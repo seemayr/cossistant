@@ -74,26 +74,29 @@ export function createConnectionEvent(
 ): RealtimeEvent {
 	const isUserConnection = !!authResult.userId;
 
-	if (isUserConnection) {
-		if (!authResult.userId) {
-			throw new Error("No userId available for user connection");
-		}
-		if (!(authResult.websiteId && authResult.organizationId)) {
+if (isUserConnection) {
+if (!authResult.userId) {
+throw new Error("No userId available for user connection");
+}
+if (!(authResult.websiteId && authResult.organizationId)) {
 			throw new Error(
 				"Missing website or organization metadata for connection event"
 			);
 		}
-		return {
-			type: "USER_CONNECTED",
-			payload: {
-				userId: authResult.userId,
-				connectionId,
-				timestamp: Date.now(),
-			},
-			timestamp: Date.now(),
-			websiteId: authResult.websiteId,
-			organizationId: authResult.organizationId,
-			visitorId: null,
+return {
+type: "USER_CONNECTED",
+payload: {
+userId: authResult.userId,
+connectionId,
+timestamp: Date.now(),
+organizationId: authResult.organizationId,
+websiteId: authResult.websiteId,
+visitorId: null,
+},
+timestamp: Date.now(),
+websiteId: authResult.websiteId,
+organizationId: authResult.organizationId,
+visitorId: null,
 		};
 	}
 
@@ -108,17 +111,19 @@ export function createConnectionEvent(
 		);
 	}
 
-	return {
-		type: "VISITOR_CONNECTED",
-		payload: {
-			visitorId: authResult.visitorId,
-			connectionId,
-			timestamp: Date.now(),
-		},
-		timestamp: Date.now(),
-		websiteId: authResult.websiteId,
-		organizationId: authResult.organizationId,
-		visitorId: authResult.visitorId,
+return {
+type: "VISITOR_CONNECTED",
+payload: {
+visitorId: authResult.visitorId,
+connectionId,
+timestamp: Date.now(),
+organizationId: authResult.organizationId,
+websiteId: authResult.websiteId,
+},
+timestamp: Date.now(),
+websiteId: authResult.websiteId,
+organizationId: authResult.organizationId,
+visitorId: authResult.visitorId,
 	};
 }
 

@@ -2,101 +2,118 @@ import { z } from "zod";
 import { conversationSchema } from "./schemas";
 import { conversationHeaderSchema } from "./trpc/conversation";
 
+const realtimeEventMetadataSchema = z.object({
+	organizationId: z.string(),
+	websiteId: z.string(),
+	visitorId: z.string().nullable(),
+});
+
 /**
  * Central event system for real-time communication
  * All WebSocket and Redis Pub/Sub events are defined here
  */
 export const RealtimeEvents = {
-	USER_CONNECTED: z.object({
-		userId: z.string(),
-		connectionId: z.string(),
-		timestamp: z.number(),
-	}),
-	USER_DISCONNECTED: z.object({
-		userId: z.string(),
-		connectionId: z.string(),
-		timestamp: z.number(),
-	}),
-	VISITOR_CONNECTED: z.object({
-		visitorId: z.string(),
-		connectionId: z.string(),
-		timestamp: z.number(),
-	}),
-	VISITOR_DISCONNECTED: z.object({
-		visitorId: z.string(),
-		connectionId: z.string(),
-		timestamp: z.number(),
-	}),
-	USER_PRESENCE_UPDATE: z.object({
-		userId: z.string(),
-		status: z.enum(["online", "away", "offline"]),
-		lastSeen: z.number(),
-	}),
-	CONVERSATION_SEEN: z.object({
-		conversationId: z.string(),
-		websiteId: z.string(),
-		organizationId: z.string(),
-		visitorId: z.string().nullable(),
-		userId: z.string().nullable(),
-		aiAgentId: z.string().nullable(),
-		lastSeenAt: z.string(),
-	}),
-	CONVERSATION_TYPING: z.object({
-		conversationId: z.string(),
-		websiteId: z.string(),
-		organizationId: z.string(),
-		visitorId: z.string().nullable(),
-		userId: z.string().nullable(),
-		aiAgentId: z.string().nullable(),
-		isTyping: z.boolean(),
-		visitorPreview: z.string().max(2000).nullable().optional(),
-	}),
-	CONVERSATION_EVENT_CREATED: z.object({
-		conversationId: z.string(),
-		websiteId: z.string(),
-		organizationId: z.string(),
-		visitorId: z.string().nullable(),
-		userId: z.string().nullable(),
-		aiAgentId: z.string().nullable(),
-		event: z.object({
-			id: z.string(),
+	USER_CONNECTED: realtimeEventMetadataSchema.merge(
+		z.object({
+			userId: z.string(),
+			connectionId: z.string(),
+			timestamp: z.number(),
+		})
+	),
+	USER_DISCONNECTED: realtimeEventMetadataSchema.merge(
+		z.object({
+			userId: z.string(),
+			connectionId: z.string(),
+			timestamp: z.number(),
+		})
+	),
+	VISITOR_CONNECTED: realtimeEventMetadataSchema.merge(
+		z.object({
+			visitorId: z.string(),
+			connectionId: z.string(),
+			timestamp: z.number(),
+		})
+	),
+	VISITOR_DISCONNECTED: realtimeEventMetadataSchema.merge(
+		z.object({
+			visitorId: z.string(),
+			connectionId: z.string(),
+			timestamp: z.number(),
+		})
+	),
+	USER_PRESENCE_UPDATE: realtimeEventMetadataSchema.merge(
+		z.object({
+			userId: z.string(),
+			status: z.enum(["online", "away", "offline"]),
+			lastSeen: z.number(),
+		})
+	),
+	CONVERSATION_SEEN: realtimeEventMetadataSchema.merge(
+		z.object({
 			conversationId: z.string(),
-			organizationId: z.string(),
-			type: z.string(),
-			actorUserId: z.string().nullable(),
-			actorAiAgentId: z.string().nullable(),
-		}),
-	}),
-	MESSAGE_CREATED: z.object({
-		message: z.object({
-			id: z.string(),
-			bodyMd: z.string(),
-			type: z.string(),
 			userId: z.string().nullable(),
 			visitorId: z.string().nullable(),
-			organizationId: z.string(),
-			websiteId: z.string(),
-			conversationId: z.string(),
-			parentMessageId: z.string().nullable(),
 			aiAgentId: z.string().nullable(),
-			modelUsed: z.string().nullable(),
-			visibility: z.string(),
-			createdAt: z.string(),
-			updatedAt: z.string(),
-			deletedAt: z.string().nullable(),
-		}),
-		conversationId: z.string(),
-		websiteId: z.string(),
-		organizationId: z.string(),
-	}),
-	CONVERSATION_CREATED: z.object({
-		conversationId: z.string(),
-		websiteId: z.string(),
-		organizationId: z.string(),
-		visitorId: z.string().nullable(),
-		conversation: conversationSchema,
-		header: conversationHeaderSchema,
-	}),
+			lastSeenAt: z.string(),
+		})
+	),
+	CONVERSATION_TYPING: realtimeEventMetadataSchema.merge(
+		z.object({
+			conversationId: z.string(),
+			userId: z.string().nullable(),
+			visitorId: z.string().nullable(),
+			aiAgentId: z.string().nullable(),
+			isTyping: z.boolean(),
+			visitorPreview: z.string().max(2000).nullable().optional(),
+		})
+	),
+	CONVERSATION_EVENT_CREATED: realtimeEventMetadataSchema.merge(
+		z.object({
+			conversationId: z.string(),
+			visitorId: z.string().nullable(),
+			userId: z.string().nullable(),
+			aiAgentId: z.string().nullable(),
+			event: z.object({
+				id: z.string(),
+				conversationId: z.string(),
+				organizationId: z.string(),
+				type: z.string(),
+				actorUserId: z.string().nullable(),
+				actorAiAgentId: z.string().nullable(),
+			}),
+		})
+	),
+	MESSAGE_CREATED: realtimeEventMetadataSchema.merge(
+		z.object({
+			message: z.object({
+				id: z.string(),
+				bodyMd: z.string(),
+				type: z.string(),
+				userId: z.string().nullable(),
+				visitorId: z.string().nullable(),
+				organizationId: z.string(),
+				websiteId: z.string(),
+				conversationId: z.string(),
+				parentMessageId: z.string().nullable(),
+				aiAgentId: z.string().nullable(),
+				modelUsed: z.string().nullable(),
+				visibility: z.string(),
+				createdAt: z.string(),
+				updatedAt: z.string(),
+				deletedAt: z.string().nullable(),
+			}),
+			conversationId: z.string(),
+			visitorId: z.string().nullable(),
+		})
+	),
+	CONVERSATION_CREATED: realtimeEventMetadataSchema.merge(
+		z.object({
+			conversationId: z.string(),
+			visitorId: z.string().nullable(),
+			conversation: conversationSchema,
+			header: conversationHeaderSchema,
+		})
+	),
 } as const;
 
 export type RealtimeEventType = keyof typeof RealtimeEvents;

@@ -132,14 +132,14 @@ describe("messages store", () => {
 
 	it("normalizes realtime events", () => {
 		const store = createMessagesStore();
-		const event: MessageCreatedData = {
-			type: "MESSAGE_CREATED",
-			timestamp: Date.now(),
-			organizationId: "org-1",
-			websiteId: "site-1",
-			visitorId: "visitor-1",
-			payload: {
-				message: {
+const event: MessageCreatedData = {
+type: "MESSAGE_CREATED",
+timestamp: Date.now(),
+organizationId: "org-1",
+websiteId: "site-1",
+visitorId: "visitor-1",
+payload: {
+message: {
 					id: "msg-event",
 					bodyMd: "Realtime",
 					type: "text",
@@ -155,12 +155,13 @@ describe("messages store", () => {
 					createdAt: "2024-01-02T00:00:00.000Z",
 					updatedAt: "2024-01-02T00:00:00.000Z",
 					deletedAt: null,
-				},
-				conversationId: "conv-1",
-				websiteId: "site-1",
-				organizationId: "org-1",
-			},
-		};
+},
+conversationId: "conv-1",
+websiteId: "site-1",
+organizationId: "org-1",
+visitorId: "visitor-1",
+},
+};
 
 		store.ingestRealtime(event);
 
@@ -291,11 +292,11 @@ describe("CossistantClient message integration", () => {
 			createMockConversation({ id: "conv-1" })
 		);
 
-		const event = {
-			type: "MESSAGE_CREATED",
-			timestamp: Date.now(),
-			payload: {
-				message: {
+const event = {
+type: "MESSAGE_CREATED",
+timestamp: Date.now(),
+payload: {
+message: {
 					id: "msg-realtime",
 					bodyMd: "stream",
 					type: "text",
@@ -311,14 +312,15 @@ describe("CossistantClient message integration", () => {
 					createdAt: "2024-01-03T00:00:00.000Z",
 					updatedAt: "2024-01-03T00:00:00.000Z",
 					deletedAt: null,
-				},
-				conversationId: "conv-1",
-				websiteId: "site-1",
-				organizationId: "org-1",
-			},
-			websiteId: "site-1",
-			organizationId: "org-1",
-			visitorId: "visitor-1",
+},
+conversationId: "conv-1",
+websiteId: "site-1",
+organizationId: "org-1",
+visitorId: "visitor-1",
+},
+websiteId: "site-1",
+organizationId: "org-1",
+visitorId: "visitor-1",
 		} satisfies RealtimeEvent<"MESSAGE_CREATED">;
 
 		client.handleRealtimeEvent(event);

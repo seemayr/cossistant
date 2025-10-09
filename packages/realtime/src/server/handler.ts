@@ -5,15 +5,37 @@
 import type { SystemEvent, UserEvent } from "../types.js";
 import type { Opts, Realtime } from "./realtime.js";
 
+type MiddlewareFn = ({
+  request,
+  channel,
+}: {
+  request: Request;
+  channel: string;
+}) => Response | void | Promise<Response | void>;
+
+type MessageFilter<T> = ({
+  event,
+  request,
+  channel,
+}: {
+  event: UserEvent<T>;
+  request: Request;
+  channel: string;
+}) => boolean | Promise<boolean>;
+
+type ResponseHeadersFn = ({
+  request,
+  channel,
+}: {
+  request: Request;
+  channel: string;
+}) => HeadersInit | undefined;
+
 export function handle<T extends Opts>(config: {
   realtime: Realtime<T>;
-  middleware?: ({
-    request,
-    channel,
-  }: {
-    request: Request;
-    channel: string;
-  }) => Response | void | Promise<Response | void>;
+  middleware?: MiddlewareFn;
+  filter?: MessageFilter<unknown>;
+  responseHeaders?: ResponseHeadersFn;
 }): (request: Request) => Promise<Response | void> {
   return async (request: Request) => {
     const requestStartTime = Date.now();
@@ -41,14 +63,13 @@ export function handle<T extends Opts>(config: {
     }
 
     let cleanup: (() => Promise<void>) | undefined;
-    let subscriber: ReturnType<typeof redis.subscribe>;
+    let subscriber: ReturnType<typeof redis.duplicate> | undefined;
     let reconnectTimeout: NodeJS.Timeout | undefined;
     let keepaliveInterval: NodeJS.Timeout | undefined;
     let isClosed = false;
     let handleAbort: (() => Promise<void>) | undefined;
-    let onSubscribe: (() => Promise<void>) | undefined;
-    let onError: ((err: Error) => void) | undefined;
-    let onUnsubscribe: (() => void) | undefined;
+
+    const streamKey = `channel:${channel}`;
 
     const stream = new ReadableStream({
       async start(controller) {
@@ -57,7 +78,33 @@ export function handle<T extends Opts>(config: {
           return;
         }
 
-        cleanup = async () => {
+        const safeEnqueue = (data: Uint8Array) => {
+          if (!isClosed) {
+            controller.enqueue(data);
+          }
+        };
+
+        const sendUserEvent = async (event: UserEvent) => {
+          if (config.filter) {
+            try {
+              const shouldSend = await config.filter({
+                event,
+                request,
+                channel,
+              });
+              if (!shouldSend) {
+                return;
+              }
+            } catch (error) {
+              logger.error("⚠️ Filter function failed", error);
+              return;
+            }
+          }
+
+          safeEnqueue(json(event));
+        };
+
+        const closeStream = async () => {
           if (isClosed) {
             return;
           }
@@ -70,26 +117,30 @@ export function handle<T extends Opts>(config: {
             request.signal.removeEventListener("abort", handleAbort);
           }
 
-          await subscriber?.unsubscribe().catch((err) => {
-            logger.error("⚠️ Error during unsubscribe:", err);
-          });
+          if (subscriber) {
+            try {
+              await subscriber.unsubscribe(streamKey);
+            } catch (err) {
+              logger.error("⚠️ Error during unsubscribe:", err);
+            }
+            subscriber.disconnect();
+            subscriber = undefined;
+          }
 
           controller.close();
         };
 
+        cleanup = closeStream;
+
         handleAbort = async () => {
-          await cleanup?.();
+          await closeStream();
         };
 
         request.signal.addEventListener("abort", handleAbort);
 
-        subscriber = redis.subscribe(`channel:${channel}`);
-
-        const safeEnqueue = (data: Uint8Array) => {
-          if (!isClosed) {
-            controller.enqueue(data);
-          }
-        };
+        subscriber = redis.duplicate();
+        await subscriber.connect();
+        await subscriber.subscribe(streamKey);
 
         const elapsedMs = Date.now() - requestStartTime;
         const remainingMs = config.realtime._maxDurationSecs * 1000 - elapsedMs;
@@ -97,76 +148,56 @@ export function handle<T extends Opts>(config: {
 
         reconnectTimeout = setTimeout(async () => {
           safeEnqueue(json({ type: "reconnect" }));
-          await cleanup?.();
+          await closeStream();
         }, streamDurationMs);
 
-        onSubscribe = async () => {
-          logger.log("✅ Subscription established:", { channel });
-          try {
-            if (reconnect === "true" && last_ack) {
-              const startId = `(${last_ack}`;
-              const missingMessages = await redis.xrange(
-                `channel:${channel}`,
-                startId,
-                "+"
-              );
+        const sendConnectedEvent = (cursor?: string) => {
+          const connectedEvent: SystemEvent = {
+            type: "connected",
+            channel,
+            ...(cursor ? { cursor } : {}),
+          };
+          safeEnqueue(json(connectedEvent));
+        };
 
-              const connectedEvent: SystemEvent = {
-                type: "connected",
-                channel,
-              };
-
-              safeEnqueue(json(connectedEvent));
-
-              if (Array.from(Object.keys(missingMessages)).length > 0) {
-                for (const [__stream_id, value] of Object.entries(
-                  missingMessages
-                )) {
-                  if (typeof value === "object" && value !== null) {
-                    const { __event_path, data } = value as Record<
-                      string,
-                      unknown
-                    >;
-                    const userEvent: UserEvent = {
-                      data,
-                      __event_path: __event_path as string[],
-                      __stream_id,
-                    };
-                    safeEnqueue(json(userEvent));
-                  }
-                }
-              }
-            } else {
-              const lastMessage = await redis.xrevrange(
-                `channel:${channel}`,
-                "+",
-                "-",
-                1
-              );
-
-              const messageEntries = Object.entries(lastMessage);
-              const currentCursor = messageEntries[0]?.[0] ?? "0-0";
-
-              const connectedEvent: SystemEvent = {
-                type: "connected",
-                channel,
-                cursor: currentCursor,
-              };
-
-              safeEnqueue(json(connectedEvent));
-            }
-          } catch (err) {
-            logger.error("Error in subscribe handler:", err);
-            safeEnqueue(
-              json({
-                type: "error",
-                error: err instanceof Error ? err.message : "Unknown error",
-              })
+        const replayMissedMessages = async () => {
+          if (!(reconnect === "true" && last_ack)) {
+            const lastMessage = await redis.xrevrange(
+              streamKey,
+              "+",
+              "-",
+              "COUNT",
+              1
             );
+            const cursor = lastMessage[0]?.[0] ?? "0-0";
+            sendConnectedEvent(cursor);
+            return;
+          }
+
+          const startId = `(${last_ack}`;
+          const missingMessages = await redis.xrange(streamKey, startId, "+");
+
+          sendConnectedEvent();
+
+          for (const entry of missingMessages) {
+            const parsed = parseStreamEntry(entry);
+            if (!parsed) {
+              continue;
+            }
+
+            const userEvent: UserEvent = {
+              data: parsed.data,
+              __event_path: parsed.__event_path,
+              __stream_id: parsed.id,
+            };
+
+            await sendUserEvent(userEvent);
           }
         };
 
-        onError = (err: Error) => {
+        await replayMissedMessages();
+
+        subscriber.on("error", (err: Error) => {
           logger.error("⚠️ Redis subscriber error:", err);
 
           const errorEvent: SystemEvent = {
@@ -175,9 +206,9 @@ export function handle<T extends Opts>(config: {
           };
 
           safeEnqueue(json(errorEvent));
-        };
+        });
 
-        onUnsubscribe = async () => {
+        subscriber.on("unsubscribe", () => {
           logger.log("⬅️ Client unsubscribed from channel:", channel);
 
           const unsubscribedEvent: SystemEvent = {
@@ -186,80 +217,145 @@ export function handle<T extends Opts>(config: {
           };
 
           safeEnqueue(json(unsubscribedEvent));
+        });
 
-          await cleanup?.();
-        };
-
-        subscriber.on("subscribe", onSubscribe);
-        subscriber.on("error", onError);
-        subscriber.on("unsubscribe", onUnsubscribe);
-        subscriber.on(
-          "message",
-          async ({
-            message,
-            channel: messageChannel,
-          }: {
-            message: unknown;
-            channel: string;
-          }) => {
-            let payload: Record<string, unknown>;
-            if (typeof message === "string") {
-              try {
-                payload = JSON.parse(message);
-              } catch {
-                payload = { data: message };
-              }
-            } else if (typeof message === "object" && message !== null) {
-              payload = message as Record<string, unknown>;
-            } else {
-              payload = { data: message };
-            }
-
-            if (payload.type === "ping") {
-              const pingEvent: SystemEvent = {
-                type: "ping",
-                timestamp: payload.timestamp as number,
-              };
-              safeEnqueue(json(pingEvent));
-              return;
-            }
-
-            const { __stream_id, __event_path, data } = payload;
-
-            logger.log("⬇️  Received event:", {
-              channel: messageChannel,
-              __event_path,
-              data,
-            });
-
-            const userEvent: UserEvent = {
-              data,
-              __event_path: __event_path as string[],
-              __stream_id: __stream_id as string,
-            };
-
-            safeEnqueue(json(userEvent));
+        subscriber.on("message", async (_channel, message) => {
+          let parsed: PublishedPayload | null = null;
+          try {
+            parsed = parsePublishedPayload(message);
+          } catch (error) {
+            logger.error("⚠️ Failed to parse realtime payload", error);
           }
-        );
+
+          if (!parsed) {
+            return;
+          }
+
+          if (parsed.type === "ping") {
+            const pingEvent: SystemEvent = {
+              type: "ping",
+              timestamp: parsed.timestamp,
+            };
+            safeEnqueue(json(pingEvent));
+            return;
+          }
+
+          const userEvent: UserEvent = {
+            data: parsed.data,
+            __event_path: parsed.__event_path,
+            __stream_id: parsed.__stream_id,
+          };
+
+          logger.log("⬇️  Received event:", {
+            channel: _channel,
+            __event_path: parsed.__event_path,
+            data: parsed.data,
+          });
+
+          await sendUserEvent(userEvent);
+        });
 
         keepaliveInterval = setInterval(async () => {
-          await redis.publish(`channel:${channel}`, {
-            type: "ping",
-            timestamp: Date.now(),
-          });
+          await redis.publish(
+            streamKey,
+            JSON.stringify({ type: "ping", timestamp: Date.now() })
+          );
         }, 10_000);
       },
 
       async cancel() {
-        if (isClosed) {
-          return;
-        }
         await cleanup?.();
       },
     });
 
-    return new StreamingResponse(stream);
+    const headers = config.responseHeaders
+      ? config.responseHeaders({ request, channel })
+      : undefined;
+
+    return new StreamingResponse(stream, {
+      headers,
+    });
   };
+}
+
+type PublishedPayload =
+  | ({ type: "ping"; timestamp: number } & Record<string, never>)
+  | ({
+      __event_path: string[];
+      __stream_id: string;
+      data: unknown;
+    } & Record<string, never>);
+
+function parsePublishedPayload(message: unknown): PublishedPayload | null {
+  if (typeof message !== "string") {
+    return null;
+  }
+
+  const parsed = JSON.parse(message) as PublishedPayload | null;
+
+  if (!parsed) {
+    return null;
+  }
+
+  if ((parsed as { type?: string }).type === "ping") {
+    return parsed;
+  }
+
+  if (
+    "__event_path" in parsed &&
+    Array.isArray(parsed.__event_path) &&
+    "data" in parsed &&
+    "__stream_id" in parsed
+  ) {
+    return parsed;
+  }
+
+  return null;
+}
+
+type StreamEntry = [string, string[]];
+
+type ParsedStreamEntry = {
+  id: string;
+  data: unknown;
+  __event_path: string[];
+};
+
+function parseStreamEntry(entry: StreamEntry): ParsedStreamEntry | null {
+  const [id, fields] = entry;
+  const record: Record<string, string> = {};
+
+  for (let i = 0; i < fields.length; i += 2) {
+    const key = fields[i];
+    const value = fields[i + 1];
+
+    if (typeof key !== "string") {
+      continue;
+    }
+
+    record[key] = typeof value === "string" ? value : String(value ?? "");
+  }
+
+  const raw = record.payload ?? null;
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as {
+      data: unknown;
+      __event_path: string[];
+    };
+
+    return {
+      id,
+      data: parsed.data,
+      __event_path: parsed.__event_path,
+    };
+  } catch (error) {
+    console.warn("Failed to parse stream entry", { error });
+    return null;
+  }
 }
 
 function json<T>(data: SystemEvent | UserEvent<T>) {
@@ -277,7 +373,7 @@ class StreamingResponse extends Response {
         Connection: "keep-alive",
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Headers": "Cache-Control",
-        ...init?.headers,
+        ...(init?.headers ?? {}),
       },
     });
   }

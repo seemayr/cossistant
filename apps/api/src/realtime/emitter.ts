@@ -1,9 +1,10 @@
 import { type EventContext, routeEvent } from "@api/ws/router";
 import {
-	sendEventToConnection,
-	sendEventToVisitor,
-	sendEventToWebsite,
+        sendEventToConnection,
+        sendEventToVisitor,
+        sendEventToWebsite,
 } from "@api/ws/socket";
+import { realtime } from "./realtime";
 import {
 	type RealtimeEvent,
 	type RealtimeEventData,
@@ -126,11 +127,11 @@ export class RealtimeEmitter {
 			);
 		}
 
-		const event: RealtimeEvent<TType> = {
-			type,
-			payload: data,
-			timestamp: options.timestamp ?? Date.now(),
-			websiteId,
+                const event: RealtimeEvent<TType> = {
+                        type,
+                        payload: data,
+                        timestamp: options.timestamp ?? Date.now(),
+                        websiteId,
 			organizationId,
 			visitorId: options.visitorId ?? extractVisitorId(data) ?? null,
 		};
@@ -142,12 +143,22 @@ export class RealtimeEmitter {
 			userId: options.userId ?? extractUserId(data) ?? undefined,
 			organizationId,
 			sendToConnection: sendEventToConnection,
-			sendToVisitor: sendEventToVisitor,
-			sendToWebsite: sendEventToWebsite,
-		};
+                        sendToVisitor: sendEventToVisitor,
+                        sendToWebsite: sendEventToWebsite,
+                };
 
-		await routeEvent(event, context);
-	}
+                if (event.type === "MESSAGE_CREATED") {
+                        try {
+                                const channel = realtime.channel(websiteId);
+
+                                await channel.message.created.emit(event);
+                        } catch (error) {
+                                console.error("[Realtime] Failed to emit realtime event", error);
+                        }
+                }
+
+                await routeEvent(event, context);
+        }
 }
 
 const realtimeEmitter = new RealtimeEmitter();

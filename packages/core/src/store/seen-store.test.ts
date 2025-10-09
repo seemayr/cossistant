@@ -94,19 +94,22 @@ describe("seen store", () => {
 	});
 
 	it("applies realtime events with ignore filters", () => {
-		const event: RealtimeEvent<"CONVERSATION_SEEN"> = {
-			type: "CONVERSATION_SEEN",
-			timestamp: Date.now(),
-			organizationId: "org-1",
-			websiteId: "site-1",
-			payload: {
-				conversationId: "conv-1",
-				visitorId: "visitor-1",
-				userId: null,
-				aiAgentId: null,
-				lastSeenAt: new Date("2024-01-01T02:00:00.000Z").toISOString(),
-			},
-		};
+const event: RealtimeEvent<"CONVERSATION_SEEN"> = {
+type: "CONVERSATION_SEEN",
+timestamp: Date.now(),
+organizationId: "org-1",
+websiteId: "site-1",
+visitorId: "visitor-1",
+payload: {
+conversationId: "conv-1",
+visitorId: "visitor-1",
+userId: null,
+aiAgentId: null,
+lastSeenAt: new Date("2024-01-01T02:00:00.000Z").toISOString(),
+websiteId: "site-1",
+organizationId: "org-1",
+},
+};
 
 		applyConversationSeenEvent(store, event, {
 			ignoreVisitorId: "visitor-1",

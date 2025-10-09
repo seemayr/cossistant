@@ -11,6 +11,8 @@ import type {
 type Opts<T> = {
   channel?: string;
   enabled?: boolean;
+  endpoint?: string;
+  params?: Record<string, string | null | undefined>;
   events?: Partial<{
     [N in keyof T]: Partial<{
       [K in keyof T[N]]: (data: T[N][K]) => void;
@@ -24,6 +26,8 @@ const PING_TIMEOUT_MS = 20_000;
 export const useRealtime = <T extends Record<string, Record<string, unknown>>>({
   channel = "default",
   enabled = true,
+  endpoint = "/api/realtime",
+  params,
   events,
   maxReconnectAttempts = 3,
 }: Opts<T> = {}) => {
@@ -84,18 +88,43 @@ export const useRealtime = <T extends Record<string, Record<string, unknown>>>({
     setStatus("connecting");
 
     try {
-      const reconnectParam = reconnect ? "&reconnect=true" : "";
+      if (typeof window === "undefined") {
+        return;
+      }
 
-      const lastAckParam =
-        reconnect && lastAckRef.current
-          ? `&last_ack=${encodeURIComponent(lastAckRef.current)}`
-          : "";
+      const baseUrl = (() => {
+        try {
+          return new URL(endpoint, window.location.origin);
+        } catch (error) {
+          console.warn("Invalid realtime endpoint", { endpoint, error });
+          return null;
+        }
+      })();
 
-      const eventSource = new EventSource(
-        `/api/realtime?channel=${encodeURIComponent(
-          channel
-        )}${reconnectParam}${lastAckParam}`
-      );
+      if (!baseUrl) {
+        setStatus("error");
+        return;
+      }
+
+      baseUrl.searchParams.set("channel", channel);
+
+      if (params) {
+        for (const [key, value] of Object.entries(params)) {
+          if (value !== undefined && value !== null) {
+            baseUrl.searchParams.set(key, value);
+          }
+        }
+      }
+
+      if (reconnect) {
+        baseUrl.searchParams.set("reconnect", "true");
+      }
+
+      if (reconnect && lastAckRef.current) {
+        baseUrl.searchParams.set("last_ack", lastAckRef.current);
+      }
+
+      const eventSource = new EventSource(baseUrl.toString());
       eventSourceRef.current = eventSource;
 
       eventSource.onopen = () => {

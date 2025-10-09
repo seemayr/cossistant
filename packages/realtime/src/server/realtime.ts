@@ -1,12 +1,13 @@
 /** biome-ignore-all lint/style/useBlockStatements: ok */
 /** biome-ignore-all lint/style/useConsistentMemberAccessibility: ok */
 /** biome-ignore-all lint/suspicious/noExplicitAny: ok */
-import type { Redis } from "@upstash/redis";
-import * as z from "zod/v4/core";
+import type { Redis } from "ioredis";
+import type { ZodAny, ZodObject, ZodRawShape } from "zod";
+import { z } from "zod";
 
 const DEFAULT_VERCEL_FLUID_TIMEOUT = 300;
 
-type Schema = Record<string, z.$ZodObject>;
+type Schema = Record<string, ZodObject<ZodRawShape>>;
 
 export type Opts = {
   schema?: Schema;
@@ -52,24 +53,28 @@ class RealtimeBase<T extends Opts> {
 
   private createEventHandlers(channel: string): any {
     const handlers: any = {};
+
     for (const [outerKey, zodObject] of Object.entries(this._schema)) {
       handlers[outerKey] = {};
-      for (const innerKey of Object.keys(zodObject._zod.def.shape)) {
+
+      const shape = getObjectShape(zodObject);
+
+      for (const innerKey of Object.keys(shape)) {
+        const schema = shape[innerKey];
+
         handlers[outerKey][innerKey] = {
           emit: async (data: any) => {
-            if (zodObject._zod.def.shape[innerKey]) {
-              z.parse(zodObject._zod.def.shape[innerKey], data);
-            }
+            schema?.parse?.(data);
 
             if (!this._redis) {
               this._logger.warn("No Redis instance provided to Realtime.");
               return;
             }
 
-            const payload = {
+            const streamPayload = JSON.stringify({
               data,
               __event_path: [outerKey, innerKey],
-            };
+            });
 
             this._logger.log("⬆️  Emitting event:", {
               channel,
@@ -79,22 +84,27 @@ class RealtimeBase<T extends Opts> {
 
             const id = await this._redis.xadd(
               `channel:${channel}`,
+              "MAXLEN",
+              "~",
+              "100",
               "*",
-              payload,
-              {
-                trim: { type: "MAXLEN", threshold: 100, comparison: "~" },
-              }
+              "payload",
+              streamPayload
             );
 
-            await this._redis.publish(`channel:${channel}`, {
-              data,
-              __event_path: [outerKey, innerKey],
-              __stream_id: id,
-            });
+            await this._redis.publish(
+              `channel:${channel}`,
+              JSON.stringify({
+                data,
+                __event_path: [outerKey, innerKey],
+                __stream_id: id,
+              })
+            );
           },
         };
       }
     }
+
     return handlers;
   }
 
@@ -134,3 +144,21 @@ export type InferRealtimeEvents<T> =
 export const Realtime = RealtimeBase as new <T extends Opts>(
   data?: T
 ) => Realtime<T>;
+
+function getObjectShape(schema: z.ZodTypeAny): Record<string, ZodAny | undefined> {
+  if (isZodObject(schema)) {
+    if (typeof schema.shape === "object") {
+      return schema.shape as Record<string, ZodAny>;
+    }
+
+    if (typeof schema._def?.shape === "function") {
+      return schema._def.shape() as Record<string, ZodAny>;
+    }
+  }
+
+  return {};
+}
+
+function isZodObject(schema: z.ZodTypeAny): schema is ZodObject<ZodRawShape> {
+  return schema instanceof z.ZodObject;
+}

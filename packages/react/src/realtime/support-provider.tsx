@@ -1,7 +1,8 @@
 import type { CossistantClient } from "@cossistant/core";
 import type { RealtimeEvent } from "@cossistant/types/realtime-events";
 import type React from "react";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
+import { useVisitorRealtime } from "@cossistant/realtime/client";
 import { useSupport } from "../provider";
 import { applyConversationSeenEvent } from "./seen-store";
 import {
@@ -27,7 +28,19 @@ type SupportRealtimeProviderProps = {
 export function SupportRealtimeProvider({
 	children,
 }: SupportRealtimeProviderProps) {
-	const { website, client, visitor } = useSupport();
+        const { website, client, visitor } = useSupport();
+
+        const handleMessageCreated = useCallback(
+                (event: RealtimeEvent<"MESSAGE_CREATED">) => {
+                        if (website?.id && event.websiteId !== website.id) {
+                                return;
+                        }
+
+                        clearTypingFromMessage(event);
+                        client.handleRealtimeEvent(event);
+                },
+                [client, website?.id]
+        );
 
 	const realtimeContext = useMemo<SupportRealtimeContext>(
 		() => ({
@@ -38,30 +51,11 @@ export function SupportRealtimeProvider({
 		[website?.id, visitor?.id, client]
 	);
 
-	const events = useMemo(
-		() => ({
-			MESSAGE_CREATED: (
-				_data: RealtimeEvent["payload"],
-				{
-					event,
-					context,
-				}: {
-					event: RealtimeEvent<"MESSAGE_CREATED">;
-					context: SupportRealtimeContext;
-				}
-			) => {
-				if (context.websiteId && event.websiteId !== context.websiteId) {
-					return;
-				}
-
-				// Clear typing state when a message is sent
-				clearTypingFromMessage(event);
-
-				context.client.handleRealtimeEvent(event);
-			},
-			CONVERSATION_SEEN: (
-				_data: RealtimeEvent["payload"],
-				{
+        const events = useMemo(
+                () => ({
+                        CONVERSATION_SEEN: (
+                                _data: RealtimeEvent["payload"],
+                                {
 					event,
 					context,
 				}: {
@@ -99,15 +93,33 @@ export function SupportRealtimeProvider({
 		}),
 		// Empty dependencies is fine here since we use the context parameter
 		// which always has fresh data from the memoized realtimeContext
-		[]
-	);
+                []
+        );
 
-	useRealtime<SupportRealtimeContext>({
-		context: realtimeContext,
-		events,
-		websiteId: realtimeContext.websiteId,
-		visitorId: website?.visitor?.id ?? null,
-	});
+        useRealtime<SupportRealtimeContext>({
+                context: realtimeContext,
+                events,
+                websiteId: realtimeContext.websiteId,
+                visitorId: website?.visitor?.id ?? null,
+        });
 
-	return <>{children}</>;
+        const { publicKey } = client.getConfiguration();
+
+        const visitorRealtimeEvents = useMemo(
+                () => ({
+                        message: {
+                                created: handleMessageCreated,
+                        },
+                }),
+                [handleMessageCreated]
+        );
+
+        useVisitorRealtime({
+                websiteId: realtimeContext.websiteId,
+                visitorId: realtimeContext.visitorId,
+                publicKey: publicKey ?? null,
+                events: visitorRealtimeEvents,
+        });
+
+        return <>{children}</>;
 }

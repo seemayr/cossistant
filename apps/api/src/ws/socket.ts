@@ -312,33 +312,38 @@ export async function handleConnectionClose(
 			ws: undefined,
 		};
 
-		if (userId && organizationId && websiteId) {
-			const disconnectEvent: RealtimeEvent<"USER_DISCONNECTED"> = {
-				type: "USER_DISCONNECTED",
-				payload: {
-					userId,
-					connectionId,
-					timestamp,
-				},
-				timestamp,
-				organizationId,
-				websiteId,
-				visitorId: null,
-			};
+if (userId && organizationId && websiteId) {
+const disconnectEvent: RealtimeEvent<"USER_DISCONNECTED"> = {
+type: "USER_DISCONNECTED",
+payload: {
+userId,
+connectionId,
+timestamp,
+organizationId,
+websiteId,
+visitorId: null,
+},
+timestamp,
+organizationId,
+websiteId,
+visitorId: null,
+};
 
 			await routeEvent(disconnectEvent, context);
-		} else if (visitorId && organizationId && websiteId) {
-			const disconnectEvent: RealtimeEvent<"VISITOR_DISCONNECTED"> = {
-				type: "VISITOR_DISCONNECTED",
-				payload: {
-					visitorId,
-					connectionId,
-					timestamp,
-				},
-				timestamp,
-				organizationId,
-				websiteId,
-				visitorId,
+} else if (visitorId && organizationId && websiteId) {
+const disconnectEvent: RealtimeEvent<"VISITOR_DISCONNECTED"> = {
+type: "VISITOR_DISCONNECTED",
+payload: {
+visitorId,
+connectionId,
+timestamp,
+organizationId,
+websiteId,
+},
+timestamp,
+organizationId,
+websiteId,
+visitorId,
 			};
 
 			await routeEvent(disconnectEvent, context);

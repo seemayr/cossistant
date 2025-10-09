@@ -48,15 +48,17 @@ export function useConversationSeen(
 		}
 
 		return Object.values(conversationSeen).map((entry) => {
+			const timestamp = entry.lastSeenAt.toISOString();
+
 			return {
 				id: buildSeenId(conversationId, entry.actorType, entry.actorId),
 				conversationId,
 				userId: entry.actorType === "user" ? entry.actorId : null,
 				visitorId: entry.actorType === "visitor" ? entry.actorId : null,
 				aiAgentId: entry.actorType === "ai_agent" ? entry.actorId : null,
-				lastSeenAt: entry.lastSeenAt,
-				createdAt: entry.lastSeenAt,
-				updatedAt: entry.lastSeenAt,
+				lastSeenAt: timestamp,
+				createdAt: timestamp,
+				updatedAt: timestamp,
 				deletedAt: null,
 			} satisfies ConversationSeen;
 		});

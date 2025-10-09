@@ -37,16 +37,16 @@ export type CreateMessageOptions = {
 };
 
 function serializeMessageForRealtime(
-	message: Message,
-	context: {
-		conversationId: string;
-		websiteId: string;
-		organizationId: string;
-	}
+message: Message,
+context: {
+conversationId: string;
+websiteId: string;
+organizationId: string;
+}
 ): RealtimeEventData<"MESSAGE_CREATED"> {
-	return {
-		message: {
-			id: message.id,
+return {
+message: {
+id: message.id,
 			bodyMd: message.bodyMd,
 			type: message.type,
 			userId: message.userId,
@@ -61,11 +61,12 @@ function serializeMessageForRealtime(
 			updatedAt: message.updatedAt,
 			deletedAt: message.deletedAt ? message.deletedAt : null,
 			visibility: message.visibility,
-		},
-		conversationId: context.conversationId,
-		websiteId: context.websiteId,
-		organizationId: context.organizationId,
-	};
+},
+conversationId: context.conversationId,
+websiteId: context.websiteId,
+organizationId: context.organizationId,
+visitorId: message.visitorId ?? null,
+};
 }
 
 export async function createMessage(
@@ -97,31 +98,38 @@ export async function createMessage(
 
 	const parsedMessage = messageSchema.parse(createdMessage);
 
-	const realtimePayload = serializeMessageForRealtime(parsedMessage, {
-		conversationId,
-		websiteId,
-		organizationId,
-	});
+const realtimePayload = serializeMessageForRealtime(parsedMessage, {
+conversationId,
+websiteId,
+organizationId,
+});
 
-	let targetVisitorId =
-		options.conversationOwnerVisitorId ??
-		realtimePayload.message.visitorId ??
-		undefined;
+let targetVisitorId =
+options.conversationOwnerVisitorId ??
+realtimePayload.message.visitorId ??
+undefined;
 
-	if (!targetVisitorId) {
-		targetVisitorId = await resolveConversationVisitorId(
-			options.db,
-			conversationId
-		);
-	}
+if (!targetVisitorId) {
+targetVisitorId = await resolveConversationVisitorId(
+options.db,
+conversationId
+);
+}
 
-	await realtimeEmitter.emit("MESSAGE_CREATED", realtimePayload, {
-		websiteId,
-		visitorId: targetVisitorId ?? null,
-		organizationId,
-	});
+const visitorIdForEvent = targetVisitorId ?? realtimePayload.visitorId ?? null;
 
-	return parsedMessage;
+const enrichedRealtimePayload: RealtimeEventData<"MESSAGE_CREATED"> = {
+...realtimePayload,
+visitorId: visitorIdForEvent,
+};
+
+await realtimeEmitter.emit("MESSAGE_CREATED", enrichedRealtimePayload, {
+websiteId,
+visitorId: visitorIdForEvent,
+organizationId,
+});
+
+return parsedMessage;
 }
 
 type GetConversationByIdFn =

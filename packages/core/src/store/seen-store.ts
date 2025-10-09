@@ -7,7 +7,7 @@ export type SeenActorType = "visitor" | "user" | "ai_agent";
 export type SeenEntry = {
 	actorType: SeenActorType;
 	actorId: string;
-	lastSeenAt: string;
+	lastSeenAt: Date;
 };
 
 export type ConversationSeenState = Record<string, SeenEntry>;
@@ -24,7 +24,7 @@ type UpsertSeenOptions = {
 	conversationId: string;
 	actorType: SeenActorType;
 	actorId: string;
-	lastSeenAt: string;
+	lastSeenAt: Date;
 };
 
 function makeKey(
@@ -61,14 +61,31 @@ function hasSameEntries(
 		if (
 			previous.actorType !== incoming.actorType ||
 			previous.actorId !== incoming.actorId ||
-			new Date(previous.lastSeenAt).getTime() !==
-				new Date(incoming.lastSeenAt).getTime()
+			previous.lastSeenAt.getTime() !== incoming.lastSeenAt.getTime()
 		) {
 			return false;
 		}
 	}
 
 	return true;
+}
+
+function resolveActorFromEntry(
+	entry: ConversationSeen
+): { type: SeenActorType; id: string } | null {
+	if (entry.userId) {
+		return { type: "user", id: entry.userId };
+	}
+
+	if (entry.visitorId) {
+		return { type: "visitor", id: entry.visitorId };
+	}
+
+	if (entry.aiAgentId) {
+		return { type: "ai_agent", id: entry.aiAgentId };
+	}
+
+	return null;
 }
 
 export type SeenStore = Store<SeenState> & {
@@ -88,14 +105,14 @@ export function createSeenStore(
 		...store,
 		upsert({ conversationId, actorType, actorId, lastSeenAt }) {
 			store.setState((state) => {
-				const existingConversation = state.conversations[conversationId] ?? {};
+				const existingConversation =
+					state.conversations[conversationId] ?? {};
 				const key = makeKey(conversationId, actorType, actorId);
 				const previous = existingConversation[key];
 
 				if (
 					previous &&
-					new Date(previous.lastSeenAt).getTime() >=
-						new Date(lastSeenAt).getTime()
+					previous.lastSeenAt.getTime() >= lastSeenAt.getTime()
 				) {
 					return state;
 				}
@@ -129,6 +146,36 @@ export function createSeenStore(
 				}
 
 				const nextEntries: ConversationSeenState = {};
+
+				for (const entry of entries) {
+					const actor = resolveActorFromEntry(entry);
+
+					if (!actor) {
+						continue;
+					}
+
+					const lastSeenAtDate = new Date(entry.lastSeenAt);
+
+					if (Number.isNaN(lastSeenAtDate.getTime())) {
+						continue;
+					}
+
+					const key = makeKey(conversationId, actor.type, actor.id);
+					const previous = nextEntries[key];
+
+					if (
+						previous &&
+						previous.lastSeenAt.getTime() >= lastSeenAtDate.getTime()
+					) {
+						continue;
+					}
+
+					nextEntries[key] = {
+						actorType: actor.type,
+						actorId: actor.id,
+						lastSeenAt: lastSeenAtDate,
+					};
+				}
 
 				const existing = state.conversations[conversationId];
 				if (hasSameEntries(existing, nextEntries)) {
@@ -218,7 +265,11 @@ export function applyConversationSeenEvent(
 		return;
 	}
 
-	const lastSeenAt = payload.lastSeenAt;
+	const lastSeenAt = new Date(payload.lastSeenAt);
+
+	if (Number.isNaN(lastSeenAt.getTime())) {
+		return;
+	}
 
 	upsertConversationSeen(store, {
 		conversationId: payload.conversationId,

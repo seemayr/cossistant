@@ -38,13 +38,20 @@ mock.module("@api/lib/auth-validation", () => ({
 	},
 }));
 mock.module("@api/utils/websocket-connection", () => ({
-	createConnectionEvent: () => ({
-		type: "USER_CONNECTED",
-		payload: { userId: "user", connectionId: "conn", timestamp: Date.now() },
-		timestamp: Date.now(),
-		organizationId: "org",
-		websiteId: "site",
-		visitorId: null,
+createConnectionEvent: () => ({
+type: "USER_CONNECTED",
+payload: {
+userId: "user",
+connectionId: "conn",
+timestamp: Date.now(),
+organizationId: "org",
+websiteId: "site",
+visitorId: null,
+},
+timestamp: Date.now(),
+organizationId: "org",
+websiteId: "site",
+visitorId: null,
 	}),
 	getConnectionIdFromSocket: () => {},
 	handleAuthenticationFailure: async () => {},

@@ -168,18 +168,19 @@ describe("typing store", () => {
 			isTyping: true,
 		});
 
-		const messageEvent: RealtimeEvent<"MESSAGE_CREATED"> = {
-			type: "MESSAGE_CREATED",
-			timestamp: Date.now(),
-			organizationId: "org-1",
-			websiteId: "site-1",
-			visitorId: "visitor-1",
-			payload: {
-				conversationId: "conv-1",
-				websiteId: "site-1",
-				organizationId: "org-1",
-				message: {
-					id: "msg-1",
+const messageEvent: RealtimeEvent<"MESSAGE_CREATED"> = {
+type: "MESSAGE_CREATED",
+timestamp: Date.now(),
+organizationId: "org-1",
+websiteId: "site-1",
+visitorId: "visitor-1",
+payload: {
+conversationId: "conv-1",
+websiteId: "site-1",
+organizationId: "org-1",
+visitorId: "visitor-1",
+message: {
+id: "msg-1",
 					bodyMd: "hello",
 					type: "text",
 					userId: null,
