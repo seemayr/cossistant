@@ -108,15 +108,60 @@ export type GetConversationRequest = z.infer<
 >;
 
 export const getConversationResponseSchema = z
-	.object({
-		conversation: conversationSchema,
-	})
-	.openapi({
-		description: "Response containing a single conversation",
-	});
+.object({
+conversation: conversationSchema,
+})
+.openapi({
+description: "Response containing a single conversation",
+});
 
 export type GetConversationResponse = z.infer<
-	typeof getConversationResponseSchema
+typeof getConversationResponseSchema
+>;
+
+export const getConversationEventsRequestSchema = z
+.object({
+conversationId: z.string().openapi({
+description: "The ID of the conversation to retrieve events for",
+}),
+limit: z
+.coerce.number()
+.int()
+.min(1)
+.max(100)
+.optional()
+.openapi({
+description: "Maximum number of events to return",
+example: 50,
+}),
+cursor: z
+.string()
+.nullish()
+.openapi({
+description:
+"Cursor for pagination. Use the nextCursor value from the previous response.",
+}),
+})
+.openapi({
+description: "Query parameters for listing conversation timeline events",
+});
+
+export type GetConversationEventsRequest = z.infer<
+typeof getConversationEventsRequestSchema
+>;
+
+export const getConversationEventsResponseSchema = z
+.object({
+events: z.array(conversationEventSchema),
+nextCursor: z.string().nullable(),
+hasNextPage: z.boolean(),
+})
+.openapi({
+description: "Paginated response containing conversation events",
+});
+
+export type GetConversationEventsResponse = z.infer<
+typeof getConversationEventsResponseSchema
 >;
 
 export const markConversationSeenRequestSchema = z
