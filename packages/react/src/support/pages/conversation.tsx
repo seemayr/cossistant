@@ -1,8 +1,10 @@
-import type {
-	ConversationEvent,
-	Message as MessageType,
+import {
+        ConversationStatus,
+        type ConversationEvent,
+        type Message as MessageType,
 } from "@cossistant/types";
 import { useConversationPage } from "../../hooks/use-conversation-page";
+import { useConversation } from "../../hooks/use-conversation";
 import { useSupport } from "../../provider";
 import { AvatarStack } from "../components/avatar-stack";
 import { Header } from "../components/header";
@@ -51,19 +53,42 @@ export const ConversationPage = ({
 	const text = useSupportText();
 
 	// Main conversation hook - handles all logic
-	const conversation = useConversationPage({
-		conversationId: initialConversationId,
-		messages: passedMessages,
-		events,
-		initialMessage,
-		onConversationIdChange: (newConversationId) => {
-			// Update navigation when conversation is created
-			replace({
-				page: "CONVERSATION",
-				params: { conversationId: newConversationId },
-			});
-		},
-	});
+        const conversation = useConversationPage({
+                conversationId: initialConversationId,
+                messages: passedMessages,
+                events,
+                initialMessage,
+                onConversationIdChange: (newConversationId) => {
+                        // Update navigation when conversation is created
+                        replace({
+                                page: "CONVERSATION",
+                                params: { conversationId: newConversationId },
+                        });
+                },
+        });
+
+        const realConversationId = conversation.isPending
+                ? null
+                : conversation.conversationId;
+
+        const {
+                conversation: activeConversation,
+                isLoading: isConversationLoading,
+        } = useConversation(realConversationId, {
+                enabled: !conversation.isPending,
+        });
+
+        const canUseComposer =
+                conversation.isPending ||
+                activeConversation?.status === ConversationStatus.OPEN;
+
+        const shouldRenderComposer =
+                conversation.isPending ||
+                isConversationLoading ||
+                canUseComposer;
+
+        const composerDisabled =
+                conversation.composer.isSubmitting || !canUseComposer;
 
 	const handleGoBack = () => {
 		if (canGoBack) {
@@ -105,20 +130,24 @@ export const ConversationPage = ({
 				messages={conversation.messages}
 			/>
 
-			<div className="flex-shrink-0 p-1">
-				<MultimodalInput
-					disabled={conversation.composer.isSubmitting}
-					error={conversation.error}
-					files={conversation.composer.files}
-					isSubmitting={conversation.composer.isSubmitting}
-					onChange={conversation.composer.setMessage}
-					onFileSelect={conversation.composer.addFiles}
-					onRemoveFile={conversation.composer.removeFile}
-					onSubmit={conversation.composer.submit}
-					placeholder={text("component.multimodalInput.placeholder")}
-					value={conversation.composer.message}
-				/>
-			</div>
-		</div>
-	);
+                        {shouldRenderComposer ? (
+                                <div className="flex-shrink-0 p-1">
+                                        <MultimodalInput
+                                                disabled={composerDisabled}
+                                                error={conversation.error}
+                                                files={conversation.composer.files}
+                                                isSubmitting={conversation.composer.isSubmitting}
+                                                onChange={conversation.composer.setMessage}
+                                                onFileSelect={conversation.composer.addFiles}
+                                                onRemoveFile={conversation.composer.removeFile}
+                                                onSubmit={conversation.composer.submit}
+                                                placeholder={text(
+                                                        "component.multimodalInput.placeholder"
+                                                )}
+                                                value={conversation.composer.message}
+                                        />
+                                </div>
+                        ) : null}
+                </div>
+        );
 };
