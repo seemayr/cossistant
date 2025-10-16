@@ -56,7 +56,7 @@ export const getMessagesRequestSchema = z
 		conversationId: z.string().min(1).openapi({
 			description: "The ID of the conversation to retrieve messages from",
 		}),
-		limit: z.coerce.number().min(1).max(100).default(50).openapi({
+		limit: z.coerce.number().min(1).max(100).optional().default(50).openapi({
 			description: "Maximum number of messages to return",
 			default: 50,
 		}),
