@@ -15,12 +15,17 @@ import {
 	sendTimelineItemResponseSchema,
 	type TimelineItem,
 } from "@cossistant/types/api/timeline-item";
-import { ConversationTimelineType } from "@cossistant/types/enums";
+import {
+	ConversationStatus,
+	ConversationTimelineType,
+} from "@cossistant/types/enums";
 import { OpenAPIHono, z } from "@hono/zod-openapi";
 import { protectedPublicApiKeyMiddleware } from "../middleware";
 import type { RestContext } from "../types";
 
 export const messagesRouter = new OpenAPIHono<RestContext>();
+
+const VISITOR_MESSAGE_ALLOWED_STATUSES = new Set([ConversationStatus.OPEN]);
 
 // Apply middleware to all routes in this router
 messagesRouter.use("/*", ...protectedPublicApiKeyMiddleware);
@@ -137,6 +142,22 @@ messagesRouter.openapi(
 			return c.json(
 				validateResponse(
 					{ error: "Forbidden: visitor does not own the conversation" },
+					z.object({ error: z.string() })
+				),
+				403
+			);
+		}
+
+		if (
+			isPublic &&
+			!VISITOR_MESSAGE_ALLOWED_STATUSES.has(conversation.status)
+		) {
+			return c.json(
+				validateResponse(
+					{
+						error:
+							"Forbidden: visitor cannot reply to this conversation status",
+					},
 					z.object({ error: z.string() })
 				),
 				403

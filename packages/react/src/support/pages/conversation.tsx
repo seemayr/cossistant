@@ -1,5 +1,7 @@
+import { ConversationStatus } from "@cossistant/types";
 import type { TimelineItem } from "@cossistant/types/api/timeline-item";
 import type { ReactElement } from "react";
+import { useConversation } from "../../hooks/use-conversation";
 import { useConversationPage } from "../../hooks/use-conversation-page";
 import { useSupport } from "../../provider";
 import { AvatarStack } from "../components/avatar-stack";
@@ -60,6 +62,21 @@ export const ConversationPage: ConversationPageComponent = ({
 		},
 	});
 
+	const activeConversationId = conversation.isPending
+		? null
+		: conversation.conversationId;
+	const { conversation: activeConversation } = useConversation(
+		activeConversationId,
+		{
+			enabled: Boolean(activeConversationId),
+		}
+	);
+
+	const isComposerAllowed =
+		conversation.isPending ||
+		!activeConversation ||
+		activeConversation.status === ConversationStatus.OPEN;
+
 	const handleGoBack = () => {
 		if (canGoBack) {
 			goBack();
@@ -99,20 +116,22 @@ export const ConversationPage: ConversationPageComponent = ({
 				items={conversation.items}
 			/>
 
-			<div className="flex-shrink-0 p-1">
-				<MultimodalInput
-					disabled={conversation.composer.isSubmitting}
-					error={conversation.error}
-					files={conversation.composer.files}
-					isSubmitting={conversation.composer.isSubmitting}
-					onChange={conversation.composer.setMessage}
-					onFileSelect={conversation.composer.addFiles}
-					onRemoveFile={conversation.composer.removeFile}
-					onSubmit={conversation.composer.submit}
-					placeholder={text("component.multimodalInput.placeholder")}
-					value={conversation.composer.message}
-				/>
-			</div>
+			{isComposerAllowed ? (
+				<div className="flex-shrink-0 p-1">
+					<MultimodalInput
+						disabled={conversation.composer.isSubmitting}
+						error={conversation.error}
+						files={conversation.composer.files}
+						isSubmitting={conversation.composer.isSubmitting}
+						onChange={conversation.composer.setMessage}
+						onFileSelect={conversation.composer.addFiles}
+						onRemoveFile={conversation.composer.removeFile}
+						onSubmit={conversation.composer.submit}
+						placeholder={text("component.multimodalInput.placeholder")}
+						value={conversation.composer.message}
+					/>
+				</div>
+			) : null}
 		</div>
 	);
 };
