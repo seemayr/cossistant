@@ -1,4 +1,153 @@
 ---
 title: Quickstart
-description: This is coming soon 🤝
+description: Add the Support widget in a few tiny steps.
 ---
+
+Welcome! This page is your tiny map for getting the `<Support />` button live.
+We will move slowly, keep the words short, and celebrate every click.
+
+<Steps>
+<Step>
+### Install the helper package
+Pick the flavor that matches your app and run the command.
+
+<Tabs defaultValue="next">
+<TabsList>
+<TabsTrigger value="next">Next.js</TabsTrigger>
+<TabsTrigger value="react">Other React</TabsTrigger>
+</TabsList>
+<TabsContent value="next">
+```bash
+npm install @cossistant/next
+```
+</TabsContent>
+<TabsContent value="react">
+```bash
+npm install @cossistant/react
+```
+</TabsContent>
+</Tabs>
+
+Need a project key? Pop into the Cossistant dashboard and copy your **public key**.
+</Step>
+
+<Step>
+### Bring in the styles
+The widget ships with cute Tailwind tokens, but you can also use plain CSS.
+
+<Tabs defaultValue="tailwind">
+<TabsList>
+<TabsTrigger value="tailwind">I use Tailwind</TabsTrigger>
+<TabsTrigger value="css">No Tailwind here</TabsTrigger>
+</TabsList>
+<TabsContent value="tailwind">
+Add the import to your global stylesheet (for example `app/globals.css`).
+
+```css
+@import "tailwindcss";
+@import "@cossistant/react/support.css";
+```
+</TabsContent>
+<TabsContent value="css">
+Drop the ready-made CSS near the top of your app entry point.
+
+```tsx
+import "@cossistant/react/support.css";
+```
+</TabsContent>
+</Tabs>
+</Step>
+
+<Step>
+### Wrap the app with the provider
+This gives the widget its brain (API URLs, realtime, your key).
+
+<Tabs defaultValue="next">
+<TabsList>
+<TabsTrigger value="next">Next.js App Router</TabsTrigger>
+<TabsTrigger value="react">Other React</TabsTrigger>
+</TabsList>
+<TabsContent value="next">
+```tsx {1,6} title="app/layout.tsx"
+import { SupportProvider } from "@cossistant/next";
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html>
+      <body>
+        <SupportProvider publicKey="pub_xxx">{children}</SupportProvider>
+      </body>
+    </html>
+  );
+}
+```
+</TabsContent>
+<TabsContent value="react">
+```tsx {1,5} title="main.tsx"
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import { SupportProvider } from "@cossistant/react";
+import App from "./App";
+
+createRoot(document.getElementById("root")!).render(
+  <StrictMode>
+    <SupportProvider publicKey="pub_xxx">
+      <App />
+    </SupportProvider>
+  </StrictMode>
+);
+```
+</TabsContent>
+</Tabs>
+</Step>
+
+<Step>
+### Drop the widget on the page
+Place the button once and it will float on every screen.
+
+<Tabs defaultValue="next">
+<TabsList>
+<TabsTrigger value="next">Next.js page</TabsTrigger>
+<TabsTrigger value="react">React component</TabsTrigger>
+</TabsList>
+<TabsContent value="next">
+```tsx title="app/page.tsx"
+import { Support } from "@cossistant/next";
+
+export default function Home() {
+  return (
+    <main>
+      <h1>Hello, friend!</h1>
+      <Support mode="floating" />
+    </main>
+  );
+}
+```
+</TabsContent>
+<TabsContent value="react">
+```tsx title="App.tsx"
+import { Support } from "@cossistant/react";
+
+export function App() {
+  return (
+    <div>
+      <h1>Hello, friend!</h1>
+      <Support />
+    </div>
+  );
+}
+```
+</TabsContent>
+</Tabs>
+
+That is it. Open your page and the Support bubble will wave back.
+</Step>
+</Steps>
+
+## What next?
+
+- Ready for server hints and routing goodies? Visit [Next.js setup](./next).
+- Building with Vite, Remix, or Expo? Jump to the [React setup](./react).
+- Want to tweak copy, messages, or placement? Peek at the [Support component docs](../support-component).
+
+You now have a friendly support buddy in your app. High five! ✋
