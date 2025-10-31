@@ -39,10 +39,29 @@ export function SupportRealtimeProvider({
 	);
 
 	const events = useMemo(
-		() => ({
-			timelineItemCreated: (
-				_data: unknown,
-				{
+                () => ({
+                        conversationCreated: (
+                                _data: unknown,
+                                {
+                                        event,
+                                        context,
+                                }: {
+                                        event: RealtimeEvent<"conversationCreated">;
+                                        context: SupportRealtimeContext;
+                                }
+                        ) => {
+                                if (
+                                        context.websiteId &&
+                                        event.payload.websiteId !== context.websiteId
+                                ) {
+                                        return;
+                                }
+
+                                context.client.handleRealtimeEvent(event);
+                        },
+                        timelineItemCreated: (
+                                _data: unknown,
+                                {
 					event,
 					context,
 				}: {

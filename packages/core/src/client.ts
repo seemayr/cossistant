@@ -24,10 +24,11 @@ import type {
 	TimelineItem,
 } from "@cossistant/types/api/timeline-item";
 import {
-	ConversationStatus,
-	ConversationTimelineType,
-	SenderType,
-	TimelineItemVisibility,
+        ConversationEventType,
+        ConversationStatus,
+        ConversationTimelineType,
+        SenderType,
+        TimelineItemVisibility,
 } from "@cossistant/types/enums";
 import type { Conversation } from "@cossistant/types/schemas";
 import { CossistantRestClient } from "./rest-client";
@@ -409,34 +410,64 @@ export class CossistantClient {
 		}
 	}
 
-	handleRealtimeEvent(event: AnyRealtimeEvent): void {
-		if (event.type === "conversationCreated") {
-			const { conversation, header } = event.payload;
+        handleRealtimeEvent(event: AnyRealtimeEvent): void {
+                switch (event.type) {
+                        case "conversationCreated": {
+                                const { conversation } = event.payload;
 
-			this.conversationsStore.ingestConversation({
-				...conversation,
-				lastTimelineItem: conversation.lastTimelineItem ?? undefined,
-			});
-		} else if (event.type === "timelineItemCreated") {
-			// Ingest timeline item into store
-			const timelineItem =
-				this.timelineItemsStore.ingestRealtimeTimelineItem(event);
+                                this.conversationsStore.ingestConversation({
+                                        ...conversation,
+                                        lastTimelineItem:
+                                                conversation.lastTimelineItem ?? undefined,
+                                });
+                                break;
+                        }
+                        case "timelineItemCreated": {
+                                const timelineItem =
+                                        this.timelineItemsStore.ingestRealtimeTimelineItem(event);
 
-			// Update conversation with last timeline item
-			const existingConversation =
-				this.conversationsStore.getState().byId[timelineItem.conversationId];
+                                const existingConversation =
+                                        this.conversationsStore.getState().byId[
+                                                timelineItem.conversationId
+                                        ];
 
-			if (existingConversation) {
-				const nextConversation = {
-					...existingConversation,
-					updatedAt: timelineItem.createdAt,
-					lastTimelineItem: timelineItem,
-				};
+                                if (!existingConversation) {
+                                        break;
+                                }
 
-				this.conversationsStore.ingestConversation(nextConversation);
-			}
-		}
-	}
+                                const nextConversation = {
+                                        ...existingConversation,
+                                        updatedAt: timelineItem.createdAt,
+                                        lastTimelineItem: timelineItem,
+                                };
+
+                                this.conversationsStore.ingestConversation(nextConversation);
+                                break;
+                        }
+                        case "conversationEventCreated": {
+                                const existingConversation =
+                                        this.conversationsStore.getState().byId[
+                                                event.payload.conversationId
+                                        ];
+
+                                if (!existingConversation) {
+                                        break;
+                                }
+
+                                const nextConversation = applyConversationEventToConversation(
+                                        existingConversation,
+                                        event
+                                );
+
+                                if (nextConversation) {
+                                        this.conversationsStore.ingestConversation(nextConversation);
+                                }
+                                break;
+                        }
+                        default:
+                                break;
+                }
+        }
 
 	// Cleanup method
 	destroy(): void {
@@ -444,9 +475,89 @@ export class CossistantClient {
 	}
 }
 
+function isConversationStatusValue(
+        value: unknown
+): value is Conversation["status"] {
+        if (typeof value !== "string") {
+                return false;
+        }
+
+        return (Object.values(ConversationStatus) as Conversation["status"][]).includes(
+                value as Conversation["status"]
+        );
+}
+
+function applyConversationEventToConversation(
+        conversation: Conversation,
+        event: RealtimeEvent<"conversationEventCreated">
+): Conversation | null {
+        const eventData = event.payload.event;
+        const metadata = (eventData.metadata ?? {}) as Record<string, unknown>;
+
+        let changed = false;
+        let nextConversation = conversation;
+
+        const ensureClone = () => {
+                if (!changed) {
+                        nextConversation = { ...conversation };
+                        changed = true;
+                }
+        };
+
+        switch (eventData.type) {
+                case ConversationEventType.RESOLVED: {
+                        if (conversation.status !== ConversationStatus.RESOLVED) {
+                                ensureClone();
+                                nextConversation.status = ConversationStatus.RESOLVED;
+                        }
+                        break;
+                }
+                case ConversationEventType.REOPENED: {
+                        if (conversation.status !== ConversationStatus.OPEN) {
+                                ensureClone();
+                                nextConversation.status = ConversationStatus.OPEN;
+                        }
+                        break;
+                }
+                case ConversationEventType.STATUS_CHANGED: {
+                        const nextStatus = metadata.newStatus;
+
+                        if (isConversationStatusValue(nextStatus)) {
+                                if (conversation.status !== nextStatus) {
+                                        ensureClone();
+                                        nextConversation.status = nextStatus;
+                                }
+                        }
+
+                        if (typeof metadata.archived === "boolean") {
+                                const deletedAt = metadata.archived
+                                        ? eventData.createdAt
+                                        : null;
+
+                                if (conversation.deletedAt !== deletedAt) {
+                                        ensureClone();
+                                        nextConversation.deletedAt = deletedAt;
+                                }
+                        }
+
+                        break;
+                }
+                default:
+                        break;
+        }
+
+        if (!changed) {
+                return null;
+        }
+
+        nextConversation.updatedAt = eventData.createdAt;
+
+        return nextConversation;
+}
+
 function normalizeBootstrapTimelineItem(
-	conversationId: string,
-	item: DefaultMessage | TimelineItem
+        conversationId: string,
+        item: DefaultMessage | TimelineItem
 ): TimelineItem {
 	if (isDefaultMessage(item)) {
 		const createdAt = new Date().toISOString();
