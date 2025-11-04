@@ -3,6 +3,7 @@ import { getConversationById } from "@api/db/queries/conversation";
 import { conversationTimelineItem } from "@api/db/schema";
 import { realtime } from "@api/realtime/emitter";
 import { generateULID } from "@api/utils/db/ids";
+import { scheduleConversationUnseenDigest } from "@api/utils/conversation-notifications";
 import {
 	ConversationTimelineType,
 	TimelineItemVisibility,
@@ -155,7 +156,18 @@ export async function createTimelineItem(
 		}
 	);
 
-	await realtime.emit("timelineItemCreated", realtimePayload);
+        await realtime.emit("timelineItemCreated", realtimePayload);
+
+        if (
+                item.type === ConversationTimelineType.MESSAGE &&
+                (item.visibility ?? TimelineItemVisibility.PUBLIC) ===
+                        TimelineItemVisibility.PUBLIC
+        ) {
+                await scheduleConversationUnseenDigest({
+                        conversationId,
+                        organizationId,
+                });
+        }
 
 	return {
 		id: parsedItem.id,
