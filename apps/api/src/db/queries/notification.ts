@@ -88,16 +88,12 @@ export async function ensureDefaultMemberNotificationRules(
                         },
                 });
 
-                const existingTypes = new Set(
-                        existingRules.map((rule) => rule.notificationType)
+                const ruleIdByType = new Map(
+                        existingRules.map((rule) => [rule.notificationType, rule.id])
                 );
 
                 for (const definition of MEMBER_NOTIFICATION_DEFAULTS) {
-                        if (existingTypes.has(definition.notificationType)) {
-                                continue;
-                        }
-
-                        const [createdRule] = await tx
+                        const insertedRules = await tx
                                 .insert(memberNotificationRule)
                                 .values({
                                         id: generateULID(),
@@ -106,19 +102,91 @@ export async function ensureDefaultMemberNotificationRules(
                                         isEnabled: definition.isEnabled,
                                         settings: definition.settings,
                                 })
+                                .onConflictDoNothing({
+                                        target: [
+                                                memberNotificationRule.memberId,
+                                                memberNotificationRule.notificationType,
+                                        ],
+                                })
                                 .returning({ id: memberNotificationRule.id });
 
+                        let ruleId = insertedRules.at(0)?.id;
+
+                        if (!ruleId) {
+                                ruleId = ruleIdByType.get(
+                                        definition.notificationType
+                                );
+                        }
+
+                        if (!ruleId) {
+                                const existingRule = await tx
+                                        .query.memberNotificationRule.findFirst({
+                                                where: and(
+                                                        eq(
+                                                                memberNotificationRule.memberId,
+                                                                params.memberId
+                                                        ),
+                                                        eq(
+                                                                memberNotificationRule.notificationType,
+                                                                definition.notificationType
+                                                        )
+                                                ),
+                                                columns: { id: true },
+                                        });
+
+                                if (!existingRule) {
+                                        throw new Error("RULE_LOOKUP_FAILED");
+                                }
+
+                                ruleId = existingRule.id;
+                        }
+
+                        ruleIdByType.set(definition.notificationType, ruleId);
+
                         for (const channel of definition.channels) {
-                                await tx.insert(memberNotificationChannel).values({
-                                        id: generateULID(),
-                                        ruleId: createdRule.id,
-                                        channelType: channel.channelType,
-                                        config: channel.config ?? null,
-                                        conditions: channel.conditions ?? null,
-                                        delaySeconds: channel.delaySeconds,
-                                        orderIndex: channel.orderIndex,
-                                        isEnabled: channel.isEnabled,
-                                });
+                                const insertedChannels = await tx
+                                        .insert(memberNotificationChannel)
+                                        .values({
+                                                id: generateULID(),
+                                                ruleId,
+                                                channelType: channel.channelType,
+                                                config: channel.config ?? null,
+                                                conditions: channel.conditions ?? null,
+                                                delaySeconds: channel.delaySeconds,
+                                                orderIndex: channel.orderIndex,
+                                                isEnabled: channel.isEnabled,
+                                        })
+                                        .onConflictDoNothing({
+                                                target: [
+                                                        memberNotificationChannel.ruleId,
+                                                        memberNotificationChannel.orderIndex,
+                                                ],
+                                        })
+                                        .returning({
+                                                id: memberNotificationChannel.id,
+                                        });
+
+                                if (insertedChannels.length === 0) {
+                                        const existingChannel = await tx
+                                                .query.memberNotificationChannel.findFirst({
+                                                        where: and(
+                                                                eq(
+                                                                        memberNotificationChannel.ruleId,
+                                                                        ruleId
+                                                                ),
+                                                                eq(
+                                                                        memberNotificationChannel.orderIndex,
+                                                                        channel.orderIndex
+                                                                )
+                                                        ),
+                                                });
+
+                                        if (!existingChannel) {
+                                                throw new Error(
+                                                        "CHANNEL_LOOKUP_FAILED"
+                                                );
+                                        }
+                                }
                         }
                 }
 
