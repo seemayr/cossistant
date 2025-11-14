@@ -26,7 +26,6 @@ Once the foundation is stable, we’ll **open contributions with clear scopes, i
 - **Open issues** to report bugs, suggest features, or discuss implementation ideas.
 - **Help shape the roadmap** — we read every issue and discussion.
 - **Share feedback** on the API, SDK structure, or early docs.
-- **Join the waitlist or early access** once announced.
 
 ---
 

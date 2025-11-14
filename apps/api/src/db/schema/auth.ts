@@ -10,7 +10,6 @@ import {
 	ulidReference,
 } from "../../utils/db/ids";
 
-import { waitingListEntry } from "./waiting-list";
 import { website } from "./website";
 
 export const user = pgTable(
@@ -262,10 +261,6 @@ export const userRelations = relations(user, ({ many, one }) => ({
 	accounts: many(account),
 	memberships: many(member),
 	invitations: many(invitation),
-	waitingListEntry: one(waitingListEntry, {
-		fields: [user.id],
-		references: [waitingListEntry.userId],
-	}),
 }));
 
 export const organizationRelations = relations(organization, ({ many }) => ({

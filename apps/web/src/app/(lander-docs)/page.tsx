@@ -1,6 +1,5 @@
 import { SupportConfig } from "@cossistant/react/support-config";
 import Link from "next/link";
-import { Suspense } from "react";
 import { FakeDashboard } from "@/components/landing/fake-dashboard";
 import { Button } from "@/components/ui/button";
 import { Logos } from "@/components/ui/logos";
@@ -10,7 +9,6 @@ import { Benefits } from "./components/benefits";
 import { BrowserWithBackground } from "./components/browser-with-background";
 import { GitHubLink } from "./components/github-link";
 import { Install } from "./components/install";
-import { WaitingListMessage } from "./components/waiting-list-rank/message";
 
 export const dynamic = "force-dynamic";
 
@@ -40,9 +38,9 @@ export default async function Landing() {
               code.
             </h3> */}
 						<div className="mt-6 flex w-full flex-col gap-3 md:max-w-[75%] md:gap-6 lg:max-w-full lg:flex-row lg:items-center">
-							<Link href="/waitlist">
+							<Link href="/signup">
 								<Button className="h-12 w-full border border-transparent font-medium text-md has-[>svg]:px-4 lg:w-[250px]">
-									Join the waitlist
+									Create your account
 								</Button>
 							</Link>
 							<GitHubLink
@@ -52,15 +50,10 @@ export default async function Landing() {
 								Star us on GitHub
 							</GitHubLink>
 						</div>
-						<Suspense
-							fallback={
-								<p className="text-balance text-center font-mono text-foreground/20 text-xs md:text-left">
-									Already xxx people on the waitlist. Join them, be early.
-								</p>
-							}
-						>
-							<WaitingListMessage />
-						</Suspense>
+						<p className="text-balance text-center font-mono text-primary/70 text-xs md:text-left">
+							Ship AI-assisted support with human oversight today—no waiting
+							required.
+						</p>
 					</div>
 					<BrowserWithBackground containerClassName="w-full border-primary/10 border-y border-dashed hidden lg:block">
 						<div className="fake-dashboard-container">

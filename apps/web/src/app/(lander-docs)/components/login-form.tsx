@@ -219,6 +219,15 @@ export function LoginForm() {
 					</Button>
 				</div>
 			)}
+			<p className="text-center text-primary/60 text-sm">
+				Need an account?{" "}
+				<Link
+					className="text-primary underline hover:text-primary/80"
+					href="/signup"
+				>
+					Create one
+				</Link>
+			</p>
 		</div>
 	);
 }

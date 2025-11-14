@@ -9,14 +9,12 @@ import { uploadRouter } from "./upload";
 import { userRouter } from "./user";
 import { viewRouter } from "./view";
 import { visitorRouter } from "./visitor";
-import { waitlistRouter } from "./waitlist";
 import { websiteRouter } from "./website";
 
 export const origamiTRPCRouter = createTRPCRouter({
 	resend: resendRouter,
 	user: userRouter,
 	website: websiteRouter,
-	waitlist: waitlistRouter,
 	conversation: conversationRouter,
 	view: viewRouter,
 	visitor: visitorRouter,

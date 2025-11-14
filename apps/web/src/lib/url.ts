@@ -21,11 +21,6 @@ export function getWebSocketUrl() {
 	return `${baseUrl.replace(HTTP_REGEX, "ws")}/ws`;
 }
 
-export function getWaitlistUrl(referralId: string) {
-	const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
-	return `${baseUrl}/j/${referralId}`;
-}
-
 export function getLandingBaseUrl() {
 	const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
 	return baseUrl;

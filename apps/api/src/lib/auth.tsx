@@ -1,12 +1,8 @@
 import { db } from "@api/db";
 import * as schema from "@api/db/schema";
-import { waitingListEntry } from "@api/db/schema/waiting-list";
 import { env } from "@api/env";
 import { sendEmail } from "@api/lib/resend";
 import { generateULID } from "@api/utils/db/ids";
-import { generateUniqueReferralCode } from "@api/utils/referral-code";
-import { triggerWorkflow } from "@api/utils/workflow";
-import { WORKFLOW } from "@api/workflows/types";
 import { ResetPasswordEmail } from "@cossistant/transactional/emails/reset-password";
 import { polar, portal, usage } from "@polar-sh/better-auth";
 import { Polar } from "@polar-sh/sdk";
@@ -185,40 +181,6 @@ export const auth = betterAuth({
 		cookieCache: {
 			enabled: true,
 			maxAge: 60,
-		},
-	},
-	databaseHooks: {
-		user: {
-			create: {
-				after: async (createdUser) => {
-					try {
-						// Generate unique referral code
-						const referralCode = await generateUniqueReferralCode({
-							name: createdUser.name || "",
-							email: createdUser.email,
-							image: createdUser.image || undefined,
-						});
-
-						// Add user to waiting list
-						await db.insert(waitingListEntry).values({
-							userId: createdUser.id,
-							uniqueReferralCode: referralCode,
-						});
-
-						await triggerWorkflow({
-							path: WORKFLOW.WAITLIST_JOIN,
-							data: {
-								userId: createdUser.id,
-								email: createdUser.email,
-								name: createdUser.name || "",
-							},
-						});
-					} catch (error) {
-						console.error("Error in user creation hook:", error);
-						// Don't throw error to avoid blocking user creation
-					}
-				},
-			},
 		},
 	},
 }) satisfies ReturnType<typeof betterAuth>;
