@@ -41,6 +41,14 @@ export type UseGroupedMessagesOptions = {
 
 export type UseGroupedMessagesProps = UseGroupedMessagesOptions;
 
+type SeenByFilterOptions = {
+	messageId: string;
+	items: TimelineItem[];
+	seenBy: Set<string> | undefined;
+	currentViewerId?: string;
+	viewerType?: SenderType;
+};
+
 // Helper function to safely get timestamp from Date or string
 const getTimestamp = (date: Date | string | null | undefined): number => {
 	if (!date) {
@@ -224,6 +232,34 @@ const buildTimelineReadReceiptData = (
 	return { seenByMap, lastReadMessageMap, unreadCountMap };
 };
 
+export const filterSeenByIds = ({
+	messageId,
+	items,
+	seenBy,
+	currentViewerId,
+	viewerType,
+}: SeenByFilterOptions): readonly string[] => {
+	if (!seenBy || seenBy.size === 0) {
+		return EMPTY_STRING_ARRAY;
+	}
+
+	let filteredSeenBy = seenBy;
+
+	if (viewerType === SenderType.VISITOR && currentViewerId) {
+		const message = items.find((item) => item.id === messageId);
+		if (message?.visitorId === currentViewerId) {
+			filteredSeenBy = new Set(filteredSeenBy);
+			filteredSeenBy.delete(currentViewerId);
+		}
+	}
+
+	if (filteredSeenBy.size === 0) {
+		return EMPTY_STRING_ARRAY;
+	}
+
+	return Object.freeze(Array.from(filteredSeenBy)) as readonly string[];
+};
+
 /**
  * Batches sequential timeline items from the same sender into groups and enriches
  * them with read-receipt helpers so UIs can render conversation timelines with
@@ -265,8 +301,14 @@ export const useGroupedMessages = ({
 					return seenByArrayCache.get(messageId) ?? EMPTY_STRING_ARRAY;
 				}
 
-				const seenBy = seenByMap.get(messageId);
-				if (!seenBy || seenBy.size === 0) {
+				const seenBy = filterSeenByIds({
+					items,
+					seenBy: seenByMap.get(messageId),
+					messageId,
+					currentViewerId,
+					viewerType,
+				});
+				if (seenBy.length === 0) {
 					seenByArrayCache.set(messageId, EMPTY_STRING_ARRAY);
 					return EMPTY_STRING_ARRAY;
 				}
@@ -297,5 +339,5 @@ export const useGroupedMessages = ({
 				return messageIndex < lastReadIndex;
 			},
 		};
-	}, [items, seenData, currentViewerId]);
+	}, [items, seenData, currentViewerId, viewerType]);
 };

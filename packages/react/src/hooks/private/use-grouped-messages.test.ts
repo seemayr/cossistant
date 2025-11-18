@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { SenderType } from "@cossistant/types";
 import type { TimelineItem } from "@cossistant/types/api/timeline-item";
 import type { ConversationSeen } from "@cossistant/types/schemas";
+import { filterSeenByIds } from "./use-grouped-messages";
 
 // Import the internal functions we need to test
 // Since useGroupedMessages is a hook, we'll test the underlying logic directly
@@ -159,6 +160,64 @@ describe("buildTimelineReadReceiptData", () => {
 
 		// Visitor should NOT have seen msg-3 (after 10:07)
 		expect(seenByMap.get("msg-3")?.has("visitor-1")).toBe(false);
+	});
+
+	it("omits the current visitor when inspecting seenBy for their own messages", () => {
+		const visitorMessage = createTimelineItem({
+			id: "msg-visitor",
+			visitorId: "visitor-1",
+			userId: null,
+			createdAt: new Date("2024-01-01T10:00:00.000Z").toISOString(),
+		});
+
+		const agentMessage = createTimelineItem({
+			id: "msg-agent",
+			visitorId: null,
+			userId: "user-1",
+			createdAt: new Date("2024-01-01T10:05:00.000Z").toISOString(),
+		});
+
+		const items: TimelineItem[] = [visitorMessage, agentMessage];
+
+		const seenData: ConversationSeen[] = [
+			createSeenEntry({
+				id: "visitor-seen",
+				visitorId: "visitor-1",
+				userId: null,
+				lastSeenAt: new Date("2024-01-01T10:06:00.000Z").toISOString(),
+			}),
+			createSeenEntry({
+				id: "agent-seen",
+				visitorId: null,
+				userId: "user-2",
+				lastSeenAt: new Date("2024-01-01T10:10:00.000Z").toISOString(),
+			}),
+		];
+
+		const { seenByMap } = buildTimelineReadReceiptData(seenData, items);
+
+		const seenByForVisitorMessage = filterSeenByIds({
+			currentViewerId: "visitor-1",
+			items,
+			messageId: "msg-visitor",
+			seenBy: seenByMap.get("msg-visitor"),
+			viewerType: SenderType.VISITOR,
+		});
+
+		expect(seenByForVisitorMessage).toEqual(["user-2"]);
+
+		const seenByForAgentMessage = filterSeenByIds({
+			currentViewerId: "visitor-1",
+			items,
+			messageId: "msg-agent",
+			seenBy: seenByMap.get("msg-agent"),
+			viewerType: SenderType.VISITOR,
+		});
+
+		expect(seenByForAgentMessage).toEqual(
+			expect.arrayContaining(["visitor-1", "user-2"])
+		);
+		expect(seenByForAgentMessage).toHaveLength(2);
 	});
 
 	it("correctly handles multiple viewers with different lastSeenAt timestamps", () => {
