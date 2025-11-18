@@ -34,6 +34,9 @@ export function TopBar({
 
 					{/* Navigation */}
 					<div className="hidden items-center space-x-4 md:flex">
+						<TopbarButton className="text-foreground" href="/pricing">
+							Pricing
+						</TopbarButton>
 						<TopbarButton className="text-foreground" href="/docs">
 							Docs
 						</TopbarButton>
