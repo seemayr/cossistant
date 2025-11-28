@@ -87,10 +87,10 @@ export type GenerateUploadUrlOptions = {
 };
 
 export type GenerateUploadUrlResult = {
-	uploadUrl: string;
-	key: string;
-	bucket: string;
-	expiresAt: string;
+        uploadUrl: string;
+        key: string;
+        bucket: string;
+        expiresAt: string;
 	contentType: string;
 	publicUrl: string;
 };
@@ -186,10 +186,10 @@ function buildScopeBaseSegments(scope: UploadScope, useCdn: boolean): string[] {
 }
 
 export async function generateUploadUrl(
-	options: GenerateUploadUrlOptions
+        options: GenerateUploadUrlOptions
 ): Promise<GenerateUploadUrlResult> {
-	const useCdn = Boolean(options.useCdn);
-	const baseSegments = buildScopeBaseSegments(options.scope, useCdn);
+        const useCdn = env.NODE_ENV === "production" && Boolean(options.useCdn);
+        const baseSegments = buildScopeBaseSegments(options.scope, useCdn);
 	const normalizedPathSegments = sanitizeSegmentsFromInput(options.path);
 
 	const allSegments = [...baseSegments, ...normalizedPathSegments];

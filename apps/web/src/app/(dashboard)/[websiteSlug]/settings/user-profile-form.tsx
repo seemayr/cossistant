@@ -25,11 +25,13 @@ import { SettingsRowFooter } from "@/components/ui/layout/settings-layout";
 import { authClient } from "@/lib/auth/client";
 import { useTRPC } from "@/lib/trpc/client";
 
+const shouldUseCdnUploads = process.env.NODE_ENV === "production";
+
 const avatarValueSchema = z
-	.union([
-		z.string().min(1),
-		z
-			.object({
+        .union([
+                z.string().min(1),
+                z
+                        .object({
 				previewUrl: z.string().min(1),
 				url: z.string().optional(),
 				mimeType: z.string(),
@@ -151,14 +153,14 @@ export function UserProfileForm({
 					fileName: file.name,
 					websiteId,
 					path: `users/${userId}/avatars`,
-					scope: {
-						type: "user",
-						userId,
-						organizationId,
-						websiteId,
-					},
-					useCdn: true,
-				});
+                                        scope: {
+                                                type: "user",
+                                                userId,
+                                                organizationId,
+                                                websiteId,
+                                        },
+                                        useCdn: shouldUseCdnUploads,
+                                });
 
 				await uploadToPresignedUrl({
 					file,
@@ -179,7 +181,7 @@ export function UserProfileForm({
 					},
 				});
 
-				const publicUrl = uploadDetails.publicUrl;
+                                const publicUrl = uploadDetails.publicUrl ?? uploadDetails.uploadUrl;
 
 				toast.success("Profile picture uploaded.", {
 					id: avatarUploadToastId,
@@ -213,37 +215,37 @@ export function UserProfileForm({
 			const name = values.name.trim();
 			const avatarValue = values.avatar;
 
-			let imageUrl: string | null = null;
+                        const imageUrl = (() => {
+                                // Explicitly handle null (avatar removed)
+                                if (avatarValue === null) {
+                                        return null;
+                                }
 
-			// Explicitly handle null (avatar removed)
-			if (avatarValue === null) {
-				imageUrl = null;
-			} else if (typeof avatarValue === "string") {
-				// Strip any existing query parameters (like cache-busting)
-				try {
-					const url = new URL(avatarValue);
-					url.search = ""; // Remove all query parameters
-					imageUrl = url.toString();
-				} catch {
-					imageUrl = avatarValue;
-				}
-			} else if (avatarValue && typeof avatarValue === "object") {
-				if (!avatarValue.url) {
-					toast.error(
-						"Please wait for the avatar upload to finish before saving."
-					);
-					return;
-				}
+                                const rawUrl =
+                                        typeof avatarValue === "string"
+                                                ? avatarValue
+                                                : avatarValue?.url;
 
-				// Strip any existing query parameters before saving
-				try {
-					const url = new URL(avatarValue.url);
-					url.search = ""; // Remove all query parameters
-					imageUrl = url.toString();
-				} catch {
-					imageUrl = avatarValue.url;
-				}
-			}
+                                if (!rawUrl) {
+                                        toast.error(
+                                                "Please wait for the avatar upload to finish before saving."
+                                        );
+                                        return null;
+                                }
+
+                                try {
+                                        const url = new URL(rawUrl);
+                                        url.search = ""; // Remove all query parameters
+                                        url.hash = "";
+                                        return url.toString();
+                                } catch {
+                                        return rawUrl;
+                                }
+                        })();
+
+                        if (imageUrl === null && avatarValue !== null) {
+                                return;
+                        }
 
 			await updateProfile({
 				userId,

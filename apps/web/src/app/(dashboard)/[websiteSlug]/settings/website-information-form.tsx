@@ -31,12 +31,13 @@ import { isValidDomain } from "@/lib/utils";
 const PROTOCOL_REGEX = /^https?:\/\//i;
 const PATH_REGEX = /\/.*$/;
 const LOGO_ACCEPT =
-	"image/png,image/jpeg,image/webp,image/avif,image/gif,image/svg+xml";
+        "image/png,image/jpeg,image/webp,image/avif,image/gif,image/svg+xml";
+const shouldUseCdnUploads = process.env.NODE_ENV === "production";
 
 const logoValueSchema = z
-	.union([
-		z.string().min(1),
-		z
+        .union([
+                z.string().min(1),
+                z
 			.object({
 				previewUrl: z.string().min(1),
 				url: z.string().optional(),
@@ -212,14 +213,14 @@ export function WebsiteInformationForm({
 					contentType: file.type,
 					fileName: file.name,
 					websiteId,
-					scope: {
-						type: "user",
-						userId: organizationId,
-						organizationId,
-						websiteId,
-					},
-					useCdn: true,
-				});
+                                        scope: {
+                                                type: "user",
+                                                userId: organizationId,
+                                                organizationId,
+                                                websiteId,
+                                        },
+                                        useCdn: shouldUseCdnUploads,
+                                });
 
 				await uploadToPresignedUrl({
 					file,
@@ -237,7 +238,7 @@ export function WebsiteInformationForm({
 					},
 				});
 
-				const publicUrl = uploadDetails.publicUrl;
+                                const publicUrl = uploadDetails.publicUrl ?? uploadDetails.uploadUrl;
 
 				toast.success("Logo uploaded.", { id: logoUploadToastId });
 
@@ -281,20 +282,37 @@ export function WebsiteInformationForm({
 				? contactEmailValue.toLowerCase()
 				: null;
 
-			const logoValue = values.logo;
-			let logoUrl: string | null = null;
+                        const logoValue = values.logo;
+                        const logoUrl = (() => {
+                                if (logoValue === null) {
+                                        return null;
+                                }
 
-			if (typeof logoValue === "string") {
-				logoUrl = logoValue;
-			} else if (logoValue && typeof logoValue === "object") {
-				if (!logoValue.url) {
-					toast.error(
-						"Please wait for the logo upload to finish before saving."
-					);
-					return;
-				}
-				logoUrl = logoValue.url;
-			}
+                                const rawUrl =
+                                        typeof logoValue === "string"
+                                                ? logoValue
+                                                : logoValue?.url;
+
+                                if (!rawUrl) {
+                                        toast.error(
+                                                "Please wait for the logo upload to finish before saving."
+                                        );
+                                        return null;
+                                }
+
+                                try {
+                                        const url = new URL(rawUrl);
+                                        url.search = "";
+                                        url.hash = "";
+                                        return url.toString();
+                                } catch {
+                                        return rawUrl;
+                                }
+                        })();
+
+                        if (logoUrl === null && logoValue !== null) {
+                                return;
+                        }
 
 			await updateWebsite({
 				organizationId,
