@@ -359,6 +359,14 @@ export type ImagePart = z.infer<typeof imagePartSchema>;
 export type TimelinePartEvent = z.infer<typeof timelinePartEventSchema>;
 export type TimelinePartMetadata = z.infer<typeof timelinePartMetadataSchema>;
 
+// Backward-compatible type aliases (deprecated, use new names)
+/** @deprecated Use `FilePart` instead */
+export type TimelinePartFile = FilePart;
+/** @deprecated Use `ImagePart` instead */
+export type TimelinePartImage = ImagePart;
+/** @deprecated Use `TextPart` instead */
+export type TimelinePartText = TextPart;
+
 // Provider metadata type for extensions
 export type CossistantProviderMetadata = z.infer<
 	typeof cossistantProviderMetadataSchema

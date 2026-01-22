@@ -58,7 +58,7 @@ export function FileUploadZone({
 	);
 
 	const handleDrop = useCallback(
-		async (e: React.DragEvent<HTMLDivElement>) => {
+		async (e: React.DragEvent<HTMLElement>) => {
 			e.preventDefault();
 			e.stopPropagation();
 			setIsDragOver(false);
@@ -73,7 +73,7 @@ export function FileUploadZone({
 	);
 
 	const handleDragOver = useCallback(
-		(e: React.DragEvent<HTMLDivElement>) => {
+		(e: React.DragEvent<HTMLElement>) => {
 			e.preventDefault();
 			e.stopPropagation();
 			if (!(disabled || isUploading)) {
@@ -83,7 +83,7 @@ export function FileUploadZone({
 		[disabled, isUploading]
 	);
 
-	const handleDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+	const handleDragLeave = useCallback((e: React.DragEvent<HTMLElement>) => {
 		e.preventDefault();
 		e.stopPropagation();
 		setIsDragOver(false);

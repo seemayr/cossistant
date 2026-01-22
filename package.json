@@ -49,5 +49,8 @@
     "*.{js,jsx,ts,tsx,json,jsonc,css,md,mdx}": [
       "bunx ultracite fix"
     ]
+  },
+  "overrides": {
+    "@ai-sdk/provider": "3.0.4"
   }
 }

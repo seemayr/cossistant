@@ -28,8 +28,11 @@ export function handleConversationUpdated({
 
 	const { conversationId, updates } = payload;
 
-	const existingHeader =
-		context.queryNormalizer.getObjectById<ConversationHeader>(conversationId);
+	// Type assertion needed because TimelineItemParts contains complex union types
+	// that don't fit @normy/react-query's simpler Data type constraints
+	const existingHeader = context.queryNormalizer.getObjectById(
+		conversationId
+	) as ConversationHeader | undefined;
 
 	if (!existingHeader) {
 		// Conversation not in cache, invalidate to refetch
@@ -60,7 +63,11 @@ export function handleConversationUpdated({
 		);
 	});
 
-	context.queryNormalizer.setNormalizedData(headerUpdater(existingHeader));
+	context.queryNormalizer.setNormalizedData(
+		headerUpdater(existingHeader) as Parameters<
+			typeof context.queryNormalizer.setNormalizedData
+		>[0]
+	);
 }
 
 function createHeaderUpdaterFromUpdates(

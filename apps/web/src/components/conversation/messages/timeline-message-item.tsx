@@ -95,7 +95,7 @@ export function TimelineMessageItem({
 											{/* biome-ignore lint/performance/noImgElement: User-uploaded images from S3, not optimizable */}
 											{/* biome-ignore lint/nursery/useImageSize: Dynamic image dimensions not known at render time */}
 											<img
-												alt={image.fileName || `Image ${index + 1}`}
+												alt={image.filename || `Image ${index + 1}`}
 												className="max-h-[200px] max-w-[300px] cursor-pointer rounded-lg object-cover transition-transform group-hover:scale-105"
 												loading="lazy"
 												src={image.url}
@@ -119,7 +119,7 @@ export function TimelineMessageItem({
 														isSentByViewer,
 												}
 											)}
-											download={file.fileName}
+											download={file.filename}
 											href={file.url}
 											key={file.url}
 											rel="noopener noreferrer"
@@ -127,7 +127,7 @@ export function TimelineMessageItem({
 										>
 											<Icon className="h-4 w-4 shrink-0" name="attachment" />
 											<span className="flex-1 truncate font-medium">
-												{file.fileName || "Download file"}
+												{file.filename || "Download file"}
 											</span>
 											{file.size && (
 												<span className="text-muted-foreground opacity-70">
@@ -165,7 +165,7 @@ export function TimelineMessageItem({
 				<Dialog onOpenChange={setLightboxOpen} open={lightboxOpen}>
 					<DialogContent className="flex max-h-[90vh] max-w-[90vw] items-center justify-center border-none bg-black/90 p-4 [&>button]:hidden">
 						<DialogTitle className="sr-only">
-							{currentImage?.fileName || `Image ${lightboxIndex + 1}`}
+							{currentImage?.filename || `Image ${lightboxIndex + 1}`}
 						</DialogTitle>
 
 						{/* Close button */}
@@ -181,7 +181,7 @@ export function TimelineMessageItem({
 						{/* biome-ignore lint/performance/noImgElement: User-uploaded images from S3, not optimizable */}
 						{/* biome-ignore lint/nursery/useImageSize: Dynamic image dimensions not known at render time */}
 						<img
-							alt={currentImage?.fileName || `Image ${lightboxIndex + 1}`}
+							alt={currentImage?.filename || `Image ${lightboxIndex + 1}`}
 							className="max-h-[85vh] max-w-[85vw] object-contain"
 							src={currentImage?.url}
 						/>

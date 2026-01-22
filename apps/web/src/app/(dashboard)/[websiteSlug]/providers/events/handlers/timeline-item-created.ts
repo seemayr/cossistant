@@ -102,10 +102,11 @@ export const handleMessageCreated = ({
 		upsertConversationTimelineItemInCache(queryClient, queryKey, item);
 	}
 
-	const existingHeader =
-		context.queryNormalizer.getObjectById<ConversationHeader>(
-			payload.conversationId
-		);
+	// Type assertion needed because TimelineItemParts contains complex union types
+	// that don't fit @normy/react-query's simpler Data type constraints
+	const existingHeader = context.queryNormalizer.getObjectById(
+		payload.conversationId
+	) as ConversationHeader | undefined;
 
 	if (!existingHeader) {
 		forEachConversationHeadersQuery(
@@ -145,7 +146,11 @@ export const handleMessageCreated = ({
 		}
 	);
 
-	context.queryNormalizer.setNormalizedData(headerUpdater(existingHeader));
+	context.queryNormalizer.setNormalizedData(
+		headerUpdater(existingHeader) as Parameters<
+			typeof context.queryNormalizer.setNormalizedData
+		>[0]
+	);
 };
 
 function createHeaderUpdaterFromTimelineItem(

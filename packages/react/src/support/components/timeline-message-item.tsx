@@ -107,7 +107,7 @@ export function TimelineMessageItem({
 												{/* biome-ignore lint/performance/noImgElement: React package, not Next.js specific */}
 												{/* biome-ignore lint/nursery/useImageSize: Dynamic image dimensions not known at render time */}
 												<img
-													alt={image.fileName || `Image ${index + 1}`}
+													alt={image.filename || `Image ${index + 1}`}
 													className="max-h-[150px] max-w-[200px] cursor-pointer rounded-lg object-cover transition-transform group-hover:scale-105"
 													loading="lazy"
 													src={image.url}
@@ -131,7 +131,7 @@ export function TimelineMessageItem({
 															isSentByViewerFinal,
 													}
 												)}
-												download={file.fileName}
+												download={file.filename}
 												href={file.url}
 												key={file.url}
 												rel="noopener noreferrer"
@@ -139,7 +139,7 @@ export function TimelineMessageItem({
 											>
 												<Icon className="h-4 w-4 shrink-0" name="file" />
 												<span className="flex-1 truncate font-medium">
-													{file.fileName || "Download file"}
+													{file.filename || "Download file"}
 												</span>
 												{file.size && (
 													<span className="text-co-muted-foreground opacity-70">

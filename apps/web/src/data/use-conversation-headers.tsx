@@ -56,7 +56,11 @@ export function useConversationHeaders(
 
 		for (const page of query.data.pages) {
 			for (const header of page.items) {
-				queryNormalizer.setNormalizedData(header);
+				// Type assertion needed because TimelineItemParts contains complex union types
+				// that don't fit @normy/react-query's simpler Data type constraints
+				queryNormalizer.setNormalizedData(
+					header as Parameters<typeof queryNormalizer.setNormalizedData>[0]
+				);
 			}
 		}
 	}, [query.data, queryNormalizer]);

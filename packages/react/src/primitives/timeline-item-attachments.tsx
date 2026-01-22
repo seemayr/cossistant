@@ -86,7 +86,7 @@ export const TimelineItemImages = (() => {
 										{/* biome-ignore lint/performance/noImgElement: React package, not Next.js specific */}
 										{/* biome-ignore lint/nursery/useImageSize: Dynamic image dimensions not known at render time */}
 										<img
-											alt={image.fileName || `Image ${index + 1}`}
+											alt={image.filename || `Image ${index + 1}`}
 											className="max-h-[200px] max-w-[300px] cursor-pointer rounded-lg object-cover transition-transform group-hover:scale-105"
 											loading="lazy"
 											src={image.url}
@@ -167,7 +167,7 @@ export const TimelineItemFiles = (() => {
 								{files.map((file) => (
 									<a
 										className="flex items-center gap-2 rounded-lg bg-co-muted/50 px-3 py-2 text-sm transition-colors hover:bg-co-muted"
-										download={file.fileName}
+										download={file.filename}
 										href={file.url}
 										key={file.url}
 										rel="noopener noreferrer"
@@ -177,7 +177,7 @@ export const TimelineItemFiles = (() => {
 											{getFileIcon(file.mediaType)}
 										</span>
 										<span className="flex-1 truncate font-medium">
-											{file.fileName || "Download file"}
+											{file.filename || "Download file"}
 										</span>
 										{file.size && (
 											<span className="text-co-muted-foreground text-xs">

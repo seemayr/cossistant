@@ -20,7 +20,11 @@ export function handleConversationCreated({
 
 	const { header } = event.payload;
 
-	context.queryNormalizer.setNormalizedData(header);
+	// Type assertion needed because TimelineItemParts contains complex union types
+	// that don't fit @normy/react-query's simpler Data type constraints
+	context.queryNormalizer.setNormalizedData(
+		header as Parameters<typeof context.queryNormalizer.setNormalizedData>[0]
+	);
 
 	forEachConversationHeadersQuery(
 		context.queryClient,

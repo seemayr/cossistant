@@ -177,10 +177,11 @@ function applySeenUpdate(
 	const lastSeenAt = new Date(event.payload.lastSeenAt);
 	const lastSeenAtTime = lastSeenAt.getTime();
 
-	const existingHeader =
-		context.queryNormalizer.getObjectById<ConversationHeader>(
-			event.payload.conversationId
-		);
+	// Type assertion needed because TimelineItemParts contains complex union types
+	// that don't fit @normy/react-query's simpler Data type constraints
+	const existingHeader = context.queryNormalizer.getObjectById(
+		event.payload.conversationId
+	) as ConversationHeader | undefined;
 
 	if (!existingHeader) {
 		return;
@@ -202,7 +203,11 @@ function applySeenUpdate(
 	);
 
 	if (userUpdate.changed || seenEntriesUpdate.changed) {
-		context.queryNormalizer.setNormalizedData(seenEntriesUpdate.header);
+		context.queryNormalizer.setNormalizedData(
+			seenEntriesUpdate.header as Parameters<
+				typeof context.queryNormalizer.setNormalizedData
+			>[0]
+		);
 	}
 }
 

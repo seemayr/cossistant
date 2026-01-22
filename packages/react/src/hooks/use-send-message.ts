@@ -143,7 +143,7 @@ async function uploadFilesForMessage(
 				type: "image" as const,
 				url: uploadInfo.publicUrl,
 				mediaType: file.type,
-				fileName: file.name,
+				filename: file.name,
 				size: file.size,
 			} satisfies TimelinePartImage;
 		}
@@ -152,7 +152,7 @@ async function uploadFilesForMessage(
 			type: "file" as const,
 			url: uploadInfo.publicUrl,
 			mediaType: file.type,
-			fileName: file.name,
+			filename: file.name,
 			size: file.size,
 		} satisfies TimelinePartFile;
 	});

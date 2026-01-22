@@ -87,6 +87,13 @@ const dispatchRules: Partial<Record<RealtimeEventType, DispatchRuleOverrides>> =
 		linkSourceUpdated: { website: true, visitor: false },
 		crawlPagesDiscovered: { website: true, visitor: false },
 		crawlPageCompleted: { website: true, visitor: false },
+		// AI agent processing events - dispatch to both for progress updates
+		aiAgentProcessingStarted: { website: true, visitor: true },
+		aiAgentProcessingProgress: { website: true, visitor: true },
+		aiAgentProcessingCompleted: { website: true, visitor: true },
+		// Timeline item update events
+		timelineItemUpdated: { website: true, visitor: true },
+		timelineItemPartUpdated: { website: true, visitor: true },
 	};
 
 function resolveWebsiteDispatchOptions(
@@ -241,6 +248,28 @@ const eventHandlers: EventHandlers = {
 	crawlPageCompleted: (_ctx, event) => {
 		const _data = event.payload;
 		// Event is broadcast to website - no additional logic needed
+	},
+	// AI agent processing events
+	aiAgentProcessingStarted: (_ctx, event) => {
+		const _data = event.payload;
+		// Event is broadcast to website and visitor - no additional logic needed
+	},
+	aiAgentProcessingProgress: (_ctx, event) => {
+		const _data = event.payload;
+		// Event is broadcast to website and visitor - no additional logic needed
+	},
+	aiAgentProcessingCompleted: (_ctx, event) => {
+		const _data = event.payload;
+		// Event is broadcast to website and visitor - no additional logic needed
+	},
+	// Timeline item update events
+	timelineItemUpdated: (_ctx, event) => {
+		const _data = event.payload;
+		// Event is broadcast to website and visitor - no additional logic needed
+	},
+	timelineItemPartUpdated: (_ctx, event) => {
+		const _data = event.payload;
+		// Event is broadcast to website and visitor - no additional logic needed
 	},
 };
 

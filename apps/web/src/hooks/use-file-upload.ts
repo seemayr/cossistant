@@ -206,14 +206,14 @@ export function useFileUpload(
 								type: "image" as const,
 								url: uploadInfo.publicUrl,
 								mediaType: file.type,
-								fileName: file.name,
+								filename: file.name,
 								size: file.size,
 							}
 						: {
 								type: "file" as const,
 								url: uploadInfo.publicUrl,
 								mediaType: file.type,
-								fileName: file.name,
+								filename: file.name,
 								size: file.size,
 							};
 

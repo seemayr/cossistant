@@ -94,6 +94,7 @@ export function FakeSupportProvider({
 			setUnreadCount,
 			isLoading: false,
 			error: null,
+			configurationError: null,
 			client: fakeClient,
 			defaultMessages: [],
 			setDefaultMessages: () => {},

@@ -172,7 +172,7 @@ export function ImageLightbox({
 			{/* biome-ignore lint/performance/noImgElement: React package, not Next.js specific */}
 			{/* biome-ignore lint/nursery/useImageSize: Dynamic image dimensions not known at render time */}
 			<img
-				alt={currentImage?.fileName || `Image ${currentIndex + 1}`}
+				alt={currentImage?.filename || `Image ${currentIndex + 1}`}
 				className="max-h-[90vh] max-w-[90vw] object-contain"
 				src={currentImage?.url}
 			/>
