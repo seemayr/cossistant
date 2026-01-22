@@ -465,6 +465,8 @@ export function useConversationActions({
 			applyOptimisticUpdate((existing) => ({
 				...existing,
 				lastSeenAt: null,
+				// Remove the current user's entry from seenData
+				seenData: existing.seenData.filter((s) => s.userId !== user.id),
 			}));
 
 			return context;
