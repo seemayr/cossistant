@@ -190,7 +190,9 @@ const imagePartSchema = z.object({
 	mediaType: z.string().openapi({
 		description: "IANA media type of the image",
 	}),
-	fileName: z.string().optional().openapi({
+	// Use lowercase 'filename' for AI SDK consistency
+	// Note: Legacy data may have 'fileName' - conversion utilities handle both
+	filename: z.string().optional().openapi({
 		description: "Original filename of the image",
 	}),
 	size: z.number().optional().openapi({

@@ -310,21 +310,25 @@ function toAISDKPart(part: CossistantPart): AISDKPart | null {
 	}
 
 	if (isFilePart(part)) {
+		// Support both 'filename' (new) and 'fileName' (legacy) for backward compatibility
+		const typedPart = part as { filename?: string; fileName?: string };
 		return {
 			type: "file",
 			url: part.url,
 			mediaType: part.mediaType,
-			filename: (part as { filename?: string }).filename,
+			filename: typedPart.filename ?? typedPart.fileName,
 		};
 	}
 
 	if (isImagePart(part)) {
 		// Convert image to file part (AI SDK uses file for all media)
+		// Support both 'filename' (new) and 'fileName' (legacy) for backward compatibility
+		const typedPart = part as { filename?: string; fileName?: string };
 		return {
 			type: "file",
 			url: part.url,
 			mediaType: part.mediaType,
-			filename: (part as { fileName?: string }).fileName,
+			filename: typedPart.filename ?? typedPart.fileName,
 		};
 	}
 

@@ -941,6 +941,7 @@ The `parts` column already stores JSONB. The schema change is backward compatibl
 1. **`text` field deprecated**: Use `parts` array with `TextPart` instead
 2. **`tool` field removed**: Use `ToolPart` in `parts` array
 3. **New required fields**: `parts` array is now required (can be empty)
+4. **`fileName` renamed to `filename`**: In `file` and `image` parts, the field was renamed from `fileName` (camelCase) to `filename` (lowercase) to align with AI SDK conventions. The conversion utilities (`toUIMessage`, `fromUIMessage`) handle both for backward compatibility with existing data.
 
 ### 6.2 Migration Script
 
