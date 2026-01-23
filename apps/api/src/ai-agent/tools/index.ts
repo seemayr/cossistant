@@ -4,23 +4,33 @@
  * Defines LLM tools that the AI agent can use during generation.
  *
  * Tool Categories:
- * 1. Context-gathering: searchKnowledgeBase - fetch info to inform response
- * 2. Side-effect: setConversationTitle, updateSentiment, setPriority - inline actions
+ * 1. Messaging: sendMessage, sendPrivateMessage - how AI communicates
+ * 2. Actions: respond, escalate, resolve, markSpam, skip - signal completion
+ * 3. Context-gathering: searchKnowledgeBase - fetch info to inform response
+ * 4. Side-effect: setConversationTitle, updateSentiment, setPriority - inline actions
  *
- * These tools work alongside structured output - tools do work inline,
- * while the final response is still via aiDecisionSchema.
+ * The AI MUST use tools for everything - there's no structured output.
  */
 
 import type { AiAgentSelect } from "@api/db/schema/ai-agent";
 import type { ToolSet } from "ai";
 import { getBehaviorSettings } from "../settings";
+import {
+	createEscalateTool,
+	createMarkSpamTool,
+	createResolveTool,
+	createRespondTool,
+	createSkipTool,
+} from "./action-tools";
 import { createSearchKnowledgeBaseTool } from "./search-knowledge";
-import { createSendMessageToVisitorTool } from "./send-message-tool";
+import { createSendMessageTool } from "./send-message-tool";
+import { createSendPrivateMessageTool } from "./send-private-message-tool";
 import { createSetPriorityTool } from "./set-priority";
 import { createSetConversationTitleTool } from "./set-title";
 import type { ToolContext } from "./types";
 import { createUpdateSentimentTool } from "./update-sentiment";
 
+export { getCapturedAction, resetCapturedAction } from "./action-tools";
 export type { ToolContext, ToolResult } from "./types";
 
 /**
@@ -60,12 +70,20 @@ export function getToolsForGeneration(
 	// Context-gathering tools
 
 	// Knowledge base search - available for all agents
-	// (will return empty if no knowledge is indexed)
 	tools.searchKnowledgeBase = createSearchKnowledgeBaseTool(toolContext);
 
-	// Multi-message tool - available for all agents
-	// Allows natural conversational responses
-	tools.sendMessageToVisitor = createSendMessageToVisitorTool(toolContext);
+	// Messaging tools - ALWAYS available
+	// These are the primary way the AI communicates
+	tools.sendMessage = createSendMessageTool(toolContext);
+	tools.sendPrivateMessage = createSendPrivateMessageTool(toolContext);
+
+	// Action tools - AI MUST call one to signal completion
+	// These replace structured output to force tool usage
+	tools.respond = createRespondTool();
+	tools.escalate = createEscalateTool();
+	tools.resolve = createResolveTool();
+	tools.markSpam = createMarkSpamTool();
+	tools.skip = createSkipTool();
 
 	return Object.keys(tools).length > 0 ? tools : undefined;
 }

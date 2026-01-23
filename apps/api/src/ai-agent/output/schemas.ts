@@ -2,7 +2,9 @@
  * AI Decision Schema
  *
  * Defines the structured output format for AI agent decisions.
- * The AI must return a decision in this format, not free-form text.
+ *
+ * IMPORTANT: Messages are sent via tools (sendMessage, sendPrivateMessage).
+ * This schema only declares the ACTION to take, not the messages.
  */
 
 import { z } from "zod";
@@ -11,19 +13,12 @@ import { z } from "zod";
  * Escalation details when the AI decides to escalate
  */
 export const escalationSchema = z.object({
-	/** Reason for escalation (shown to human agents) */
-	reason: z.string().describe("Brief reason for escalating to a human agent"),
-	/** Message to send to the visitor explaining the escalation */
-	visitorMessage: z
+	/** Reason for escalation - context for the human agent */
+	reason: z
 		.string()
 		.describe(
-			"A friendly message to the visitor explaining that a human will help them soon"
+			"Context for the human: what the visitor needs, what you tried, what they should know"
 		),
-	/** Specific user to assign to (optional) */
-	assignToUserId: z
-		.string()
-		.optional()
-		.describe("User ID to assign the conversation to"),
 	/** Urgency level */
 	urgency: z
 		.enum(["normal", "high", "urgent"])
@@ -34,59 +29,37 @@ export const escalationSchema = z.object({
 /**
  * The main AI decision schema
  *
- * The AI returns a structured decision that determines what action to take.
- * This prevents the AI from responding when it shouldn't.
- *
- * Note: Priority, title, and sentiment are now handled via tools during generation.
+ * Messages are sent via sendMessage() and sendPrivateMessage() tools.
+ * This schema only declares what action to take.
  */
 export const aiDecisionSchema = z.object({
-	/** The primary action to take */
+	/** The action to take */
 	action: z
 		.enum([
-			"respond", // Send a visible message to the visitor
-			"internal_note", // Add a private note for the team
-			"escalate", // Escalate to a human agent
-			"resolve", // Mark the conversation as resolved
-			"mark_spam", // Mark the conversation as spam
-			"skip", // Take no action
+			"respond", // Normal response (messages sent via tool)
+			"escalate", // Escalate to human (must include escalation details)
+			"resolve", // Mark conversation as resolved
+			"mark_spam", // Mark as spam
+			"skip", // No action needed
 		])
-		.describe("The primary action to take"),
-
-	/**
-	 * Message to show the visitor.
-	 * ALWAYS provide a message unless you used sendMessageToVisitor tool.
-	 */
-	visitorMessage: z
-		.string()
-		.describe(
-			"Your response to the visitor. Keep it brief (1-2 sentences). " +
-				"Required for respond/escalate/resolve actions."
-		),
-
-	/** Optional internal note for the team (private, not visible to visitor) */
-	internalNote: z
-		.string()
-		.optional()
-		.describe(
-			"Optional private note for the support team about this action or decision"
-		),
+		.describe("The action to take after sending messages"),
 
 	/** Escalation details (required if action is escalate) */
 	escalation: escalationSchema
 		.optional()
-		.describe("Escalation details (required if action is escalate)"),
+		.describe("Required when action is escalate - context for the human"),
 
-	/** AI's reasoning for this decision (for debugging/audit) */
-	reasoning: z
-		.string()
-		.describe("Brief explanation of why this action was chosen"),
+	/** Brief reasoning for audit/debugging */
+	reasoning: z.string().describe("Why this action was chosen"),
 
 	/** Confidence in the decision (0-1) */
 	confidence: z
 		.number()
 		.min(0)
 		.max(1)
-		.describe("How confident the AI is in this decision (0 to 1)"),
+		.describe(
+			"Confidence in this decision (0-1). Below 0.6 = consider escalating"
+		),
 });
 
 export type AiDecision = z.infer<typeof aiDecisionSchema>;

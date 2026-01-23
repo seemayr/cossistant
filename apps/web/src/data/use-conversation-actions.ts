@@ -67,6 +67,7 @@ type UseConversationActionsReturn = {
 	markUnarchived: () => Promise<ConversationMutationResponse>;
 	markRead: () => Promise<ConversationMutationResponse>;
 	markUnread: () => Promise<ConversationMutationResponse>;
+	joinEscalation: () => Promise<ConversationMutationResponse>;
 	blockVisitor: () => Promise<BlockVisitorResponse>;
 	unblockVisitor: () => Promise<BlockVisitorResponse>;
 	isAnyPending: boolean;
@@ -79,6 +80,7 @@ type UseConversationActionsReturn = {
 		markUnarchived: boolean;
 		markRead: boolean;
 		markUnread: boolean;
+		joinEscalation: boolean;
 		blockVisitor: boolean;
 		unblockVisitor: boolean;
 	};
@@ -462,6 +464,36 @@ export function useConversationActions({
 		},
 	});
 
+	const joinEscalationMutation = useMutation<
+		ConversationMutationResponse,
+		TRPCError,
+		BaseConversationMutationVariables,
+		MutationContext
+	>({
+		...trpc.conversation.joinEscalation.mutationOptions(),
+		onMutate: async () => {
+			const context = await prepareContext();
+			const now = new Date().toISOString();
+
+			applyOptimisticUpdate((existing) => ({
+				...existing,
+				escalationHandledAt: now,
+				escalationHandledByUserId: user.id,
+				updatedAt: now,
+			}));
+
+			return context;
+		},
+		onError: (_error, _variables, context) => {
+			restoreContext(context);
+		},
+		onSuccess: (data) => {
+			applyOptimisticUpdate((existing) =>
+				mergeWithServerConversation(existing, data.conversation)
+			);
+		},
+	});
+
 	const blockVisitorMutation = useMutation<
 		BlockVisitorResponse,
 		TRPCError,
@@ -722,6 +754,15 @@ export function useConversationActions({
 		[conversationId, markUnreadMutation, website.slug]
 	);
 
+	const joinEscalation = useCallback(
+		() =>
+			joinEscalationMutation.mutateAsync({
+				conversationId,
+				websiteSlug: website.slug,
+			}),
+		[conversationId, joinEscalationMutation, website.slug]
+	);
+
 	const blockVisitor = useCallback(
 		() =>
 			blockVisitorMutation.mutateAsync({
@@ -749,6 +790,7 @@ export function useConversationActions({
 		markUnarchived,
 		markRead,
 		markUnread,
+		joinEscalation,
 		blockVisitor,
 		unblockVisitor,
 		isAnyPending:
@@ -760,6 +802,7 @@ export function useConversationActions({
 			markUnarchivedMutation.isPending ||
 			markReadMutation.isPending ||
 			markUnreadMutation.isPending ||
+			joinEscalationMutation.isPending ||
 			blockVisitorMutation.isPending ||
 			unblockVisitorMutation.isPending,
 		pendingAction: {
@@ -771,6 +814,7 @@ export function useConversationActions({
 			markUnarchived: markUnarchivedMutation.isPending,
 			markRead: markReadMutation.isPending,
 			markUnread: markUnreadMutation.isPending,
+			joinEscalation: joinEscalationMutation.isPending,
 			blockVisitor: blockVisitorMutation.isPending,
 			unblockVisitor: unblockVisitorMutation.isPending,
 		},

@@ -431,6 +431,47 @@ export async function markConversationAsUnread(
 	return params.conversation;
 }
 
+/**
+ * Join an escalated conversation
+ *
+ * Marks the escalation as handled and returns the updated conversation.
+ * The caller is responsible for adding the user as a participant and
+ * creating the participant joined event.
+ */
+export async function joinEscalation(
+	db: Database,
+	params: {
+		conversation: ConversationRecord;
+		actorUserId: string;
+	}
+) {
+	const handledAt = new Date();
+	const handledAtIso = handledAt.toISOString();
+
+	// Only update if escalation hasn't been handled yet
+	if (params.conversation.escalationHandledAt) {
+		return params.conversation;
+	}
+
+	const [updated] = await db
+		.update(conversation)
+		.set({
+			escalationHandledAt: handledAtIso,
+			escalationHandledByUserId: params.actorUserId,
+			updatedAt: handledAtIso,
+		})
+		.where(
+			and(
+				eq(conversation.id, params.conversation.id),
+				eq(conversation.organizationId, params.conversation.organizationId),
+				eq(conversation.websiteId, params.conversation.websiteId)
+			)
+		)
+		.returning();
+
+	return updated ?? params.conversation;
+}
+
 export type ConversationActor =
 	| { type: "visitor"; visitorId: string }
 	| { type: "user"; userId: string }

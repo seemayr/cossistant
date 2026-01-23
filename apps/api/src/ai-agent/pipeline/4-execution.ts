@@ -1,15 +1,14 @@
 /**
  * Pipeline Step 4: Execution
  *
- * This step executes the AI's chosen actions.
- * All actions are idempotent to support safe retries.
+ * Executes the AI's chosen action.
+ * Messages are already sent via tools during generation.
  *
- * Responsibilities:
- * - Execute primary action (respond, escalate, resolve, etc.)
- * - Create timeline events
- * - Update conversation state
- *
- * Note: Priority, title, and sentiment are now handled via SDK tools during generation.
+ * This step handles:
+ * - escalate: Update conversation status, notify team
+ * - resolve: Mark conversation as resolved
+ * - mark_spam: Mark as spam
+ * - respond/skip: No additional action needed
  */
 
 import type { Database } from "@api/db";
@@ -23,7 +22,6 @@ export type ExecutionResult = {
 	primaryAction: {
 		type: string;
 		success: boolean;
-		messageId?: string;
 		error?: string;
 	};
 };
@@ -34,7 +32,7 @@ type ExecutionInput = {
 	conversation: ConversationSelect;
 	decision: AiDecision;
 	jobId: string;
-	messageId: string; // Trigger message ID - used for idempotency
+	messageId: string;
 	organizationId: string;
 	websiteId: string;
 	visitorId: string;
@@ -42,7 +40,7 @@ type ExecutionInput = {
 };
 
 /**
- * Execute the AI's chosen actions
+ * Execute the AI's chosen action
  */
 export async function execute(input: ExecutionInput): Promise<ExecutionResult> {
 	const {
@@ -50,34 +48,26 @@ export async function execute(input: ExecutionInput): Promise<ExecutionResult> {
 		aiAgent,
 		conversation,
 		decision,
-		messageId,
 		organizationId,
 		websiteId,
-		visitorId,
 		visitorName,
 	} = input;
 	const convId = conversation.id;
 
 	console.log(
-		`[ai-agent:execute] conv=${convId} | Executing action="${decision.action}" | confidence=${decision.confidence}`
+		`[ai-agent:execute] conv=${convId} | action="${decision.action}" | confidence=${decision.confidence}`
 	);
 
-	// Confidence-based escalation: if AI is uncertain, escalate instead of responding
+	// Confidence-based escalation override
 	if (decision.confidence < 0.6 && decision.action === "respond") {
 		console.log(
-			`[ai-agent:execute] conv=${convId} | Low confidence (${decision.confidence}), overriding to escalate`
+			`[ai-agent:execute] conv=${convId} | Low confidence (${decision.confidence}), should have escalated`
 		);
-		decision.action = "escalate";
-		decision.escalation = {
-			reason: "AI uncertain about response",
-			visitorMessage:
-				decision.visitorMessage ||
-				"Let me connect you with the team for a definitive answer.",
-			urgency: "normal",
-		};
+		// Note: We don't override here anymore - the AI should have sent messages via tools
+		// and included escalation. If it didn't, we just log the warning.
 	}
 
-	// Validate decision before execution
+	// Validate decision
 	const validation = validateDecisionForExecution(decision);
 	if (!validation.valid) {
 		console.error(
@@ -99,81 +89,19 @@ export async function execute(input: ExecutionInput): Promise<ExecutionResult> {
 		},
 	};
 
-	// Get the visitor message
-	const visitorMessage = decision.visitorMessage || "";
-
-	// Execute primary action
 	try {
 		switch (decision.action) {
-			case "respond": {
-				// If visitorMessage is empty, the AI likely already sent messages via tool
-				if (visitorMessage) {
-					const sendResult = await actions.sendMessage({
-						db,
-						conversationId: conversation.id,
-						organizationId,
-						websiteId,
-						visitorId,
-						aiAgentId: aiAgent.id,
-						text: visitorMessage,
-						idempotencyKey: `${messageId}-respond`,
-					});
-					result.primaryAction = {
-						type: "respond",
-						success: true,
-						messageId: sendResult.messageId,
-					};
-				} else {
-					// No message to send - likely already sent via sendMessageToVisitor tool
-					console.log(
-						`[ai-agent:execute] conv=${convId} | No visitorMessage - likely sent via tool`
-					);
-					result.primaryAction = {
-						type: "respond",
-						success: true,
-					};
-				}
-				break;
-			}
-
-			case "internal_note": {
-				const noteText = decision.internalNote || visitorMessage;
-				const noteResult = await actions.addInternalNote({
-					db,
-					conversationId: conversation.id,
-					organizationId,
-					aiAgentId: aiAgent.id,
-					text: noteText,
-					idempotencyKey: `${messageId}-note`,
-				});
+			case "respond":
+			case "skip": {
+				// Messages already sent via tools - nothing more to do
 				result.primaryAction = {
-					type: "internal_note",
+					type: decision.action,
 					success: true,
-					messageId: noteResult.noteId,
 				};
-
-				// If there's also a visitor message, send it
-				if (visitorMessage && visitorMessage !== noteText) {
-					await actions.sendMessage({
-						db,
-						conversationId: conversation.id,
-						organizationId,
-						websiteId,
-						visitorId,
-						aiAgentId: aiAgent.id,
-						text: visitorMessage,
-						idempotencyKey: `${messageId}-note-visitor`,
-					});
-				}
 				break;
 			}
 
 			case "escalate": {
-				const escalationVisitorMessage =
-					decision.escalation?.visitorMessage ||
-					visitorMessage ||
-					"I'm connecting you with one of our team members who can help you further. They'll be with you shortly!";
-
 				await actions.escalate({
 					db,
 					conversation,
@@ -182,9 +110,9 @@ export async function execute(input: ExecutionInput): Promise<ExecutionResult> {
 					aiAgentId: aiAgent.id,
 					aiAgentName: aiAgent.name,
 					reason: decision.escalation?.reason ?? "AI requested escalation",
-					visitorMessage: escalationVisitorMessage,
+					visitorMessage: null, // Already sent via tool
 					visitorName,
-					assignToUserId: decision.escalation?.assignToUserId,
+					assignToUserId: null,
 					urgency: decision.escalation?.urgency ?? "normal",
 				});
 				result.primaryAction = {
@@ -195,20 +123,6 @@ export async function execute(input: ExecutionInput): Promise<ExecutionResult> {
 			}
 
 			case "resolve": {
-				// Send visitor message BEFORE updating status
-				if (visitorMessage) {
-					await actions.sendMessage({
-						db,
-						conversationId: conversation.id,
-						organizationId,
-						websiteId,
-						visitorId,
-						aiAgentId: aiAgent.id,
-						text: visitorMessage,
-						idempotencyKey: `${messageId}-resolve-msg`,
-					});
-				}
-
 				await actions.updateStatus({
 					db,
 					conversation,
@@ -224,19 +138,6 @@ export async function execute(input: ExecutionInput): Promise<ExecutionResult> {
 			}
 
 			case "mark_spam": {
-				if (visitorMessage) {
-					await actions.sendMessage({
-						db,
-						conversationId: conversation.id,
-						organizationId,
-						websiteId,
-						visitorId,
-						aiAgentId: aiAgent.id,
-						text: visitorMessage,
-						idempotencyKey: `${messageId}-spam-msg`,
-					});
-				}
-
 				await actions.updateStatus({
 					db,
 					conversation,
@@ -246,28 +147,6 @@ export async function execute(input: ExecutionInput): Promise<ExecutionResult> {
 				});
 				result.primaryAction = {
 					type: "mark_spam",
-					success: true,
-				};
-				break;
-			}
-
-			case "skip": {
-				// Even on skip, send visitor message if provided
-				if (visitorMessage) {
-					await actions.sendMessage({
-						db,
-						conversationId: conversation.id,
-						organizationId,
-						websiteId,
-						visitorId,
-						aiAgentId: aiAgent.id,
-						text: visitorMessage,
-						idempotencyKey: `${messageId}-skip-msg`,
-					});
-				}
-
-				result.primaryAction = {
-					type: "skip",
 					success: true,
 				};
 				break;
@@ -289,27 +168,8 @@ export async function execute(input: ExecutionInput): Promise<ExecutionResult> {
 		};
 	}
 
-	// Handle internal note as a side effect if provided and not the primary action
-	if (decision.internalNote && decision.action !== "internal_note") {
-		try {
-			await actions.addInternalNote({
-				db,
-				conversationId: conversation.id,
-				organizationId,
-				aiAgentId: aiAgent.id,
-				text: decision.internalNote,
-				idempotencyKey: `${messageId}-internal-note`,
-			});
-		} catch (error) {
-			console.error(
-				`[ai-agent:execute] conv=${convId} | Failed to add internal note:`,
-				error
-			);
-		}
-	}
-
 	if (result.primaryAction.success) {
-		console.log(`[ai-agent:execute] conv=${convId} | Result: success=true`);
+		console.log(`[ai-agent:execute] conv=${convId} | success=true`);
 	} else {
 		console.error(
 			`[ai-agent:execute] conv=${convId} | FAILED | error="${result.primaryAction.error}"`

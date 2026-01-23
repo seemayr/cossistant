@@ -96,13 +96,22 @@ export const AITypingPreview = ({
 	aiAgent: AvailableAIAgent | undefined;
 }) => {
 	const agentName = aiAgent?.name ?? "AI Assistant";
+	const hasImage = Boolean(aiAgent?.image);
 
 	return (
 		<div className={cn("flex w-full gap-2", "flex-row")}>
 			<TimelineItemGroupAvatar className="flex shrink-0 flex-col justify-end">
-				<div className="flex size-7 items-center justify-center rounded-full bg-primary/10">
-					<Logo className="h-5 w-5 text-primary" />
-				</div>
+				{hasImage ? (
+					<Avatar
+						className="size-7"
+						fallbackName={agentName}
+						url={aiAgent?.image}
+					/>
+				) : (
+					<div className="flex size-7 items-center justify-center">
+						<Logo className="size-full text-primary" />
+					</div>
+				)}
 			</TimelineItemGroupAvatar>
 			<TimelineItemGroupContent className={cn("flex flex-col gap-0")}>
 				<TimelineItemGroupHeader className="mb-2 px-1 text-muted-foreground text-xs opacity-50">

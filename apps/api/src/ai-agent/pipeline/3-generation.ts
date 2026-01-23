@@ -1,14 +1,16 @@
 /**
  * Pipeline Step 3: Generation
  *
- * This step generates the AI response using the LLM with structured output.
+ * This step generates the AI response using the LLM with tools.
  * It builds the prompt dynamically based on context and behavior settings.
  *
- * Responsibilities:
- * - Build dynamic system prompt
- * - Format conversation history for LLM
- * - Call LLM with structured output schema
- * - Parse and validate AI decision
+ * KEY DESIGN: Tools-only approach (no structured output)
+ * The AI MUST call tools for everything:
+ * - sendMessage() to communicate with visitor
+ * - sendPrivateMessage() to leave notes for team
+ * - respond()/escalate()/resolve()/etc. to signal completion
+ *
+ * This forces the model to use tools rather than skipping them.
  */
 
 import type { Database } from "@api/db";
@@ -16,16 +18,21 @@ import type { AiAgentSelect } from "@api/db/schema/ai-agent";
 import type { ConversationSelect } from "@api/db/schema/conversation";
 import { env } from "@api/env";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
-import { generateText, Output, stepCountIs } from "ai";
+import { generateText, hasToolCall, stepCountIs } from "ai";
 import {
 	detectPromptInjection,
 	logInjectionAttempt,
 } from "../analysis/injection";
 import type { RoleAwareMessage } from "../context/conversation";
 import type { VisitorContext } from "../context/visitor";
-import { type AiDecision, aiDecisionSchema } from "../output/schemas";
+import type { AiDecision } from "../output/schemas";
 import { buildSystemPrompt } from "../prompts/system";
-import { getToolsForGeneration, type ToolContext } from "../tools";
+import {
+	getCapturedAction,
+	getToolsForGeneration,
+	resetCapturedAction,
+	type ToolContext,
+} from "../tools";
 import type { ResponseMode } from "./2-decision";
 
 export type GenerationResult = {
@@ -34,6 +41,11 @@ export type GenerationResult = {
 		inputTokens: number;
 		outputTokens: number;
 		totalTokens: number;
+	};
+	/** Tool call counts from this generation */
+	toolCalls?: {
+		sendMessage: number;
+		sendPrivateMessage: number;
 	};
 };
 
@@ -53,7 +65,10 @@ type GenerationInput = {
 };
 
 /**
- * Generate AI response using LLM with structured output
+ * Generate AI response using LLM with tools
+ *
+ * The AI must use tools for everything - there's no structured output.
+ * This ensures the model actually calls sendMessage() to respond.
  */
 export async function generate(
 	input: GenerationInput
@@ -84,6 +99,9 @@ export async function generate(
 		aiAgentId: aiAgent.id,
 		triggerMessageId,
 	};
+
+	// Reset captured action before generation
+	resetCapturedAction();
 
 	// Get tools for this agent based on settings (with bound context)
 	const tools = getToolsForGeneration(aiAgent, toolContext);
@@ -140,49 +158,67 @@ export async function generate(
 		apiKey: env.OPENROUTER_API_KEY,
 	});
 
-	// Generate structured output using AI SDK v6 pattern
-	// Using generateText + Output.object instead of deprecated generateObject
+	// Generate using tools-only approach (no structured output)
+	// The AI MUST call tools:
+	// 1. sendMessage() to respond to visitor
+	// 2. respond()/escalate()/resolve() to signal completion
 	//
-	// IMPORTANT: When tools are enabled, we use stopWhen to ensure the AI generates
-	// a final text response after tool execution. This prevents the AI from going
-	// silent after calling a tool. The step count of 5 allows for:
-	// - Step 1: Initial response (may include tool call)
-	// - Step 2: Tool execution result
-	// - Step 3: Follow-up response (may include another tool call)
-	// - Step 4: Another tool execution result
-	// - Step 5: Final structured output generation
+	// Key configurations:
+	// - toolChoice: 'required' forces the model to call tools (can't skip them)
+	// - stopWhen: stops generation when an action tool is called OR after 10 steps
 	const result = await generateText({
 		model: openrouter.chat(aiAgent.model),
-		output: Output.object({
-			schema: aiDecisionSchema,
-		}),
 		tools,
-		// Pass tool context via experimental_context for tool execute functions
-		experimental_context: toolContext,
-		// stopWhen ensures multi-step execution when tools are used, so the AI
-		// generates a response after tool calls instead of going silent
-		stopWhen: tools ? stepCountIs(5) : undefined,
+		toolChoice: "required", // Force the model to call tools
+		stopWhen: [
+			// Stop when any action tool is called
+			hasToolCall("respond"),
+			hasToolCall("escalate"),
+			hasToolCall("resolve"),
+			hasToolCall("markSpam"),
+			hasToolCall("skip"),
+			// Safety limit: stop after 10 steps regardless
+			stepCountIs(10),
+		],
 		system: systemPrompt,
 		messages,
-		temperature: aiAgent.temperature ?? 0.7,
+		// Use temperature 0 for deterministic tool calling (AI SDK best practice)
+		// This reduces randomness and improves tool call reliability
+		temperature: 0,
 	});
 
-	// Extract the structured output
-	const decision = result.output;
+	// Log tool call information for debugging
+	const allToolCalls =
+		result.steps?.flatMap((step) => step.toolCalls ?? []) ?? [];
+	const sendMessageCalls = allToolCalls.filter(
+		(tc) => tc.toolName === "sendMessage"
+	);
+	const sendPrivateMessageCalls = allToolCalls.filter(
+		(tc) => tc.toolName === "sendPrivateMessage"
+	);
+	const actionCalls = allToolCalls.filter((tc) =>
+		["respond", "escalate", "resolve", "markSpam", "skip"].includes(tc.toolName)
+	);
 
-	// Validate that we got a proper decision
-	if (!decision) {
+	console.log(
+		`[ai-agent:generate] conv=${convId} | Steps: ${result.steps?.length ?? 0} | Tool calls: sendMessage=${sendMessageCalls.length}, sendPrivateMessage=${sendPrivateMessageCalls.length}, action=${actionCalls.length}`
+	);
+
+	// Get the captured action from action tools
+	const capturedAction = getCapturedAction();
+
+	// Validate that we got an action
+	if (!capturedAction) {
 		console.error(
-			`[ai-agent:generate] conv=${convId} | Structured output failed | text="${result.text?.slice(0, 200)}"`
+			`[ai-agent:generate] conv=${convId} | No action tool called! text="${result.text?.slice(0, 200)}"`
 		);
-		// Return a safe fallback decision with a visitor message to avoid going silent
+
+		// Return a safe fallback decision
 		return {
 			decision: {
 				action: "skip" as const,
-				visitorMessage:
-					"I'm having a moment - let me get back to you shortly, or a team member will assist you.",
 				reasoning:
-					"Failed to generate structured output from model. Raw response logged for debugging.",
+					"AI did not call an action tool (respond/escalate/resolve). This may indicate a model compatibility issue.",
 				confidence: 0,
 			},
 			usage: result.usage
@@ -192,29 +228,29 @@ export async function generate(
 						totalTokens: result.usage.totalTokens ?? 0,
 					}
 				: undefined,
+			toolCalls: {
+				sendMessage: sendMessageCalls.length,
+				sendPrivateMessage: sendPrivateMessageCalls.length,
+			},
 		};
+	}
+
+	// Warn if no sendMessage was called for respond/escalate/resolve actions
+	const requiresMessage = ["respond", "escalate", "resolve"].includes(
+		capturedAction.action
+	);
+	if (requiresMessage && sendMessageCalls.length === 0) {
+		console.warn(
+			`[ai-agent:generate] conv=${convId} | WARNING: Action "${capturedAction.action}" without sendMessage! The visitor won't see a response.`
+		);
 	}
 
 	// Extract usage data from AI SDK response
 	const usage = result.usage;
 	console.log(
-		`[ai-agent:generate] conv=${convId} | AI decided: action=${decision.action} | reasoning="${(decision.reasoning ?? "").slice(0, 100)}${(decision.reasoning ?? "").length > 100 ? "..." : ""}"`
+		`[ai-agent:generate] conv=${convId} | AI decided: action=${capturedAction.action} | reasoning="${(capturedAction.reasoning ?? "").slice(0, 100)}${(capturedAction.reasoning ?? "").length > 100 ? "..." : ""}"`
 	);
 
-	// Log visitor message
-	const visitorMsg = decision.visitorMessage || "";
-	if (visitorMsg) {
-		console.log(
-			`[ai-agent:generate] conv=${convId} | Visitor message (${visitorMsg.length} chars): "${visitorMsg.slice(0, 100)}${visitorMsg.length > 100 ? "..." : ""}"`
-		);
-	}
-
-	// Log internal note if present
-	if (decision.internalNote) {
-		console.log(
-			`[ai-agent:generate] conv=${convId} | Internal note (${decision.internalNote.length} chars): "${decision.internalNote.slice(0, 100)}${decision.internalNote.length > 100 ? "..." : ""}"`
-		);
-	}
 	if (usage) {
 		console.log(
 			`[ai-agent:generate] conv=${convId} | Tokens: input=${usage.inputTokens ?? 0} output=${usage.outputTokens ?? 0} total=${usage.totalTokens ?? 0}`
@@ -222,7 +258,7 @@ export async function generate(
 	}
 
 	return {
-		decision,
+		decision: capturedAction,
 		usage: usage
 			? {
 					inputTokens: usage.inputTokens ?? 0,
@@ -230,6 +266,10 @@ export async function generate(
 					totalTokens: usage.totalTokens ?? 0,
 				}
 			: undefined,
+		toolCalls: {
+			sendMessage: sendMessageCalls.length,
+			sendPrivateMessage: sendPrivateMessageCalls.length,
+		},
 	};
 }
 

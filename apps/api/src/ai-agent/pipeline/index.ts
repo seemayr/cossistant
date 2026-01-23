@@ -16,6 +16,7 @@ import type { Database } from "@api/db";
 import { generateVisitorName } from "@cossistant/core";
 import { isWorkflowRunActive } from "@cossistant/jobs/workflow-state";
 import type { Redis } from "@cossistant/redis";
+import { sendMessage } from "../actions/send-message";
 import {
 	emitDecisionMade,
 	emitWorkflowCancelled,
@@ -204,6 +205,58 @@ export async function runAiAgentPipeline(
 			triggerMessageId: ctx.input.messageId,
 		});
 		metrics.generationMs = Date.now() - generationStart;
+
+		// FALLBACK: If AI returned respond/escalate/resolve but didn't call sendMessage,
+		// send a fallback message so the visitor isn't left without a response
+		const requiresMessage = ["respond", "escalate", "resolve"].includes(
+			generationResult.decision.action
+		);
+		const sentMessages = generationResult.toolCalls?.sendMessage ?? 0;
+
+		if (requiresMessage && sentMessages === 0) {
+			console.warn(
+				`[ai-agent] conv=${convId} | AI forgot to call sendMessage! Sending fallback...`
+			);
+
+			// Construct a fallback message based on the action
+			let fallbackMessage: string;
+			switch (generationResult.decision.action) {
+				case "escalate":
+					fallbackMessage =
+						"Let me connect you with a team member who can help.";
+					break;
+				case "resolve":
+					fallbackMessage =
+						"I hope that helped! Let me know if you need anything else.";
+					break;
+				default:
+					// For respond, use the reasoning if available, otherwise generic
+					fallbackMessage =
+						generationResult.decision.reasoning?.slice(0, 200) ||
+						"I'm here to help! How can I assist you?";
+			}
+
+			try {
+				await sendMessage({
+					db: ctx.db,
+					conversationId: convId,
+					organizationId: ctx.input.organizationId,
+					websiteId: ctx.input.websiteId,
+					visitorId: ctx.input.visitorId,
+					aiAgentId: intakeResult.aiAgent.id,
+					text: fallbackMessage,
+					idempotencyKey: `${ctx.input.messageId}-fallback`,
+				});
+				console.log(
+					`[ai-agent] conv=${convId} | Fallback message sent successfully`
+				);
+			} catch (fallbackError) {
+				console.error(
+					`[ai-agent] conv=${convId} | Failed to send fallback:`,
+					fallbackError
+				);
+			}
+		}
 
 		// CHECK: Has this job been superseded after LLM call but before execution?
 		const isActiveBeforeExecution = await isWorkflowRunActive(

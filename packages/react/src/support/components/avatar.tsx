@@ -32,19 +32,27 @@ export function Avatar({
 	isAI = false,
 	showBackground = true,
 }: AvatarProps): ReactElement {
-	// AI agent without image: show logo without circle background
+	// AI agent without image: show logo at full size without circle
 	if (isAI && !image) {
 		return (
-			<div
+			<div className={cn("flex items-center justify-center", className)}>
+				<CossistantLogo className="h-full w-full" />
+			</div>
+		);
+	}
+
+	// AI agent with image: show image in a circle
+	if (isAI && image) {
+		return (
+			<AvatarPrimitive
 				className={cn(
-					"flex items-center justify-center",
-					showBackground &&
-						"rounded-full bg-co-background-200 dark:bg-co-background-500",
+					"flex size-9 items-center justify-center overflow-clip rounded-full bg-co-background-200 dark:bg-co-background-500",
 					className
 				)}
 			>
-				<CossistantLogo className="h-[60%] min-h-3 w-[60%] min-w-3" />
-			</div>
+				<AvatarImage alt={name} src={image} />
+				<AvatarFallback className="font-medium text-xs" name={name} />
+			</AvatarPrimitive>
 		);
 	}
 

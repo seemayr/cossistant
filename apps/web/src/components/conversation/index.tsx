@@ -9,6 +9,10 @@ import {
 import { ConversationHeader, type ConversationHeaderProps } from "./header";
 import { ConversationTimelineList } from "./messages/conversation-timeline";
 import { MultimodalInput, type MultimodalInputProps } from "./multimodal-input";
+import {
+	EscalationAction,
+	type EscalationActionProps,
+} from "./multimodal-input/escalation-action";
 
 type ConversationTimelineProps = ComponentProps<
 	typeof ConversationTimelineList
@@ -19,6 +23,8 @@ export type ConversationProps = {
 	timeline: ConversationTimelineProps;
 	input: MultimodalInputProps;
 	visitorSidebar: VisitorSidebarProps;
+	/** If set, shows escalation action instead of input */
+	escalation?: EscalationActionProps | null;
 };
 
 export function Conversation({
@@ -26,13 +32,18 @@ export function Conversation({
 	timeline,
 	input,
 	visitorSidebar,
+	escalation,
 }: ConversationProps) {
 	return (
 		<>
 			<Page className="relative py-0 pr-0.5 pl-0">
 				<ConversationHeader {...header} />
 				<ConversationTimelineList {...timeline} />
-				<MultimodalInput {...input} />
+				{escalation ? (
+					<EscalationAction {...escalation} />
+				) : (
+					<MultimodalInput {...input} />
+				)}
 			</Page>
 			<VisitorSidebar {...visitorSidebar} />
 		</>

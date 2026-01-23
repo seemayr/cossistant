@@ -2,6 +2,7 @@
  * Prompt Templates
  *
  * Reusable prompt fragments for building system prompts.
+ * The main messaging rules are in security.ts (CORE_SECURITY_PROMPT).
  */
 
 export const PROMPT_TEMPLATES = {
@@ -17,88 +18,40 @@ export const PROMPT_TEMPLATES = {
 {conversationMeta}`,
 
 	/**
-	 * Instructions for using available tools
+	 * Available tools - placeholder for dynamic tool list
 	 */
 	TOOLS_AVAILABLE: `## Available Tools
 
 {toolList}`,
 
 	/**
-	 * Instructions for structured output
+	 * Reinforcement of tools-only workflow
 	 */
-	STRUCTURED_OUTPUT: `## Response Format
+	STRUCTURED_OUTPUT: `## IMPORTANT: Tools Are Required
 
-Respond with a structured decision:
+You cannot communicate without tools. Follow this exact pattern:
 
-**Actions:** respond, internal_note, escalate, resolve, mark_spam, skip
+1. FIRST: Call sendMessage() with your response text
+2. THEN: Call an action tool (respond, escalate, resolve, skip, or markSpam)
 
-**Required fields:**
-- action: What to do
-- visitorMessage: Message for visitor (can be empty if sent via sendMessageToVisitor tool)
-- reasoning: Brief explanation
-- confidence: 0-1 (low confidence = escalate)`,
-
-	/**
-	 * Critical instructions to never go silent
-	 */
-	NEVER_GO_SILENT: `## Always Respond
-
-Never leave visitors without feedback.
-
-- **respond**: Answer briefly (1-2 sentences)
-- **escalate**: "Connecting you with the team!"
-- **resolve**: "Resolved! Reach out anytime."
-- **skip**: Ask a clarifying question instead
-
-Exception: internal_note and mark_spam can have empty visitorMessage.`,
-
-	/**
-	 * Instructions for responding to visitors
-	 */
-	VISITOR_RESPONSE: `## Response Rules
-
-- Be helpful and friendly
-- Use searchKnowledgeBase for factual questions
-- Don't make promises you can't keep`,
-
-	/**
-	 * Conversation context instructions
-	 * @deprecated Use CORE_SECURITY_PROMPT from security.ts instead
-	 * Kept for backward compatibility but no longer used in buildSystemPrompt
-	 */
-	CONVERSATION_CONTEXT: `## Conversation Context
-
-You are in a multi-party conversation that may include:
-- The visitor (customer/user seeking help)
-- Human support agents (your teammates)
-- Previous AI responses (from you)
-
-Messages from human agents may be:
-- Responses to the visitor
-- Internal notes (visible only to the team)
-- Commands to you (starting with @ai)
-
-Pay attention to who sent each message to understand the conversation flow.`,
+The visitor ONLY sees messages from sendMessage(). If you skip it, they see nothing.`,
 
 	/**
 	 * Escalation guidelines
 	 */
 	ESCALATION_GUIDELINES: `## When to Escalate
 
-Escalate when:
 - Visitor asks for a human
-- You don't know the answer (confidence < 0.6)
+- You don't know the answer
 - Issue needs human judgment
 - Visitor is frustrated
-- Legal/compliance concern
-
-Keep escalation message brief: "Connecting you with the team!"`,
+- Legal/compliance concern`,
 
 	/**
 	 * Capabilities awareness
 	 */
 	CAPABILITIES: `## Capabilities
 
-**Can:** Respond, escalate, resolve, set priority, search knowledge base
-**Cannot:** Make purchases, refunds, account changes, or company commitments`,
+**Can:** Respond, escalate, resolve, search knowledge base
+**Cannot:** Make purchases, refunds, account changes`,
 } as const;

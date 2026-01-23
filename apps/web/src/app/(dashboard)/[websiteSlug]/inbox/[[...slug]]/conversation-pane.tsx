@@ -123,7 +123,7 @@ export function ConversationPane({
 		position: "left",
 	});
 
-	const { markRead } = useConversationActions({
+	const { markRead, joinEscalation, pendingAction } = useConversationActions({
 		conversationId,
 		visitorId,
 	});
@@ -422,6 +422,18 @@ export function ConversationPane({
 			isLoading: isVisitorLoading,
 			visitor,
 		},
+		// Show escalation action if escalated but not yet handled
+		escalation:
+			selectedConversation.escalatedAt &&
+			!selectedConversation.escalationHandledAt
+				? {
+						reason:
+							selectedConversation.escalationReason ??
+							"Human assistance requested",
+						onJoin: joinEscalation,
+						isJoining: pendingAction.joinEscalation,
+					}
+				: null,
 	};
 
 	return <Conversation {...conversationProps} />;

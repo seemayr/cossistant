@@ -1,5 +1,6 @@
 import { upsertVisitor } from "@api/db/queries";
 import { getContactForVisitor } from "@api/db/queries/contact";
+import { aiAgent } from "@api/db/schema/ai-agent";
 import { member } from "@api/db/schema/auth";
 import { visitor as visitorTable } from "@api/db/schema/website";
 import { generateULID } from "@api/utils/db/ids";
@@ -11,7 +12,7 @@ import {
 import { getMostRecentLastOnlineAt } from "@api/utils/website";
 import { publicWebsiteResponseSchema } from "@cossistant/types";
 import { OpenAPIHono } from "@hono/zod-openapi";
-import { and, eq, or } from "drizzle-orm";
+import { and, eq, isNull, or } from "drizzle-orm";
 import { z } from "zod";
 import { protectedPublicApiKeyMiddleware } from "../middleware";
 import type { RestContext } from "../types";
@@ -136,28 +137,41 @@ websiteRouter.openapi(
 		// if visitorIdHeader is not provided, generate a new one
 		const visitorId = visitorIdHeader ?? generateULID();
 
-		const [visitor, organizationAdminsAndOwners, contact] = await Promise.all([
-			upsertVisitor(db, {
-				websiteId: website.id,
-				organizationId: website.organizationId,
-				visitorId,
-				isTest: apiKey.isTest,
-			}),
-			db.query.member.findMany({
-				where: and(
-					eq(member.organizationId, website.organizationId),
-					or(eq(member.role, "admin"), eq(member.role, "owner"))
-				),
-				with: {
-					user: true,
-				},
-				limit: 3,
-			}),
-			getContactForVisitor(db, {
-				visitorId,
-				websiteId: website.id,
-			}),
-		]);
+		const [visitor, organizationAdminsAndOwners, contact, websiteAiAgents] =
+			await Promise.all([
+				upsertVisitor(db, {
+					websiteId: website.id,
+					organizationId: website.organizationId,
+					visitorId,
+					isTest: apiKey.isTest,
+				}),
+				db.query.member.findMany({
+					where: and(
+						eq(member.organizationId, website.organizationId),
+						or(eq(member.role, "admin"), eq(member.role, "owner"))
+					),
+					with: {
+						user: true,
+					},
+					limit: 3,
+				}),
+				getContactForVisitor(db, {
+					visitorId,
+					websiteId: website.id,
+				}),
+				// Query active AI agents for this website
+				db.query.aiAgent.findMany({
+					where: and(
+						eq(aiAgent.websiteId, website.id),
+						eq(aiAgent.isActive, true),
+						isNull(aiAgent.deletedAt)
+					),
+					columns: {
+						id: true,
+						name: true,
+					},
+				}),
+			]);
 
 		const availableHumanAgents = organizationAdminsAndOwners.map(
 			(humanAgent) => ({
@@ -169,6 +183,13 @@ websiteRouter.openapi(
 					humanAgent.user.lastSeenAt?.toISOString() ?? new Date().toISOString(),
 			})
 		);
+
+		// Map AI agents to the AvailableAIAgent format
+		const availableAIAgents = websiteAiAgents.map((agent) => ({
+			id: agent.id,
+			name: agent.name,
+			image: null, // AI agents don't have avatars yet
+		}));
 
 		// iso string indicating support activity - uses most recent lastSeenAt from available human agents
 		const lastOnlineAt = getMostRecentLastOnlineAt(availableHumanAgents);
@@ -185,7 +206,7 @@ websiteRouter.openapi(
 					status: website.status,
 					lastOnlineAt,
 					availableHumanAgents,
-					availableAIAgents: [],
+					availableAIAgents,
 					visitor: {
 						id: visitor.id,
 						isBlocked: Boolean(visitor.blockedAt),

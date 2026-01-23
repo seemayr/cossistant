@@ -91,17 +91,12 @@ export function buildSystemPrompt(input: BuildPromptInput): string {
 	// Add structured output instructions
 	parts.push(PROMPT_TEMPLATES.STRUCTURED_OUTPUT);
 
-	// Add critical instruction to never go silent
-	parts.push(PROMPT_TEMPLATES.NEVER_GO_SILENT);
-
 	// Add behavior instructions based on settings
 	parts.push(buildBehaviorInstructions(settings, mode));
 
 	// Add mode-specific instructions
 	if (mode === "respond_to_command" && humanCommand) {
 		parts.push(buildCommandModeInstructions(humanCommand));
-	} else if (mode === "respond_to_visitor") {
-		parts.push(PROMPT_TEMPLATES.VISITOR_RESPONSE);
 	}
 
 	// =========================================================================
