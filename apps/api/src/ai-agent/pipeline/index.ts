@@ -201,6 +201,7 @@ export async function runAiAgentPipeline(
 			organizationId: ctx.input.organizationId,
 			websiteId: ctx.input.websiteId,
 			visitorId: ctx.input.visitorId,
+			triggerMessageId: ctx.input.messageId,
 		});
 		metrics.generationMs = Date.now() - generationStart;
 

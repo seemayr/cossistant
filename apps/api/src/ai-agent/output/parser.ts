@@ -51,12 +51,12 @@ export function validateDecisionForExecution(decision: AiDecision): {
 
 	switch (decision.action) {
 		case "respond":
-			// Respond action MUST have a visitor message
+			// Respond action SHOULD have a visitor message (warn if missing)
+			// May be empty if AI sent messages via sendMessageToVisitor tool
 			if (!visitorMessage || visitorMessage.trim().length === 0) {
-				return {
-					valid: false,
-					error: `Action "respond" requires a visitorMessage`,
-				};
+				console.warn(
+					"[ai-agent] Respond action without visitor message - may have used sendMessageToVisitor tool"
+				);
 			}
 			break;
 

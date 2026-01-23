@@ -59,8 +59,23 @@ export async function execute(input: ExecutionInput): Promise<ExecutionResult> {
 	const convId = conversation.id;
 
 	console.log(
-		`[ai-agent:execute] conv=${convId} | Executing action="${decision.action}"`
+		`[ai-agent:execute] conv=${convId} | Executing action="${decision.action}" | confidence=${decision.confidence}`
 	);
+
+	// Confidence-based escalation: if AI is uncertain, escalate instead of responding
+	if (decision.confidence < 0.6 && decision.action === "respond") {
+		console.log(
+			`[ai-agent:execute] conv=${convId} | Low confidence (${decision.confidence}), overriding to escalate`
+		);
+		decision.action = "escalate";
+		decision.escalation = {
+			reason: "AI uncertain about response",
+			visitorMessage:
+				decision.visitorMessage ||
+				"Let me connect you with the team for a definitive answer.",
+			urgency: "normal",
+		};
+	}
 
 	// Validate decision before execution
 	const validation = validateDecisionForExecution(decision);
@@ -91,21 +106,33 @@ export async function execute(input: ExecutionInput): Promise<ExecutionResult> {
 	try {
 		switch (decision.action) {
 			case "respond": {
-				const sendResult = await actions.sendMessage({
-					db,
-					conversationId: conversation.id,
-					organizationId,
-					websiteId,
-					visitorId,
-					aiAgentId: aiAgent.id,
-					text: visitorMessage,
-					idempotencyKey: `${messageId}-respond`,
-				});
-				result.primaryAction = {
-					type: "respond",
-					success: true,
-					messageId: sendResult.messageId,
-				};
+				// If visitorMessage is empty, the AI likely already sent messages via tool
+				if (visitorMessage) {
+					const sendResult = await actions.sendMessage({
+						db,
+						conversationId: conversation.id,
+						organizationId,
+						websiteId,
+						visitorId,
+						aiAgentId: aiAgent.id,
+						text: visitorMessage,
+						idempotencyKey: `${messageId}-respond`,
+					});
+					result.primaryAction = {
+						type: "respond",
+						success: true,
+						messageId: sendResult.messageId,
+					};
+				} else {
+					// No message to send - likely already sent via sendMessageToVisitor tool
+					console.log(
+						`[ai-agent:execute] conv=${convId} | No visitorMessage - likely sent via tool`
+					);
+					result.primaryAction = {
+						type: "respond",
+						success: true,
+					};
+				}
 				break;
 			}
 

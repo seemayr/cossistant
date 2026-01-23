@@ -14,6 +14,7 @@ import type { AiAgentBehaviorSettings } from "./types";
 export const behaviorSettingsSchema = z.object({
 	responseMode: z.enum(["always", "when_no_human", "on_mention", "manual"]),
 	responseDelayMs: z.number().min(0).max(30_000),
+	proactiveMode: z.boolean(),
 
 	pauseOnHumanReply: z.boolean(),
 	pauseDurationMinutes: z.number().min(1).max(1440).nullable(), // Max 24 hours

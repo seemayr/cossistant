@@ -15,6 +15,7 @@ import type { AiAgentSelect } from "@api/db/schema/ai-agent";
 import type { ToolSet } from "ai";
 import { getBehaviorSettings } from "../settings";
 import { createSearchKnowledgeBaseTool } from "./search-knowledge";
+import { createSendMessageToVisitorTool } from "./send-message-tool";
 import { createSetPriorityTool } from "./set-priority";
 import { createSetConversationTitleTool } from "./set-title";
 import type { ToolContext } from "./types";
@@ -61,6 +62,10 @@ export function getToolsForGeneration(
 	// Knowledge base search - available for all agents
 	// (will return empty if no knowledge is indexed)
 	tools.searchKnowledgeBase = createSearchKnowledgeBaseTool(toolContext);
+
+	// Multi-message tool - available for all agents
+	// Allows natural conversational responses
+	tools.sendMessageToVisitor = createSendMessageToVisitorTool(toolContext);
 
 	return Object.keys(tools).length > 0 ? tools : undefined;
 }

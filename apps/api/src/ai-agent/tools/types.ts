@@ -18,6 +18,8 @@ export type ToolContext = {
 	websiteId: string;
 	visitorId: string;
 	aiAgentId: string;
+	/** Trigger message ID - used for idempotency keys in send-message tool */
+	triggerMessageId: string;
 };
 
 /**

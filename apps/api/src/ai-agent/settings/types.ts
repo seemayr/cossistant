@@ -23,6 +23,8 @@ export type AiAgentBehaviorSettings = {
 	responseMode: ResponseModeType;
 	/** Delay in milliseconds before responding (0-30000) */
 	responseDelayMs: number;
+	/** Enable proactive responses (greetings, follow-ups) */
+	proactiveMode: boolean;
 
 	// Human interaction
 	/** Pause responding when a human agent replies */

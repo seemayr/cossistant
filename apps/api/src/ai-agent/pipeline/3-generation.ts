@@ -48,6 +48,8 @@ type GenerationInput = {
 	organizationId: string;
 	websiteId: string;
 	visitorId: string;
+	/** Trigger message ID - used for idempotency keys in tools */
+	triggerMessageId: string;
 };
 
 /**
@@ -67,6 +69,7 @@ export async function generate(
 		organizationId,
 		websiteId,
 		visitorId,
+		triggerMessageId,
 	} = input;
 	const convId = conversation.id;
 
@@ -79,6 +82,7 @@ export async function generate(
 		websiteId,
 		visitorId,
 		aiAgentId: aiAgent.id,
+		triggerMessageId,
 	};
 
 	// Get tools for this agent based on settings (with bound context)

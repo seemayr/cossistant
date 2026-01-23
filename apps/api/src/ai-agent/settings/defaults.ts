@@ -15,6 +15,7 @@ export function getDefaultBehaviorSettings(): AiAgentBehaviorSettings {
 		// Response triggers
 		responseMode: "always",
 		responseDelayMs: 3000, // 3 second delay feels natural
+		proactiveMode: true, // Enable proactive responses (greetings, follow-ups)
 
 		// Human interaction
 		pauseOnHumanReply: true, // Pause when human takes over

@@ -53,23 +53,14 @@ export const aiDecisionSchema = z.object({
 		.describe("The primary action to take"),
 
 	/**
-	 * REQUIRED: Message to show the visitor explaining what you're doing.
-	 * This ensures the user always gets feedback and the AI never goes silent.
-	 *
-	 * Examples:
-	 * - respond: Your actual response to their question
-	 * - escalate: "I'm connecting you with a team member who can help further!"
-	 * - resolve: "I've resolved this for you. Feel free to reach out if you need anything else!"
-	 * - skip: "Let me look into this for you..." or ask a clarifying question
-	 * - internal_note: Can be empty if you only need to leave a note for the team
-	 * - mark_spam: Can be empty for actual spam
+	 * Message to show the visitor.
+	 * ALWAYS provide a message unless you used sendMessageToVisitor tool.
 	 */
 	visitorMessage: z
 		.string()
 		.describe(
-			"REQUIRED: A friendly message for the visitor explaining what you're doing. " +
-				"Even when resolving, escalating, or needing more time, always explain what's happening. " +
-				"Only leave empty for internal_note (team-only) or mark_spam (actual spam)."
+			"Your response to the visitor. Keep it brief (1-2 sentences). " +
+				"Required for respond/escalate/resolve actions."
 		),
 
 	/** Optional internal note for the team (private, not visible to visitor) */
