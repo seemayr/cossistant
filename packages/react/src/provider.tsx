@@ -12,6 +12,7 @@ import {
 } from "./hooks/private/use-rest-client";
 import { useSeenStore } from "./realtime/seen-store";
 import { WebSocketProvider } from "./support";
+import { IdentificationProvider } from "./support/context/identification";
 import {
 	initializeSupportStore,
 	useSupportStore,
@@ -476,19 +477,21 @@ function SupportProviderInner({
 
 	return (
 		<SupportContext.Provider value={value}>
-			<WebSocketProvider
-				autoConnect={autoConnect && !isVisitorBlocked && !configurationError}
-				key={webSocketKey}
-				onConnect={onWsConnect}
-				onDisconnect={onWsDisconnect}
-				onError={onWsError}
-				publicKey={publicKey}
-				visitorId={isVisitorBlocked ? undefined : website?.visitor?.id}
-				websiteId={website?.id}
-				wsUrl={wsUrl}
-			>
-				{children}
-			</WebSocketProvider>
+			<IdentificationProvider>
+				<WebSocketProvider
+					autoConnect={autoConnect && !isVisitorBlocked && !configurationError}
+					key={webSocketKey}
+					onConnect={onWsConnect}
+					onDisconnect={onWsDisconnect}
+					onError={onWsError}
+					publicKey={publicKey}
+					visitorId={isVisitorBlocked ? undefined : website?.visitor?.id}
+					websiteId={website?.id}
+					wsUrl={wsUrl}
+				>
+					{children}
+				</WebSocketProvider>
+			</IdentificationProvider>
 		</SupportContext.Provider>
 	);
 }

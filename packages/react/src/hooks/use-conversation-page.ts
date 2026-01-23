@@ -6,6 +6,7 @@ import {
 } from "@cossistant/types/enums";
 import { useEffect, useMemo, useRef } from "react";
 import { useSupport } from "../provider";
+import { useIdentificationState } from "../support/context/identification";
 import { useWebSocketSafe } from "../support/context/websocket";
 import { useDefaultMessages } from "./private/use-default-messages";
 import { useConversationAutoSeen } from "./use-conversation-auto-seen";
@@ -119,6 +120,7 @@ export function useConversationPage(
 
 	const { client, visitor } = useSupport();
 	const websocket = useWebSocketSafe();
+	const identificationState = useIdentificationState();
 
 	const trimmedInitialMessage = initialMessage?.trim() ?? "";
 	const hasInitialMessage = trimmedInitialMessage.length > 0;
@@ -173,6 +175,12 @@ export function useConversationPage(
 			return false;
 		}
 
+		// Don't show identification form while identification is in progress
+		// This prevents the form from flashing when an authenticated user opens the widget
+		if (identificationState?.isIdentifying) {
+			return false;
+		}
+
 		if (visitor?.contact) {
 			return false;
 		}
@@ -180,7 +188,12 @@ export function useConversationPage(
 		return !baseItems.some(
 			(item) => item.type === ConversationTimelineType.IDENTIFICATION
 		);
-	}, [baseItems, lifecycle.isPending, visitor?.contact]);
+	}, [
+		baseItems,
+		lifecycle.isPending,
+		visitor?.contact,
+		identificationState?.isIdentifying,
+	]);
 
 	const displayItems = useMemo(() => {
 		if (!shouldShowIdentificationTool) {

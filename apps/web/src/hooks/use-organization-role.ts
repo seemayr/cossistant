@@ -12,7 +12,7 @@ type OrganizationRole = {
 };
 
 export function useOrganizationRole(): OrganizationRole {
-	const { data, isLoading } = useQuery({
+	const { data, isLoading, isFetched } = useQuery({
 		queryKey: ["organization", "active-member-role"],
 		queryFn: async () => {
 			const result = await authClient.organization.getActiveMemberRole();
@@ -25,7 +25,10 @@ export function useOrganizationRole(): OrganizationRole {
 	const role = data ?? null;
 	const isOwner = role === "owner";
 	const isAdmin = role === "admin";
-	const canCreateWebsite = isOwner || isAdmin;
+
+	// While still loading and never fetched, assume admin/owner can create
+	// This prevents the button from flickering/disappearing during initial load
+	const canCreateWebsite = isLoading && !isFetched ? true : isOwner || isAdmin;
 
 	return {
 		role,

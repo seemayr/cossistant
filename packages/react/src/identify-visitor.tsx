@@ -3,6 +3,7 @@
 import type { VisitorMetadata } from "@cossistant/types";
 import { type ReactElement, useEffect, useState } from "react";
 import { useVisitor } from "./hooks";
+import { useIdentificationState } from "./support/context/identification";
 import { computeMetadataHash } from "./utils/metadata-hash";
 
 export type IdentifySupportVisitorProps = {
@@ -24,8 +25,21 @@ export const IdentifySupportVisitor = ({
 	metadata: _newMetadata,
 }: IdentifySupportVisitorProps): ReactElement | null => {
 	const { visitor, identify, setVisitorMetadata } = useVisitor();
+	const identificationState = useIdentificationState();
 	const [hasIdentified, setHasIdentified] = useState(false);
 	const [lastMetadataHash, setLastMetadataHash] = useState<string | null>(null);
+
+	// Signal that identification is pending when we have identification data but no contact yet
+	useEffect(() => {
+		const hasIdentificationData = Boolean(externalId || email);
+		const needsIdentification = hasIdentificationData && !visitor?.contact;
+
+		if (identificationState?.setIsIdentifying) {
+			identificationState.setIsIdentifying(
+				needsIdentification && !hasIdentified
+			);
+		}
+	}, [externalId, email, visitor?.contact, hasIdentified, identificationState]);
 
 	// Only call identify if:
 	// 1. Visitor hasn't been identified yet (no contact)
@@ -49,6 +63,10 @@ export const IdentifySupportVisitor = ({
 						image: image ?? undefined,
 					});
 					setHasIdentified(true);
+					// Clear identifying state after identification completes
+					if (identificationState?.setIsIdentifying) {
+						identificationState.setIsIdentifying(false);
+					}
 				}
 				return;
 			}
@@ -79,6 +97,7 @@ export const IdentifySupportVisitor = ({
 		image,
 		identify,
 		hasIdentified,
+		identificationState,
 	]);
 
 	// Compute metadata hash, compare to previous hash and only update if it has changed
