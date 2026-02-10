@@ -274,6 +274,18 @@ async function validateTypingEventAuthorization(
 		return false;
 	}
 
+	if (
+		payload.visitorId &&
+		conversation.visitorId &&
+		payload.visitorId !== conversation.visitorId
+	) {
+		sendError(ws, {
+			error: "Invalid visitorId",
+			message: "visitorId must match the conversation visitor",
+		});
+		return false;
+	}
+
 	// For users: they're already authenticated for the website, so they can type in any conversation
 	// (Dashboard agents can respond to any conversation on their website)
 
@@ -415,7 +427,10 @@ function enrichClientEventPayload(
 				websiteId,
 				// Use connection context for actor identification
 				userId: userId ?? null,
-				visitorId: visitorId ?? null,
+				visitorId:
+					typeof basePayload.visitorId === "string"
+						? basePayload.visitorId
+						: visitorId ?? null,
 				aiAgentId: null, // Clients can't impersonate AI agents
 			};
 		case "conversationSeen":

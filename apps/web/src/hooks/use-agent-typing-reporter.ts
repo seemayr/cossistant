@@ -10,6 +10,7 @@ const STOP_TYPING_DELAY_MS = 2000; // Send isTyping: false after 2 seconds of in
 
 type UseAgentTypingReporterOptions = {
 	conversationId: string | null;
+	visitorId?: string | null;
 	websiteSlug: string;
 	enabled?: boolean;
 };
@@ -22,6 +23,7 @@ type UseAgentTypingReporterResult = {
 
 export function useAgentTypingReporter({
 	conversationId,
+	visitorId,
 	websiteSlug,
 	enabled = true,
 }: UseAgentTypingReporterOptions): UseAgentTypingReporterResult {
@@ -59,7 +61,7 @@ export function useAgentTypingReporter({
 
 	const sendTyping = useCallback(
 		async (isTyping: boolean) => {
-			if (!(enabled && conversationId && websiteSlug)) {
+			if (!(enabled && conversationId && websiteSlug && visitorId)) {
 				return;
 			}
 
@@ -75,7 +77,7 @@ export function useAgentTypingReporter({
 							// These will be enriched by the server with the actual values
 							websiteId: "",
 							organizationId: "",
-							visitorId: null,
+							visitorId,
 							userId: null,
 							aiAgentId: null,
 						},
@@ -105,6 +107,7 @@ export function useAgentTypingReporter({
 		[
 			enabled,
 			conversationId,
+			visitorId,
 			websiteSlug,
 			realtimeSend,
 			isRealtimeConnected,
@@ -135,7 +138,7 @@ export function useAgentTypingReporter({
 
 	const handleInputChange = useCallback(
 		(value: string) => {
-			if (!(enabled && conversationId && websiteSlug)) {
+			if (!(enabled && conversationId && websiteSlug && visitorId)) {
 				return;
 			}
 
@@ -173,6 +176,7 @@ export function useAgentTypingReporter({
 		[
 			enabled,
 			conversationId,
+			visitorId,
 			websiteSlug,
 			sendTyping,
 			scheduleKeepAlive,
