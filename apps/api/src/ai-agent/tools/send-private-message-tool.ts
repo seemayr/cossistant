@@ -6,7 +6,6 @@
 
 import { tool } from "ai";
 import { z } from "zod";
-import { addInternalNote } from "../actions/internal-note";
 import type { ToolContext, ToolResult } from "./types";
 
 const inputSchema = z.object({
@@ -50,6 +49,7 @@ export function createSendPrivateMessageTool(ctx: ToolContext) {
 					`[tool:sendPrivateMessage] conv=${ctx.conversationId} | sending #${noteNumber}`
 				);
 
+				const { addInternalNote } = await import("../actions/internal-note");
 				const result = await addInternalNote({
 					db: ctx.db,
 					conversationId: ctx.conversationId,

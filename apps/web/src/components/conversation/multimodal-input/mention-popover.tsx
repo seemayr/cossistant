@@ -3,6 +3,7 @@
 import type { CaretCoordinates, Mention } from "@cossistant/tiny-markdown";
 import { Avatar } from "@/components/ui/avatar";
 import Icon from "@/components/ui/icons";
+import { Logo } from "@/components/ui/logo";
 import { cn } from "@/lib/utils";
 
 export type MentionPopoverProps = {
@@ -19,6 +20,8 @@ function getEntityIcon(type: string) {
 	switch (type) {
 		case "ai-agent":
 			return <Icon className="size-3" name="agent" />;
+		case "tool":
+			return <Icon className="size-3" name="cli" />;
 		case "visitor":
 			return <Icon className="size-3" name="contacts" />;
 		default:
@@ -30,6 +33,8 @@ function getEntityLabel(type: string) {
 	switch (type) {
 		case "ai-agent":
 			return "AI Agent";
+		case "tool":
+			return "Tool";
 		case "human-agent":
 			return "Team";
 		case "visitor":
@@ -37,6 +42,40 @@ function getEntityLabel(type: string) {
 		default:
 			return "";
 	}
+}
+
+function MentionLeadingVisual({ mention }: { mention: Mention }) {
+	if (mention.type === "tool") {
+		return (
+			<div
+				className="flex size-6 items-center justify-center rounded bg-primary/10 text-primary"
+				data-mention-leading="tool-icon"
+			>
+				<Icon className="size-3.5" name="cli" />
+			</div>
+		);
+	}
+
+	if (mention.type === "ai-agent" && !mention.avatar) {
+		return (
+			<div
+				className="flex size-6 items-center justify-center rounded border border-border/60 bg-muted/40"
+				data-mention-leading="ai-logo"
+			>
+				<Logo className="size-3.5 text-primary/90" />
+			</div>
+		);
+	}
+
+	return (
+		<div data-mention-leading="avatar">
+			<Avatar
+				className="size-6"
+				fallbackName={mention.name}
+				url={mention.avatar}
+			/>
+		</div>
+	);
 }
 
 export function MentionPopover({
@@ -89,11 +128,7 @@ export function MentionPopover({
 							onClick={() => onSelect(mention)}
 							type="button"
 						>
-							<Avatar
-								className="size-6"
-								fallbackName={mention.name}
-								url={mention.avatar}
-							/>
+							<MentionLeadingVisual mention={mention} />
 							<div className="flex flex-1 flex-col">
 								<span className="font-medium">{mention.name}</span>
 							</div>

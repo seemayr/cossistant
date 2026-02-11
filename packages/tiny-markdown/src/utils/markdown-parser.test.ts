@@ -79,4 +79,24 @@ describe("markdown-parser", () => {
 		const input = ["```js", "const value = 1;", "```"].join("\n");
 		expect(hasMarkdownFormatting(input)).toBe(true);
 	});
+
+	it("parses tool mention tokens", () => {
+		const tokens = parseMarkdown(
+			"Use [@Search Knowledge Base](mention:tool:searchKnowledgeBase) first."
+		);
+
+		const paragraph = tokens.find((token) => token.type === "p");
+		expect(paragraph?.type).toBe("p");
+
+		if (paragraph?.type === "p") {
+			const mentionToken = paragraph.children.find(
+				(token) => token.type === "mention"
+			);
+			expect(mentionToken?.type).toBe("mention");
+			if (mentionToken?.type === "mention") {
+				expect(mentionToken.mention.type).toBe("tool");
+				expect(mentionToken.mention.id).toBe("searchKnowledgeBase");
+			}
+		}
+	});
 });

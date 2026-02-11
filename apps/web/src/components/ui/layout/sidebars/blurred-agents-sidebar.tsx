@@ -61,6 +61,7 @@ export function BlurredAgentsSidebar({ className }: BlurredAgentsSidebarProps) {
 					{/* Sub-items */}
 					<div className="ml-6 flex flex-col gap-1">
 						<SkeletonSidebarItem hasIcon={false} width="w-12" />
+						<SkeletonSidebarItem hasIcon={false} width="w-14" />
 						<SkeletonSidebarItem hasIcon={false} width="w-20" />
 					</div>
 				</div>

@@ -1,17 +1,24 @@
 "use client";
 
 import type { RouterOutputs } from "@cossistant/api/types";
+import { AI_AGENT_TOOL_CATALOG } from "@cossistant/types";
 import { motion } from "motion/react";
 import { CrawlLimitInfo } from "@/components/agents/crawl-limit-info";
 import { ModelSelect } from "@/components/agents/model-select";
 import { Button } from "@/components/ui/button";
 import Icon from "@/components/ui/icons";
-import { PromptInput } from "@/components/ui/prompt-input";
+import { PromptInputWithMentions } from "@/components/ui/prompt-input-with-mentions";
 import { Spinner } from "@/components/ui/spinner";
 import { AnalysisProgress } from "./analysis-progress";
 import { ManualDescriptionInput } from "./manual-description-input";
 
 type AnalysisStep = "crawling" | "analyzing" | "crafting" | "complete";
+
+const TOOL_MENTION_OPTIONS = AI_AGENT_TOOL_CATALOG.map((tool) => ({
+	id: tool.id,
+	name: tool.label,
+	description: tool.description,
+}));
 
 type StepPersonalityProps = {
 	isAnalyzing: boolean;
@@ -126,7 +133,7 @@ export function StepPersonality({
 
 					{/* Base Prompt */}
 					<div className="space-y-2">
-						<PromptInput
+						<PromptInputWithMentions
 							description="Define how your AI agent should behave and respond to visitors"
 							disabled={isSubmitting}
 							label="System Prompt"
@@ -134,6 +141,7 @@ export function StepPersonality({
 							onChange={setBasePrompt}
 							placeholder="You are a helpful assistant..."
 							rows={10}
+							toolMentions={TOOL_MENTION_OPTIONS}
 							value={basePrompt}
 						/>
 					</div>

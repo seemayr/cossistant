@@ -1,7 +1,9 @@
+import { buildCapabilitiesStudioResponse } from "@api/ai-agent/capabilities-studio";
 import {
 	PromptDocumentConflictError,
 	PromptDocumentValidationError,
 } from "@api/ai-agent/prompts/documents";
+import { resolvePromptBundle } from "@api/ai-agent/prompts/resolver";
 import { getBehaviorSettings } from "@api/ai-agent/settings";
 import {
 	createAiAgent,
@@ -41,6 +43,8 @@ import {
 	getAiAgentRequestSchema,
 	getBehaviorSettingsRequestSchema,
 	getBehaviorSettingsResponseSchema,
+	getCapabilitiesStudioRequestSchema,
+	getCapabilitiesStudioResponseSchema,
 	listPromptDocumentsRequestSchema,
 	listPromptDocumentsResponseSchema,
 	toggleAiAgentActiveRequestSchema,
@@ -569,6 +573,54 @@ export const aiAgentRouter = createTRPCRouter({
 
 			// Return the updated settings merged with defaults
 			return getBehaviorSettings(agent);
+		}),
+
+	getCapabilitiesStudio: protectedProcedure
+		.input(getCapabilitiesStudioRequestSchema)
+		.output(getCapabilitiesStudioResponseSchema)
+		.query(async ({ ctx: { db, user }, input }) => {
+			const websiteData = await getWebsiteBySlugWithAccess(db, {
+				userId: user.id,
+				websiteSlug: input.websiteSlug,
+			});
+
+			if (!websiteData) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Website not found or access denied",
+				});
+			}
+
+			const agent = await getAiAgentForWebsite(db, {
+				websiteId: websiteData.id,
+				organizationId: websiteData.organizationId,
+			});
+
+			if (!agent || agent.id !== input.aiAgentId) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "AI agent not found",
+				});
+			}
+
+			const [documents, promptBundle] = await Promise.all([
+				listAiAgentPromptDocuments(db, {
+					organizationId: websiteData.organizationId,
+					websiteId: websiteData.id,
+					aiAgentId: input.aiAgentId,
+				}),
+				resolvePromptBundle({
+					db,
+					aiAgent: agent,
+					mode: "respond_to_visitor",
+				}),
+			]);
+
+			return buildCapabilitiesStudioResponse({
+				aiAgent: agent,
+				documents,
+				promptBundle,
+			});
 		}),
 
 	listPromptDocuments: protectedProcedure

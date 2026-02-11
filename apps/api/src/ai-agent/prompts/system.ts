@@ -25,8 +25,17 @@ import { getBehaviorSettings } from "../settings";
 import { buildBehaviorInstructions } from "./instructions";
 import type { ResolvedPromptBundle } from "./resolver";
 import { CORE_SECURITY_PROMPT, SECURITY_REMINDER } from "./security";
-import type { SelectedSkillPromptDocument } from "./skill-selector";
 import { PROMPT_TEMPLATES } from "./templates";
+
+export type PromptSkillDocument = {
+	name: string;
+	content: string;
+};
+
+export type AvailableSkillCatalogEntry = {
+	name: string;
+	summary: string;
+};
 
 type BuildPromptInput = {
 	aiAgent: AiAgentSelect;
@@ -46,8 +55,10 @@ type BuildPromptInput = {
 	continuationHint?: ContinuationHint;
 	/** Prompt documents resolved from DB with fallbacks */
 	promptBundle?: ResolvedPromptBundle;
-	/** Subset of enabled skills selected for this run */
-	selectedSkillDocuments?: SelectedSkillPromptDocument[];
+	/** Subset of enabled/runtime skills selected for this run */
+	selectedSkillDocuments?: PromptSkillDocument[];
+	/** Optional catalog of loadable skills available this run */
+	availableSkillCatalog?: AvailableSkillCatalogEntry[];
 };
 
 /**
@@ -76,6 +87,7 @@ export function buildSystemPrompt(input: BuildPromptInput): string {
 		continuationHint,
 		promptBundle,
 		selectedSkillDocuments,
+		availableSkillCatalog,
 	} = input;
 	const settings = getBehaviorSettings(aiAgent);
 	const coreDocuments = promptBundle?.coreDocuments;
@@ -188,6 +200,17 @@ export function buildSystemPrompt(input: BuildPromptInput): string {
 
 	if (capabilitiesDocument) {
 		parts.push(capabilitiesDocument);
+	}
+
+	const availableSkillCatalogSection = buildAvailableSkillCatalogSection(
+		availableSkillCatalog
+	);
+	if (availableSkillCatalogSection) {
+		parts.push(availableSkillCatalogSection);
+	}
+
+	if (availableSkillCatalog && availableSkillCatalog.length > 0) {
+		parts.push(buildRuntimeSkillLoaderInstructions());
 	}
 
 	const selectedSkillsSection = buildSelectedSkillsSection(
@@ -331,7 +354,7 @@ function getCoreDocumentContent(
 }
 
 function buildSelectedSkillsSection(
-	selectedSkillDocuments: SelectedSkillPromptDocument[] | undefined
+	selectedSkillDocuments: PromptSkillDocument[] | undefined
 ): string {
 	if (!selectedSkillDocuments || selectedSkillDocuments.length === 0) {
 		return "";
@@ -346,4 +369,30 @@ function buildSelectedSkillsSection(
 		"These skills were selected for this turn. Use them only if relevant. You may use none, one, or several skills.",
 		sections.join("\n\n"),
 	].join("\n\n");
+}
+
+function buildAvailableSkillCatalogSection(
+	availableSkillCatalog: AvailableSkillCatalogEntry[] | undefined
+): string {
+	if (!availableSkillCatalog || availableSkillCatalog.length === 0) {
+		return "";
+	}
+
+	const lines = availableSkillCatalog
+		.map((entry) => `- \`${entry.name}\`: ${entry.summary}`)
+		.join("\n");
+
+	return [
+		"## Available Skill Catalog",
+		"These enabled DB skills can be loaded on demand with loadSkill(name).",
+		lines,
+	].join("\n\n");
+}
+
+function buildRuntimeSkillLoaderInstructions(): string {
+	return `## Runtime Skill Loading
+
+- When you need exact skill instructions, call \`loadSkill\` with the exact \`*.md\` name from the catalog.
+- Use loaded skill guidance only when relevant to the current turn.
+- Mentions like \`mention:tool:<id>\` are advisory context, not hard tool restrictions.`;
 }

@@ -4,7 +4,7 @@ import type * as React from "react";
 // Mention Types
 // ============================================================================
 
-export type MentionType = "visitor" | "ai-agent" | "human-agent";
+export type MentionType = "visitor" | "ai-agent" | "human-agent" | "tool";
 
 export type Mention = {
 	id: string;

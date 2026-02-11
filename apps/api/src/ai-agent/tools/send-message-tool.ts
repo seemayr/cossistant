@@ -8,7 +8,6 @@
 import { getLatestPublicVisitorMessageId } from "@api/db/queries/conversation";
 import { tool } from "ai";
 import { z } from "zod";
-import { sendMessage as sendMessageAction } from "../actions/send-message";
 import type { ToolContext, ToolResult } from "./types";
 
 /**
@@ -189,7 +188,8 @@ export function createSendMessageTool(ctx: ToolContext) {
 						`[tool:sendMessage] conv=${ctx.conversationId} | sending #${messageNumber}`
 					);
 
-					const result = await sendMessageAction({
+					const { sendMessage } = await import("../actions/send-message");
+					const result = await sendMessage({
 						db: ctx.db,
 						conversationId: ctx.conversationId,
 						organizationId: ctx.organizationId,

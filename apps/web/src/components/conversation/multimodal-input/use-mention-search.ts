@@ -1,7 +1,16 @@
 import type { Mention, MentionType } from "@cossistant/tiny-markdown";
 import { useCallback, useMemo } from "react";
 
-export type MentionableEntityType = "ai-agent" | "human-agent" | "visitor";
+export type MentionableEntityType =
+	| "ai-agent"
+	| "human-agent"
+	| "visitor"
+	| "tool";
+export type MentionableTool = {
+	id: string;
+	name: string;
+	description?: string;
+};
 
 export type MentionableEntity = {
 	id: string;
@@ -16,6 +25,7 @@ export type UseMentionSearchOptions = {
 		id: string;
 		name: string;
 		isActive?: boolean;
+		image?: string | null;
 	} | null;
 	teamMembers?: Array<{
 		id: string;
@@ -30,6 +40,7 @@ export type UseMentionSearchOptions = {
 			email?: string | null;
 		} | null;
 	} | null;
+	tools?: MentionableTool[];
 };
 
 /**
@@ -39,6 +50,7 @@ export function useMentionSearch({
 	aiAgent,
 	teamMembers = [],
 	visitor,
+	tools = [],
 }: UseMentionSearchOptions) {
 	// Build the list of mentionable entities
 	const entities = useMemo<MentionableEntity[]>(() => {
@@ -50,7 +62,7 @@ export function useMentionSearch({
 				id: aiAgent.id,
 				name: aiAgent.name,
 				type: "ai-agent",
-				image: null,
+				image: aiAgent.image ?? null,
 			});
 		}
 
@@ -75,8 +87,17 @@ export function useMentionSearch({
 			});
 		}
 
+		for (const tool of tools) {
+			result.push({
+				id: tool.id,
+				name: tool.name,
+				type: "tool",
+				email: tool.description ?? null,
+			});
+		}
+
 		return result;
-	}, [aiAgent, teamMembers, visitor]);
+	}, [aiAgent, teamMembers, visitor, tools]);
 
 	// Search function that filters entities by query
 	const search = useCallback(

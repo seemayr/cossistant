@@ -23,6 +23,7 @@ import {
 	stepCountIs,
 	ToolLoopAgent,
 } from "@api/lib/ai";
+import type { PrepareStepFunction, ToolSet } from "ai";
 import {
 	detectPromptInjection,
 	logInjectionAttempt,
@@ -31,8 +32,12 @@ import type { RoleAwareMessage } from "../context/conversation";
 import type { VisitorContext } from "../context/visitor";
 import type { AiDecision } from "../output/schemas";
 import { resolvePromptBundle } from "../prompts/resolver";
+import {
+	createLoadSkillTool,
+	createRuntimeSkillRegistry,
+} from "../prompts/runtime-skill-loader";
 import { selectRelevantSkills } from "../prompts/skill-selector";
-import { buildSystemPrompt } from "../prompts/system";
+import { buildSystemPrompt, type PromptSkillDocument } from "../prompts/system";
 import {
 	createActionCapture,
 	getCapturedAction,
@@ -119,7 +124,8 @@ async function generateWithToolLoopAgent(input: {
 	modelId: string;
 	systemPrompt: string;
 	messages: Array<{ role: "user" | "assistant"; content: string }>;
-	tools: NonNullable<ReturnType<typeof getToolsForGeneration>>;
+	tools: ToolSet;
+	prepareStep?: PrepareStepFunction<ToolSet>;
 	stopWhen: Array<
 		ReturnType<typeof hasToolCall> | ReturnType<typeof stepCountIs>
 	>;
@@ -129,6 +135,7 @@ async function generateWithToolLoopAgent(input: {
 		model: createModel(input.modelId),
 		instructions: input.systemPrompt,
 		tools: input.tools,
+		prepareStep: input.prepareStep,
 		toolChoice: "required",
 		stopWhen: input.stopWhen,
 		// Deterministic tool calls reduce accidental tool misuse in multi-step loops.
@@ -239,7 +246,7 @@ export async function generate(
 		aiAgent,
 		mode,
 	});
-	const selectedSkillDocuments = selectRelevantSkills({
+	const fallbackSelectedSkillDocuments = selectRelevantSkills({
 		enabledSkills: promptBundle.enabledSkills,
 		conversationHistory,
 		mode,
@@ -247,30 +254,73 @@ export async function generate(
 		capabilitiesContent:
 			promptBundle.coreDocuments["capabilities.md"]?.content ?? "",
 	});
+	const runtimeSkillRegistry = createRuntimeSkillRegistry({
+		enabledSkills: promptBundle.enabledSkills,
+	});
+	const loadSkillTool = createLoadSkillTool({
+		registry: runtimeSkillRegistry,
+		conversationId: convId,
+	});
+	const runtimeTools: ToolSet = {
+		...tools,
+		loadSkill: loadSkillTool,
+	};
+	const availableSkillCatalog = runtimeSkillRegistry.getCatalog();
+
+	const buildMergedSkillDocuments = (): PromptSkillDocument[] => {
+		const mergedByName = new Map<string, PromptSkillDocument>();
+
+		for (const skill of fallbackSelectedSkillDocuments) {
+			mergedByName.set(skill.name, {
+				name: skill.name,
+				content: skill.content,
+			});
+		}
+
+		for (const skill of runtimeSkillRegistry.getLoadedSkills()) {
+			// Runtime-loaded skill content should win over fallback selection.
+			mergedByName.set(skill.name, {
+				name: skill.name,
+				content: skill.content,
+			});
+		}
+
+		return Array.from(mergedByName.values());
+	};
+
+	const buildRuntimeSystemPrompt = () =>
+		buildSystemPrompt({
+			aiAgent,
+			conversation,
+			conversationHistory,
+			visitorContext,
+			mode,
+			humanCommand,
+			tools: runtimeTools,
+			isEscalated,
+			escalationReason,
+			smartDecision,
+			continuationHint,
+			promptBundle,
+			selectedSkillDocuments: buildMergedSkillDocuments(),
+			availableSkillCatalog,
+		});
 
 	// Build dynamic system prompt with real-time context and tool instructions
-	const systemPrompt = buildSystemPrompt({
-		aiAgent,
-		conversation,
-		conversationHistory,
-		visitorContext,
-		mode,
-		humanCommand,
-		tools,
-		isEscalated,
-		escalationReason,
-		smartDecision,
-		continuationHint,
-		promptBundle,
-		selectedSkillDocuments,
+	const systemPrompt = buildRuntimeSystemPrompt();
+	const prepareStep: PrepareStepFunction<ToolSet> = () => ({
+		system: buildRuntimeSystemPrompt(),
 	});
 
 	// Format conversation history for LLM with multi-party prefixes
 	const visitorName = visitorContext?.name ?? null;
 	const messages = formatMessagesForLlm(conversationHistory, visitorName);
+	const fallbackSkillNames = fallbackSelectedSkillDocuments.map(
+		(skill) => skill.name
+	);
 
 	console.log(
-		`[ai-agent:generate] conv=${convId} | model=${aiAgent.model} | messages=${messages.length} | mode=${mode} | tools=${Object.keys(tools).length} | selectedSkills=${selectedSkillDocuments.length}`
+		`[ai-agent:generate] conv=${convId} | model=${aiAgent.model} | messages=${messages.length} | mode=${mode} | tools=${Object.keys(runtimeTools).length} | fallbackSkills=${fallbackSkillNames.join(",") || "none"} | skillCatalog=${availableSkillCatalog.length}`
 	);
 
 	// Check for potential prompt injection in the latest visitor message (for monitoring)
@@ -316,13 +366,22 @@ export async function generate(
 			modelId: aiAgent.model,
 			systemPrompt,
 			messages,
-			tools,
+			tools: runtimeTools,
+			prepareStep,
 			stopWhen: MAIN_STOP_CONDITIONS,
 			abortSignal,
 		});
 	} catch (error) {
 		// Handle abort gracefully - this means a new message arrived
 		if (error instanceof Error && error.name === "AbortError") {
+			console.log(
+				`[ai-agent:generate] conv=${convId} | dynamicSkills=${
+					runtimeSkillRegistry
+						.getLoadedSkills()
+						.map((skill) => skill.name)
+						.join(",") || "none"
+				} | loadSkillCalls=${runtimeSkillRegistry.getLoadSkillCallCount()}`
+			);
 			console.log(
 				`[ai-agent:generate] conv=${convId} | Generation aborted - new message arrived`
 			);
@@ -354,6 +413,13 @@ export async function generate(
 	);
 	const actionCalls = allToolCalls.filter((tc) =>
 		["respond", "escalate", "resolve", "markSpam", "skip"].includes(tc.toolName)
+	);
+	const loadedSkillNames = runtimeSkillRegistry
+		.getLoadedSkills()
+		.map((skill) => skill.name);
+
+	console.log(
+		`[ai-agent:generate] conv=${convId} | dynamicSkills=${loadedSkillNames.join(",") || "none"} | loadSkillCalls=${runtimeSkillRegistry.getLoadSkillCallCount()}`
 	);
 
 	console.log(
@@ -400,7 +466,7 @@ export async function generate(
 				smartDecision,
 				continuationHint,
 				promptBundle,
-				selectedSkillDocuments,
+				selectedSkillDocuments: buildMergedSkillDocuments(),
 			})}\n\n## Repair Mode\n\nYou must complete this turn using ONLY these tools:\n- sendMessage(): send a short, safe, helpful reply to the visitor\n- respond(): finish the turn\n\nRules:\n- Call sendMessage() exactly once\n- Call respond() immediately after sendMessage()\n- Do not call any other tools`;
 
 			let repairResult: Awaited<ReturnType<typeof generateWithToolLoopAgent>>;

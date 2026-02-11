@@ -13,7 +13,13 @@
  */
 
 import type { AiAgentSelect } from "@api/db/schema/ai-agent";
+import {
+	AI_AGENT_TOOL_CATALOG,
+	type AiAgentBehaviorSettingKey,
+	type AiAgentToolId,
+} from "@cossistant/types";
 import type { ToolSet } from "ai";
+import type { AiAgentBehaviorSettings } from "../settings";
 import { getBehaviorSettings } from "../settings";
 import {
 	createEscalateTool,
@@ -39,6 +45,67 @@ export {
 } from "./action-tools";
 export type { ToolContext, ToolResult } from "./types";
 
+const TOOL_CATALOG_MAP = new Map(
+	AI_AGENT_TOOL_CATALOG.map((tool) => [tool.id, tool])
+);
+
+const TOOL_FACTORIES: Record<
+	AiAgentToolId,
+	(context: ToolContext) => ToolSet[string] | null
+> = {
+	searchKnowledgeBase: (context) => createSearchKnowledgeBaseTool(context),
+	identifyVisitor: (context) => createIdentifyVisitorTool(context),
+	updateConversationTitle: (context) =>
+		createUpdateConversationTitleTool(context),
+	updateSentiment: (context) => createUpdateSentimentTool(context),
+	setPriority: (context) => createSetPriorityTool(context),
+	sendMessage: (context) => createSendMessageTool(context),
+	sendPrivateMessage: (context) => createSendPrivateMessageTool(context),
+	respond: (context) => createRespondTool(context),
+	escalate: (context) => createEscalateTool(context),
+	resolve: (context) => createResolveTool(context),
+	markSpam: (context) => createMarkSpamTool(context),
+	skip: (context) => createSkipTool(context),
+};
+
+function getBehaviorSettingValue(
+	settings: AiAgentBehaviorSettings,
+	key: AiAgentBehaviorSettingKey
+): boolean {
+	switch (key) {
+		case "autoAnalyzeSentiment":
+			return settings.autoAnalyzeSentiment;
+		case "autoGenerateTitle":
+			return settings.autoGenerateTitle;
+		case "canEscalate":
+			return settings.canEscalate;
+		case "canMarkSpam":
+			return settings.canMarkSpam;
+		case "canResolve":
+			return settings.canResolve;
+		case "canSetPriority":
+			return settings.canSetPriority;
+		default:
+			return false;
+	}
+}
+
+function isToolEnabledBySettings(
+	toolId: AiAgentToolId,
+	settings: AiAgentBehaviorSettings
+): boolean {
+	const metadata = TOOL_CATALOG_MAP.get(toolId);
+	if (!metadata) {
+		return false;
+	}
+
+	if (!(metadata.isToggleable && metadata.behaviorSettingKey)) {
+		return true;
+	}
+
+	return getBehaviorSettingValue(settings, metadata.behaviorSettingKey);
+}
+
 /**
  * Get tools for the generation step based on agent settings
  *
@@ -56,46 +123,20 @@ export function getToolsForGeneration(
 	const settings = getBehaviorSettings(aiAgent);
 	const tools: ToolSet = {};
 
-	// Side-effect tools - inline actions the AI can take
+	for (const tool of AI_AGENT_TOOL_CATALOG) {
+		if (!isToolEnabledBySettings(tool.id, settings)) {
+			continue;
+		}
 
-	// Title tool - available if auto-generate title is enabled
-	if (settings.autoGenerateTitle) {
-		tools.updateConversationTitle =
-			createUpdateConversationTitleTool(toolContext);
+		const factory = TOOL_FACTORIES[tool.id];
+		const resolvedTool = factory?.(toolContext);
+
+		if (!resolvedTool) {
+			continue;
+		}
+
+		tools[tool.id] = resolvedTool;
 	}
-
-	// Sentiment tool - available if auto-analyze is enabled
-	if (settings.autoAnalyzeSentiment) {
-		tools.updateSentiment = createUpdateSentimentTool(toolContext);
-	}
-
-	// Priority tool - available if agent can set priority
-	if (settings.canSetPriority) {
-		tools.setPriority = createSetPriorityTool(toolContext);
-	}
-
-	// Context-gathering tools
-
-	// Knowledge base search - available for all agents
-	tools.searchKnowledgeBase = createSearchKnowledgeBaseTool(toolContext);
-
-	// Visitor identification - always available
-	tools.identifyVisitor = createIdentifyVisitorTool(toolContext);
-
-	// Messaging tools - ALWAYS available
-	// These are the primary way the AI communicates
-	if (toolContext.allowPublicMessages) {
-		tools.sendMessage = createSendMessageTool(toolContext);
-	}
-	tools.sendPrivateMessage = createSendPrivateMessageTool(toolContext);
-
-	// Action tools - AI MUST call one to signal completion
-	// These replace structured output to force tool usage
-	tools.respond = createRespondTool(toolContext);
-	tools.escalate = createEscalateTool(toolContext); // Pass context to check escalation state
-	tools.resolve = createResolveTool(toolContext);
-	tools.markSpam = createMarkSpamTool(toolContext);
-	tools.skip = createSkipTool(toolContext);
 
 	if (Object.keys(tools).length === 0) {
 		return;

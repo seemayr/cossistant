@@ -1,6 +1,6 @@
 "use client";
 
-import type { AiAgentResponse } from "@cossistant/types";
+import { AI_AGENT_TOOL_CATALOG, type AiAgentResponse } from "@cossistant/types";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -23,7 +23,7 @@ import {
 import Icon from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { SettingsRowFooter } from "@/components/ui/layout/settings-layout";
-import { PromptInput } from "@/components/ui/prompt-input";
+import { PromptInputWithMentions } from "@/components/ui/prompt-input-with-mentions";
 import { Switch } from "@/components/ui/switch";
 import { TooltipOnHover } from "@/components/ui/tooltip";
 import { useTRPC } from "@/lib/trpc/client";
@@ -65,6 +65,12 @@ type AIAgentFormProps = {
 	websiteSlug: string;
 	initialData: AiAgentResponse | null;
 };
+
+const TOOL_MENTION_OPTIONS = AI_AGENT_TOOL_CATALOG.map((tool) => ({
+	id: tool.id,
+	name: tool.label,
+	description: tool.description,
+}));
 
 export function AIAgentForm({
 	websiteSlug,
@@ -331,7 +337,7 @@ export function AIAgentForm({
 						name="basePrompt"
 						render={({ field, fieldState }) => (
 							<FormItem>
-								<PromptInput
+								<PromptInputWithMentions
 									description="The system prompt that defines how your AI agent behaves."
 									disabled={isPending}
 									error={fieldState.error?.message}
@@ -340,6 +346,7 @@ export function AIAgentForm({
 									onChange={field.onChange}
 									placeholder="You are a helpful support assistant..."
 									rows={10}
+									toolMentions={TOOL_MENTION_OPTIONS}
 									value={field.value}
 								/>
 							</FormItem>

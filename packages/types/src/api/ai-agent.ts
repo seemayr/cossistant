@@ -1,4 +1,9 @@
 import { z } from "@hono/zod-openapi";
+import {
+	AI_AGENT_BEHAVIOR_SETTING_KEYS,
+	AI_AGENT_TOOL_CATEGORIES,
+	AI_AGENT_TOOL_IDS,
+} from "./ai-agent-capabilities";
 
 /**
  * Available AI models from OpenRouter
@@ -585,6 +590,67 @@ export const toggleSkillDocumentRequestSchema = z.object({
 	}),
 });
 
+export const aiAgentToolCategorySchema = z.enum(AI_AGENT_TOOL_CATEGORIES);
+export const aiAgentToolIdSchema = z.enum(AI_AGENT_TOOL_IDS);
+export const aiAgentBehaviorSettingKeySchema = z.enum(
+	AI_AGENT_BEHAVIOR_SETTING_KEYS
+);
+
+export const aiAgentCapabilitiesToolStateSchema = z.object({
+	id: aiAgentToolIdSchema,
+	label: z.string(),
+	description: z.string(),
+	category: aiAgentToolCategorySchema,
+	isSystem: z.boolean(),
+	isRequired: z.boolean(),
+	isToggleable: z.boolean(),
+	behaviorSettingKey: aiAgentBehaviorSettingKeySchema.nullable(),
+	defaultTemplateNames: z.array(aiAgentSkillPromptDocumentNameSchema),
+	enabled: z.boolean(),
+});
+
+export const aiAgentDefaultSkillTemplateStateSchema = z.object({
+	name: aiAgentSkillPromptDocumentNameSchema,
+	label: z.string(),
+	description: z.string(),
+	content: z.string(),
+	suggestedToolIds: z.array(aiAgentToolIdSchema),
+	isEnabled: z.boolean(),
+	hasOverride: z.boolean(),
+	isCustomized: z.boolean(),
+	skillDocumentId: z.ulid().nullable(),
+});
+
+export const aiAgentSystemSkillDocumentSchema = z.object({
+	name: aiAgentCorePromptDocumentNameSchema,
+	label: z.string(),
+	description: z.string(),
+	content: z.string(),
+	source: z.enum(["db", "fallback"]),
+	enabled: z.boolean(),
+	priority: z.number().int(),
+	documentId: z.ulid().nullable(),
+});
+
+export const getCapabilitiesStudioRequestSchema = z.object({
+	websiteSlug: z.string().openapi({
+		description: "The website slug.",
+		example: "my-website",
+	}),
+	aiAgentId: z.ulid().openapi({
+		description: "The AI agent ID.",
+		example: "01JG000000000000000000000",
+	}),
+});
+
+export const getCapabilitiesStudioResponseSchema = z.object({
+	aiAgentId: z.ulid(),
+	tools: z.array(aiAgentCapabilitiesToolStateSchema),
+	defaultSkillTemplates: z.array(aiAgentDefaultSkillTemplateStateSchema),
+	systemSkillDocuments: z.array(aiAgentSystemSkillDocumentSchema),
+	skillDocuments: z.array(aiAgentPromptDocumentResponseSchema),
+});
+
 export type AiAgentResponse = z.infer<typeof aiAgentResponseSchema>;
 export type CreateAiAgentRequest = z.infer<typeof createAiAgentRequestSchema>;
 export type UpdateAiAgentRequest = z.infer<typeof updateAiAgentRequestSchema>;
@@ -622,6 +688,21 @@ export type DeleteSkillDocumentRequest = z.infer<
 >;
 export type ToggleSkillDocumentRequest = z.infer<
 	typeof toggleSkillDocumentRequestSchema
+>;
+export type GetCapabilitiesStudioRequest = z.infer<
+	typeof getCapabilitiesStudioRequestSchema
+>;
+export type GetCapabilitiesStudioResponse = z.infer<
+	typeof getCapabilitiesStudioResponseSchema
+>;
+export type AiAgentCapabilitiesToolState = z.infer<
+	typeof aiAgentCapabilitiesToolStateSchema
+>;
+export type AiAgentDefaultSkillTemplateState = z.infer<
+	typeof aiAgentDefaultSkillTemplateStateSchema
+>;
+export type AiAgentSystemSkillDocument = z.infer<
+	typeof aiAgentSystemSkillDocumentSchema
 >;
 
 /**

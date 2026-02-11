@@ -1,18 +1,20 @@
 "use client";
 
 import { Maximize2 } from "lucide-react";
-import type * as React from "react";
-import { useRef, useState } from "react";
-
+import { useState } from "react";
+import {
+	SkillMarkdownEditor,
+	type SkillToolMention,
+} from "@/components/agents/skills/skill-markdown-editor";
 import { Button } from "@/components/ui/button";
 import { PromptEditModal } from "@/components/ui/prompt-edit-modal";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { TooltipOnHover } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
-type PromptInputProps = {
+type PromptInputWithMentionsProps = {
 	value: string;
 	onChange: (value: string) => void;
+	toolMentions: SkillToolMention[];
 	placeholder?: string;
 	maxLength?: number;
 	disabled?: boolean;
@@ -23,9 +25,10 @@ type PromptInputProps = {
 	rows?: number;
 };
 
-export function PromptInput({
+export function PromptInputWithMentions({
 	value,
 	onChange,
+	toolMentions,
 	placeholder = "Enter your prompt...",
 	maxLength = 10_000,
 	disabled = false,
@@ -34,9 +37,8 @@ export function PromptInput({
 	description,
 	error,
 	rows = 8,
-}: PromptInputProps) {
+}: PromptInputWithMentionsProps) {
 	const [isDialogOpen, setIsDialogOpen] = useState(false);
-	const textareaRef = useRef<HTMLTextAreaElement>(null);
 
 	const characterCount = value.length;
 	const isOverLimit = characterCount > maxLength;
@@ -44,14 +46,11 @@ export function PromptInput({
 
 	return (
 		<div className="flex flex-col gap-2">
-			{label && (
-				<label className="font-medium text-sm" htmlFor="prompt-input">
-					{label}
-				</label>
-			)}
+			{label && <span className="font-medium text-sm">{label}</span>}
 			{description && (
 				<p className="text-muted-foreground text-sm">{description}</p>
 			)}
+
 			<div className="relative">
 				<TooltipOnHover content="Expand prompt input" side="right">
 					<Button
@@ -64,43 +63,21 @@ export function PromptInput({
 						<Maximize2 />
 					</Button>
 				</TooltipOnHover>
-				<div
+				<SkillMarkdownEditor
 					className={cn(
-						"w-full overflow-hidden rounded border border-input bg-background-100/50 shadow-xs transition-[color,box-shadow]",
-						"focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20",
-						"dark:bg-background-200",
-						isOverLimit &&
-							"border-destructive focus-within:border-destructive focus-within:ring-destructive/20",
-						error &&
-							"border-destructive focus-within:border-destructive focus-within:ring-destructive/20",
-						disabled && "cursor-not-allowed opacity-50",
+						isOverLimit && "border-destructive",
+						error && "border-destructive",
 						className
 					)}
-				>
-					<ScrollArea
-						className="max-h-[480px]"
-						maskHeight="80px"
-						orientation="vertical"
-						scrollbarWidth="8px"
-						scrollMask={true}
-					>
-						<textarea
-							className={cn(
-								"field-sizing-content flex w-full resize-none border-0 bg-transparent px-3 py-3 pt-10 font-mono text-sm outline-none",
-								"placeholder:text-muted-foreground",
-								"disabled:cursor-not-allowed"
-							)}
-							disabled={disabled}
-							id="prompt-input"
-							onChange={(e) => onChange(e.target.value)}
-							placeholder={placeholder}
-							ref={textareaRef}
-							rows={rows}
-							value={value}
-						/>
-					</ScrollArea>
-				</div>
+					disabled={disabled}
+					onChange={onChange}
+					placeholder={placeholder}
+					rows={rows}
+					toolMentions={toolMentions}
+					value={value}
+				/>
 			</div>
+
 			<div className="flex items-center justify-between">
 				{error ? <p className="text-destructive text-xs">{error}</p> : <div />}
 				<span
@@ -130,16 +107,12 @@ export function PromptInput({
 				open={isDialogOpen}
 				title="Prompt Editor"
 			>
-				<textarea
-					autoFocus
-					className={cn(
-						"field-sizing-content h-content w-full resize-none rounded border-0 border-input bg-background p-3 font-mono text-sm outline-none transition-[color,box-shadow] focus:bg-background-200",
-						"placeholder:text-muted-foreground",
-						isOverLimit &&
-							"border-destructive focus-visible:border-destructive focus-visible:ring-destructive/20"
-					)}
-					onChange={(e) => onChange(e.target.value)}
+				<SkillMarkdownEditor
+					disabled={disabled}
+					onChange={onChange}
 					placeholder={placeholder}
+					rows={24}
+					toolMentions={toolMentions}
 					value={value}
 				/>
 			</PromptEditModal>

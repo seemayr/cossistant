@@ -163,13 +163,30 @@ function mapSenderToTurnCode(
 	}
 }
 
+function findLastPublicHumanMessageIndex(
+	conversationHistory: RoleAwareMessage[]
+): number {
+	for (let i = conversationHistory.length - 1; i >= 0; i--) {
+		const message = conversationHistory[i];
+		if (!message) {
+			continue;
+		}
+
+		if (
+			message.senderType === "human_agent" &&
+			message.visibility === "public"
+		) {
+			return i;
+		}
+	}
+
+	return -1;
+}
+
 function extractDecisionSignals(input: SmartDecisionInput): DecisionSignals {
 	const { conversationHistory, triggerMessage } = input;
 
-	const lastHumanIndex = conversationHistory.findLastIndex(
-		(message) =>
-			message.senderType === "human_agent" && message.visibility === "public"
-	);
+	const lastHumanIndex = findLastPublicHumanMessageIndex(conversationHistory);
 
 	const messagesSinceHuman =
 		lastHumanIndex >= 0 ? conversationHistory.length - 1 - lastHumanIndex : -1;
@@ -196,7 +213,12 @@ function extractDecisionSignals(input: SmartDecisionInput): DecisionSignals {
 
 	let visitorBurstCount = 0;
 	for (let i = conversationHistory.length - 1; i >= 0; i--) {
-		if (conversationHistory[i].senderType === "visitor") {
+		const message = conversationHistory[i];
+		if (!message) {
+			continue;
+		}
+
+		if (message.senderType === "visitor") {
 			visitorBurstCount++;
 			continue;
 		}
@@ -249,7 +271,11 @@ function selectRelevantMessages(
 	const seen = new Set<string>();
 	const messageIndex = new Map<string, number>();
 	for (let i = 0; i < history.length; i++) {
-		messageIndex.set(history[i].messageId, i);
+		const message = history[i];
+		if (!message) {
+			continue;
+		}
+		messageIndex.set(message.messageId, i);
 	}
 
 	const addMessage = (msg: RoleAwareMessage) => {
@@ -263,6 +289,10 @@ function selectRelevantMessages(
 	const currentBurst: RoleAwareMessage[] = [];
 	for (let i = history.length - 1; i >= 0; i--) {
 		const msg = history[i];
+		if (!msg) {
+			continue;
+		}
+
 		if (msg.senderType === triggerMessage.senderType) {
 			currentBurst.unshift(msg);
 		} else {
@@ -278,6 +308,10 @@ function selectRelevantMessages(
 	let exchangeCount = 0;
 	for (let i = exchangeStartIndex - 1; i >= 0 && exchangeCount < 4; i--) {
 		const msg = history[i];
+		if (!msg) {
+			continue;
+		}
+
 		contextMessages.unshift(msg);
 		if (msg.senderType !== lastSenderType) {
 			exchangeCount++;
@@ -289,6 +323,10 @@ function selectRelevantMessages(
 	const humanAgentMessages: RoleAwareMessage[] = [];
 	for (let i = history.length - 1; i >= 0; i--) {
 		const msg = history[i];
+		if (!msg) {
+			continue;
+		}
+
 		if (msg.senderType === "human_agent") {
 			humanAgentMessages.unshift(msg);
 			if (humanAgentMessages.length >= MAX_HUMAN_MESSAGES) {
@@ -531,8 +569,7 @@ export async function runSmartDecision(
 	const prompt = buildDecisionPrompt(input, signals);
 
 	// Try each model sequentially until one succeeds
-	for (let i = 0; i < DECISION_MODELS.length; i++) {
-		const modelConfig = DECISION_MODELS[i];
+	for (const [i, modelConfig] of DECISION_MODELS.entries()) {
 		const isLastModel = i === DECISION_MODELS.length - 1;
 		const abortController = new AbortController();
 		const timeout = setTimeout(() => {

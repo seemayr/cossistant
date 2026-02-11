@@ -36,11 +36,13 @@ export function AgentsNavigationSidebar() {
 	const isFaqActive = pathname.startsWith(`${trainingPath}/faq`);
 	const isFilesActive = pathname.startsWith(`${trainingPath}/files`);
 	const isToolsActive = pathname.startsWith(`${basePath}/tools`);
+	const isSkillsActive = pathname.startsWith(`${basePath}/skills`);
 	const isIntegrationsActive = pathname.startsWith(`${basePath}/integrations`);
 
 	// Determine if sections should be open by default
 	const isKnowledgeActive = isWebSourcesActive || isFaqActive || isFilesActive;
-	const isCapabilitiesActive = isToolsActive || isIntegrationsActive;
+	const isCapabilitiesActive =
+		isToolsActive || isSkillsActive || isIntegrationsActive;
 
 	return (
 		<ResizableSidebar position="left" sidebarTitle="AI Agent">
@@ -113,11 +115,11 @@ export function AgentsNavigationSidebar() {
 							label: "Tools",
 							href: `${basePath}/tools`,
 							active: isToolsActive,
-							rightItem: (
-								<Badge className="ml-auto" variant="secondary">
-									Soon
-								</Badge>
-							),
+						},
+						{
+							label: "Skills",
+							href: `${basePath}/skills`,
+							active: isSkillsActive,
 						},
 						{
 							label: "Integrations",

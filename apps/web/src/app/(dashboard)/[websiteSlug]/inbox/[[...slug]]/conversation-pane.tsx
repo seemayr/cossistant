@@ -64,7 +64,10 @@ export function ConversationPane({
 			{
 				id: aiAgent.id,
 				name: aiAgent.name,
-				image: null, // AI agents don't have custom images yet
+				image:
+					"image" in aiAgent
+						? ((aiAgent as { image?: string | null }).image ?? null)
+						: null,
 			},
 		];
 	}, [aiAgent]);
@@ -462,7 +465,17 @@ export function ConversationPane({
 			),
 			// Enable mentions for AI agent, team members, and visitor
 			mentionConfig: {
-				aiAgent: aiAgent ?? null,
+				aiAgent: aiAgent
+					? {
+							id: aiAgent.id,
+							name: aiAgent.name,
+							isActive: aiAgent.isActive,
+							image:
+								"image" in aiAgent
+									? ((aiAgent as { image?: string | null }).image ?? null)
+									: null,
+						}
+					: null,
 				teamMembers: members.filter((m): m is typeof m & { name: string } =>
 					Boolean(m.name)
 				),

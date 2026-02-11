@@ -25,13 +25,34 @@ let aiTrainingTriggers: ReturnType<typeof createAiTrainingTriggers> | null =
 	null;
 let webCrawlTriggers: ReturnType<typeof createWebCrawlTriggers> | null = null;
 
-const bullConnectionOptions = getBullConnectionOptions(env.REDIS_URL);
+let bullConnectionOptions: ReturnType<typeof getBullConnectionOptions> | null =
+	null;
+
+function getRedisUrlOrThrow(): string {
+	const redisUrl = env.REDIS_URL.trim();
+	if (!redisUrl) {
+		throw new Error(
+			"[queue-triggers] REDIS_URL is required when queue triggers are invoked"
+		);
+	}
+
+	return redisUrl;
+}
+
+function getBullOptions() {
+	if (!bullConnectionOptions) {
+		bullConnectionOptions = getBullConnectionOptions(getRedisUrlOrThrow());
+	}
+
+	return bullConnectionOptions;
+}
 
 function getMessageNotificationTriggers() {
 	if (!messageNotificationTriggers) {
+		const redisUrl = getRedisUrlOrThrow();
 		messageNotificationTriggers = createMessageNotificationTriggers({
-			connection: bullConnectionOptions,
-			redisUrl: env.REDIS_URL,
+			connection: getBullOptions(),
+			redisUrl,
 		});
 	}
 	return messageNotificationTriggers;
@@ -39,9 +60,10 @@ function getMessageNotificationTriggers() {
 
 export function getAiAgentQueueTriggers() {
 	if (!aiAgentTriggers) {
+		const redisUrl = getRedisUrlOrThrow();
 		aiAgentTriggers = createAiAgentTriggers({
-			connection: bullConnectionOptions,
-			redisUrl: env.REDIS_URL,
+			connection: getBullOptions(),
+			redisUrl,
 		});
 	}
 	return aiAgentTriggers;
@@ -49,9 +71,10 @@ export function getAiAgentQueueTriggers() {
 
 function getAiTrainingTriggers() {
 	if (!aiTrainingTriggers) {
+		const redisUrl = getRedisUrlOrThrow();
 		aiTrainingTriggers = createAiTrainingTriggers({
-			connection: bullConnectionOptions,
-			redisUrl: env.REDIS_URL,
+			connection: getBullOptions(),
+			redisUrl,
 		});
 	}
 	return aiTrainingTriggers;
@@ -59,9 +82,10 @@ function getAiTrainingTriggers() {
 
 function getWebCrawlTriggers() {
 	if (!webCrawlTriggers) {
+		const redisUrl = getRedisUrlOrThrow();
 		webCrawlTriggers = createWebCrawlTriggers({
-			connection: bullConnectionOptions,
-			redisUrl: env.REDIS_URL,
+			connection: getBullOptions(),
+			redisUrl,
 		});
 	}
 	return webCrawlTriggers;
