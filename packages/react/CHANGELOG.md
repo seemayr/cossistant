@@ -1,5 +1,15 @@
 # @cossistant/react
 
+## 0.1.1
+
+### Patch Changes
+
+- Bug fixes, removed two dependencies (so around 400kb removed) + better support for vite
+
+- Updated dependencies []:
+  - @cossistant/core@0.1.1
+  - @cossistant/types@0.1.1
+
 ## 0.1.0
 
 ### Minor Changes

@@ -1,0 +1,38 @@
+---
+version: "0.1.1"
+description: "Performance improvements and bug fixes"
+date: "2026-02-15"
+author: "Cossistant Team"
+---
+
+Reduced bundle size by 400KB and fixed Vite compatibility issues.
+
+### Support Widget
+
+- <HighlightLine variant="updated">
+    **WebSocket handling**: Custom implementation improves reliability and enables future non-React ports.
+  </HighlightLine>
+- <HighlightLine variant="updated">
+    **CSS animations**: Replaced Motion dependency with pure CSS, saving 120KB.
+  </HighlightLine>
+- <HighlightLine variant="fixed">
+    **Message wrapping**: Fixed incorrect text wrapping in chat messages.
+  </HighlightLine>
+- <HighlightLine variant="updated">
+    **Input field**: Multimodal input now auto-resizes for large text.
+  </HighlightLine>
+
+### Bug Fixes & Improvements
+
+- <HighlightLine variant="fixed">
+    **Vite support**: Fixed environment variable detection causing Vite apps to crash.
+  </HighlightLine>
+- <HighlightLine variant="fixed">
+    **Analytics**: Fixed missing event tracking and prevented event quarantine issues.
+  </HighlightLine>
+
+### Upgrade
+
+```bash
+npm install @cossistant/react@0.1.1 @cossistant/next@0.1.1
+```

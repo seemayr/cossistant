@@ -1,5 +1,11 @@
 # @cossistant/core
 
+## 0.1.1
+
+### Patch Changes
+
+- Bug fixes, removed two dependencies (so around 400kb removed) + better support for vite
+
 ## 0.1.0
 
 ### Minor Changes
