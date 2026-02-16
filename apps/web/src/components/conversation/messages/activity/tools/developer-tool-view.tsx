@@ -36,7 +36,7 @@ const stateConfig: Record<ToolCallState, { label: string; className: string }> =
 		result: {
 			label: "Success",
 			className:
-				"border-emerald-300/70 bg-emerald-100/70 text-emerald-900 dark:border-emerald-700/70 dark:bg-emerald-900/30 dark:text-emerald-100",
+				"border-cossistant-green/70 bg-cossistant-green/5 text-cossistant-green dark:border-cossistant-green/50 dark:bg-cossistant-green/10 dark:text-cossistant-green",
 		},
 		error: {
 			label: "Error",
@@ -56,13 +56,12 @@ const logTypeConfig: Record<
 	},
 	log: {
 		label: "Log",
-		className:
-			"border-zinc-300/70 bg-zinc-100/70 text-zinc-900 dark:border-zinc-700/70 dark:bg-zinc-900/30 dark:text-zinc-100",
+		className: "border-primary/20 text-primary/50 dark:border-primary/15",
 	},
 	decision: {
 		label: "Decision",
 		className:
-			"border-blue-300/70 bg-blue-100/70 text-blue-900 dark:border-blue-700/70 dark:bg-blue-900/30 dark:text-blue-100",
+			"border-cossistant-blue bg-cossistant-blue/5 text-cossistant-blue dark:border-cossistant-blue/50 dark:bg-cossistant-blue/10 dark:text-cossistant-blue",
 	},
 };
 
@@ -97,7 +96,7 @@ function StatusBadge({ state }: { state: ToolCallState }) {
 	return (
 		<span
 			className={cn(
-				"inline-flex items-center rounded-md border px-1.5 py-0.5 font-medium",
+				"inline-flex items-center rounded border border-dashed px-1 font-medium",
 				config.className
 			)}
 		>
@@ -111,7 +110,7 @@ function LogTypeBadge({ logType }: { logType: ToolTimelineLogType }) {
 	return (
 		<span
 			className={cn(
-				"inline-flex items-center rounded-md border px-1.5 py-0.5 font-medium",
+				"inline-flex items-center rounded border border-dashed px-1 font-medium",
 				config.className
 			)}
 		>
@@ -175,21 +174,17 @@ export function DeveloperToolView({
 	return (
 		<div className={cn("flex w-full", showIcon ? "gap-2" : "gap-0")}>
 			{showIcon ? <IconRenderer icon={icon} /> : null}
-			<div className="flex min-w-0 flex-1 flex-col gap-1 pb-1.5">
-				<div className="px-1 text-muted-foreground text-xs">
-					AI agent dev log
-				</div>
-				<div className="rounded-lg border border-primary/20 bg-background-200/60 p-3">
-					<div className="flex flex-wrap items-center gap-2 text-xs">
-						<span className="font-semibold text-foreground">
-							{toolCall.summaryText}
-						</span>
+			<div className="flex min-w-0 flex-1 flex-col gap-3 pt-0.5 pb-1.5 pl-1">
+				<div className="flex items-center justify-between text-muted-foreground text-xs">
+					<span>{toolCall.summaryText}</span>
+
+					<div className="flex items-center gap-2 text-xs">
 						<StatusBadge state={toolCall.state} />
 						<LogTypeBadge logType={toolCall.logType} />
-						<time className="ml-auto text-muted-foreground">{timestamp}</time>
 					</div>
-
-					<div className="mt-2 rounded-md border border-border/60 bg-background/80 p-2 font-mono text-[11px] leading-relaxed">
+				</div>
+				<div className="rounded border border-primary/10 border-dashed dark:bg-background-200">
+					<div className="flex items-center gap-10 border-primary/10 border-b border-dashed bg-background p-2 font-mono text-[11px] leading-relaxed">
 						<div>
 							<span className="text-muted-foreground">tool</span>:{" "}
 							{toolCall.toolName}
@@ -206,20 +201,20 @@ export function DeveloperToolView({
 						</div>
 					) : null}
 
-					<details className="group mt-2">
-						<summary className="cursor-pointer font-mono text-[11px] text-muted-foreground transition-colors hover:text-foreground">
+					<details className="group p-2">
+						<summary className="cursor-pointer text-right font-mono text-[11px] text-muted-foreground transition-colors hover:text-foreground">
 							Dev payload
 						</summary>
 						<div className="mt-2 space-y-2">
 							<DebugBlock
 								label="Input"
-								preClassName="bg-background/90 font-mono"
+								preClassName="bg-background-300 font-mono"
 								value={toolCall.input}
 							/>
 							{toolCall.state === "result" && toolCall.output !== undefined ? (
 								<DebugBlock
 									label="Output"
-									preClassName="bg-background/90 font-mono"
+									preClassName="bg-background-300 font-mono"
 									value={toolCall.output}
 								/>
 							) : null}
@@ -233,6 +228,7 @@ export function DeveloperToolView({
 						</div>
 					</details>
 				</div>
+				<time className="text-muted-foreground text-xs">{timestamp}</time>
 			</div>
 		</div>
 	);

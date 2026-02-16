@@ -67,7 +67,7 @@ export function ConversationsList({
 							shortcuts={["["]}
 						>
 							<Button
-								className="ml-0.5"
+								className="-ml-1"
 								onClick={onToggleLeftSidebar}
 								size="icon-small"
 								variant="ghost"

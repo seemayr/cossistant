@@ -36,7 +36,7 @@ const ScrollArea = forwardRef<HTMLDivElement, ScrollAreaProps>(
 		return (
 			<div
 				className={cn(
-					"scrollbar-thin scrollbar-thumb-background-300 scrollbar-track-fd-overlay",
+					"scrollbar-thin scrollbar-thumb-background-50 dark:scrollbar-thumb-background-300 scrollbar-track-background-50 dark:scrollbar-track-fd-overlay",
 					orientation === "vertical" && "overflow-x-hidden overflow-y-scroll",
 					orientation === "horizontal" && "overflow-y-hidden overflow-x-scroll",
 					orientation === "both" && "overflow-scroll",
