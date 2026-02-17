@@ -3,6 +3,7 @@
 import { parseAsString, useQueryState } from "nuqs";
 import { KnowledgePreviewModal } from "@/components/modals/knowledge-preview-modal";
 import { useWebsite } from "@/contexts/website";
+import { TeamInviteModalWrapper } from "./modals";
 import { ContactSheetWrapper } from "./sheets/contact-sheet-wrapper";
 
 /**
@@ -53,6 +54,8 @@ export function ModalsAndSheets() {
 					websiteSlug={website.slug}
 				/>
 			)}
+
+			<TeamInviteModalWrapper />
 		</>
 	);
 }

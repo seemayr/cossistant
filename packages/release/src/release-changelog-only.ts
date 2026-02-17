@@ -1,6 +1,4 @@
-import path from "node:path";
 import { execa } from "execa";
-import fs from "fs-extra";
 import kleur from "kleur";
 import ora from "ora";
 import prompts from "prompts";
@@ -10,17 +8,25 @@ import {
 	generateChangelog,
 	refineChangelog,
 } from "./ai";
-import { getNextVersion, saveChangelog } from "./changelog";
+import {
+	getLatestChangelogVersion,
+	incrementVersion,
+	saveChangelog,
+} from "./changelog";
 import { getCommitsSinceLastRelease, getLastReleaseTag } from "./git";
 
 /**
- * AI-powered release flow for Cossistant Suite packages.
- * Includes AI changelog generation, feature detection, and refinement.
+ * Changelog-only release flow.
+ * Generates a changelog entry without creating changesets, bumping package versions, or pushing tags.
+ * Useful for dashboard/API-only changes that don't affect published packages.
  */
-export async function releaseCossistant(): Promise<void> {
-	console.log(kleur.cyan().bold("\n  Cossistant Suite Release\n"));
+export async function releaseChangelogOnly(): Promise<void> {
+	console.log(kleur.cyan().bold("\n  Changelog-Only Release\n"));
+	console.log(
+		kleur.dim("  This creates a changelog entry without publishing packages.\n")
+	);
 
-	// Step 1: Select release type
+	// Step 1: Select release type (for version numbering only)
 	const { releaseType } = await prompts({
 		type: "select",
 		name: "releaseType",
@@ -61,7 +67,15 @@ export async function releaseCossistant(): Promise<void> {
 		`Found ${commits.length} commits since ${lastTag || "beginning"}`
 	);
 
-	// Step 4: AI Feature Detection - Ask questions to gather more details
+	// Step 4: Determine version from latest changelog file
+	spinner.start("Resolving version...");
+	const latestVersion = await getLatestChangelogVersion();
+	const nextVersion = latestVersion
+		? incrementVersion(latestVersion, releaseType)
+		: "0.0.1";
+	spinner.succeed(`Next changelog version: ${nextVersion}`);
+
+	// Step 5: AI Feature Detection
 	spinner.start("Analyzing release for key features...");
 	const questions = await detectImportantFeatures({
 		commits,
@@ -135,9 +149,8 @@ export async function releaseCossistant(): Promise<void> {
 		}
 	}
 
-	// Step 5: Generate changelog with AI
+	// Step 6: Generate changelog with AI
 	spinner.start("Generating changelog with AI...");
-	const nextVersion = getNextVersion(lastTag, releaseType);
 	let changelog = await generateChangelog({
 		commits,
 		description,
@@ -147,7 +160,7 @@ export async function releaseCossistant(): Promise<void> {
 	});
 	spinner.succeed("Changelog generated");
 
-	// Step 6: Refinement loop
+	// Step 7: Refinement loop
 	while (true) {
 		console.log(kleur.dim(`\n${"─".repeat(60)}\n`));
 		console.log(changelog);
@@ -158,7 +171,7 @@ export async function releaseCossistant(): Promise<void> {
 			name: "action",
 			message: "What would you like to do?",
 			choices: [
-				{ title: "Approve and release", value: "approve" },
+				{ title: "Approve and save", value: "approve" },
 				{ title: "Request changes from AI", value: "refine" },
 				{ title: "Cancel", value: "cancel" },
 			],
@@ -186,58 +199,16 @@ export async function releaseCossistant(): Promise<void> {
 		spinner.succeed("Changelog refined");
 	}
 
-	// Step 7: Save and release
+	// Step 8: Save changelog and commit
 	const savedPath = await saveChangelog(changelog, nextVersion);
 	console.log(kleur.green(`\nChangelog saved to: ${savedPath}`));
 
-	await runCossistantRelease(releaseType, description);
+	spinner.start("Committing changelog...");
+	await execa("git", ["add", savedPath]);
+	await execa("git", ["commit", "-m", `chore(changelog): v${nextVersion}`]);
+	spinner.succeed("Changelog committed");
 
-	console.log(kleur.green().bold("\n  Cossistant Suite release completed!\n"));
-}
-
-async function runCossistantRelease(
-	releaseType: "patch" | "minor" | "major",
-	description: string
-): Promise<void> {
-	const spinner = ora();
-
-	// Create changeset
-	spinner.start("Creating changeset...");
-	await createCossistantChangeset(releaseType, description);
-	spinner.succeed("Changeset created");
-
-	// Version packages
-	spinner.start("Versioning packages...");
-	await execa("bun", ["run", "changeset:version"], { stdio: "pipe" });
-	spinner.succeed("Packages versioned");
-
-	// Commit version changes
-	spinner.start("Committing version changes...");
-	await execa("git", ["add", "."]);
-	await execa("git", ["commit", "-m", "chore(release): version packages"]);
-	spinner.succeed("Changes committed");
-
-	console.log(kleur.dim("\n  Review the commit and push when ready.\n"));
-}
-
-async function createCossistantChangeset(
-	releaseType: "patch" | "minor" | "major",
-	description: string
-): Promise<void> {
-	const changesetContent = `---
-"@cossistant/core": ${releaseType}
-"@cossistant/react": ${releaseType}
-"@cossistant/next": ${releaseType}
-"@cossistant/types": ${releaseType}
----
-
-${description}
-`;
-
-	const filename = path.join(
-		process.cwd(),
-		".changeset",
-		`${Date.now()}-release.md`
-	);
-	await fs.outputFile(filename, changesetContent);
+	console.log(kleur.green().bold("\n  Changelog-only release completed!\n"));
+	console.log(kleur.dim("  No packages were versioned or published."));
+	console.log(kleur.dim("  Review the commit and push when ready.\n"));
 }

@@ -3,6 +3,7 @@ import {
 	contact,
 	conversation,
 	conversationTimelineItem,
+	member,
 	teamMember,
 } from "@api/db/schema";
 import { ConversationTimelineType } from "@cossistant/types";
@@ -96,14 +97,37 @@ export async function getTeamMemberCount(
 	db: Database,
 	params: {
 		teamId: string;
+		organizationId: string;
 	}
 ): Promise<number> {
-	const result = await db
-		.select({ count: count() })
-		.from(teamMember)
-		.where(eq(teamMember.teamId, params.teamId));
+	const [teamUsers, organizationMembers] = await Promise.all([
+		db
+			.select({
+				userId: teamMember.userId,
+			})
+			.from(teamMember)
+			.where(eq(teamMember.teamId, params.teamId)),
+		db
+			.select({
+				userId: member.userId,
+				role: member.role,
+			})
+			.from(member)
+			.where(eq(member.organizationId, params.organizationId)),
+	]);
 
-	return result[0]?.count ?? 0;
+	const ids = new Set(teamUsers.map((row) => row.userId));
+
+	for (const organizationMember of organizationMembers) {
+		const roles = organizationMember.role
+			.split(",")
+			.map((role) => role.trim().toLowerCase());
+		if (roles.includes("owner") || roles.includes("admin")) {
+			ids.add(organizationMember.userId);
+		}
+	}
+
+	return ids.size;
 }
 
 /**
@@ -126,7 +150,10 @@ export async function getWebsiteUsageCounts(
 		getMessageCount(db, params),
 		getContactCount(db, params),
 		getConversationCount(db, params),
-		getTeamMemberCount(db, { teamId: params.teamId }),
+		getTeamMemberCount(db, {
+			teamId: params.teamId,
+			organizationId: params.organizationId,
+		}),
 	]);
 
 	return {

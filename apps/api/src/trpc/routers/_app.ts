@@ -9,6 +9,7 @@ import { linkSourceRouter } from "./link-source";
 import { notificationRouter } from "./notification";
 import { planRouter } from "./plan";
 import { resendRouter } from "./resend";
+import { teamRouter } from "./team";
 import { uploadRouter } from "./upload";
 import { userRouter } from "./user";
 import { viewRouter } from "./view";
@@ -18,6 +19,7 @@ import { websiteRouter } from "./website";
 export const origamiTRPCRouter = createTRPCRouter({
 	aiAgent: aiAgentRouter,
 	resend: resendRouter,
+	team: teamRouter,
 	user: userRouter,
 	website: websiteRouter,
 	conversation: conversationRouter,

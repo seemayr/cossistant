@@ -119,9 +119,14 @@ export default async function ChangelogPaginatedPage(props: {
 									{/* Sticky sidebar with version and date */}
 									<div className="shrink-0 md:sticky md:top-24 md:h-fit md:w-32">
 										<div className="flex items-center gap-3 md:flex-col md:items-start md:gap-1">
-											<span className="inline-flex items-center rounded-sm bg-background-300 px-2.5 py-1 font-mono text-sm dark:bg-background-400">
+											<a
+												className="inline-flex items-center rounded-sm bg-background-300 px-2.5 py-1 font-mono text-sm transition-colors hover:bg-background-400 dark:bg-background-400 dark:hover:bg-background-500"
+												href={`https://www.npmjs.com/package/@cossistant/react/v/${entry.data.version}`}
+												rel="noopener noreferrer"
+												target="_blank"
+											>
 												{entry.data.version}
-											</span>
+											</a>
 											<time
 												className="text-muted-foreground text-sm"
 												dateTime={entry.data.date}

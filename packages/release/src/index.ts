@@ -8,6 +8,7 @@ config({ path: path.join(import.meta.dir, "../.env"), quiet: true });
 import { Command } from "commander";
 import kleur from "kleur";
 import prompts from "prompts";
+import { releaseChangelogOnly } from "./release-changelog-only";
 import { releaseCossistant } from "./release-cossistant";
 import { releaseFacehash } from "./release-facehash";
 
@@ -38,6 +39,11 @@ program
 					description: "Core packages (AI-powered changelog)",
 					value: "cossistant",
 				},
+				{
+					title: "Changelog Only",
+					description: "Changelog entry without package publish",
+					value: "changelog-only",
+				},
 			],
 		});
 
@@ -47,6 +53,8 @@ program
 
 		if (target === "facehash") {
 			await releaseFacehash();
+		} else if (target === "changelog-only") {
+			await releaseChangelogOnly();
 		} else {
 			await releaseCossistant();
 		}

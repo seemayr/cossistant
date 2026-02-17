@@ -1,9 +1,11 @@
 import { notFound, redirect } from "next/navigation";
+import { mdxComponents } from "@/app/(lander-docs)/components/docs/mdx-components";
 import { CentralContainer } from "@/components/ui/layout";
 import { NavigationTopbar } from "@/components/ui/layout/navigation-topbar";
 import { InboxesProvider } from "@/contexts/inboxes";
 import { VisitorPresenceProvider } from "@/contexts/visitor-presence";
 import { WebsiteProvider } from "@/contexts/website";
+import { getLatestRelease, getLatestReleaseBody } from "@/lib/latest-release";
 import {
 	getQueryClient,
 	HydrateClient,
@@ -30,6 +32,11 @@ export default async function Layout({ children, params }: LayoutProps) {
 		notFound();
 	}
 
+	const latestRelease = getLatestRelease();
+	const ChangelogBody = getLatestReleaseBody();
+	const changelogContent = ChangelogBody ? (
+		<ChangelogBody components={mdxComponents} />
+	) : null;
 	const queryClient = getQueryClient();
 
 	const handleAuthRedirect = (
@@ -100,7 +107,10 @@ export default async function Layout({ children, params }: LayoutProps) {
 						<Realtime>
 							<InboxesProvider websiteSlug={websiteSlug}>
 								<div className="h-screen w-screen overflow-hidden bg-background-100 dark:bg-background">
-									<NavigationTopbar />
+									<NavigationTopbar
+										changelogContent={changelogContent}
+										latestRelease={latestRelease}
+									/>
 									<CentralContainer>{children}</CentralContainer>
 									<ModalsAndSheets />
 								</div>

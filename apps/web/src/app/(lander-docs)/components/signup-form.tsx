@@ -1,24 +1,52 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { BaseSubmitButton } from "@/components/ui/base-submit-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { getAbsoluteAuthCallbackUrl } from "@/lib/auth/callback-url";
 import { signIn, signUp } from "@/lib/auth/client";
+import {
+	buildInviteAuthPath,
+	readInviteAuthState,
+} from "@/lib/auth/invite-state";
 import { GithubIcon, GoogleIcon } from "./login-form";
 
 export function SignupForm() {
 	const router = useRouter();
+	const searchParams = useSearchParams();
+	const inviteState = readInviteAuthState(searchParams, "/select");
+	const inviteEmail = inviteState.inviteEmail;
+	const inviteTarget = inviteState.inviteTarget;
+	const isInviteFlow = inviteState.isInviteFlow;
+	const isInviteEmailLocked = Boolean(isInviteFlow && inviteEmail);
 	const [displayEmailSignup, setDisplayEmailSignup] = useState(false);
 	const [name, setName] = useState("");
-	const [email, setEmail] = useState("");
+	const [email, setEmail] = useState(inviteEmail ?? "");
 	const [password, setPassword] = useState("");
 	const [isLoading, setIsLoading] = useState(false);
 
-	const baseURL = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+	const callbackPath = inviteState.callbackPath;
+	const callbackURL = getAbsoluteAuthCallbackUrl(callbackPath);
+	const signInHref = isInviteFlow
+		? buildInviteAuthPath("/login", {
+				callbackPath,
+				inviteEmail,
+				inviteTarget,
+			})
+		: "/login";
+	const title = isInviteFlow
+		? `Sign up to join ${inviteTarget ?? "your workspace"}`
+		: "Create your account";
+
+	useEffect(() => {
+		if (isInviteFlow) {
+			setEmail(inviteEmail ?? "");
+		}
+	}, [inviteEmail, isInviteFlow]);
 
 	const handleEmailSignUp = async (e: React.FormEvent) => {
 		e.preventDefault();
@@ -35,7 +63,7 @@ export function SignupForm() {
 				email: email.trim(),
 				password,
 				name: name.trim() || "",
-				callbackURL: `${baseURL}/select`,
+				callbackURL,
 			});
 
 			if (result.error) {
@@ -59,9 +87,9 @@ export function SignupForm() {
 					toast.error(errorMessage);
 				}
 			} else {
-				// Successful signup - redirect to select page
+				// Successful signup - redirect to the safe callback destination
 				toast.success("Account created successfully!");
-				router.push("/select");
+				router.push(callbackPath);
 			}
 		} catch (_error) {
 			console.error("Email sign-up error:", _error);
@@ -76,7 +104,7 @@ export function SignupForm() {
 			await signIn.social(
 				{
 					provider,
-					callbackURL: `${baseURL}/select`,
+					callbackURL,
 				},
 				{
 					credentials: "include",
@@ -90,7 +118,7 @@ export function SignupForm() {
 
 	return (
 		<div className="flex w-md flex-col items-center justify-between gap-6">
-			<h1 className="font-f37-stout text-5xl">Create your account</h1>
+			<h1 className="font-f37-stout text-5xl">{title}</h1>
 			{displayEmailSignup ? (
 				<div className="flex w-full max-w-md flex-col items-center justify-center space-y-4">
 					<form
@@ -113,7 +141,8 @@ export function SignupForm() {
 							autoComplete="email"
 							disabled={isLoading}
 							onChange={(e) => setEmail(e.target.value)}
-							placeholder="Work email"
+							placeholder={isInviteEmailLocked ? "Invited email" : "Work email"}
+							readOnly={isInviteEmailLocked}
 							required
 							type="email"
 							value={email}
@@ -153,8 +182,11 @@ export function SignupForm() {
 
 					<div className="flex items-center gap-2">
 						<p className="text-primary/60 text-sm">Already have an account?</p>
-						<Link className="text-primary/60 text-sm underline" href="/login">
-							Log in
+						<Link
+							className="text-primary/60 text-sm underline"
+							href={signInHref}
+						>
+							Sign in
 						</Link>
 					</div>
 				</div>
@@ -191,8 +223,11 @@ export function SignupForm() {
 					</Button>
 					<div className="flex items-center gap-2">
 						<p className="text-primary/60 text-sm">Already have an account?</p>
-						<Link className="text-primary/60 text-sm underline" href="/login">
-							Log in
+						<Link
+							className="text-primary/60 text-sm underline"
+							href={signInHref}
+						>
+							Sign in
 						</Link>
 					</div>
 				</div>

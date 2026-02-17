@@ -1,16 +1,47 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import { BaseSubmitButton } from "@/components/ui/base-submit-button";
 import { Input } from "@/components/ui/input";
 import { forgetPassword } from "@/lib/auth/client";
+import {
+	buildInviteAwarePath,
+	readInviteAuthState,
+} from "@/lib/auth/invite-state";
 
 export default function ForgotPasswordPage() {
-	const [email, setEmail] = useState("");
+	const searchParams = useSearchParams();
+	const inviteState = readInviteAuthState(searchParams, "/select");
+	const inviteEmail = inviteState.inviteEmail;
+	const inviteTarget = inviteState.inviteTarget;
+	const isInviteFlow = inviteState.isInviteFlow;
+	const isInviteEmailLocked = Boolean(isInviteFlow && inviteEmail);
+	const [email, setEmail] = useState(inviteEmail ?? "");
 	const [isLoading, setIsLoading] = useState(false);
 	const [isSuccess, setIsSuccess] = useState(false);
 	const [error, setError] = useState("");
+	const loginHref = isInviteFlow
+		? buildInviteAwarePath("/login", {
+				callbackPath: inviteState.callbackPath,
+				inviteEmail,
+				inviteTarget,
+			})
+		: "/login";
+	const resetPasswordRedirectTo = isInviteFlow
+		? buildInviteAwarePath("/reset-password", {
+				callbackPath: inviteState.callbackPath,
+				inviteEmail,
+				inviteTarget,
+			})
+		: "/reset-password";
+
+	useEffect(() => {
+		if (isInviteFlow) {
+			setEmail(inviteEmail ?? "");
+		}
+	}, [inviteEmail, isInviteFlow]);
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
@@ -25,7 +56,7 @@ export default function ForgotPasswordPage() {
 		try {
 			const result = await forgetPassword({
 				email: email.trim(),
-				redirectTo: "/reset-password",
+				redirectTo: resetPasswordRedirectTo,
 			});
 
 			if (result.error) {
@@ -50,6 +81,11 @@ export default function ForgotPasswordPage() {
 						<p className="text-primary/60">
 							We've sent a password reset link to {email}
 						</p>
+						{isInviteFlow && inviteTarget ? (
+							<p className="text-primary/60 text-sm">
+								After reset, you&apos;ll continue joining {inviteTarget}.
+							</p>
+						) : null}
 					</div>
 					<div className="rounded-lg bg-primary/5 p-4">
 						<p className="text-sm">
@@ -68,7 +104,7 @@ export default function ForgotPasswordPage() {
 					</div>
 					<Link
 						className="inline-block text-primary/60 text-sm underline"
-						href="/login"
+						href={loginHref}
 					>
 						Back to login
 					</Link>
@@ -85,6 +121,11 @@ export default function ForgotPasswordPage() {
 					<p className="text-primary/60">
 						No worries, we'll send you reset instructions
 					</p>
+					{isInviteFlow && inviteTarget ? (
+						<p className="text-primary/60 text-sm">
+							Reset your password to continue joining {inviteTarget}.
+						</p>
+					) : null}
 				</div>
 
 				<form className="space-y-4" onSubmit={handleSubmit}>
@@ -93,7 +134,10 @@ export default function ForgotPasswordPage() {
 							autoComplete="email"
 							disabled={isLoading}
 							onChange={(e) => setEmail(e.target.value)}
-							placeholder="Enter your email"
+							placeholder={
+								isInviteEmailLocked ? "Invited email" : "Enter your email"
+							}
+							readOnly={isInviteEmailLocked}
 							required
 							type="email"
 							value={email}
@@ -114,7 +158,7 @@ export default function ForgotPasswordPage() {
 				</form>
 
 				<div className="text-center">
-					<Link className="text-primary/60 text-sm underline" href="/login">
+					<Link className="text-primary/60 text-sm underline" href={loginHref}>
 						Back to login
 					</Link>
 				</div>

@@ -1,2 +1,1 @@
-// Future modals will be exported here
-export {};
+export { TeamInviteModalWrapper } from "./team-invite-modal-wrapper";

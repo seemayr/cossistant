@@ -2,7 +2,11 @@ import { db } from "@api/db";
 import * as schema from "@api/db/schema";
 import { env } from "@api/env";
 import { generateULID } from "@api/utils/db/ids";
-import { ResetPasswordEmail, sendEmail } from "@cossistant/transactional";
+import {
+	ResetPasswordEmail,
+	sendEmail,
+	TeamInvitationEmail,
+} from "@cossistant/transactional";
 import { polar, portal, usage } from "@polar-sh/better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { betterAuth } from "better-auth/minimal";
@@ -59,6 +63,27 @@ export const auth = betterAuth({
 				enabled: true,
 				maximumTeams: 100, // Allow up to 100 teams per organization
 				allowRemovingAllTeams: false, // Prevent removing the last team
+			},
+			sendInvitationEmail: async (data) => {
+				const appUrl = env.PUBLIC_APP_URL || "http://localhost:3000";
+				const joinUrl = new URL(
+					`/welcome/${data.organization.slug}/join/${data.invitation.id}`,
+					appUrl
+				).toString();
+
+				await sendEmail({
+					to: data.email,
+					subject: `Join ${data.organization.name} on Cossistant`,
+					react: (
+						<TeamInvitationEmail
+							inviterName={data.inviter.user.name}
+							joinUrl={joinUrl}
+							organizationName={data.organization.name}
+							recipientEmail={data.email}
+						/>
+					),
+					variant: "notifications",
+				});
 			},
 			organizationCreation: {
 				disabled: false,

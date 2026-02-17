@@ -6,15 +6,25 @@ import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useHotkeys } from "react-hotkeys-hook";
+import { ChangelogNotification } from "@/components/changelog-notification";
 import { DashboardTriggerContent } from "@/components/support/custom-trigger";
 import { useWebsite } from "@/contexts/website";
+import type { LatestRelease } from "@/lib/latest-release";
 import { useTRPC } from "@/lib/trpc/client";
 import Icon from "../../icons";
 import { Logo } from "../../logo";
 import { TooltipOnHover } from "../../tooltip";
 import { TopbarItem } from "./topbar-item";
 
-export function NavigationTopbar() {
+type NavigationTopbarProps = {
+	latestRelease?: LatestRelease | null;
+	changelogContent?: React.ReactNode;
+};
+
+export function NavigationTopbar({
+	latestRelease,
+	changelogContent,
+}: NavigationTopbarProps) {
 	const pathname = usePathname();
 	const router = useRouter();
 	const website = useWebsite();
@@ -79,6 +89,16 @@ export function NavigationTopbar() {
 						</TooltipOnHover>
 					)}
 				</AnimatePresence>
+				{latestRelease && (
+					<ChangelogNotification
+						date={latestRelease.date}
+						description={latestRelease.description}
+						tinyExcerpt={latestRelease.tinyExcerpt}
+						version={latestRelease.version}
+					>
+						{changelogContent}
+					</ChangelogNotification>
+				)}
 			</div>
 			<div className="flex items-center gap-2">
 				<TopbarItem

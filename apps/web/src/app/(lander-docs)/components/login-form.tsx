@@ -6,8 +6,13 @@ import { useEffect, useState } from "react";
 import { BaseSubmitButton } from "@/components/ui/base-submit-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
+import { getAbsoluteAuthCallbackUrl } from "@/lib/auth/callback-url";
 import { signIn } from "@/lib/auth/client";
+import {
+	buildInviteAuthPath,
+	buildInviteAwarePath,
+	readInviteAuthState,
+} from "@/lib/auth/invite-state";
 import { cn } from "@/lib/utils";
 
 export const GoogleIcon = ({ className }: { className?: string }) => (
@@ -64,14 +69,40 @@ export const GithubIcon = ({ className }: { className?: string }) => (
 
 export function LoginForm() {
 	const searchParams = useSearchParams();
+	const inviteState = readInviteAuthState(searchParams, "/select");
+	const inviteEmail = inviteState.inviteEmail;
+	const inviteTarget = inviteState.inviteTarget;
+	const isInviteFlow = inviteState.isInviteFlow;
+	const isInviteEmailLocked = Boolean(isInviteFlow && inviteEmail);
 	const [displaySignInPassword, setDisplaySignInPassword] = useState(false);
-	const [email, setEmail] = useState("");
+	const [email, setEmail] = useState(inviteEmail ?? "");
 	const [password, setPassword] = useState("");
 	const [isLoading, setIsLoading] = useState(false);
 	const [error, setError] = useState("");
 	const [successMessage, setSuccessMessage] = useState("");
 
-	const baseURL = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+	const callbackPath = inviteState.callbackPath;
+	const callbackURL = getAbsoluteAuthCallbackUrl(callbackPath);
+	const signUpHref = isInviteFlow
+		? buildInviteAuthPath("/sign-up", {
+				callbackPath,
+				inviteEmail,
+				inviteTarget,
+			})
+		: "/sign-up";
+	const forgotPasswordHref = isInviteFlow
+		? buildInviteAwarePath("/forgot-password", {
+				callbackPath,
+				inviteEmail,
+				inviteTarget,
+			})
+		: "/forgot-password";
+
+	useEffect(() => {
+		if (isInviteFlow) {
+			setEmail(inviteEmail ?? "");
+		}
+	}, [inviteEmail, isInviteFlow]);
 
 	useEffect(() => {
 		const reset = searchParams.get("reset");
@@ -96,7 +127,7 @@ export function LoginForm() {
 			const result = await signIn.email({
 				email: email.trim(),
 				password,
-				callbackURL: `${baseURL}/select`,
+				callbackURL,
 			});
 
 			if (result.error) {
@@ -114,7 +145,7 @@ export function LoginForm() {
 		await signIn.social(
 			{
 				provider,
-				callbackURL: `${baseURL}/select`,
+				callbackURL,
 			},
 			{
 				credentials: "include",
@@ -126,6 +157,11 @@ export function LoginForm() {
 		<div className="flex w-md flex-col items-center justify-between gap-6">
 			{/* Email Sign-in Form - Primary Option */}
 			<h1 className="font-f37-stout text-5xl">Log in</h1>
+			{isInviteFlow && inviteTarget ? (
+				<p className="text-center text-primary/60 text-sm">
+					Sign in to join {inviteTarget}.
+				</p>
+			) : null}
 			{displaySignInPassword ? (
 				<div className="flex w-full max-w-md flex-col items-center justify-center space-y-4">
 					<form
@@ -138,7 +174,8 @@ export function LoginForm() {
 						<Input
 							disabled={isLoading}
 							onChange={(e) => setEmail(e.target.value)}
-							placeholder="Email"
+							placeholder={isInviteEmailLocked ? "Invited email" : "Email"}
+							readOnly={isInviteEmailLocked}
 							required
 							type="email"
 							value={email}
@@ -180,10 +217,16 @@ export function LoginForm() {
 					<div className="flex flex-col text-center">
 						<Link
 							className="text-primary/60 text-sm underline"
-							href="/forgot-password"
+							href={forgotPasswordHref}
 						>
 							Forgot your password?
 						</Link>
+						<p className="mt-2 text-primary/60 text-sm">
+							Don&apos;t have an account?{" "}
+							<Link className="underline" href={signUpHref}>
+								Sign up
+							</Link>
+						</p>
 					</div>
 				</div>
 			) : (
@@ -217,6 +260,12 @@ export function LoginForm() {
 					>
 						Use password instead
 					</Button>
+					<p className="text-primary/60 text-sm">
+						Don&apos;t have an account?{" "}
+						<Link className="underline" href={signUpHref}>
+							Sign up
+						</Link>
+					</p>
 				</div>
 			)}
 		</div>

@@ -59,6 +59,13 @@ export function SettingsNavigationSidebar() {
 					Notifications
 				</SidebarItem>
 				<SidebarItem
+					active={pathname.includes(`${basePath}/team`)}
+					href={`${basePath}/team`}
+					iconName="contacts"
+				>
+					Team
+				</SidebarItem>
+				<SidebarItem
 					active={pathname.includes(`${basePath}/usage`)}
 					href={`${basePath}/plan`}
 					iconName="wallet"

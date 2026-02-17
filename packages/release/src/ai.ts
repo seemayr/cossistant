@@ -126,7 +126,8 @@ Your job is to communicate **what changed for users**, fast.
 - Output **valid MDX** only. No commentary.
 - never use emojis and em-dashes.
 - Include the **Upgrade** section with the correct version number.
-- Include the **Example** section with a relevant code example for new features (omit for patch releases with only bug fixes).`,
+- Include the **Example** section with a relevant code example for new features (omit for patch releases with only bug fixes).
+- The frontmatter **tiny-excerpt** must be a punchy 3-8 word summary for a notification pill (e.g. "New AI agent escalation flow", "Faster widget load times"). No period at the end.`,
 		prompt: `Generate a changelog for:
 - **Version:** ${options.version}
 - **Release type:** ${options.releaseType}
