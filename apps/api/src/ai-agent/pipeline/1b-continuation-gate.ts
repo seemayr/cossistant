@@ -98,13 +98,11 @@ function fallbackContinuationDecision(params: {
 	}
 
 	return {
-		decision: "supplement",
-		reason: `fallback_supplement:${params.errorReason}`,
+		decision: "none",
+		reason: `fallback_none:${params.errorReason}`,
 		confidence: "low",
 		latestAiMessageId: params.latestAiMessageId,
 		latestAiMessageText: params.latestAiText,
-		deltaHint:
-			"Add only missing information; do not repeat greeting or already asked questions.",
 	};
 }
 
@@ -133,7 +131,7 @@ Rule:
 
 Constraints:
 - Prefer skip for pure greetings/acknowledgements if AI already asked a follow-up question
-- Prefer supplement if uncertain about unmet intent
+- Prefer skip when uncertain
 - If supplement, provide a short deltaHint describing ONLY what is missing
 
 Latest queued trigger (visitor):

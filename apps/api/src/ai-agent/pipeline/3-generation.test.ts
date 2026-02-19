@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import {
 	buildToolCallsByName,
+	getNonFinishToolCallCount,
 	getTotalToolCalls,
 	mergeToolCallsByName,
 } from "./3-generation";
@@ -51,5 +52,17 @@ describe("generation tool call accounting", () => {
 			respond: 1,
 		});
 		expect(getTotalToolCalls(combined)).toBe(5);
+	});
+
+	it("counts non-finish calls while excluding finish actions", () => {
+		const nonFinishTotal = getNonFinishToolCallCount({
+			searchKnowledgeBase: 2,
+			sendMessage: 2,
+			sendPrivateMessage: 1,
+			respond: 1,
+			wait: 1,
+		});
+
+		expect(nonFinishTotal).toBe(5);
 	});
 });

@@ -38,7 +38,11 @@ export async function followup(input: FollowupInput): Promise<void> {
 	const { db, aiAgent, conversation, decision, executionResult } = input;
 
 	// If there was a successful action, update usage stats
-	if (executionResult?.primaryAction.success && decision?.action !== "skip") {
+	if (
+		executionResult?.primaryAction.success &&
+		decision?.action !== "skip" &&
+		decision?.action !== "wait"
+	) {
 		await updateAiAgentUsage(db, { aiAgentId: aiAgent.id });
 	}
 

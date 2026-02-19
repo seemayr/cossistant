@@ -92,7 +92,8 @@ export async function execute(input: ExecutionInput): Promise<ExecutionResult> {
 	try {
 		switch (decision.action) {
 			case "respond":
-			case "skip": {
+			case "skip":
+			case "wait": {
 				// Messages already sent via tools - nothing more to do
 				result.primaryAction = {
 					type: decision.action,

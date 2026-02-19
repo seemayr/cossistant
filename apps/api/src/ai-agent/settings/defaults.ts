@@ -5,7 +5,25 @@
  */
 
 import type { AiAgentSelect } from "@api/db/schema/ai-agent";
-import type { AiAgentBehaviorSettings } from "./types";
+import {
+	type AiAgentBehaviorSettings,
+	DEFAULT_TOOL_INVOCATIONS_PER_RUN,
+	MAX_TOOL_INVOCATIONS_PER_RUN,
+	MIN_TOOL_INVOCATIONS_PER_RUN,
+} from "./types";
+
+function clampToolInvocationBudget(
+	rawValue: number | null | undefined
+): number {
+	if (typeof rawValue !== "number" || !Number.isFinite(rawValue)) {
+		return DEFAULT_TOOL_INVOCATIONS_PER_RUN;
+	}
+
+	return Math.min(
+		MAX_TOOL_INVOCATIONS_PER_RUN,
+		Math.max(MIN_TOOL_INVOCATIONS_PER_RUN, Math.floor(rawValue))
+	);
+}
 
 /**
  * Default behavior settings for new AI agents
@@ -25,6 +43,7 @@ export function getDefaultBehaviorSettings(): AiAgentBehaviorSettings {
 
 		// Escalation config
 		defaultEscalationUserId: null,
+		maxToolInvocationsPerRun: DEFAULT_TOOL_INVOCATIONS_PER_RUN,
 
 		// Visitor identification
 		visitorContactPolicy: "only_if_needed",
@@ -52,8 +71,15 @@ export function getBehaviorSettings(
 	}
 
 	// Merge stored with defaults
-	return {
+	const merged = {
 		...defaults,
 		...stored,
+	};
+
+	return {
+		...merged,
+		maxToolInvocationsPerRun: clampToolInvocationBudget(
+			merged.maxToolInvocationsPerRun
+		),
 	};
 }

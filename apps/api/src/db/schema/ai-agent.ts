@@ -44,6 +44,7 @@ export type AiAgentBehaviorSettings = {
 	// Escalation config
 	defaultEscalationUserId: string | null;
 	autoAssignOnEscalation: boolean;
+	maxToolInvocationsPerRun: number;
 
 	// Visitor identification
 	visitorContactPolicy: "only_if_needed" | "ask_early" | "ask_after_time";

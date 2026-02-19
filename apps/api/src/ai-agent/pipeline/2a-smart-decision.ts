@@ -19,6 +19,7 @@ import { createModelRaw, generateText, Output } from "@api/lib/ai";
 import { z } from "zod";
 import type { RoleAwareMessage } from "../context/conversation";
 import type { ConversationState } from "../context/state";
+import { PROMPT_TEMPLATES } from "../prompts/templates";
 
 const HUMAN_ACTIVE_WINDOW_MS = 120_000;
 const MESSAGE_CHAR_LIMIT = 220;
@@ -53,6 +54,7 @@ type SmartDecisionInput = {
 	conversationHistory: RoleAwareMessage[];
 	conversationState: ConversationState;
 	triggerMessage: RoleAwareMessage;
+	decisionPolicy?: string;
 };
 
 type DecisionSignals = {
@@ -137,10 +139,6 @@ function looksLikeHumanCommand(text: string): boolean {
 	const value = normalizeText(text).toLowerCase();
 	if (!value) {
 		return false;
-	}
-
-	if (value.includes("?")) {
-		return true;
 	}
 
 	return /\b(can you|could you|please|summari[sz]e|draft|reply|respond|tell (the )?visitor|update (the )?visitor|message (the )?visitor|analy[sz]e|what do you think|help me)\b/.test(
@@ -376,6 +374,8 @@ function buildDecisionPrompt(
 	signals: DecisionSignals
 ): string {
 	const { conversationHistory, triggerMessage, conversationState } = input;
+	const decisionPolicy =
+		input.decisionPolicy?.trim() || PROMPT_TEMPLATES.DECISION_POLICY;
 	const historyWithoutTrigger = conversationHistory.filter(
 		(message) => message.messageId !== triggerMessage.messageId
 	);
@@ -404,17 +404,13 @@ Intent guidance:
 - For human-agent triggers, "respond" means execute the teammate's request (can be public or private as needed).
 - "assist_team" means leave internal guidance only.
 
-Decision policy:
-- Priority 1: protect human conversation continuity; if a teammate is actively handling and AI value is unclear, choose observe.
-- Priority 2: resolve clear unmet visitor need; choose respond for unanswered questions or explicit help requests.
-- Priority 3: honor teammate intent; choose respond for clear execution commands and assist_team for internal analysis/handoff.
-- For greetings (hi, hello, hey): prefer respond when humanActive=false — the AI should engage and start the conversation. When humanActive=true, prefer observe.
-- Prefer observe for short acknowledgements (ok, thanks, got it) or banter without a clear need.
-- If uncertain, choose observe.
+Decision policy (from decision.md):
+${decisionPolicy}
 
 Signals:
 - triggerSender=${triggerMessage.senderType}
 - triggerVisibility=${triggerMessage.visibility}
+- triggerLooksLikeHumanCommand=${signals.triggerLooksLikeHumanCommand}
 - humanActive=${signals.humanActive}
 - lastHumanSecondsAgo=${signals.lastHumanSecondsAgo ?? "none"}
 - messagesSinceHuman=${signals.messagesSinceHuman >= 0 ? signals.messagesSinceHuman : "none"}
@@ -452,24 +448,6 @@ function applyDeterministicRules(
 	signals: DecisionSignals
 ): SmartDecisionResult | null {
 	const { triggerMessage } = input;
-
-	if (
-		triggerMessage.senderType === "human_agent" &&
-		!signals.triggerLooksLikeHumanCommand
-	) {
-		const ruleId =
-			triggerMessage.visibility === "private"
-				? "human_private_non_command_observe"
-				: "human_public_non_command_observe";
-
-		return observeDecision({
-			reasoning:
-				"Human teammate is handling the conversation without a clear AI command.",
-			confidence: "high",
-			source: "rule",
-			ruleId,
-		});
-	}
 
 	if (triggerMessage.senderType === "visitor" && signals.humanActive) {
 		if (signals.triggerIsShortAckOrGreeting) {

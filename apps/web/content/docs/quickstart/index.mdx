@@ -124,24 +124,32 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 }
 ```
 
-### 7. Display custom messages with `<DefaultMessage />`
+### 7. Display custom messages with `SupportConfig defaultMessages`
 
 ```tsx title="app/page.tsx"
-import { DefaultMessage, Support, SupportConfig } from "@cossistant/next";
+import { Support, SupportConfig } from "@cossistant/next";
+import { type DefaultMessage, SenderType } from "@cossistant/types";
+
+const user: { name: string | null } = {
+  name: "Jane Doe",
+};
+
+const defaultMessages: DefaultMessage[] = [
+  {
+    content: `Hi ${user.name ?? "there"}, anything I can help with?`,
+    senderType: SenderType.TEAM_MEMBER,
+  },
+];
+
+const quickOptions: string[] = ["How to identify a visitor?"];
 
 export default function Page() {
   return (
     <>
-      <SupportConfig>
-        <DefaultMessage
-          senderType="team_member"
-          content="Hey, tell us what you are building and we will help."
-        />
-        <DefaultMessage
-          senderType="ai"
-          content="I can answer setup questions right away."
-        />
-      </SupportConfig>
+      <SupportConfig
+        defaultMessages={defaultMessages}
+        quickOptions={quickOptions}
+      />
       <Support />
     </>
   );

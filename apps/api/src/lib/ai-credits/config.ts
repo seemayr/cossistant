@@ -2,7 +2,17 @@ export const AI_CREDIT_PRICING_CONFIG = {
 	baseRunCredits: 1,
 	includedBillableTools: 2,
 	perExtraToolCredits: 0.5,
-	excludedToolNames: ["sendMessage", "sendPrivateMessage", "aiDecision"],
+	excludedToolNames: [
+		"sendMessage",
+		"sendPrivateMessage",
+		"aiDecision",
+		"respond",
+		"escalate",
+		"resolve",
+		"markSpam",
+		"skip",
+		"wait",
+	],
 } as const;
 
 export type AiAgentModelCatalogItem = {

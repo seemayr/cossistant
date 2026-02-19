@@ -5,6 +5,7 @@ export const CORE_PROMPT_DOCUMENT_NAMES = [
 	"security.md",
 	"behaviour.md",
 	"participation.md",
+	"decision.md",
 	"grounding.md",
 	"capabilities.md",
 ] as const;

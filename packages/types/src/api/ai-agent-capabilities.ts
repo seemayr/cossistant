@@ -26,6 +26,7 @@ export const AI_AGENT_TOOL_IDS = [
 	"resolve",
 	"markSpam",
 	"skip",
+	"wait",
 ] as const;
 
 export type AiAgentToolId = (typeof AI_AGENT_TOOL_IDS)[number];
@@ -194,6 +195,17 @@ export const AI_AGENT_TOOL_CATALOG: readonly AiAgentToolCatalogEntry[] = [
 		behaviorSettingKey: null,
 		defaultTemplateNames: ["reply-or-stay-silent.md"],
 	},
+	{
+		id: "wait",
+		label: "Finish: Wait",
+		description: "Defers briefly, then re-evaluates with fresh context.",
+		category: "action",
+		isSystem: true,
+		isRequired: true,
+		isToggleable: false,
+		behaviorSettingKey: null,
+		defaultTemplateNames: ["reply-or-stay-silent.md"],
+	},
 ] as const;
 
 const AI_AGENT_DEFAULT_SKILL_TEMPLATE_DEFINITIONS = [
@@ -212,8 +224,9 @@ const AI_AGENT_DEFAULT_SKILL_TEMPLATE_DEFINITIONS = [
 
 - Use [@Send Public Message](mention:tool:sendMessage) only when a reply adds value.
 - Finish with [@Finish: Respond](mention:tool:respond) after replying.
-- Use [@Finish: Skip](mention:tool:skip) when no reply is required.`,
-		suggestedToolIds: ["sendMessage", "respond", "skip"] as const,
+- Use [@Finish: Skip](mention:tool:skip) when no reply is required.
+- Use [@Finish: Wait](mention:tool:wait) when a short defer and re-check is better than replying now.`,
+		suggestedToolIds: ["sendMessage", "respond", "skip", "wait"] as const,
 	},
 	{
 		name: "tone-and-voice.md",
@@ -449,6 +462,7 @@ export type AiAgentSystemSkillMetadataEntry = {
 		| "security.md"
 		| "behaviour.md"
 		| "participation.md"
+		| "decision.md"
 		| "grounding.md"
 		| "capabilities.md";
 	label: string;
@@ -478,6 +492,12 @@ export const AI_AGENT_SYSTEM_SKILL_METADATA: readonly AiAgentSystemSkillMetadata
 			label: "Participation Policy",
 			description:
 				"Rules for when AI should participate versus intentionally stay silent.",
+		},
+		{
+			name: "decision.md",
+			label: "Decision Policy",
+			description:
+				"Prompt-editable policy for whether AI should respond, observe, or assist team.",
 		},
 		{
 			name: "grounding.md",

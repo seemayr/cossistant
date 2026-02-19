@@ -110,6 +110,14 @@ const skipSchema = z.object({
 	reasoning: z.string().describe("Why no response is needed"),
 });
 
+const waitSchema = z.object({
+	reasoning: z
+		.string()
+		.describe(
+			"Why waiting is better than responding right now (for example, expecting immediate follow-up context)"
+		),
+});
+
 /**
  * Create the respond tool - signals normal response completion
  */
@@ -252,6 +260,29 @@ export function createSkipTool(ctx?: ToolContext) {
 				confidence: 1,
 			});
 			return { success: true, action: "skip" };
+		},
+	});
+}
+
+/**
+ * Create the wait tool - signals defer and re-evaluate soon
+ */
+export function createWaitTool(ctx?: ToolContext) {
+	return tool({
+		description:
+			"FINISH action: Wait briefly and re-evaluate from decision stage. Use when more immediate context may arrive and sending now would likely interrupt or duplicate.",
+		inputSchema: waitSchema,
+		execute: async ({
+			reasoning,
+		}): Promise<{ success: boolean; action: string }> => {
+			await stopTypingIfNeeded(ctx, "wait");
+			const capture = ctx?.actionCapture ?? defaultCapture;
+			capture.set({
+				action: "wait",
+				reasoning,
+				confidence: 1,
+			});
+			return { success: true, action: "wait" };
 		},
 	});
 }

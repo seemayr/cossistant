@@ -85,7 +85,7 @@ describe("runSmartDecision", () => {
 		});
 	});
 
-	it("observes for untagged public teammate statement via rule gate", async () => {
+	it("routes untagged public teammate statement through model decision", async () => {
 		const { runSmartDecision } = await modulePromise;
 		const trigger = message("I will handle this thread.", {
 			messageId: "msg-human-public",
@@ -101,12 +101,11 @@ describe("runSmartDecision", () => {
 		const result = await runSmartDecision(input as never);
 
 		expect(result.intent).toBe("observe");
-		expect(result.source).toBe("rule");
-		expect(result.ruleId).toBe("human_public_non_command_observe");
-		expect(generateTextMock).toHaveBeenCalledTimes(0);
+		expect(result.source).toBe("model");
+		expect(generateTextMock).toHaveBeenCalledTimes(1);
 	});
 
-	it("observes for untagged private teammate note via rule gate", async () => {
+	it("routes untagged private teammate note through model decision", async () => {
 		const { runSmartDecision } = await modulePromise;
 		const trigger = message("Internal note: I am on it.", {
 			messageId: "msg-human-private",
@@ -122,9 +121,8 @@ describe("runSmartDecision", () => {
 		const result = await runSmartDecision(input as never);
 
 		expect(result.intent).toBe("observe");
-		expect(result.source).toBe("rule");
-		expect(result.ruleId).toBe("human_private_non_command_observe");
-		expect(generateTextMock).toHaveBeenCalledTimes(0);
+		expect(result.source).toBe("model");
+		expect(generateTextMock).toHaveBeenCalledTimes(1);
 	});
 
 	it("observes visitor ack while a human is active", async () => {
@@ -187,6 +185,30 @@ describe("runSmartDecision", () => {
 		expect(result.source).toBe("model");
 		expect(generateTextMock).toHaveBeenCalledTimes(1);
 		expect(triggerMentions.length).toBe(1);
+	});
+
+	it("injects decision policy text into the model prompt when provided", async () => {
+		const { runSmartDecision } = await modulePromise;
+		const customPolicy =
+			"## Decision Policy\n- Prefer observe unless there is a direct unresolved request.";
+		const trigger = message("Can you help me with billing?", {
+			messageId: "msg-custom-policy",
+			senderType: "visitor",
+		});
+		const input = buildInput({
+			triggerMessage: trigger,
+			conversationHistory: [trigger],
+		});
+
+		await runSmartDecision({
+			...input,
+			decisionPolicy: customPolicy,
+		} as never);
+
+		const promptArg = generateTextMock.mock.calls[0]?.[0] as
+			| { prompt?: string }
+			| undefined;
+		expect(promptArg?.prompt).toContain(customPolicy);
 	});
 
 	it("retries with fallback model on primary timeout", async () => {

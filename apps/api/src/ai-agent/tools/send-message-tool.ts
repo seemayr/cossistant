@@ -2,7 +2,6 @@
  * Send Message Tool
  *
  * Sends a public message to the visitor.
- * Includes natural delays between messages to simulate human typing.
  */
 
 import { getLatestPublicVisitorMessageId } from "@api/db/queries/conversation";
@@ -10,38 +9,59 @@ import { tool } from "ai";
 import { z } from "zod";
 import type { ToolContext, ToolResult } from "./types";
 
-/**
- * Calculate a natural typing delay based on message length.
- * Simulates human typing speed (~50-60 WPM).
- */
-function calculateTypingDelay(messageLength: number): number {
-	const MIN_DELAY_MS = 800; // Minimum pause between messages
-	const MAX_DELAY_MS = 2500; // Maximum pause (don't make user wait too long)
-	const CHARS_PER_SECOND = 25; // ~50 WPM, adjusted for natural reading pauses
-
-	// Base delay on message length
-	const typingTimeMs = (messageLength / CHARS_PER_SECOND) * 1000;
-
-	// Clamp between min and max
-	return Math.max(MIN_DELAY_MS, Math.min(typingTimeMs, MAX_DELAY_MS));
-}
-
-/**
- * Sleep for a given duration.
- */
-async function interruptibleSleep(durationMs: number): Promise<void> {
-	const POLL_INTERVAL_MS = 200; // Check every 200ms if we should abort
-	let elapsed = 0;
-
-	while (elapsed < durationMs) {
-		const sleepTime = Math.min(POLL_INTERVAL_MS, durationMs - elapsed);
-		await new Promise((resolve) => setTimeout(resolve, sleepTime));
-		elapsed += sleepTime;
-	}
-}
+const MIN_ADAPTIVE_DELAY_MS = 400;
+const MAX_ADAPTIVE_DELAY_MS = 1800;
+const IS_TEST_ENV = process.env.NODE_ENV === "test";
 
 function normalizeMessageForDedup(message: string): string {
 	return message.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function clamp(value: number, min: number, max: number): number {
+	return Math.min(max, Math.max(min, value));
+}
+
+function deterministicJitter(seed: string): number {
+	let hash = 0;
+	for (let index = 0; index < seed.length; index++) {
+		hash = (hash * 31 + seed.charCodeAt(index)) | 0;
+	}
+
+	// Range: [-120, +120]
+	return (Math.abs(hash) % 241) - 120;
+}
+
+function estimateAdaptiveDelayMs(input: {
+	message: string;
+	conversationId: string;
+	triggerMessageId: string;
+	messageNumber: number;
+}): number {
+	if (IS_TEST_ENV) {
+		return 0;
+	}
+
+	const words = input.message.trim().split(/\s+/).filter(Boolean).length;
+	const chars = input.message.length;
+	const base = 300;
+	const wordCost = words * 45;
+	const charCost = Math.min(chars, 320) * 1.5;
+	const jitter = deterministicJitter(
+		`${input.conversationId}:${input.triggerMessageId}:${input.messageNumber}`
+	);
+
+	return clamp(
+		Math.round(base + wordCost + charCost + jitter),
+		MIN_ADAPTIVE_DELAY_MS,
+		MAX_ADAPTIVE_DELAY_MS
+	);
+}
+
+async function sleep(ms: number): Promise<void> {
+	if (ms <= 0) {
+		return;
+	}
+	await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function isSupersededVisitorTrigger(ctx: ToolContext): Promise<boolean> {
@@ -95,7 +115,7 @@ export function createSendMessageTool(ctx: ToolContext) {
 
 	return tool({
 		description:
-			"REQUIRED: Send a visible message to the visitor. The visitor ONLY sees messages sent through this tool. Call this BEFORE any action tool (respond, escalate, resolve). If sending multiple messages, call this tool in the exact final display order and ensure each message adds new information.",
+			"REQUIRED: Send a visible message to the visitor. The visitor ONLY sees messages sent through this tool. Call this BEFORE any action tool (respond, escalate, resolve). You may send multiple short messages when it improves clarity.",
 		inputSchema,
 		execute: ({ message }) =>
 			runSequentially<
@@ -152,21 +172,6 @@ export function createSendMessageTool(ctx: ToolContext) {
 					const messageNumber = counters.sendMessage + 1;
 					const uniqueKey = `public:${ctx.triggerMessageId}:slot:${messageNumber}`;
 
-					// For subsequent messages (not the first one), add a natural delay
-					// with typing indicator to simulate human conversation pacing.
-					if (messageNumber > 1) {
-						const delayMs = calculateTypingDelay(message.length);
-						console.log(
-							`[tool:sendMessage] conv=${ctx.conversationId} | Message #${messageNumber}: typing for ${delayMs}ms`
-						);
-
-						if (ctx.startTyping) {
-							await ctx.startTyping();
-						}
-
-						await interruptibleSleep(delayMs);
-					}
-
 					if (await isSupersededVisitorTrigger(ctx)) {
 						console.log(
 							`[tool:sendMessage] conv=${ctx.conversationId} | Suppressing send for stale trigger ${ctx.triggerMessageId}`
@@ -179,6 +184,29 @@ export function createSendMessageTool(ctx: ToolContext) {
 								staleTriggerSuppressed: true,
 							},
 						};
+					}
+
+					if (messageNumber > 1) {
+						const adaptiveDelayMs = estimateAdaptiveDelayMs({
+							message,
+							conversationId: ctx.conversationId,
+							triggerMessageId: ctx.triggerMessageId,
+							messageNumber,
+						});
+						console.log(
+							`[tool:sendMessage] conv=${ctx.conversationId} | pacing delay=${adaptiveDelayMs}ms before send #${messageNumber}`
+						);
+						if (ctx.startTyping) {
+							try {
+								await ctx.startTyping();
+							} catch (error) {
+								console.warn(
+									`[tool:sendMessage] conv=${ctx.conversationId} | Failed to start typing during pacing:`,
+									error
+								);
+							}
+						}
+						await sleep(adaptiveDelayMs);
 					}
 
 					nextCreatedAtMs = Math.max(nextCreatedAtMs + 1, Date.now());

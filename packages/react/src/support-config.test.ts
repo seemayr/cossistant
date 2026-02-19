@@ -1,97 +1,41 @@
 import { describe, expect, it } from "bun:test";
-import React from "react";
-import {
-	DefaultMessage,
-	extractDefaultMessagesFromChildren,
-	resolveSupportConfigMessages,
-} from "./support-config";
+import { readFileSync } from "node:fs";
+import * as supportConfigModule from "./support-config";
 
-describe("extractDefaultMessagesFromChildren", () => {
-	it("extracts a single message", () => {
-		const children = React.createElement(DefaultMessage, {
-			content: "Hello there",
-			senderType: "team_member",
-		});
-
-		expect(extractDefaultMessagesFromChildren(children)).toEqual([
-			{
-				content: "Hello there",
-				senderType: "team_member",
-			},
-		]);
+describe("support-config module exports", () => {
+	it("exports SupportConfig", () => {
+		expect(typeof supportConfigModule.SupportConfig).toBe("function");
 	});
 
-	it("extracts multiple messages and ignores noise", () => {
-		const children = React.createElement(
-			React.Fragment,
-			null,
-			React.createElement(DefaultMessage, {
-				content: "Welcome",
-				senderType: "team_member",
-			}),
-			React.createElement("div", null, "ignore"),
-			React.createElement(
-				React.Fragment,
-				null,
-				React.createElement(DefaultMessage, {
-					content: "Ask me anything",
-					senderType: "ai",
-					senderId: "agent_1",
-				})
-			)
+	it("does not export removed child-based APIs", () => {
+		expect("DefaultMessage" in supportConfigModule).toBe(false);
+		expect("extractDefaultMessagesFromChildren" in supportConfigModule).toBe(
+			false
 		);
-
-		expect(extractDefaultMessagesFromChildren(children)).toEqual([
-			{
-				content: "Welcome",
-				senderType: "team_member",
-			},
-			{
-				content: "Ask me anything",
-				senderId: "agent_1",
-				senderType: "ai",
-			},
-		]);
+		expect("resolveSupportConfigMessages" in supportConfigModule).toBe(false);
 	});
 });
 
-describe("resolveSupportConfigMessages", () => {
-	it("returns child messages when defaultMessages prop is not provided", () => {
-		const children = React.createElement(DefaultMessage, {
-			content: "Hi",
-			senderType: "team_member",
-		});
+describe("SupportConfig implementation", () => {
+	it("updates only when props are defined (allowing [] to clear values)", () => {
+		const source = readFileSync(
+			new URL("./support-config.tsx", import.meta.url),
+			"utf8"
+		);
 
-		expect(resolveSupportConfigMessages({ children })).toEqual([
-			{
-				content: "Hi",
-				senderType: "team_member",
-			},
-		]);
+		expect(source).toContain("if (defaultMessages !== undefined)");
+		expect(source).toContain("if (quickOptions !== undefined)");
 	});
 
-	it("gives precedence to defaultMessages prop", () => {
-		const defaultMessages = [
-			{
-				content: "From prop",
-				senderType: "team_member" as const,
-			},
-		];
+	it("removes children-based message configuration", () => {
+		const source = readFileSync(
+			new URL("./support-config.tsx", import.meta.url),
+			"utf8"
+		);
 
-		const children = React.createElement(DefaultMessage, {
-			content: "From child",
-			senderType: "ai",
-		});
-
-		expect(
-			resolveSupportConfigMessages({
-				children,
-				defaultMessages,
-			})
-		).toEqual(defaultMessages);
-	});
-
-	it("returns undefined when there is no config", () => {
-		expect(resolveSupportConfigMessages({})).toBeUndefined();
+		expect(source).not.toContain("children?: React.ReactNode");
+		expect(source).not.toContain("export function DefaultMessage");
+		expect(source).not.toContain("extractDefaultMessagesFromChildren");
+		expect(source).not.toContain("resolveSupportConfigMessages");
 	});
 });

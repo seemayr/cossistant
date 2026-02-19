@@ -5,7 +5,7 @@
  *
  * Tool Categories:
  * 1. Messaging: sendMessage, sendPrivateMessage - how AI communicates
- * 2. Actions: respond, escalate, resolve, markSpam, skip - signal completion
+ * 2. Actions: respond, escalate, resolve, markSpam, skip, wait - signal completion
  * 3. Context-gathering: searchKnowledgeBase - fetch info to inform response
  * 4. Side-effect: updateConversationTitle, updateSentiment, setPriority - inline actions
  *
@@ -27,6 +27,7 @@ import {
 	createResolveTool,
 	createRespondTool,
 	createSkipTool,
+	createWaitTool,
 } from "./action-tools";
 import { createIdentifyVisitorTool } from "./identify-visitor";
 import { createSearchKnowledgeBaseTool } from "./search-knowledge";
@@ -66,6 +67,7 @@ const TOOL_FACTORIES: Record<
 	resolve: (context) => createResolveTool(context),
 	markSpam: (context) => createMarkSpamTool(context),
 	skip: (context) => createSkipTool(context),
+	wait: (context) => createWaitTool(context),
 };
 
 function getBehaviorSettingValue(

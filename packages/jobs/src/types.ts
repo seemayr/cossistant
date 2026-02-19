@@ -57,6 +57,12 @@ export type AiAgentJobData = {
 	 * with older producers that only enqueue by conversation.
 	 */
 	triggerMessageId?: string;
+	/**
+	 * Optional wait-resume marker.
+	 * When present, worker selects the latest queued trigger on first pass
+	 * after a deferred wait cycle.
+	 */
+	waitResumeForTriggerMessageId?: string;
 };
 
 export function generateAiAgentJobId(

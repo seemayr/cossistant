@@ -6,7 +6,12 @@
 
 import { z } from "zod";
 import { getDefaultBehaviorSettings } from "./defaults";
-import type { AiAgentBehaviorSettings } from "./types";
+import {
+	type AiAgentBehaviorSettings,
+	DEFAULT_TOOL_INVOCATIONS_PER_RUN,
+	MAX_TOOL_INVOCATIONS_PER_RUN,
+	MIN_TOOL_INVOCATIONS_PER_RUN,
+} from "./types";
 
 /**
  * Zod schema for behavior settings validation
@@ -23,6 +28,7 @@ export const behaviorSettingsSchema = z.object({
 	canEscalate: z.boolean(),
 
 	defaultEscalationUserId: z.string().nullable(),
+	maxToolInvocationsPerRun: z.number(),
 
 	visitorContactPolicy: z.enum([
 		"only_if_needed",
@@ -34,6 +40,19 @@ export const behaviorSettingsSchema = z.object({
 	autoGenerateTitle: z.boolean(),
 	autoCategorize: z.boolean(),
 });
+
+function clampToolInvocationBudget(
+	rawValue: number | null | undefined
+): number {
+	if (typeof rawValue !== "number" || !Number.isFinite(rawValue)) {
+		return DEFAULT_TOOL_INVOCATIONS_PER_RUN;
+	}
+
+	return Math.min(
+		MAX_TOOL_INVOCATIONS_PER_RUN,
+		Math.max(MIN_TOOL_INVOCATIONS_PER_RUN, Math.floor(rawValue))
+	);
+}
 
 /**
  * Validate and sanitize behavior settings
@@ -63,5 +82,10 @@ export function validateBehaviorSettings(
 		return defaults;
 	}
 
-	return parsed.data;
+	return {
+		...parsed.data,
+		maxToolInvocationsPerRun: clampToolInvocationBudget(
+			parsed.data.maxToolInvocationsPerRun
+		),
+	};
 }

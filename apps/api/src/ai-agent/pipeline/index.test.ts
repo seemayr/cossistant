@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterAll, beforeEach, describe, expect, it, mock } from "bun:test";
 
 const intakeMock = mock(
 	(async () => null) as (...args: unknown[]) => Promise<unknown>
@@ -43,6 +43,22 @@ const ingestAiCreditUsageMock = mock((async () => ({
 const logAiCreditUsageTimelineMock = mock((async () => {}) as (
 	...args: unknown[]
 ) => Promise<void>);
+const resolvePromptBundleMock = mock((async () => ({
+	coreDocuments: {
+		"decision.md": {
+			name: "decision.md",
+			content: "default decision policy",
+			source: "fallback",
+			priority: 0,
+		},
+	},
+	enabledSkills: [],
+})) as (...args: unknown[]) => Promise<unknown>);
+const fallbackSendMessageMock = mock(async () => ({
+	messageId: "fallback-msg",
+	created: true,
+	paused: false,
+}));
 
 const emitDecisionMadeMock = mock((async () => {}) as (
 	...args: unknown[]
@@ -105,15 +121,12 @@ mock.module("../events", () => ({
 }));
 
 mock.module("../actions/send-message", () => ({
-	sendMessage: mock(async () => ({
-		messageId: "fallback-msg",
-		created: true,
-		paused: false,
-	})),
+	sendMessage: fallbackSendMessageMock,
 }));
 
 mock.module("../tools/tool-call-logger", () => ({
 	logDecisionTimelineState: logDecisionTimelineStateMock,
+	wrapToolsWithTimelineLogging: <T>(tools: T) => tools,
 }));
 
 mock.module("@api/lib/ai-credits/guard", () => ({
@@ -126,6 +139,10 @@ mock.module("@api/lib/ai-credits/polar-meter", () => ({
 
 mock.module("@api/lib/ai-credits/timeline", () => ({
 	logAiCreditUsageTimeline: logAiCreditUsageTimelineMock,
+}));
+
+mock.module("../prompts/resolver", () => ({
+	resolvePromptBundle: resolvePromptBundleMock,
 }));
 
 const pipelineModulePromise = import("./index");
@@ -176,6 +193,10 @@ function buildDecisionResult() {
 }
 
 describe("runAiAgentPipeline retryability and typing cleanup", () => {
+	afterAll(() => {
+		mock.restore();
+	});
+
 	beforeEach(() => {
 		intakeMock.mockReset();
 		decideMock.mockReset();
@@ -191,6 +212,8 @@ describe("runAiAgentPipeline retryability and typing cleanup", () => {
 		guardAiCreditRunMock.mockReset();
 		ingestAiCreditUsageMock.mockReset();
 		logAiCreditUsageTimelineMock.mockReset();
+		resolvePromptBundleMock.mockReset();
+		fallbackSendMessageMock.mockReset();
 
 		intakeMock.mockResolvedValue(buildReadyIntakeResult());
 		decideMock.mockResolvedValue(buildDecisionResult());
@@ -219,6 +242,22 @@ describe("runAiAgentPipeline retryability and typing cleanup", () => {
 			status: "ingested",
 		});
 		logAiCreditUsageTimelineMock.mockResolvedValue(undefined);
+		fallbackSendMessageMock.mockResolvedValue({
+			messageId: "fallback-msg",
+			created: true,
+			paused: false,
+		});
+		resolvePromptBundleMock.mockResolvedValue({
+			coreDocuments: {
+				"decision.md": {
+					name: "decision.md",
+					content: "default decision policy",
+					source: "fallback",
+					priority: 0,
+				},
+			},
+			enabledSkills: [],
+		});
 	});
 
 	it("marks failures before any public send as retryable", async () => {
@@ -376,6 +415,55 @@ describe("runAiAgentPipeline retryability and typing cleanup", () => {
 		});
 		expect(typingHeartbeatStopMock).toHaveBeenCalledTimes(1);
 		expect(emitTypingStopMock).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not send fallback when authoritative public send already happened", async () => {
+		const { runAiAgentPipeline } = await pipelineModulePromise;
+		generateMock.mockImplementation(async (...args: unknown[]) => {
+			const [input] = args as [
+				{
+					onPublicMessageSent?: (params: {
+						messageId: string;
+						created: boolean;
+					}) => void;
+				},
+			];
+			input.onPublicMessageSent?.({
+				messageId: "pub-msg-1",
+				created: true,
+			});
+			return {
+				decision: {
+					action: "respond",
+					reasoning: "repair state reported fallback despite send",
+					confidence: 0.8,
+				},
+				needsFallbackMessage: true,
+				toolCalls: {
+					sendMessage: 0,
+					sendPrivateMessage: 0,
+				},
+			};
+		});
+
+		const result = await runAiAgentPipeline({
+			db: {} as never,
+			input: {
+				conversationId: "conv-1",
+				messageId: "trigger-msg-1",
+				messageCreatedAt: new Date().toISOString(),
+				websiteId: "site-1",
+				organizationId: "org-1",
+				visitorId: "visitor-1",
+				aiAgentId: "ai-1",
+				workflowRunId: "workflow-fallback-authoritative-send",
+				jobId: "job-fallback-authoritative-send",
+			},
+		});
+
+		expect(result.status).toBe("completed");
+		expect(result.publicMessagesSent).toBe(1);
+		expect(fallbackSendMessageMock).not.toHaveBeenCalled();
 	});
 
 	it("skips before generation when credit guard blocks", async () => {

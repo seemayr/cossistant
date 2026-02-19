@@ -34,6 +34,8 @@ import {
 	emitWorkflowCompleted,
 	TypingHeartbeat,
 } from "../events";
+import { resolvePromptBundle } from "../prompts/resolver";
+import { PROMPT_TEMPLATES } from "../prompts/templates";
 import { logDecisionTimelineState } from "../tools/tool-call-logger";
 import { type IntakeResult, intake } from "./1-intake";
 import {
@@ -230,25 +232,31 @@ export async function runAiAgentPipeline(
 		});
 
 		try {
+			let decisionPolicy: string = PROMPT_TEMPLATES.DECISION_POLICY;
+			try {
+				const decisionPromptBundle = await resolvePromptBundle({
+					db: ctx.db,
+					aiAgent: intakeResult.aiAgent,
+					mode: "background_only",
+				});
+				decisionPolicy =
+					decisionPromptBundle.coreDocuments["decision.md"]?.content?.trim() ||
+					PROMPT_TEMPLATES.DECISION_POLICY;
+			} catch (error) {
+				console.warn(
+					`[ai-agent] conv=${convId} | Failed to resolve decision.md, using fallback policy`,
+					error
+				);
+			}
+
 			decisionResult = await decide({
 				aiAgent: intakeResult.aiAgent,
 				conversation: intakeResult.conversation,
 				conversationHistory: intakeResult.conversationHistory,
 				conversationState: intakeResult.conversationState,
 				triggerMessage: intakeResult.triggerMessage,
+				decisionPolicy,
 			});
-
-			if (
-				continuationResult.decision === "supplement" &&
-				(!decisionResult.shouldAct || decisionResult.mode === "background_only")
-			) {
-				decisionResult = {
-					...decisionResult,
-					shouldAct: true,
-					reason: `Continuation supplement override: ${continuationResult.reason}`,
-					mode: "respond_to_visitor",
-				};
-			}
 
 			await logDecisionTimelineState({
 				toolContext: decisionToolContext,
@@ -575,10 +583,11 @@ export async function runAiAgentPipeline(
 		const requiresMessage = ["respond", "escalate", "resolve"].includes(
 			generationResult.decision.action
 		);
-		const sentMessages = generationResult.toolCalls?.sendMessage ?? 0;
+		const sentMessages = publicMessagesSent;
+		const missingAuthoritativeSend = sentMessages === 0;
 		const needsFallbackMessage =
-			generationResult.needsFallbackMessage ||
-			(requiresMessage && sentMessages === 0);
+			missingAuthoritativeSend &&
+			(generationResult.needsFallbackMessage || requiresMessage);
 
 		if (needsFallbackMessage && allowPublicMessages) {
 			if (generationResult.needsFallbackMessage) {

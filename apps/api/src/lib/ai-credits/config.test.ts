@@ -37,6 +37,7 @@ describe("ai credit pricing config", () => {
 
 	it("counts excluded tools and billable tools correctly", () => {
 		expect(isExcludedToolName("sendMessage")).toBe(true);
+		expect(isExcludedToolName("respond")).toBe(true);
 		expect(isExcludedToolName("searchKnowledgeBase")).toBe(false);
 
 		const stats = getToolCallStats({
@@ -48,8 +49,8 @@ describe("ai credit pricing config", () => {
 		});
 
 		expect(stats.totalToolCount).toBe(8);
-		expect(stats.excludedToolCount).toBe(5);
-		expect(stats.billableToolCount).toBe(3);
+		expect(stats.excludedToolCount).toBe(6);
+		expect(stats.billableToolCount).toBe(2);
 	});
 
 	it("applies tool surcharge only after included billable tools", () => {
@@ -71,10 +72,10 @@ describe("ai credit pricing config", () => {
 
 		expect(charge.baseCredits).toBe(1);
 		expect(charge.modelCredits).toBe(1);
-		expect(charge.billableToolCount).toBe(4);
-		expect(charge.excludedToolCount).toBe(1);
-		expect(charge.toolCredits).toBe(1);
-		expect(charge.totalCredits).toBe(3);
+		expect(charge.billableToolCount).toBe(3);
+		expect(charge.excludedToolCount).toBe(2);
+		expect(charge.toolCredits).toBe(0.5);
+		expect(charge.totalCredits).toBe(2.5);
 	});
 
 	it("exposes one default model and resolves unknown models to default", () => {

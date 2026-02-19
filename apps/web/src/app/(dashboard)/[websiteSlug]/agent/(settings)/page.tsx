@@ -16,6 +16,7 @@ import { useTRPC } from "@/lib/trpc/client";
 import { AIAgentForm } from "../ai-agent-form";
 import { DeleteAgentDialog } from "../delete-agent-dialog";
 import { BackgroundAnalysisForm } from "./behavior/background-analysis-form";
+import { ToolInvocationBudgetForm } from "./behavior/tool-invocation-budget-form";
 import { VisitorContactForm } from "./behavior/visitor-contact-form";
 
 export default function AgentsPage() {
@@ -110,6 +111,17 @@ export default function AgentsPage() {
 							title="Background Analysis"
 						>
 							<BackgroundAnalysisForm
+								aiAgentId={aiAgent.id}
+								initialData={behaviorSettings}
+								websiteSlug={website.slug}
+							/>
+						</SettingsRow>
+
+						<SettingsRow
+							description="Control how many non-finish tool invocations the AI can use per run."
+							title="Tool Invocation Budget"
+						>
+							<ToolInvocationBudgetForm
 								aiAgentId={aiAgent.id}
 								initialData={behaviorSettings}
 								websiteSlug={website.slug}

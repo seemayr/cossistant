@@ -170,24 +170,32 @@ export default function App() {
 }
 ```
 
-### 7. Display custom messages with `<DefaultMessage />`
+### 7. Display custom messages with `SupportConfig defaultMessages`
 
 ```tsx title="src/App.tsx"
-import { DefaultMessage, Support, SupportConfig } from "@cossistant/react";
+import { Support, SupportConfig } from "@cossistant/react";
+import { type DefaultMessage, SenderType } from "@cossistant/types";
+
+const user: { name: string | null } = {
+  name: "Jane Doe",
+};
+
+const defaultMessages: DefaultMessage[] = [
+  {
+    content: `Hi ${user.name ?? "there"}, anything I can help with?`,
+    senderType: SenderType.TEAM_MEMBER,
+  },
+];
+
+const quickOptions: string[] = ["How to identify a visitor?"];
 
 export default function App() {
   return (
     <>
-      <SupportConfig>
-        <DefaultMessage
-          senderType="team_member"
-          content="Hey, tell us what you are building and we will help."
-        />
-        <DefaultMessage
-          senderType="ai"
-          content="I can answer setup questions right away."
-        />
-      </SupportConfig>
+      <SupportConfig
+        defaultMessages={defaultMessages}
+        quickOptions={quickOptions}
+      />
       <Support />
     </>
   );

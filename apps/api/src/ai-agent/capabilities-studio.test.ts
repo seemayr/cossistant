@@ -73,6 +73,12 @@ function createPromptBundle(): ResolvedPromptBundle {
 				source: "fallback",
 				priority: 0,
 			},
+			"decision.md": {
+				name: "decision.md",
+				content: "fallback decision",
+				source: "fallback",
+				priority: 0,
+			},
 			"grounding.md": {
 				name: "grounding.md",
 				content: "fallback grounding",

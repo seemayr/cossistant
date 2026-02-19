@@ -40,16 +40,31 @@ Use `<SupportConfig />` to customize messages and quick options per page:
 
 ```tsx title="app/pricing/page.tsx"
 import { SupportConfig } from "@cossistant/next";
+import { type DefaultMessage, SenderType } from "@cossistant/types";
+
+const user: { name: string | null } = {
+  name: "Jane Doe",
+};
+
+const defaultMessages: DefaultMessage[] = [
+  {
+    content: `Hi ${user.name ?? "there"}, anything I can help with?`,
+    senderType: SenderType.TEAM_MEMBER,
+  },
+];
+
+const quickOptions: string[] = [
+  "How does billing work?",
+  "What's included in Pro?",
+  "Can I cancel anytime?",
+];
 
 export default function PricingPage() {
   return (
     <>
       <SupportConfig
-        quickOptions={[
-          "How does billing work?",
-          "What's included in Pro?",
-          "Can I cancel anytime?",
-        ]}
+        defaultMessages={defaultMessages}
+        quickOptions={quickOptions}
       />
       <h1>Choose your plan</h1>
     </>

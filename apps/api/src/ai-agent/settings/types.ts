@@ -9,6 +9,10 @@
  * pauseDurationMinutes.
  */
 
+export const MIN_TOOL_INVOCATIONS_PER_RUN = 10;
+export const MAX_TOOL_INVOCATIONS_PER_RUN = 50;
+export const DEFAULT_TOOL_INVOCATIONS_PER_RUN = 15;
+
 /**
  * Behavior settings for an AI agent
  */
@@ -30,6 +34,9 @@ export type AiAgentBehaviorSettings = {
 	// Escalation config
 	/** Default user to assign when escalating (null = no default) */
 	defaultEscalationUserId: string | null;
+
+	/** Maximum tool calls allowed per pipeline run (excluding finish actions) */
+	maxToolInvocationsPerRun: number;
 
 	// Visitor identification
 	/** How aggressively the AI should ask for visitor contact info */

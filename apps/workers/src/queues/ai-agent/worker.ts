@@ -36,6 +36,7 @@ import {
 	enqueueAiAgentMessage,
 	generateAiAgentJobId,
 	getAiAgentFailureKey,
+	getAiAgentQueueKey,
 	getAiAgentQueueSize,
 	peekAiAgentQueue,
 	peekAiAgentQueueBatch,
@@ -245,6 +246,71 @@ export function createAiAgentWorker({
 	const COALESCE_BATCH_LIMIT = 10;
 	const FAILURE_THRESHOLD = 3;
 	const FAILURE_TTL_SECONDS = 60 * 60;
+	const WAIT_DELAY_MS = 10_000;
+	const WAIT_DEFER_TTL_SECONDS = Math.ceil(WAIT_DELAY_MS / 1000);
+	const WAIT_CYCLE_TTL_SECONDS = 10 * 60;
+
+	function getWaitCycleKey(
+		conversationId: string,
+		triggerMessageId: string
+	): string {
+		return `ai-agent:wait:${conversationId}:${triggerMessageId}`;
+	}
+
+	function getWaitDeferKey(conversationId: string): string {
+		return `ai-agent:wait-defer:${conversationId}`;
+	}
+
+	async function acquireWaitCycle(params: {
+		redis: Redis;
+		conversationId: string;
+		triggerMessageId: string;
+	}): Promise<boolean> {
+		const key = getWaitCycleKey(params.conversationId, params.triggerMessageId);
+		const result = await params.redis.set(
+			key,
+			"1",
+			"EX",
+			WAIT_CYCLE_TTL_SECONDS,
+			"NX"
+		);
+		return result === "OK";
+	}
+
+	async function selectLatestTriggerableQueuedMessage(params: {
+		redis: Redis;
+		conversationId: string;
+		organizationId: string;
+	}): Promise<Awaited<ReturnType<typeof getMessageMetadata>> | null> {
+		const queueKey = getAiAgentQueueKey(params.conversationId);
+		const messageIds = await params.redis.zrange(queueKey, 0, -1);
+		if (messageIds.length === 0) {
+			return null;
+		}
+
+		const metadataRows = await getMessageMetadataBatch(db, {
+			organizationId: params.organizationId,
+			messageIds,
+		});
+		const metadataById = new Map(metadataRows.map((row) => [row.id, row]));
+
+		for (let index = messageIds.length - 1; index >= 0; index--) {
+			const messageId = messageIds[index];
+			if (!messageId) {
+				continue;
+			}
+			const metadata = metadataById.get(messageId);
+			if (!metadata) {
+				continue;
+			}
+			if (!isTriggerableMessage(metadata)) {
+				continue;
+			}
+			return metadata;
+		}
+
+		return null;
+	}
 
 	async function hydrateQueueFromCursor(
 		redis: Redis,
@@ -298,6 +364,8 @@ export function createAiAgentWorker({
 		jobData: AiAgentJobData;
 		triggerMessageId: string;
 		currentJobId: string;
+		delayMs?: number;
+		waitResumeForTriggerMessageId?: string;
 	}): Promise<void> {
 		if (!wakeQueue) {
 			console.warn(
@@ -307,8 +375,12 @@ export function createAiAgentWorker({
 		}
 
 		const wakeData: AiAgentJobData = {
-			...params.jobData,
+			conversationId: params.jobData.conversationId,
+			websiteId: params.jobData.websiteId,
+			organizationId: params.jobData.organizationId,
+			aiAgentId: params.jobData.aiAgentId,
 			triggerMessageId: params.triggerMessageId,
+			waitResumeForTriggerMessageId: params.waitResumeForTriggerMessageId,
 		};
 		const baseJobId = generateAiAgentJobId(
 			params.jobData.conversationId,
@@ -340,12 +412,14 @@ export function createAiAgentWorker({
 		}
 
 		try {
+			const delayMs = params.delayMs ?? AI_AGENT_JOB_OPTIONS.delay ?? 0;
 			await wakeQueue.add("ai-agent", wakeData, {
 				...AI_AGENT_JOB_OPTIONS,
+				delay: delayMs,
 				jobId,
 			});
 			console.log(
-				`[worker:ai-agent] conv=${params.jobData.conversationId} | Scheduled continuation drain for trigger ${params.triggerMessageId}`
+				`[worker:ai-agent] conv=${params.jobData.conversationId} | Scheduled continuation drain for trigger ${params.triggerMessageId} | delayMs=${delayMs} | waitResume=${params.waitResumeForTriggerMessageId ?? "none"}`
 			);
 		} catch (error) {
 			console.error(
@@ -388,6 +462,44 @@ export function createAiAgentWorker({
 			return;
 		}
 
+		let lockLost = false;
+		let stopLockWatchdog = false;
+		const lockRenewIntervalMs = Math.max(
+			250,
+			Math.floor(DRAIN_LOCK_TTL_MS / 3)
+		);
+		const lockWatchdog = (async () => {
+			while (!stopLockWatchdog) {
+				await sleep(lockRenewIntervalMs);
+				if (stopLockWatchdog) {
+					break;
+				}
+
+				try {
+					const renewed = await renewAiAgentLock(
+						redis,
+						conversationId,
+						lockValue,
+						DRAIN_LOCK_TTL_MS
+					);
+					if (!renewed) {
+						lockLost = true;
+						console.error(
+							`[worker:ai-agent] conv=${conversationId} | Conversation lock lease lost during processing`
+						);
+						break;
+					}
+				} catch (error) {
+					lockLost = true;
+					console.error(
+						`[worker:ai-agent] conv=${conversationId} | Lock watchdog renewal failed`,
+						error
+					);
+					break;
+				}
+			}
+		})();
+
 		try {
 			// Get conversation for emitting events and cursor state
 			const conversation = await getConversationById(db, { conversationId });
@@ -409,6 +521,19 @@ export function createAiAgentWorker({
 					`[worker:ai-agent] conv=${conversationId} | AI paused, skipping drain`
 				);
 				return;
+			}
+
+			const waitDeferKey = getWaitDeferKey(conversationId);
+			if (job.data.waitResumeForTriggerMessageId) {
+				await redis.del(waitDeferKey);
+			} else {
+				const waitDeferred = await redis.get(waitDeferKey);
+				if (waitDeferred) {
+					console.log(
+						`[worker:ai-agent] conv=${conversationId} | Active wait defer window, skipping non-resume drain`
+					);
+					return;
+				}
 			}
 
 			// Emit seen event once per drain run
@@ -434,8 +559,17 @@ export function createAiAgentWorker({
 			let processed = 0;
 			let shouldRequeue = true;
 			let continuationTriggerMessageId: string | null = null;
+			let waitResumeForTriggerMessageId =
+				job.data.waitResumeForTriggerMessageId ?? null;
 
 			while (true) {
+				if (lockLost) {
+					console.error(
+						`[worker:ai-agent] conv=${conversationId} | Lock lease lost, stopping drain loop before next trigger`
+					);
+					shouldRequeue = false;
+					break;
+				}
 				if (processed >= DRAIN_MAX_MESSAGES) {
 					break;
 				}
@@ -450,15 +584,44 @@ export function createAiAgentWorker({
 					break;
 				}
 
-				const nextMessageId = await peekAiAgentQueue(redis, conversationId);
+				let nextMessageId: string | null = null;
+				let messageMetadata: Awaited<
+					ReturnType<typeof getMessageMetadata>
+				> | null = null;
+				let skipVisitorCoalescing = false;
+
+				if (waitResumeForTriggerMessageId) {
+					const latestQueuedMessage =
+						await selectLatestTriggerableQueuedMessage({
+							redis,
+							conversationId,
+							organizationId: conversation.organizationId,
+						});
+					waitResumeForTriggerMessageId = null;
+					if (latestQueuedMessage) {
+						nextMessageId = latestQueuedMessage.id;
+						messageMetadata = latestQueuedMessage;
+						skipVisitorCoalescing = true;
+						console.log(
+							`[worker:ai-agent] conv=${conversationId} | Wait resume selected latest trigger ${nextMessageId}`
+						);
+					}
+				}
+
+				if (!nextMessageId) {
+					nextMessageId = await peekAiAgentQueue(redis, conversationId);
+				}
+
 				if (!nextMessageId) {
 					break;
 				}
 
-				const messageMetadata = await getMessageMetadata(db, {
-					messageId: nextMessageId,
-					organizationId: conversation.organizationId,
-				});
+				if (!messageMetadata) {
+					messageMetadata = await getMessageMetadata(db, {
+						messageId: nextMessageId,
+						organizationId: conversation.organizationId,
+					});
+				}
 
 				if (!messageMetadata) {
 					console.warn(
@@ -466,15 +629,6 @@ export function createAiAgentWorker({
 					);
 					await removeAiAgentQueueMessage(redis, conversationId, nextMessageId);
 					processed++;
-					const renewed = await renewAiAgentLock(
-						redis,
-						conversationId,
-						lockValue,
-						DRAIN_LOCK_TTL_MS
-					);
-					if (!renewed) {
-						break;
-					}
 					continue;
 				}
 				if (!isTriggerableMessage(messageMetadata)) {
@@ -487,15 +641,6 @@ export function createAiAgentWorker({
 						messageMetadata.id
 					);
 					processed++;
-					const renewed = await renewAiAgentLock(
-						redis,
-						conversationId,
-						lockValue,
-						DRAIN_LOCK_TTL_MS
-					);
-					if (!renewed) {
-						break;
-					}
 					continue;
 				}
 
@@ -509,24 +654,19 @@ export function createAiAgentWorker({
 						messageMetadata.id
 					);
 					processed++;
-					const renewed = await renewAiAgentLock(
-						redis,
-						conversationId,
-						lockValue,
-						DRAIN_LOCK_TTL_MS
-					);
-					if (!renewed) {
-						break;
-					}
 					continue;
 				}
 
 				let effectiveMessageMetadata = messageMetadata;
 				let coalescedMessageIds = [messageMetadata.id];
 
-				if (isVisitorTrigger(messageMetadata)) {
+				if (!skipVisitorCoalescing && isVisitorTrigger(messageMetadata)) {
 					if (VISITOR_DEBOUNCE_MS > 0) {
 						await sleep(VISITOR_DEBOUNCE_MS);
+						if (lockLost) {
+							shouldRequeue = false;
+							break;
+						}
 					}
 
 					const queueBatchIds = await peekAiAgentQueueBatch(
@@ -606,6 +746,14 @@ export function createAiAgentWorker({
 					};
 				}
 
+				if (lockLost) {
+					console.error(
+						`[worker:ai-agent] conv=${conversationId} | Lock lease lost after pipeline run, skipping queue mutation`
+					);
+					shouldRequeue = false;
+					break;
+				}
+
 				if (result.status === "error") {
 					const failureCount = await recordMessageFailure(
 						redis,
@@ -635,15 +783,6 @@ export function createAiAgentWorker({
 						});
 						cursor = advanceCursor(cursor, effectiveMessageMetadata);
 						processed += coalescedMessageIds.length;
-						const renewed = await renewAiAgentLock(
-							redis,
-							conversationId,
-							lockValue,
-							DRAIN_LOCK_TTL_MS
-						);
-						if (!renewed) {
-							break;
-						}
 						continue;
 					}
 
@@ -653,6 +792,39 @@ export function createAiAgentWorker({
 					// Keep the message at the queue head and requeue drain.
 					continuationTriggerMessageId = effectiveMessageMetadata.id;
 					break;
+				}
+
+				if (result.action === "wait") {
+					const waitCycleAcquired = await acquireWaitCycle({
+						redis,
+						conversationId,
+						triggerMessageId: effectiveMessageMetadata.id,
+					});
+
+					if (waitCycleAcquired) {
+						await redis.set(
+							getWaitDeferKey(conversationId),
+							"1",
+							"EX",
+							WAIT_DEFER_TTL_SECONDS
+						);
+						await requeueDrainJob({
+							jobData: job.data,
+							triggerMessageId: effectiveMessageMetadata.id,
+							currentJobId: String(job.id ?? ""),
+							delayMs: WAIT_DELAY_MS,
+							waitResumeForTriggerMessageId: effectiveMessageMetadata.id,
+						});
+						console.log(
+							`[worker:ai-agent] conv=${conversationId} | Wait action accepted for trigger ${effectiveMessageMetadata.id}; deferred ${WAIT_DELAY_MS}ms`
+						);
+						shouldRequeue = false;
+						break;
+					}
+
+					console.warn(
+						`[worker:ai-agent] conv=${conversationId} | Wait action rejected for trigger ${effectiveMessageMetadata.id} (already used), processing as no-op completion`
+					);
 				}
 
 				await updateConversationAiCursor(db, {
@@ -668,16 +840,6 @@ export function createAiAgentWorker({
 					coalescedMessageIds
 				);
 				processed += coalescedMessageIds.length;
-
-				const renewed = await renewAiAgentLock(
-					redis,
-					conversationId,
-					lockValue,
-					DRAIN_LOCK_TTL_MS
-				);
-				if (!renewed) {
-					break;
-				}
 			}
 
 			const remaining = await getAiAgentQueueSize(redis, conversationId);
@@ -694,6 +856,8 @@ export function createAiAgentWorker({
 				}
 			}
 		} finally {
+			stopLockWatchdog = true;
+			await lockWatchdog.catch(() => {});
 			await releaseAiAgentLock(redis, conversationId, lockValue);
 		}
 	}

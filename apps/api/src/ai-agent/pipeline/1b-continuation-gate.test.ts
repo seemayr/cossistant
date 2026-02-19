@@ -165,7 +165,7 @@ describe("continuationGate", () => {
 		expect(result.reason.startsWith("fallback_skip")).toBe(true);
 	});
 
-	it("falls back to supplement for ambiguous trigger when classifier fails", async () => {
+	it("falls back to neutral for ambiguous trigger when classifier fails", async () => {
 		const { continuationGate } = await modulePromise;
 		getLatestPublicAiMessageAfterCursorMock.mockResolvedValue({
 			id: "ai-msg-3",
@@ -192,7 +192,7 @@ describe("continuationGate", () => {
 			conversationHistory: [],
 		});
 
-		expect(result.decision).toBe("supplement");
-		expect(result.reason.startsWith("fallback_supplement")).toBe(true);
+		expect(result.decision).toBe("none");
+		expect(result.reason.startsWith("fallback_none")).toBe(true);
 	});
 });

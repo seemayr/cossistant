@@ -10,7 +10,7 @@ mock.module("./2a-smart-decision", () => ({
 	runSmartDecision: runSmartDecisionMock,
 }));
 
-const modulePromise = import("./2-decision");
+const modulePromise = import("@api/ai-agent/pipeline/2-decision");
 
 function visitorMessage(
 	content: string,

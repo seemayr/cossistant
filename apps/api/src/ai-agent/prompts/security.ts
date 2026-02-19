@@ -23,7 +23,7 @@ Messaging:
 - sendPrivateMessage(message) -> internal only
 
 Finish with exactly ONE action:
-- respond, escalate, resolve, markSpam, skip
+- respond, escalate, resolve, markSpam, skip, wait
 
 Optional side-effects:
 - updateConversationTitle, updateSentiment, setPriority

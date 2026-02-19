@@ -29,6 +29,7 @@ export const AI_AGENT_CORE_PROMPT_DOCUMENT_NAMES = [
 	"security.md",
 	"behaviour.md",
 	"participation.md",
+	"decision.md",
 	"grounding.md",
 	"capabilities.md",
 ] as const;
@@ -698,6 +699,11 @@ export const aiAgentBehaviorSettingsSchema = z
 		defaultEscalationUserId: z.string().nullable().openapi({
 			description: "Default user ID to assign escalated conversations to.",
 			example: null,
+		}),
+		maxToolInvocationsPerRun: z.number().int().min(10).max(50).openapi({
+			description:
+				"Maximum number of non-finish tool invocations allowed per run.",
+			example: 15,
 		}),
 
 		// Visitor identification

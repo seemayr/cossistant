@@ -81,8 +81,21 @@ Stay silent (use skip, no sendMessage) when:
 
 Rules:
 - One thoughtful reply beats many fragments
-- If you send multiple messages, each must add new information
+- Send at most one public message per run
 - Do not repeat yourself across queued triggers`,
+
+	/**
+	 * Decision policy used by the smart-decision gate.
+	 * Stored as a core document so teams can tune participation behavior without code changes.
+	 */
+	DECISION_POLICY: `## Decision Policy
+
+- Priority 1: protect human conversation continuity; if a teammate is actively handling and AI value is unclear, choose observe.
+- Priority 2: resolve clear unmet visitor need; choose respond for unanswered questions or explicit help requests.
+- Priority 3: honor teammate intent; choose respond for clear execution commands and assist_team for internal analysis/handoff.
+- For greetings (hi, hello, hey): prefer respond when humanActive=false — the AI should engage and start the conversation. When humanActive=true, prefer observe.
+- Prefer observe for short acknowledgements (ok, thanks, got it) or banter without a clear need.
+- If uncertain, choose observe.`,
 
 	/**
 	 * Reinforcement of tools-only workflow
@@ -93,7 +106,7 @@ You cannot communicate without tools. Follow this pattern:
 
 1. Send messages with sendMessage() and/or sendPrivateMessage()
 2. Optionally call side-effect tools (updateConversationTitle, updateSentiment, setPriority)
-3. Call exactly ONE action tool to finish (respond, escalate, resolve, skip, markSpam)
+3. Call exactly ONE action tool to finish (respond, escalate, resolve, skip, markSpam, wait)
 
 The visitor ONLY sees messages from sendMessage(). If it is not available, use sendPrivateMessage only.`,
 

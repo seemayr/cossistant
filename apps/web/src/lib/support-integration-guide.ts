@@ -114,21 +114,29 @@ export default function AppLayout({
 }
 `,
 		defaultMessageFileName: "app/page.tsx",
-		defaultMessageCode: `import { DefaultMessage, Support, SupportConfig } from "@cossistant/next";
+		defaultMessageCode: `import { Support, SupportConfig } from "@cossistant/next";
+import { type DefaultMessage, SenderType } from "@cossistant/types";
+
+const user: { name: string | null } = {
+  name: "Jane Doe",
+};
+
+const defaultMessages: DefaultMessage[] = [
+  {
+    content: \`Hi \${user.name ?? "there"}, anything I can help with?\`,
+    senderType: SenderType.TEAM_MEMBER,
+  },
+];
+
+const quickOptions: string[] = ["How to identify a visitor?"];
 
 export default function Page() {
   return (
     <>
-      <SupportConfig>
-        <DefaultMessage
-          senderType="team_member"
-          content="Hey, tell us what you are building and we will help."
-        />
-        <DefaultMessage
-          senderType="ai"
-          content="I can answer setup questions right away."
-        />
-      </SupportConfig>
+      <SupportConfig
+        defaultMessages={defaultMessages}
+        quickOptions={quickOptions}
+      />
       <Support />
     </>
   );
@@ -216,21 +224,29 @@ export default function App() {
 }
 `,
 		defaultMessageFileName: "src/App.tsx",
-		defaultMessageCode: `import { DefaultMessage, Support, SupportConfig } from "@cossistant/react";
+		defaultMessageCode: `import { Support, SupportConfig } from "@cossistant/react";
+import { type DefaultMessage, SenderType } from "@cossistant/types";
+
+const user: { name: string | null } = {
+  name: "Jane Doe",
+};
+
+const defaultMessages: DefaultMessage[] = [
+  {
+    content: \`Hi \${user.name ?? "there"}, anything I can help with?\`,
+    senderType: SenderType.TEAM_MEMBER,
+  },
+];
+
+const quickOptions: string[] = ["How to identify a visitor?"];
 
 export default function App() {
   return (
     <>
-      <SupportConfig>
-        <DefaultMessage
-          senderType="team_member"
-          content="Hey, tell us what you are building and we will help."
-        />
-        <DefaultMessage
-          senderType="ai"
-          content="I can answer setup questions right away."
-        />
-      </SupportConfig>
+      <SupportConfig
+        defaultMessages={defaultMessages}
+        quickOptions={quickOptions}
+      />
       <Support />
     </>
   );
@@ -352,10 +368,7 @@ Required implementation:
    - Otherwise import '${guide.packageName}/styles.css' in the root entry/layout file.
 6. Render <Support /> in a real page.
 7. Add optional visitor identification for logged-in users using <IdentifySupportVisitor />.
-8. Add custom welcome messages using:
-   <SupportConfig>
-     <DefaultMessage senderType="team_member" content="..." />
-   </SupportConfig>
+8. Add custom welcome messages using <SupportConfig defaultMessages={defaultMessages} quickOptions={quickOptions} /> with typed DefaultMessage[] and SenderType values.
 
 Output format (strict):
 1. List all changed files.

@@ -39,6 +39,7 @@ import {
 } from "../prompts/runtime-skill-loader";
 import { selectRelevantSkills } from "../prompts/skill-selector";
 import { buildSystemPrompt, type PromptSkillDocument } from "../prompts/system";
+import { getBehaviorSettings } from "../settings";
 import {
 	createActionCapture,
 	getCapturedAction,
@@ -114,20 +115,103 @@ type GenerationInput = {
 	workflowRunId?: string;
 };
 
-const MAIN_STOP_CONDITIONS = [
-	hasToolCall("respond"),
-	hasToolCall("escalate"),
-	hasToolCall("resolve"),
-	hasToolCall("markSpam"),
-	hasToolCall("skip"),
-	stepCountIs(10),
-];
-
-const REPAIR_STOP_CONDITIONS = [hasToolCall("respond"), stepCountIs(3)];
+const MIN_TOOL_INVOCATIONS_PER_RUN = 10;
+const MAX_TOOL_INVOCATIONS_PER_RUN = 50;
+const DEFAULT_TOOL_INVOCATIONS_PER_RUN = 15;
+const FINISH_TOOL_NAMES = [
+	"respond",
+	"escalate",
+	"resolve",
+	"markSpam",
+	"skip",
+	"wait",
+] as const;
+const FINISH_TOOL_NAME_SET = new Set<string>(FINISH_TOOL_NAMES);
 
 type ToolCallLike = {
 	toolName?: string;
 };
+
+type ToolStepLike = {
+	toolCalls?: ToolCallLike[];
+};
+
+function clampToolInvocationBudget(
+	rawValue: number | null | undefined
+): number {
+	if (typeof rawValue !== "number" || !Number.isFinite(rawValue)) {
+		return DEFAULT_TOOL_INVOCATIONS_PER_RUN;
+	}
+	return Math.min(
+		MAX_TOOL_INVOCATIONS_PER_RUN,
+		Math.max(MIN_TOOL_INVOCATIONS_PER_RUN, Math.floor(rawValue))
+	);
+}
+
+function isFinishToolName(toolName: string): boolean {
+	return FINISH_TOOL_NAME_SET.has(toolName);
+}
+
+export function getNonFinishToolCallCount(
+	toolCallsByName: Record<string, number>
+): number {
+	return Object.entries(toolCallsByName).reduce(
+		(total, [toolName, rawCount]) => {
+			if (!Number.isFinite(rawCount) || rawCount <= 0) {
+				return total;
+			}
+			if (isFinishToolName(toolName)) {
+				return total;
+			}
+			return total + Math.floor(rawCount);
+		},
+		0
+	);
+}
+
+function countNonFinishToolCallsFromSteps(
+	steps: ToolStepLike[] | undefined
+): number {
+	if (!steps || steps.length === 0) {
+		return 0;
+	}
+
+	let total = 0;
+	for (const step of steps) {
+		for (const toolCall of step.toolCalls ?? []) {
+			const toolName = toolCall?.toolName;
+			if (!(toolName && typeof toolName === "string")) {
+				continue;
+			}
+			if (isFinishToolName(toolName)) {
+				continue;
+			}
+			total += 1;
+		}
+	}
+	return total;
+}
+
+function buildStopConditions(params: {
+	toolBudgetCap: number;
+	usedNonFinishCallsOffset?: number;
+	finishToolNames?: readonly string[];
+}) {
+	const finishToolNames = params.finishToolNames ?? FINISH_TOOL_NAMES;
+	const usedNonFinishCallsOffset = params.usedNonFinishCallsOffset ?? 0;
+
+	return [
+		...finishToolNames.map((toolName) => hasToolCall(toolName)),
+		({ steps }: { steps: ToolStepLike[] }) =>
+			usedNonFinishCallsOffset + countNonFinishToolCallsFromSteps(steps) >=
+			params.toolBudgetCap,
+		stepCountIs(params.toolBudgetCap + 2),
+	];
+}
+
+function getFinishToolsInToolset(tools: ToolSet): string[] {
+	return Object.keys(tools).filter((toolName) => isFinishToolName(toolName));
+}
 
 export function buildToolCallsByName(
 	toolCalls: ToolCallLike[]
@@ -202,7 +286,9 @@ async function generateWithToolLoopAgent(input: {
 	tools: ToolSet;
 	prepareStep?: PrepareStepFunction<ToolSet>;
 	stopWhen: Array<
-		ReturnType<typeof hasToolCall> | ReturnType<typeof stepCountIs>
+		| ReturnType<typeof hasToolCall>
+		| ReturnType<typeof stepCountIs>
+		| ((params: { steps: ToolStepLike[] }) => boolean)
 	>;
 	abortSignal?: AbortSignal;
 }): Promise<Awaited<ReturnType<ToolLoopAgent["generate"]>>> {
@@ -299,6 +385,10 @@ export async function generate(
 
 	// Reset captured action before generation
 	resetCapturedAction(actionCapture);
+	const behaviorSettings = getBehaviorSettings(aiAgent);
+	const maxToolInvocationsPerRun = clampToolInvocationBudget(
+		behaviorSettings.maxToolInvocationsPerRun
+	);
 
 	// Get tools for this agent based on settings (with bound context)
 	const tools = getToolsForGeneration(aiAgent, toolContext);
@@ -345,6 +435,7 @@ export async function generate(
 		...tools,
 		loadSkill: loadSkillTool,
 	};
+	const runtimeFinishTools = getFinishToolsInToolset(runtimeTools);
 	const availableSkillCatalog = runtimeSkillRegistry.getCatalog();
 
 	const buildMergedSkillDocuments = (): PromptSkillDocument[] => {
@@ -392,8 +483,25 @@ export async function generate(
 
 	// Build dynamic system prompt with real-time context and tool instructions
 	const systemPrompt = buildRuntimeSystemPrompt();
-	const prepareStep: PrepareStepFunction<ToolSet> = () => ({
-		system: buildRuntimeSystemPrompt(),
+	const prepareStep: PrepareStepFunction<ToolSet> = ({ steps }) => {
+		const nonFinishCallsUsed = countNonFinishToolCallsFromSteps(
+			(steps as ToolStepLike[] | undefined) ?? []
+		);
+		const budgetExhausted = nonFinishCallsUsed >= maxToolInvocationsPerRun;
+
+		if (budgetExhausted && runtimeFinishTools.length > 0) {
+			return {
+				system: buildRuntimeSystemPrompt(),
+				activeTools: runtimeFinishTools,
+			};
+		}
+
+		return {
+			system: buildRuntimeSystemPrompt(),
+		};
+	};
+	const mainStopConditions = buildStopConditions({
+		toolBudgetCap: maxToolInvocationsPerRun,
 	});
 
 	// Format conversation history for LLM with multi-party prefixes
@@ -404,7 +512,7 @@ export async function generate(
 	);
 
 	console.log(
-		`[ai-agent:generate] conv=${convId} | model=${aiAgent.model} | messages=${messages.length} | mode=${mode} | tools=${Object.keys(runtimeTools).length} | fallbackSkills=${fallbackSkillNames.join(",") || "none"} | skillCatalog=${availableSkillCatalog.length}`
+		`[ai-agent:generate] conv=${convId} | model=${aiAgent.model} | messages=${messages.length} | mode=${mode} | tools=${Object.keys(runtimeTools).length} | toolBudget=${maxToolInvocationsPerRun} | fallbackSkills=${fallbackSkillNames.join(",") || "none"} | skillCatalog=${availableSkillCatalog.length}`
 	);
 
 	// Check for potential prompt injection in the latest visitor message (for monitoring)
@@ -442,7 +550,8 @@ export async function generate(
 	//
 	// Key configurations:
 	// - toolChoice: 'required' forces the model to call tools (can't skip them)
-	// - stopWhen: stops generation when an action tool is called OR after 10 steps
+	// - stopWhen: stops on finish action tools, non-finish tool budget exhaustion,
+	//   or an emergency step guard (cap + 2)
 	// - abortSignal: allows interruption when new message arrives
 	let result: Awaited<ReturnType<typeof generateWithToolLoopAgent>>;
 	try {
@@ -452,7 +561,7 @@ export async function generate(
 			messages,
 			tools: runtimeTools,
 			prepareStep,
-			stopWhen: MAIN_STOP_CONDITIONS,
+			stopWhen: mainStopConditions,
 			abortSignal,
 		});
 	} catch (error) {
@@ -491,19 +600,29 @@ export async function generate(
 		throw error;
 	}
 
-	// Log tool call information for debugging
+	// Log tool call information for debugging.
+	// Merge SDK-reported tool calls with authoritative local counters to avoid
+	// fallback loops when SDK step accounting is incomplete.
 	const allToolCalls =
 		result.steps?.flatMap((step) => step.toolCalls ?? []) ?? [];
-	const toolCallsByName = buildToolCallsByName(allToolCalls);
+	const sdkToolCallsByName = buildToolCallsByName(allToolCalls);
+	const counterToolCallsByName = buildToolCallsByNameFromCounters(
+		toolContext.counters
+	);
+	const toolCallsByName = mergeToolCallsByName(
+		sdkToolCallsByName,
+		counterToolCallsByName
+	);
 	const totalToolCalls = getTotalToolCalls(toolCallsByName);
-	const sendMessageCalls = allToolCalls.filter(
-		(tc) => tc.toolName === "sendMessage"
+	const nonFinishToolCalls = getNonFinishToolCallCount(toolCallsByName);
+	const remainingNonFinishBudget = Math.max(
+		0,
+		maxToolInvocationsPerRun - nonFinishToolCalls
 	);
-	const sendPrivateMessageCalls = allToolCalls.filter(
-		(tc) => tc.toolName === "sendPrivateMessage"
-	);
+	const sendMessageCallCount = toolCallsByName.sendMessage ?? 0;
+	const sendPrivateMessageCallCount = toolCallsByName.sendPrivateMessage ?? 0;
 	const actionCalls = allToolCalls.filter((tc) =>
-		["respond", "escalate", "resolve", "markSpam", "skip"].includes(tc.toolName)
+		tc.toolName ? isFinishToolName(tc.toolName) : false
 	);
 	const loadedSkillNames = runtimeSkillRegistry
 		.getLoadedSkills()
@@ -514,7 +633,7 @@ export async function generate(
 	);
 
 	console.log(
-		`[ai-agent:generate] conv=${convId} | Steps: ${result.steps?.length ?? 0} | Tool calls: sendMessage=${sendMessageCalls.length}, sendPrivateMessage=${sendPrivateMessageCalls.length}, action=${actionCalls.length}`
+		`[ai-agent:generate] conv=${convId} | Steps: ${result.steps?.length ?? 0} | Tool calls: sendMessage=${sendMessageCallCount}, sendPrivateMessage=${sendPrivateMessageCallCount}, action=${actionCalls.length}, nonFinish=${nonFinishToolCalls}/${maxToolInvocationsPerRun}`
 	);
 
 	// Get the captured action from action tools
@@ -524,23 +643,78 @@ export async function generate(
 		capturedAction &&
 			["respond", "escalate", "resolve"].includes(capturedAction.action)
 	);
-	const missingRequiredMessage =
-		requiresMessage && sendMessageCalls.length === 0;
+	const missingRequiredMessage = requiresMessage && sendMessageCallCount === 0;
 	const missingAction = !capturedAction;
 
 	if (
 		toolContext.allowPublicMessages &&
 		(missingAction || missingRequiredMessage)
 	) {
+		if (remainingNonFinishBudget === 0) {
+			if (missingAction && sendMessageCallCount > 0) {
+				console.warn(
+					`[ai-agent:generate] conv=${convId} | Budget exhausted with public message already sent; synthesizing respond action`
+				);
+				return {
+					decision: {
+						action: "respond" as const,
+						reasoning:
+							"Tool budget exhausted after sending a public message; synthesized terminal respond action.",
+						confidence: 0.6,
+					},
+					usage: result.usage
+						? {
+								inputTokens: result.usage.inputTokens ?? 0,
+								outputTokens: result.usage.outputTokens ?? 0,
+								totalTokens: result.usage.totalTokens ?? 0,
+							}
+						: undefined,
+					toolCalls: {
+						sendMessage: sendMessageCallCount,
+						sendPrivateMessage: sendPrivateMessageCallCount,
+					},
+					toolCallsByName,
+					totalToolCalls,
+				};
+			}
+
+			console.warn(
+				`[ai-agent:generate] conv=${convId} | Budget exhausted before terminal public response; returning safe skip`
+			);
+			return {
+				decision: {
+					action: "skip" as const,
+					reasoning:
+						"Tool budget exhausted before producing a complete public response. Skipping to avoid unsafe fallback behavior.",
+					confidence: 1,
+				},
+				usage: result.usage
+					? {
+							inputTokens: result.usage.inputTokens ?? 0,
+							outputTokens: result.usage.outputTokens ?? 0,
+							totalTokens: result.usage.totalTokens ?? 0,
+						}
+					: undefined,
+				toolCalls: {
+					sendMessage: sendMessageCallCount,
+					sendPrivateMessage: sendPrivateMessageCallCount,
+				},
+				toolCallsByName,
+				totalToolCalls,
+			};
+		}
+
 		const repairReason = missingAction
 			? "missing_action"
 			: "missing_send_message";
 		console.warn(
-			`[ai-agent:generate] conv=${convId} | Repair triggered (${repairReason})`
+			`[ai-agent:generate] conv=${convId} | Repair triggered (${repairReason}) | remainingBudget=${remainingNonFinishBudget}`
 		);
 
 		const repairTools = getRepairTools(toolContext);
 		if (repairTools) {
+			const repairFinishTools = getFinishToolsInToolset(repairTools);
+
 			// Reset captured action before repair generation
 			resetCapturedAction(actionCapture);
 
@@ -567,7 +741,27 @@ export async function generate(
 					systemPrompt: repairPrompt,
 					messages,
 					tools: repairTools,
-					stopWhen: REPAIR_STOP_CONDITIONS,
+					prepareStep: ({ steps }) => {
+						const repairCallsUsed = countNonFinishToolCallsFromSteps(
+							(steps as ToolStepLike[] | undefined) ?? []
+						);
+						const totalUsed = nonFinishToolCalls + repairCallsUsed;
+						const budgetExhausted = totalUsed >= maxToolInvocationsPerRun;
+						if (budgetExhausted && repairFinishTools.length > 0) {
+							return {
+								system: repairPrompt,
+								activeTools: repairFinishTools,
+							};
+						}
+						return {
+							system: repairPrompt,
+						};
+					},
+					stopWhen: buildStopConditions({
+						toolBudgetCap: maxToolInvocationsPerRun,
+						usedNonFinishCallsOffset: nonFinishToolCalls,
+						finishToolNames: FINISH_TOOL_NAMES,
+					}),
 					abortSignal,
 				});
 			} catch (error) {
@@ -606,9 +800,13 @@ export async function generate(
 			const repairToolCalls =
 				repairResult.steps?.flatMap((step) => step.toolCalls ?? []) ?? [];
 			const repairToolCallsByName = buildToolCallsByName(repairToolCalls);
+			const repairCounterToolCallsByName = buildToolCallsByNameFromCounters(
+				toolContext.counters
+			);
 			const combinedRepairToolCallsByName = mergeToolCallsByName(
 				toolCallsByName,
-				repairToolCallsByName
+				repairToolCallsByName,
+				repairCounterToolCallsByName
 			);
 			const repairTotalToolCalls = getTotalToolCalls(
 				combinedRepairToolCallsByName
@@ -683,7 +881,7 @@ export async function generate(
 			decision: {
 				action: "skip" as const,
 				reasoning:
-					"AI did not call an action tool (respond/escalate/resolve). This may indicate a model compatibility issue.",
+					"AI did not call an action tool (respond/escalate/resolve/skip/markSpam/wait). This may indicate a model compatibility issue.",
 				confidence: 0,
 			},
 			usage: result.usage
@@ -694,8 +892,8 @@ export async function generate(
 					}
 				: undefined,
 			toolCalls: {
-				sendMessage: sendMessageCalls.length,
-				sendPrivateMessage: sendPrivateMessageCalls.length,
+				sendMessage: sendMessageCallCount,
+				sendPrivateMessage: sendPrivateMessageCallCount,
 			},
 			toolCallsByName,
 			totalToolCalls,
@@ -703,7 +901,7 @@ export async function generate(
 	}
 
 	// Warn if no sendMessage was called for respond/escalate/resolve actions
-	if (requiresMessage && sendMessageCalls.length === 0) {
+	if (requiresMessage && sendMessageCallCount === 0) {
 		console.warn(
 			`[ai-agent:generate] conv=${convId} | WARNING: Action "${capturedAction.action}" without sendMessage! The visitor won't see a response.`
 		);
@@ -731,8 +929,8 @@ export async function generate(
 				}
 			: undefined,
 		toolCalls: {
-			sendMessage: sendMessageCalls.length,
-			sendPrivateMessage: sendPrivateMessageCalls.length,
+			sendMessage: sendMessageCallCount,
+			sendPrivateMessage: sendPrivateMessageCallCount,
 		},
 		toolCallsByName,
 		totalToolCalls,

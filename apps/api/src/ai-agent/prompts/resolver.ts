@@ -59,6 +59,7 @@ function buildFallbackCoreDocuments(
 		"security.md": CORE_SECURITY_PROMPT,
 		"behaviour.md": behaviorSections.join("\n\n"),
 		"participation.md": PROMPT_TEMPLATES.PARTICIPATION_POLICY,
+		"decision.md": PROMPT_TEMPLATES.DECISION_POLICY,
 		"grounding.md":
 			mode === "respond_to_visitor"
 				? PROMPT_TEMPLATES.GROUNDING_INSTRUCTIONS
@@ -125,6 +126,16 @@ export async function resolvePromptBundle(
 		coreDocuments["capabilities.md"] = {
 			name: "capabilities.md",
 			content: fallbackDocuments["capabilities.md"],
+			source: "fallback",
+			priority: 0,
+		};
+	}
+
+	// decision.md must always resolve to content so the decision stage stays prompt-driven
+	if (!coreDocuments["decision.md"].content.trim()) {
+		coreDocuments["decision.md"] = {
+			name: "decision.md",
+			content: fallbackDocuments["decision.md"],
 			source: "fallback",
 			priority: 0,
 		};

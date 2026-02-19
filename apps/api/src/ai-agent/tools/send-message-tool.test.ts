@@ -212,4 +212,55 @@ describe("createSendMessageTool", () => {
 		expect(stopTyping).toHaveBeenCalledTimes(1);
 		expect(startTyping).toHaveBeenCalledTimes(0);
 	});
+
+	it("allows multiple distinct public messages in the same run", async () => {
+		const { createSendMessageTool } = await sendMessageToolModulePromise;
+		const tool = createSendMessageTool(
+			createToolContext() as never
+		) as unknown as {
+			execute: (input: { message: string }) => Promise<{
+				success: boolean;
+				data?: {
+					sent: boolean;
+					messageId: string;
+				};
+			}>;
+		};
+
+		const first = await tool.execute({ message: "First message." });
+		const second = await tool.execute({ message: "A second public message." });
+
+		expect(first.success).toBe(true);
+		expect(first.data?.sent).toBe(true);
+		expect(second.success).toBe(true);
+		expect(second.data?.sent).toBe(true);
+		expect(sendMessageActionMock).toHaveBeenCalledTimes(2);
+
+		const [firstArgs, secondArgs] = sendMessageActionMock.mock.calls;
+		const firstCall = firstArgs?.[0] as { idempotencyKey: string };
+		const secondCall = secondArgs?.[0] as { idempotencyKey: string };
+		expect(firstCall.idempotencyKey).toContain(":slot:1");
+		expect(secondCall.idempotencyKey).toContain(":slot:2");
+	});
+
+	it("restarts typing before a paced second message", async () => {
+		const { createSendMessageTool } = await sendMessageToolModulePromise;
+		const stopTyping = mock(async () => {});
+		const startTyping = mock(async () => {});
+		const tool = createSendMessageTool(
+			createToolContext({ stopTyping, startTyping }) as never
+		) as unknown as {
+			execute: (input: { message: string }) => Promise<{ success: boolean }>;
+		};
+
+		const first = await tool.execute({ message: "First reply" });
+		const second = await tool.execute({
+			message: "Second reply with additional detail for pacing.",
+		});
+
+		expect(first.success).toBe(true);
+		expect(second.success).toBe(true);
+		expect(startTyping).toHaveBeenCalledTimes(1);
+		expect(stopTyping).toHaveBeenCalledTimes(2);
+	});
 });

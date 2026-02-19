@@ -41,6 +41,7 @@ type DecisionInput = {
 	conversationHistory: RoleAwareMessage[];
 	conversationState: ConversationState;
 	triggerMessage: RoleAwareMessage | null;
+	decisionPolicy?: string;
 };
 
 const MENTION_REGEX = /\[@([^\]]+)\]\(mention:([^:]+):([^)]+)\)/g;
@@ -136,6 +137,7 @@ export async function decide(input: DecisionInput): Promise<DecisionResult> {
 		conversationHistory: input.conversationHistory,
 		conversationState,
 		triggerMessage,
+		decisionPolicy: input.decisionPolicy,
 	});
 
 	return decisionFromSmartResult({
