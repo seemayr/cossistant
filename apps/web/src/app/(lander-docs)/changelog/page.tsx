@@ -79,14 +79,16 @@ export default async function ChangelogPage() {
 							<article className="relative py-16" key={entry.url}>
 								<div className="mx-auto mb-6 max-w-2xl shrink-0 md:sticky md:top-[90px] md:mx-0 md:mb-0 md:h-fit md:max-w-none md:px-4">
 									<div className="flex items-center gap-3 md:flex-col md:items-start md:gap-1">
-										<a
-											className="inline-flex items-center border border-primary/10 border-dashed bg-background-300 px-2.5 py-1 font-mono text-sm transition-colors hover:bg-background-400"
-											href={`https://www.npmjs.com/package/@cossistant/react/v/${entry.data.version}`}
-											rel="noopener noreferrer"
-											target="_blank"
-										>
-											{entry.data.version}
-										</a>
+										{entry.data.version && (
+											<a
+												className="inline-flex items-center border border-primary/10 border-dashed bg-background-300 px-2.5 py-1 font-mono text-sm transition-colors hover:bg-background-400"
+												href={`https://www.npmjs.com/package/@cossistant/react/v/${entry.data.version}`}
+												rel="noopener noreferrer"
+												target="_blank"
+											>
+												{entry.data.version}
+											</a>
+										)}
 										<time
 											className="mt-2 font-mono text-muted-foreground text-sm"
 											dateTime={entry.data.date}

@@ -17,7 +17,7 @@ import {
 import { ScrollArea } from "./ui/scroll-area";
 
 type ChangelogNotificationProps = {
-	version: string;
+	version?: string;
 	description: string;
 	tinyExcerpt: string;
 	date: string;
@@ -34,7 +34,9 @@ export function ChangelogNotification({
 	const { isDismissed, dismiss } = useChangelogDismissed();
 	const [modalOpen, setModalOpen] = useState(false);
 
-	if (isDismissed(version)) {
+	const id = version ? `v${version}` : tinyExcerpt;
+
+	if (isDismissed(id)) {
 		return null;
 	}
 
@@ -42,16 +44,20 @@ export function ChangelogNotification({
 		<>
 			<div className="flex items-center gap-1.5">
 				<button
-					className="flex items-center gap-2 px-1 py-0.5 font-mono text-primary/80 text-xs transition-colors hover:bg-background-300 hover:text-primary"
+					className="hidden items-center gap-2 px-1 py-0.5 font-mono text-primary/80 text-xs transition-colors hover:bg-background-300 hover:text-primary sm:flex"
 					onClick={() => setModalOpen(true)}
 					type="button"
 				>
-					<span className="rounded-xs bg-background-400 px-1.5 py-0.5 font-semibold text-[10px] leading-none">
-						v{version}
-					</span>
-					<span className="hidden max-w-48 truncate sm:inline">
-						{tinyExcerpt}
-					</span>
+					{version ? (
+						<span className="rounded-xs bg-background-400 px-1.5 py-0.5 font-semibold text-[10px] leading-none">
+							v{version}
+						</span>
+					) : (
+						<span className="rounded-xs bg-background-400 px-1.5 py-0.5 font-semibold text-[10px] leading-none">
+							NEW
+						</span>
+					)}
+					<span className="hidden sm:inline">{tinyExcerpt}</span>
 				</button>
 				<button
 					className="rounded-sm p-0.5 text-primary/40 transition-colors hover:bg-background-300 hover:text-primary/80"

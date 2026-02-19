@@ -77,7 +77,7 @@ export const changelog = defineCollections({
 	type: "doc",
 	dir: "./content/changelog",
 	schema: z.object({
-		version: z.string(),
+		version: z.string().optional(),
 		description: z.string(),
 		"tiny-excerpt": z.string().optional(),
 		date: z.string(),

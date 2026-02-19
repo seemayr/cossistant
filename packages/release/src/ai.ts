@@ -49,7 +49,7 @@ const featureQuestionsSchema = z.object({
 export async function detectImportantFeatures(options: {
 	commits: Commit[];
 	description: string;
-	releaseType: "patch" | "minor" | "major";
+	releaseType?: "patch" | "minor" | "major";
 }): Promise<FeatureQuestion[]> {
 	const openrouter = getOpenRouterClient();
 
@@ -75,8 +75,7 @@ Analyze the commits and description to find the 2-4 MOST significant changes tha
 - Return 2-4 questions maximum, sorted by importance
 - For patch releases, you may return 0-2 questions if changes are minor
 - Do NOT ask about version numbers, dates, or obvious information`,
-		prompt: `## Release Context
-- **Release type:** ${options.releaseType}
+		prompt: `## Release Context${options.releaseType ? `\n- **Release type:** ${options.releaseType}` : ""}
 - **User description:** ${options.description}
 
 ## Git commits since last release
@@ -93,7 +92,7 @@ export async function generateChangelog(options: {
 	commits: Commit[];
 	description: string;
 	version: string;
-	releaseType: "patch" | "minor" | "major";
+	releaseType?: "patch" | "minor" | "major";
 	featureDetails?: FeatureDetail[];
 }): Promise<string> {
 	const templatePath = path.join(import.meta.dir, "../templates/changelog.mdx");
@@ -129,8 +128,7 @@ Your job is to communicate **what changed for users**, fast.
 - Include the **Example** section with a relevant code example for new features (omit for patch releases with only bug fixes).
 - The frontmatter **tiny-excerpt** must be a punchy 3-8 word summary for a notification pill (e.g. "New AI agent escalation flow", "Faster widget load times"). No period at the end.`,
 		prompt: `Generate a changelog for:
-- **Version:** ${options.version}
-- **Release type:** ${options.releaseType}
+- **Version:** ${options.version}${options.releaseType ? `\n- **Release type:** ${options.releaseType}` : ""}
 - **Date:** ${new Date().toISOString().split("T")[0]}
 
 ## Context

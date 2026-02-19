@@ -26,27 +26,7 @@ export async function releaseChangelogOnly(): Promise<void> {
 		kleur.dim("  This creates a changelog entry without publishing packages.\n")
 	);
 
-	// Step 1: Select release type (for version numbering only)
-	const { releaseType } = await prompts({
-		type: "select",
-		name: "releaseType",
-		message: "What type of release is this?",
-		choices: [
-			{ title: "patch", description: "Bug fixes (0.0.x)", value: "patch" },
-			{ title: "minor", description: "New features (0.x.0)", value: "minor" },
-			{
-				title: "major",
-				description: "Breaking changes (x.0.0)",
-				value: "major",
-			},
-		],
-	});
-
-	if (!releaseType) {
-		process.exit(0);
-	}
-
-	// Step 2: Get description
+	// Step 1: Get description
 	const { description } = await prompts({
 		type: "text",
 		name: "description",
@@ -59,7 +39,7 @@ export async function releaseChangelogOnly(): Promise<void> {
 		process.exit(0);
 	}
 
-	// Step 3: Fetch git commits
+	// Step 2: Fetch git commits
 	const spinner = ora("Fetching git commits...").start();
 	const lastTag = await getLastReleaseTag();
 	const commits = await getCommitsSinceLastRelease(lastTag);
@@ -67,20 +47,19 @@ export async function releaseChangelogOnly(): Promise<void> {
 		`Found ${commits.length} commits since ${lastTag || "beginning"}`
 	);
 
-	// Step 4: Determine version from latest changelog file
+	// Step 3: Determine version from latest changelog file
 	spinner.start("Resolving version...");
 	const latestVersion = await getLatestChangelogVersion();
 	const nextVersion = latestVersion
-		? incrementVersion(latestVersion, releaseType)
+		? incrementVersion(latestVersion, "patch")
 		: "0.0.1";
 	spinner.succeed(`Next changelog version: ${nextVersion}`);
 
-	// Step 5: AI Feature Detection
+	// Step 4: AI Feature Detection
 	spinner.start("Analyzing release for key features...");
 	const questions = await detectImportantFeatures({
 		commits,
 		description,
-		releaseType,
 	});
 	spinner.succeed(
 		questions.length > 0
@@ -149,18 +128,17 @@ export async function releaseChangelogOnly(): Promise<void> {
 		}
 	}
 
-	// Step 6: Generate changelog with AI
+	// Step 5: Generate changelog with AI
 	spinner.start("Generating changelog with AI...");
 	let changelog = await generateChangelog({
 		commits,
 		description,
 		version: nextVersion,
-		releaseType,
 		featureDetails: featureDetails.length > 0 ? featureDetails : undefined,
 	});
 	spinner.succeed("Changelog generated");
 
-	// Step 7: Refinement loop
+	// Step 6: Refinement loop
 	while (true) {
 		console.log(kleur.dim(`\n${"─".repeat(60)}\n`));
 		console.log(changelog);
@@ -199,7 +177,7 @@ export async function releaseChangelogOnly(): Promise<void> {
 		spinner.succeed("Changelog refined");
 	}
 
-	// Step 8: Save changelog and commit
+	// Step 7: Save changelog and commit
 	const savedPath = await saveChangelog(changelog, nextVersion);
 	console.log(kleur.green(`\nChangelog saved to: ${savedPath}`));
 
