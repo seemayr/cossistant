@@ -4,6 +4,7 @@ import {
 	Bot,
 	CircleCheck,
 	CircleDot,
+	DollarSign,
 	Flag,
 	Heading,
 	RotateCcw,
@@ -50,6 +51,10 @@ const TOOL_ICON_MAP: Record<string, ActionIconDefinition> = {
 	setPriority: {
 		key: "setPriority",
 		Icon: Flag,
+	},
+	aiCreditUsage: {
+		key: "aiCreditUsage",
+		Icon: DollarSign,
 	},
 };
 

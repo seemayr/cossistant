@@ -3,6 +3,7 @@ import type {
 	UpdateBehaviorSettingsRequest,
 } from "@cossistant/types";
 import {
+	AI_AGENT_TOOL_CATALOG,
 	parseSkillFileContent,
 	serializeSkillFileContent,
 	stripSkillMarkdownExtension,
@@ -12,38 +13,125 @@ type BehaviorSettingKey = NonNullable<
 	GetCapabilitiesStudioResponse["tools"][number]["behaviorSettingKey"]
 >;
 type StudioTool = GetCapabilitiesStudioResponse["tools"][number];
-
-const TOOL_CATEGORY_ORDER: Record<StudioTool["category"], number> = {
-	system: 0,
-	messaging: 1,
-	action: 2,
-	context: 3,
-	analysis: 4,
+type StudioToolInput = Partial<StudioTool> & {
+	id?: unknown;
 };
+
+const TOOL_CATALOG_BY_ID = new Map(
+	AI_AGENT_TOOL_CATALOG.map((tool) => [tool.id, tool])
+);
+
+function getToolId(value: unknown): StudioTool["id"] | null {
+	if (typeof value !== "string") {
+		return null;
+	}
+	return TOOL_CATALOG_BY_ID.has(value as StudioTool["id"])
+		? (value as StudioTool["id"])
+		: null;
+}
+
+function getStringOrFallback(value: unknown, fallback: string): string {
+	if (typeof value === "string") {
+		const trimmed = value.trim();
+		if (trimmed.length > 0) {
+			return value;
+		}
+	}
+	return fallback;
+}
+
+function getOptionalStringOrNull(value: unknown): string | null {
+	return typeof value === "string" ? value : null;
+}
+
+function getBooleanOrFallback(value: unknown, fallback: boolean): boolean {
+	return typeof value === "boolean" ? value : fallback;
+}
+
+export function normalizeStudioTools(tools: unknown): StudioTool[] {
+	const rawTools = Array.isArray(tools) ? tools : [];
+	const rawByToolId = new Map<StudioTool["id"], StudioToolInput>();
+
+	for (const rawTool of rawTools) {
+		if (!(rawTool && typeof rawTool === "object")) {
+			continue;
+		}
+		const toolId = getToolId((rawTool as StudioToolInput).id);
+		if (!(toolId && !rawByToolId.has(toolId))) {
+			continue;
+		}
+		rawByToolId.set(toolId, rawTool as StudioToolInput);
+	}
+
+	return AI_AGENT_TOOL_CATALOG.map((catalogTool) => {
+		const rawTool = rawByToolId.get(catalogTool.id);
+		const skillContent = getStringOrFallback(
+			rawTool?.skillContent,
+			catalogTool.defaultSkill.content
+		);
+		const skillDocumentId = getOptionalStringOrNull(rawTool?.skillDocumentId);
+		const skillHasOverride = getBooleanOrFallback(
+			rawTool?.skillHasOverride,
+			Boolean(skillDocumentId)
+		);
+		const skillIsCustomized = getBooleanOrFallback(
+			rawTool?.skillIsCustomized,
+			skillHasOverride &&
+				skillContent.trim() !== catalogTool.defaultSkill.content.trim()
+		);
+
+		return {
+			id: catalogTool.id,
+			label: getStringOrFallback(rawTool?.label, catalogTool.label),
+			description: getStringOrFallback(
+				rawTool?.description,
+				catalogTool.description
+			),
+			category: catalogTool.category,
+			group: catalogTool.group,
+			order: catalogTool.order,
+			isSystem: catalogTool.isSystem,
+			isRequired: catalogTool.isRequired,
+			isToggleable: catalogTool.isToggleable,
+			behaviorSettingKey: catalogTool.behaviorSettingKey,
+			enabled: getBooleanOrFallback(rawTool?.enabled, true),
+			skillName: catalogTool.defaultSkill.name,
+			skillLabel: getStringOrFallback(
+				rawTool?.skillLabel,
+				catalogTool.defaultSkill.label
+			),
+			skillDescription: getStringOrFallback(
+				rawTool?.skillDescription,
+				catalogTool.defaultSkill.description
+			),
+			skillContent,
+			skillDocumentId,
+			skillHasOverride,
+			skillIsCustomized,
+		};
+	});
+}
 
 function sortTools(tools: StudioTool[]): StudioTool[] {
 	return [...tools].sort((a, b) => {
-		const categoryOrderDiff =
-			TOOL_CATEGORY_ORDER[a.category] - TOOL_CATEGORY_ORDER[b.category];
-		if (categoryOrderDiff !== 0) {
-			return categoryOrderDiff;
+		if (a.order !== b.order) {
+			return a.order - b.order;
 		}
 		return a.label.localeCompare(b.label);
 	});
 }
 
 export function buildToolStudioSections(tools: StudioTool[]) {
-	const isDefaultTool = (tool: StudioTool) =>
-		tool.isRequired || !tool.isToggleable;
-	const defaultTools = sortTools(tools.filter(isDefaultTool));
-	const optionalTools = sortTools(
-		tools.filter((tool) => !isDefaultTool(tool) && tool.isToggleable)
+	const behaviorTools = sortTools(
+		tools.filter((tool) => tool.group === "behavior")
+	);
+	const actionTools = sortTools(
+		tools.filter((tool) => tool.group === "actions")
 	);
 
 	return {
-		defaultTools,
-		optionalTools,
-		customTools: [] as StudioTool[],
+		behaviorTools,
+		actionTools,
 	};
 }
 

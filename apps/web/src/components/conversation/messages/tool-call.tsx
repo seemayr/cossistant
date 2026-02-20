@@ -175,6 +175,17 @@ export function ToolCall({
 	const icon = resolveToolActivityIcon(toolCall.toolName);
 
 	if (mode === "developer") {
+		const CustomRenderer = TOOL_RENDERER_MAP[toolCall.toolName];
+		if (CustomRenderer) {
+			return (
+				<CustomRenderer
+					icon={icon}
+					showIcon={showIcon}
+					timestamp={timestamp}
+					toolCall={toolCall}
+				/>
+			);
+		}
 		return (
 			<DeveloperToolView
 				icon={icon}

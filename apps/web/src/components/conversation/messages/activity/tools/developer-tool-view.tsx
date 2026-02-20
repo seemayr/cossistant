@@ -156,6 +156,8 @@ function IconRenderer({ icon }: { icon: ActivityIcon | undefined }) {
 				</div>
 			);
 		}
+		case "custom":
+			return <>{resolvedIcon.content}</>;
 		default:
 			return (
 				<div className="flex size-6 shrink-0 items-center justify-center">

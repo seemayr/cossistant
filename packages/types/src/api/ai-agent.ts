@@ -1,7 +1,10 @@
 import { z } from "@hono/zod-openapi";
 import {
 	AI_AGENT_BEHAVIOR_SETTING_KEYS,
+	AI_AGENT_DROPPED_SKILL_TEMPLATE_NAMES,
+	AI_AGENT_RESERVED_TOOL_SKILL_TEMPLATE_NAMES,
 	AI_AGENT_TOOL_CATEGORIES,
+	AI_AGENT_TOOL_GROUPS,
 	AI_AGENT_TOOL_IDS,
 } from "./ai-agent-capabilities";
 
@@ -24,7 +27,7 @@ export const AI_AGENT_GOALS = [
 
 export type AIAgentGoal = (typeof AI_AGENT_GOALS)[number]["value"];
 
-export const AI_AGENT_CORE_PROMPT_DOCUMENT_NAMES = [
+const AI_AGENT_CORE_PROMPT_DOCUMENT_NAMES = [
 	"agent.md",
 	"security.md",
 	"behaviour.md",
@@ -33,13 +36,8 @@ export const AI_AGENT_CORE_PROMPT_DOCUMENT_NAMES = [
 	"grounding.md",
 	"capabilities.md",
 ] as const;
-export type AiAgentCorePromptDocumentName =
-	(typeof AI_AGENT_CORE_PROMPT_DOCUMENT_NAMES)[number];
 
 export const aiAgentPromptDocumentKindSchema = z.enum(["core", "skill"]);
-export const aiAgentCorePromptDocumentNameSchema = z.enum(
-	AI_AGENT_CORE_PROMPT_DOCUMENT_NAMES
-);
 
 export const aiAgentSkillPromptDocumentNameSchema = z
 	.string()
@@ -52,6 +50,23 @@ export const aiAgentSkillPromptDocumentNameSchema = z
 			message: "Skill name cannot use reserved core document names.",
 		}
 	);
+
+export const aiAgentCustomSkillPromptDocumentNameSchema =
+	aiAgentSkillPromptDocumentNameSchema
+		.refine(
+			(value) =>
+				!AI_AGENT_RESERVED_TOOL_SKILL_TEMPLATE_NAMES.includes(value as never),
+			{
+				message: "Skill name is reserved for a default tool-attached skill.",
+			}
+		)
+		.refine(
+			(value) =>
+				!AI_AGENT_DROPPED_SKILL_TEMPLATE_NAMES.includes(value as never),
+			{
+				message: "Skill name is reserved and cannot be used.",
+			}
+		);
 
 export const aiAgentPromptDocumentResponseSchema = z.object({
 	id: z.ulid(),
@@ -429,40 +444,6 @@ export const generateBasePromptResponseSchema = z
 			"Response containing the generated base prompt and brand info.",
 	});
 
-export const listPromptDocumentsRequestSchema = z.object({
-	websiteSlug: z.string().openapi({
-		description: "The website slug.",
-		example: "my-website",
-	}),
-	aiAgentId: z.ulid().openapi({
-		description: "The AI agent ID.",
-		example: "01JG000000000000000000000",
-	}),
-});
-
-export const listPromptDocumentsResponseSchema = z.object({
-	coreDocuments: z.array(aiAgentPromptDocumentResponseSchema),
-	skillDocuments: z.array(aiAgentPromptDocumentResponseSchema),
-});
-
-export const upsertCoreDocumentRequestSchema = z.object({
-	websiteSlug: z.string().openapi({
-		description: "The website slug.",
-		example: "my-website",
-	}),
-	aiAgentId: z.ulid().openapi({
-		description: "The AI agent ID.",
-		example: "01JG000000000000000000000",
-	}),
-	name: aiAgentCorePromptDocumentNameSchema,
-	content: z.string().max(50_000).openapi({
-		description: "Markdown content for the core document.",
-		example: "## Instructions\\nFollow these rules.",
-	}),
-	enabled: z.boolean().optional(),
-	priority: z.number().int().min(-100).max(100).optional(),
-});
-
 export const createSkillDocumentRequestSchema = z.object({
 	websiteSlug: z.string().openapi({
 		description: "The website slug.",
@@ -472,7 +453,7 @@ export const createSkillDocumentRequestSchema = z.object({
 		description: "The AI agent ID.",
 		example: "01JG000000000000000000000",
 	}),
-	name: aiAgentSkillPromptDocumentNameSchema,
+	name: aiAgentCustomSkillPromptDocumentNameSchema,
 	content: z.string().max(50_000).openapi({
 		description: "Markdown content for the skill document.",
 		example: "## Workflow\\nWhen refund appears, collect order ID first.",
@@ -495,7 +476,7 @@ export const updateSkillDocumentRequestSchema = z
 			description: "The skill prompt document ID.",
 			example: "01JG000000000000000000000",
 		}),
-		name: aiAgentSkillPromptDocumentNameSchema.optional(),
+		name: aiAgentCustomSkillPromptDocumentNameSchema.optional(),
 		content: z.string().max(50_000).optional(),
 		enabled: z.boolean().optional(),
 		priority: z.number().int().min(-100).max(100).optional(),
@@ -546,6 +527,7 @@ export const toggleSkillDocumentRequestSchema = z.object({
 });
 
 export const aiAgentToolCategorySchema = z.enum(AI_AGENT_TOOL_CATEGORIES);
+export const aiAgentToolGroupSchema = z.enum(AI_AGENT_TOOL_GROUPS);
 export const aiAgentToolIdSchema = z.enum(AI_AGENT_TOOL_IDS);
 export const aiAgentBehaviorSettingKeySchema = z.enum(
 	AI_AGENT_BEHAVIOR_SETTING_KEYS
@@ -556,35 +538,20 @@ export const aiAgentCapabilitiesToolStateSchema = z.object({
 	label: z.string(),
 	description: z.string(),
 	category: aiAgentToolCategorySchema,
+	group: aiAgentToolGroupSchema,
+	order: z.number().int(),
 	isSystem: z.boolean(),
 	isRequired: z.boolean(),
 	isToggleable: z.boolean(),
 	behaviorSettingKey: aiAgentBehaviorSettingKeySchema.nullable(),
-	defaultTemplateNames: z.array(aiAgentSkillPromptDocumentNameSchema),
 	enabled: z.boolean(),
-});
-
-export const aiAgentDefaultSkillTemplateStateSchema = z.object({
-	name: aiAgentSkillPromptDocumentNameSchema,
-	label: z.string(),
-	description: z.string(),
-	content: z.string(),
-	suggestedToolIds: z.array(aiAgentToolIdSchema),
-	isEnabled: z.boolean(),
-	hasOverride: z.boolean(),
-	isCustomized: z.boolean(),
+	skillName: aiAgentSkillPromptDocumentNameSchema,
+	skillLabel: z.string(),
+	skillDescription: z.string(),
+	skillContent: z.string(),
 	skillDocumentId: z.ulid().nullable(),
-});
-
-export const aiAgentSystemSkillDocumentSchema = z.object({
-	name: aiAgentCorePromptDocumentNameSchema,
-	label: z.string(),
-	description: z.string(),
-	content: z.string(),
-	source: z.enum(["db", "fallback"]),
-	enabled: z.boolean(),
-	priority: z.number().int(),
-	documentId: z.ulid().nullable(),
+	skillHasOverride: z.boolean(),
+	skillIsCustomized: z.boolean(),
 });
 
 export const getCapabilitiesStudioRequestSchema = z.object({
@@ -601,9 +568,35 @@ export const getCapabilitiesStudioRequestSchema = z.object({
 export const getCapabilitiesStudioResponseSchema = z.object({
 	aiAgentId: z.ulid(),
 	tools: z.array(aiAgentCapabilitiesToolStateSchema),
-	defaultSkillTemplates: z.array(aiAgentDefaultSkillTemplateStateSchema),
-	systemSkillDocuments: z.array(aiAgentSystemSkillDocumentSchema),
-	skillDocuments: z.array(aiAgentPromptDocumentResponseSchema),
+	customSkillDocuments: z.array(aiAgentPromptDocumentResponseSchema),
+});
+
+export const upsertToolSkillOverrideRequestSchema = z.object({
+	websiteSlug: z.string().openapi({
+		description: "The website slug.",
+		example: "my-website",
+	}),
+	aiAgentId: z.ulid().openapi({
+		description: "The AI agent ID.",
+		example: "01JG000000000000000000000",
+	}),
+	toolId: aiAgentToolIdSchema,
+	content: z.string().max(50_000).openapi({
+		description: "Markdown content for the tool-attached skill override.",
+		example: "## Rules\\nUse this tool only when confidence is high.",
+	}),
+});
+
+export const resetToolSkillOverrideRequestSchema = z.object({
+	websiteSlug: z.string().openapi({
+		description: "The website slug.",
+		example: "my-website",
+	}),
+	aiAgentId: z.ulid().openapi({
+		description: "The AI agent ID.",
+		example: "01JG000000000000000000000",
+	}),
+	toolId: aiAgentToolIdSchema,
 });
 
 export type AiAgentResponse = z.infer<typeof aiAgentResponseSchema>;
@@ -622,15 +615,6 @@ export type GenerateBasePromptResponse = z.infer<
 >;
 export type AiAgentPromptDocumentResponse = z.infer<
 	typeof aiAgentPromptDocumentResponseSchema
->;
-export type ListPromptDocumentsRequest = z.infer<
-	typeof listPromptDocumentsRequestSchema
->;
-export type ListPromptDocumentsResponse = z.infer<
-	typeof listPromptDocumentsResponseSchema
->;
-export type UpsertCoreDocumentRequest = z.infer<
-	typeof upsertCoreDocumentRequestSchema
 >;
 export type CreateSkillDocumentRequest = z.infer<
 	typeof createSkillDocumentRequestSchema
@@ -653,11 +637,11 @@ export type GetCapabilitiesStudioResponse = z.infer<
 export type AiAgentCapabilitiesToolState = z.infer<
 	typeof aiAgentCapabilitiesToolStateSchema
 >;
-export type AiAgentDefaultSkillTemplateState = z.infer<
-	typeof aiAgentDefaultSkillTemplateStateSchema
+export type UpsertToolSkillOverrideRequest = z.infer<
+	typeof upsertToolSkillOverrideRequestSchema
 >;
-export type AiAgentSystemSkillDocument = z.infer<
-	typeof aiAgentSystemSkillDocumentSchema
+export type ResetToolSkillOverrideRequest = z.infer<
+	typeof resetToolSkillOverrideRequestSchema
 >;
 
 /**

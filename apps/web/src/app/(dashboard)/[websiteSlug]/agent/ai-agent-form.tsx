@@ -3,7 +3,7 @@
 import { AI_AGENT_TOOL_CATALOG, type AiAgentResponse } from "@cossistant/types";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -66,12 +66,6 @@ type AIAgentFormProps = {
 	initialData: AiAgentResponse | null;
 };
 
-const TOOL_MENTION_OPTIONS = AI_AGENT_TOOL_CATALOG.map((tool) => ({
-	id: tool.id,
-	name: tool.label,
-	description: tool.description,
-}));
-
 export function AIAgentForm({
 	websiteSlug,
 	initialData,
@@ -79,6 +73,15 @@ export function AIAgentForm({
 }: AIAgentFormProps) {
 	const trpc = useTRPC();
 	const queryClient = useQueryClient();
+	const toolMentionOptions = useMemo(
+		() =>
+			(AI_AGENT_TOOL_CATALOG ?? []).map((tool) => ({
+				id: tool.id,
+				name: tool.label,
+				description: tool.description,
+			})),
+		[]
+	);
 
 	// Fetch plan info for model restrictions
 	const { data: planInfo } = useQuery(
@@ -372,7 +375,7 @@ export function AIAgentForm({
 									onChange={field.onChange}
 									placeholder="You are a helpful support assistant..."
 									rows={10}
-									toolMentions={TOOL_MENTION_OPTIONS}
+									toolMentions={toolMentionOptions}
 									value={field.value}
 								/>
 							</FormItem>

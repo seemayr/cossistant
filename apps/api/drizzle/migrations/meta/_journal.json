@@ -302,6 +302,13 @@
       "when": 1770463978694,
       "tag": "0042_needy_killraven",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1771553294544,
+      "tag": "0043_gifted_chamber",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,4 @@
 import {
-	assertCorePromptDocumentName,
 	assertSkillPromptDocumentName,
 	isUniqueViolation,
 	normalizePromptDocumentName,
@@ -65,25 +64,6 @@ function scopeCondition(scope: PromptDocumentScope) {
 	);
 }
 
-async function getPromptDocumentByName(
-	db: Database,
-	scope: PromptDocumentScope,
-	name: string
-): Promise<AiAgentPromptDocumentSelect | null> {
-	const [document] = await db
-		.select()
-		.from(aiAgentPromptDocument)
-		.where(
-			and(
-				scopeCondition(scope),
-				eq(aiAgentPromptDocument.name, normalizePromptDocumentName(name))
-			)
-		)
-		.limit(1);
-
-	return document ?? null;
-}
-
 async function getPromptDocumentById(
 	db: Database,
 	scope: PromptDocumentScope,
@@ -122,85 +102,6 @@ export async function listAiAgentPromptDocuments(
 			desc(aiAgentPromptDocument.priority),
 			asc(aiAgentPromptDocument.name)
 		);
-}
-
-export async function upsertAiAgentCorePromptDocument(
-	db: Database,
-	params: PromptDocumentScope & {
-		name: string;
-		content: string;
-		enabled?: boolean;
-		priority?: number;
-		updatedByUserId: string;
-	}
-): Promise<AiAgentPromptDocumentSelect> {
-	const normalizedName = normalizePromptDocumentName(params.name);
-	assertCorePromptDocumentName(normalizedName);
-
-	const now = new Date().toISOString();
-	const existing = await getPromptDocumentByName(db, params, normalizedName);
-
-	if (existing) {
-		if (existing.kind !== "core") {
-			throw new PromptDocumentConflictError(
-				`Prompt document '${normalizedName}' already exists as a skill`
-			);
-		}
-
-		const [updated] = await db
-			.update(aiAgentPromptDocument)
-			.set({
-				content: params.content,
-				enabled: params.enabled ?? true,
-				priority: params.priority ?? existing.priority,
-				updatedByUserId: params.updatedByUserId,
-				updatedAt: now,
-			})
-			.where(eq(aiAgentPromptDocument.id, existing.id))
-			.returning();
-
-		if (!updated) {
-			throw new Error("Failed to update core prompt document");
-		}
-
-		return updated;
-	}
-
-	const insertData: AiAgentPromptDocumentInsert = {
-		id: ulid(),
-		organizationId: params.organizationId,
-		websiteId: params.websiteId,
-		aiAgentId: params.aiAgentId,
-		kind: "core",
-		name: normalizedName,
-		content: params.content,
-		enabled: params.enabled ?? true,
-		priority: params.priority ?? 0,
-		createdByUserId: params.updatedByUserId,
-		updatedByUserId: params.updatedByUserId,
-		createdAt: now,
-		updatedAt: now,
-	};
-
-	try {
-		const [created] = await db
-			.insert(aiAgentPromptDocument)
-			.values(insertData)
-			.returning();
-
-		if (!created) {
-			throw new Error("Failed to create core prompt document");
-		}
-
-		return created;
-	} catch (error) {
-		if (isUniqueViolation(error, UNIQUE_NAME_CONSTRAINT)) {
-			throw new PromptDocumentConflictError(
-				`A prompt document named '${normalizedName}' already exists for this agent`
-			);
-		}
-		throw error;
-	}
 }
 
 export async function createAiAgentSkillPromptDocument(

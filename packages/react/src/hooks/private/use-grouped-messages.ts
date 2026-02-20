@@ -125,6 +125,9 @@ type GroupableTimelineItemType =
 	| "standalone_tool"
 	| "standalone_event";
 
+/** Tool names that should never be grouped with other activity items. */
+const STANDALONE_TOOL_NAMES = new Set(["aiCreditUsage"]);
+
 function getGroupableTimelineItemType(
 	item: TimelineItem
 ): GroupableTimelineItemType {
@@ -132,12 +135,19 @@ function getGroupableTimelineItemType(
 		return "message";
 	}
 
-	if (item.type === "event" || item.type === "tool") {
-		return "activity";
-	}
-
 	if (item.type === "identification") {
 		return "standalone_tool";
+	}
+
+	if (
+		item.type === "tool" &&
+		STANDALONE_TOOL_NAMES.has(getToolNameFromTimelineItem(item) ?? "")
+	) {
+		return "standalone_tool";
+	}
+
+	if (item.type === "event" || item.type === "tool") {
+		return "activity";
 	}
 
 	return "standalone_event";

@@ -6,22 +6,17 @@ import {
 	MAX_FILE_SIZE,
 	MAX_FILES_PER_MESSAGE,
 } from "@cossistant/core";
-import { type Mention, useTinyMention } from "@cossistant/tiny-markdown";
 import type React from "react";
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { Button } from "@/components/ui/button";
 import Icon from "@/components/ui/icons";
 import { TooltipOnHover } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { MentionPopover } from "./mention-popover";
-import {
-	convertDisplayToMarkdown,
-	formatMentionDisplay,
-	type MentionStore,
-	parseDisplayMentions,
-} from "./mention-store";
+import { convertDisplayToMarkdown, type MentionStore } from "./mention-store";
 import { StyledOverlay } from "./styled-overlay";
+import { useMentionEditor } from "./use-mention-editor";
 import {
 	type UseMentionSearchOptions,
 	useMentionSearch,
@@ -96,94 +91,22 @@ export const MultimodalInput: React.FC<MultimodalInputProps> = ({
 }) => {
 	const isPrivate = visibility === "private";
 	const fileInputRef = useRef<HTMLInputElement>(null);
-	const textareaRef = useRef<HTMLTextAreaElement>(null);
-	const containerRef = useRef<HTMLDivElement>(null);
-	const overlayRef = useRef<HTMLDivElement>(null);
+	const inputContainerRef = useRef<HTMLDivElement>(null);
 	const hasContent = value.trim().length > 0 || files.length > 0;
 	const canSubmit = !disabled && hasContent && !isUploading;
 
 	// Mention store - maps display IDs to full mention data
 	const mentionStoreRef = useRef<MentionStore>(new Map());
 
-	// Check if we have display-format mentions
-	const hasMentions = useMemo(() => {
-		if (!mentionConfig) {
-			return false;
-		}
-		return parseDisplayMentions(value, mentionStoreRef.current).length > 0;
-	}, [mentionConfig, value]);
-
-	// Track cursor position for mentions
-	const [cursorPosition, setCursorPosition] = useState(0);
-
 	// Mention search
 	const { search: mentionSearch } = useMentionSearch(mentionConfig ?? {});
-
-	// Update markdown value when display value changes
-	const updateMarkdownValue = useCallback(
-		(displayValue: string) => {
-			if (onMarkdownChange) {
-				const markdownValue = convertDisplayToMarkdown(
-					displayValue,
-					mentionStoreRef.current
-				);
-				onMarkdownChange(markdownValue);
-			}
-		},
-		[onMarkdownChange]
-	);
-
-	// Handle mention selection - insert short display format
-	const handleMentionSelect = useCallback(
-		(selectedMention: Mention) => {
-			const textarea = textareaRef.current;
-			if (!textarea) {
-				return;
-			}
-
-			// Find the @ trigger position
-			const textBeforeCursor = value.slice(0, cursorPosition);
-			const triggerIndex = textBeforeCursor.lastIndexOf("@");
-
-			if (triggerIndex === -1) {
-				return;
-			}
-
-			// Store the mention data keyed by name
-			mentionStoreRef.current.set(selectedMention.name, selectedMention);
-
-			// Insert short display format: @Name
-			const displayMention = formatMentionDisplay(selectedMention);
-			const newValue =
-				value.slice(0, triggerIndex) +
-				displayMention +
-				" " +
-				value.slice(cursorPosition);
-
-			onChange(newValue);
-			updateMarkdownValue(newValue);
-
-			// Move cursor after the mention
-			const newPosition = triggerIndex + displayMention.length + 1;
-			requestAnimationFrame(() => {
-				textarea.setSelectionRange(newPosition, newPosition);
-				textarea.focus();
-				setCursorPosition(newPosition);
-			});
-		},
-		[value, cursorPosition, onChange, updateMarkdownValue]
-	);
-
-	// Mention hook
-	const mention = useTinyMention({
-		textareaRef,
-		containerRef,
+	const mentionEditor = useMentionEditor({
 		value,
-		cursorPosition,
-		onSearch: mentionSearch,
-		onSelect: handleMentionSelect,
-		trigger: "@",
-		debounceMs: 100,
+		onValueChange: onChange,
+		mentionStoreRef,
+		mentionSearch,
+		onMarkdownChange,
+		mentionEnabled: Boolean(mentionConfig),
 	});
 
 	// Toggle private mode with "n" shortcut (for "note")
@@ -205,8 +128,8 @@ export const MultimodalInput: React.FC<MultimodalInputProps> = ({
 
 	// Auto-resize textarea with max height constraint
 	useLayoutEffect(() => {
-		const textarea = textareaRef.current;
-		const container = containerRef.current;
+		const textarea = mentionEditor.textareaRef.current;
+		const container = inputContainerRef.current;
 		if (!textarea) {
 			return;
 		}
@@ -221,8 +144,8 @@ export const MultimodalInput: React.FC<MultimodalInputProps> = ({
 		textarea.style.overflowY = "hidden";
 
 		// Sync overlay height
-		if (overlayRef.current) {
-			overlayRef.current.style.height = `${scrollHeight}px`;
+		if (mentionEditor.overlayRef.current) {
+			mentionEditor.overlayRef.current.style.height = `${scrollHeight}px`;
 		}
 
 		// Report height changes for dynamic timeline padding & auto-scroll
@@ -257,17 +180,12 @@ export const MultimodalInput: React.FC<MultimodalInputProps> = ({
 
 			previousHeightRef.current = currentHeight;
 		}
-	}, [value, onHeightChange]);
-
-	// Scroll sync between textarea and overlay
-	const handleScroll = useCallback(() => {
-		const textarea = textareaRef.current;
-		const overlay = overlayRef.current;
-		if (textarea && overlay) {
-			overlay.scrollTop = textarea.scrollTop;
-			overlay.scrollLeft = textarea.scrollLeft;
-		}
-	}, []);
+	}, [
+		mentionEditor.overlayRef,
+		mentionEditor.textareaRef,
+		onHeightChange,
+		value,
+	]);
 
 	const handleSubmit = () => {
 		if (!canSubmit) {
@@ -278,9 +196,9 @@ export const MultimodalInput: React.FC<MultimodalInputProps> = ({
 		// Clear mention store on submit
 		mentionStoreRef.current.clear();
 		// Focus textarea after submission
-		textareaRef.current?.focus();
+		mentionEditor.textareaRef.current?.focus();
 		requestAnimationFrame(() => {
-			textareaRef.current?.focus();
+			mentionEditor.textareaRef.current?.focus();
 		});
 	};
 
@@ -300,7 +218,7 @@ export const MultimodalInput: React.FC<MultimodalInputProps> = ({
 	// Handle keyboard events - mentions first, then submit
 	const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
 		// Let mention hook handle its keys first
-		if (mentionConfig && mention.handleKeyDown(e)) {
+		if (mentionEditor.handleKeyDown(e)) {
 			return;
 		}
 
@@ -310,22 +228,6 @@ export const MultimodalInput: React.FC<MultimodalInputProps> = ({
 			handleSubmit();
 		}
 	};
-
-	// Track selection changes for cursor position
-	const handleSelect = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
-		setCursorPosition(e.currentTarget.selectionStart);
-	};
-
-	// Handle text changes
-	const handleChange = useCallback(
-		(e: React.ChangeEvent<HTMLTextAreaElement>) => {
-			const newValue = e.target.value;
-			onChange(newValue);
-			updateMarkdownValue(newValue);
-			setCursorPosition(e.target.selectionStart);
-		},
-		[onChange, updateMarkdownValue]
-	);
 
 	return (
 		<div className="absolute right-0 bottom-4 left-0 z-10 mx-auto w-full px-4 xl:max-w-xl xl:px-0 2xl:max-w-2xl">
@@ -389,20 +291,7 @@ export const MultimodalInput: React.FC<MultimodalInputProps> = ({
 				)}
 
 				{/* Input area */}
-				<div className="relative" ref={containerRef}>
-					{/* Mention popover */}
-					{mentionConfig && (
-						<MentionPopover
-							caretPosition={mention.caretPosition}
-							containerRef={containerRef}
-							highlightedIndex={mention.highlightedIndex}
-							isActive={mention.isActive}
-							isLoading={mention.isLoading}
-							onSelect={mention.selectMention}
-							results={mention.results}
-						/>
-					)}
-
+				<div className="relative" ref={inputContainerRef}>
 					{/* Floating private mode banner — slides up from above the input */}
 					<div
 						className={cn(
@@ -464,16 +353,32 @@ export const MultimodalInput: React.FC<MultimodalInputProps> = ({
 								</div>
 							)}
 
-							<div className="scrollbar-thin scrollbar-track-fd-overlay scrollbar-thumb-border/30 hover:scrollbar-thumb-border/50 relative max-h-[280px] overflow-y-scroll">
+							<div
+								className="scrollbar-thin scrollbar-track-fd-overlay scrollbar-thumb-border/30 hover:scrollbar-thumb-border/50 relative max-h-[280px] overflow-y-scroll"
+								ref={mentionEditor.mentionViewportRef}
+							>
+								{/* Mention popover */}
+								{mentionConfig && (
+									<MentionPopover
+										anchorRef={mentionEditor.mentionViewportRef}
+										caretPosition={mentionEditor.mention.caretPosition}
+										highlightedIndex={mentionEditor.mention.highlightedIndex}
+										isActive={mentionEditor.mention.isActive}
+										isLoading={mentionEditor.mention.isLoading}
+										onSelect={mentionEditor.mention.selectMention}
+										results={mentionEditor.mention.results}
+									/>
+								)}
+
 								{/* Styled overlay - shows formatted content with mention pills */}
-								{hasMentions && (
+								{mentionEditor.hasMentions && (
 									<StyledOverlay
 										className={cn(
 											"pointer-events-none absolute inset-0 min-h-[20px] w-full whitespace-pre-wrap break-words p-3 text-foreground text-sm",
 											className
 										)}
 										mentionStore={mentionStoreRef.current}
-										ref={overlayRef}
+										ref={mentionEditor.overlayRef}
 										value={value}
 									/>
 								)}
@@ -486,16 +391,16 @@ export const MultimodalInput: React.FC<MultimodalInputProps> = ({
 									className={cn(
 										"min-h-[20px] w-full flex-1 resize-none bg-transparent p-3 text-sm placeholder:text-primary/50 focus-visible:outline-none",
 										// When there are mentions, make text transparent so pills show through
-										hasMentions
+										mentionEditor.hasMentions
 											? "text-transparent caret-foreground"
 											: "text-foreground",
 										className
 									)}
 									disabled={disabled}
-									onChange={handleChange}
+									onChange={mentionEditor.handleChange}
 									onKeyDown={handleKeyDown}
-									onScroll={handleScroll}
-									onSelect={handleSelect}
+									onScroll={mentionEditor.handleScroll}
+									onSelect={mentionEditor.handleSelect}
 									placeholder={
 										isPrivate
 											? "Write a private note..."
@@ -503,7 +408,7 @@ export const MultimodalInput: React.FC<MultimodalInputProps> = ({
 												? `${placeholder} Type @ to mention...`
 												: placeholder
 									}
-									ref={textareaRef}
+									ref={mentionEditor.textareaRef}
 									rows={1}
 									value={value}
 								/>

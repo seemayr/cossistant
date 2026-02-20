@@ -1,12 +1,12 @@
 import { describe, expect, it } from "bun:test";
 import {
-	AI_AGENT_DEFAULT_SKILL_TEMPLATES,
+	AI_AGENT_DROPPED_SKILL_TEMPLATE_NAMES,
+	AI_AGENT_TOOL_CATALOG,
 	AI_AGENT_TOOL_IDS,
 } from "@cossistant/types";
 import type { AiAgentSelect } from "../db/schema/ai-agent";
 import type { AiAgentPromptDocumentSelect } from "../db/schema/ai-agent-prompt-document";
 import { buildCapabilitiesStudioResponse } from "./capabilities-studio";
-import type { ResolvedPromptBundle } from "./prompts/resolver";
 import { getDefaultBehaviorSettings } from "./settings/defaults";
 
 function createAgent(
@@ -46,56 +46,6 @@ function createAgent(
 	};
 }
 
-function createPromptBundle(): ResolvedPromptBundle {
-	return {
-		coreDocuments: {
-			"agent.md": {
-				name: "agent.md",
-				content: "fallback agent",
-				source: "fallback",
-				priority: 0,
-			},
-			"security.md": {
-				name: "security.md",
-				content: "fallback security",
-				source: "fallback",
-				priority: 0,
-			},
-			"behaviour.md": {
-				name: "behaviour.md",
-				content: "fallback behaviour",
-				source: "fallback",
-				priority: 0,
-			},
-			"participation.md": {
-				name: "participation.md",
-				content: "fallback participation",
-				source: "fallback",
-				priority: 0,
-			},
-			"decision.md": {
-				name: "decision.md",
-				content: "fallback decision",
-				source: "fallback",
-				priority: 0,
-			},
-			"grounding.md": {
-				name: "grounding.md",
-				content: "fallback grounding",
-				source: "fallback",
-				priority: 0,
-			},
-			"capabilities.md": {
-				name: "capabilities.md",
-				content: "fallback capabilities",
-				source: "fallback",
-				priority: 0,
-			},
-		},
-		enabledSkills: [],
-	};
-}
-
 function createDocument(
 	overrides: Partial<AiAgentPromptDocumentSelect>
 ): AiAgentPromptDocumentSelect {
@@ -129,7 +79,6 @@ describe("buildCapabilitiesStudioResponse", () => {
 				autoAnalyzeSentiment: false,
 			}),
 			documents: [],
-			promptBundle: createPromptBundle(),
 		});
 
 		const toolsById = new Map(response.tools.map((tool) => [tool.id, tool]));
@@ -146,62 +95,97 @@ describe("buildCapabilitiesStudioResponse", () => {
 		}
 	});
 
-	it("uses resolved fallback content while preserving disabled core doc metadata", () => {
+	it("returns a full catalog-sized tools list with valid group/order metadata", () => {
 		const response = buildCapabilitiesStudioResponse({
 			aiAgent: createAgent(),
-			documents: [
-				createDocument({
-					id: "01JTESTCOREDOC00000000000",
-					kind: "core",
-					name: "agent.md",
-					content: "db core content",
-					enabled: false,
-					priority: 12,
-				}),
-			],
-			promptBundle: createPromptBundle(),
+			documents: [],
 		});
 
-		const agentSystemSkill = response.systemSkillDocuments.find(
-			(skill) => skill.name === "agent.md"
-		);
-
-		expect(agentSystemSkill).toBeDefined();
-		expect(agentSystemSkill?.content).toBe("fallback agent");
-		expect(agentSystemSkill?.source).toBe("fallback");
-		expect(agentSystemSkill?.enabled).toBe(false);
-		expect(agentSystemSkill?.priority).toBe(12);
-		expect(agentSystemSkill?.documentId).toBe("01JTESTCOREDOC00000000000");
+		expect(response.tools).toHaveLength(AI_AGENT_TOOL_CATALOG.length);
+		for (const tool of response.tools) {
+			expect(tool.group === "behavior" || tool.group === "actions").toBe(true);
+			expect(Number.isInteger(tool.order)).toBe(true);
+		}
 	});
 
-	it("marks template overrides and customization state from skill documents", () => {
-		const template = AI_AGENT_DEFAULT_SKILL_TEMPLATES[0];
-		if (!template) {
-			throw new Error("Expected at least one default template");
+	it("returns effective tool skill content and override metadata", () => {
+		const resolveTool = AI_AGENT_TOOL_CATALOG.find(
+			(tool) => tool.id === "resolve"
+		);
+		if (!resolveTool) {
+			throw new Error("Expected resolve tool in catalog");
 		}
 
 		const response = buildCapabilitiesStudioResponse({
 			aiAgent: createAgent(),
 			documents: [
 				createDocument({
-					id: "01JTESTSKILLOVERRIDE00000",
-					kind: "skill",
-					name: template.name,
-					content: `${template.content}\n\n- Extra customization`,
+					id: "01JTESTOVERRIDE0000000000",
+					name: resolveTool.defaultSkill.name,
+					content: `${resolveTool.defaultSkill.content}\n\n- Extra rule`,
+				}),
+			],
+		});
+
+		const resolveState = response.tools.find((tool) => tool.id === "resolve");
+
+		expect(resolveState).toBeDefined();
+		expect(resolveState?.skillName).toBe(resolveTool.defaultSkill.name);
+		expect(resolveState?.skillHasOverride).toBe(true);
+		expect(resolveState?.skillIsCustomized).toBe(true);
+		expect(resolveState?.skillDocumentId).toBe("01JTESTOVERRIDE0000000000");
+		expect(resolveState?.skillContent).toContain("Extra rule");
+	});
+
+	it("exposes custom skills only and excludes tool-attached and dropped names", () => {
+		const sendMessageTool = AI_AGENT_TOOL_CATALOG.find(
+			(tool) => tool.id === "sendMessage"
+		);
+		if (!sendMessageTool) {
+			throw new Error("Expected sendMessage tool in catalog");
+		}
+		const droppedName = AI_AGENT_DROPPED_SKILL_TEMPLATE_NAMES[0];
+		if (!droppedName) {
+			throw new Error("Expected dropped skill names");
+		}
+
+		const response = buildCapabilitiesStudioResponse({
+			aiAgent: createAgent(),
+			documents: [
+				createDocument({
+					id: "01JTESTTOOLSKILL00000000",
+					name: sendMessageTool.defaultSkill.name,
+					enabled: true,
+				}),
+				createDocument({
+					id: "01JTESTDROPPED0000000000",
+					name: droppedName,
+					enabled: true,
+				}),
+				createDocument({
+					id: "01JTESTCUSTOM00000000000",
+					name: "custom-playbook.md",
 					enabled: true,
 				}),
 			],
-			promptBundle: createPromptBundle(),
 		});
 
-		const templateState = response.defaultSkillTemplates.find(
-			(skill) => skill.name === template.name
+		const customSkillNames = response.customSkillDocuments.map(
+			(document) => document.name
 		);
 
-		expect(templateState).toBeDefined();
-		expect(templateState?.hasOverride).toBe(true);
-		expect(templateState?.isEnabled).toBe(true);
-		expect(templateState?.isCustomized).toBe(true);
-		expect(templateState?.skillDocumentId).toBe("01JTESTSKILLOVERRIDE00000");
+		expect(customSkillNames).toContain("custom-playbook.md");
+		expect(customSkillNames).not.toContain(sendMessageTool.defaultSkill.name);
+		expect(customSkillNames).not.toContain(droppedName);
+	});
+
+	it("does not return removed template/system sections", () => {
+		const response = buildCapabilitiesStudioResponse({
+			aiAgent: createAgent(),
+			documents: [],
+		});
+
+		expect("defaultSkillTemplates" in response).toBe(false);
+		expect("systemSkillDocuments" in response).toBe(false);
 	});
 });

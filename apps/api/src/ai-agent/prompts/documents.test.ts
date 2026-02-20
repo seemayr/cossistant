@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 import {
 	assertCorePromptDocumentName,
 	assertSkillPromptDocumentName,
-	extractSkillReferencesFromCapabilities,
 	isCorePromptDocumentName,
 	isValidSkillPromptDocumentName,
 	PromptDocumentValidationError,
@@ -33,19 +32,5 @@ describe("prompt document rules", () => {
 		expect(() => assertSkillPromptDocumentName("decision.md")).toThrow(
 			PromptDocumentValidationError
 		);
-	});
-
-	it("extracts referenced skill filenames from capabilities markdown", () => {
-		const references = extractSkillReferencesFromCapabilities(`
-+## Skills
-+- refunds-refund-policy.md
-+- bad_name.MD
-+- escalation-playbook.md
-+`);
-
-		expect(references).toEqual([
-			"refunds-refund-policy.md",
-			"escalation-playbook.md",
-		]);
 	});
 });

@@ -27,8 +27,9 @@ export function AgentsNavigationSidebar() {
 
 	// Check if current path matches
 	const isGeneralActive = pathname === basePath;
-	const isToolsActive = pathname.startsWith(`${basePath}/tools`);
-	const isSkillsActive = pathname.startsWith(`${basePath}/skills`);
+	const isToolsActive =
+		pathname.startsWith(`${basePath}/tools`) ||
+		pathname.startsWith(`${basePath}/skills`);
 	const isWebSourcesActive = pathname.startsWith(`${trainingPath}/web`);
 	const isFaqActive = pathname.startsWith(`${trainingPath}/faq`);
 	const isFilesActive = pathname.startsWith(`${trainingPath}/files`);
@@ -69,14 +70,7 @@ export function AgentsNavigationSidebar() {
 						href={`${basePath}/tools`}
 						iconName="agent"
 					>
-						Tools
-					</SidebarItem>
-					<SidebarItem
-						active={isSkillsActive}
-						href={`${basePath}/skills`}
-						iconName="target"
-					>
-						Skills
+						Behaviour & tools
 					</SidebarItem>
 				</div>
 

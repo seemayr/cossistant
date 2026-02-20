@@ -15,20 +15,21 @@ export type ActivityIcon =
 			type: "icon";
 			Icon: LucideIcon;
 			iconKey: string;
-	  };
+	  }
+	| { type: "custom"; content: React.ReactNode };
 
 function ActivityIconRenderer({ icon }: { icon: ActivityIcon }) {
 	switch (icon.type) {
 		case "spinner":
 			return (
-				<div className="flex size-6 shrink-0 items-center justify-center">
-					<Spinner className="size-5" size={20} />
+				<div className="flex size-5 shrink-0 items-center justify-center">
+					<Spinner className="size-4" size={20} />
 				</div>
 			);
 		case "avatar":
 			return (
 				<Avatar
-					className="size-6 shrink-0 overflow-clip"
+					className="size-5 shrink-0 overflow-clip"
 					fallbackName={icon.name}
 					url={icon.image}
 				/>
@@ -36,7 +37,7 @@ function ActivityIconRenderer({ icon }: { icon: ActivityIcon }) {
 		case "icon": {
 			const Icon = icon.Icon;
 			return (
-				<div className="flex size-6 shrink-0 items-center justify-center">
+				<div className="flex size-5 shrink-0 items-center justify-center">
 					<Icon
 						aria-hidden
 						className="size-4 text-muted-foreground"
@@ -45,10 +46,12 @@ function ActivityIconRenderer({ icon }: { icon: ActivityIcon }) {
 				</div>
 			);
 		}
+		case "custom":
+			return <>{icon.content}</>;
 		default:
 			return (
-				<div className="flex size-6 shrink-0 items-center justify-center">
-					<Logo className="size-5 text-primary/90" />
+				<div className="flex size-5 shrink-0 items-center justify-center">
+					<Logo className="size-4 text-primary/90" />
 				</div>
 			);
 	}
@@ -98,7 +101,7 @@ export function ActivityWrapper({
 			initial={{ opacity: 0, y: 6 }}
 			transition={{ duration: 0.1, ease: [0.25, 0.46, 0.45, 0.94] }}
 		>
-			{showIcon ? <ActivityIconRenderer icon={resolvedIcon} /> : null}
+			{/* {showIcon ? <ActivityIconRenderer icon={resolvedIcon} /> : null} */}
 			<div className="flex min-w-0 flex-1 flex-col">
 				<div
 					className={cn(

@@ -1,10 +1,14 @@
 import { describe, expect, it } from "bun:test";
-import type { GetCapabilitiesStudioResponse } from "@cossistant/types";
+import {
+	AI_AGENT_TOOL_CATALOG,
+	type GetCapabilitiesStudioResponse,
+} from "@cossistant/types";
 import {
 	buildBehaviorSettingsPatch,
 	buildToolStudioSections,
 	normalizeSkillFileName,
 	normalizeSkillFrontmatterName,
+	normalizeStudioTools,
 	parseSkillEditorContent,
 	serializeSkillEditorContent,
 	toCanonicalSkillFileNameFromFrontmatterName,
@@ -14,22 +18,29 @@ function createTool(
 	overrides: Partial<GetCapabilitiesStudioResponse["tools"][number]> & {
 		id: GetCapabilitiesStudioResponse["tools"][number]["id"];
 		label: string;
-		category: GetCapabilitiesStudioResponse["tools"][number]["category"];
-		isRequired: boolean;
-		isToggleable: boolean;
+		group: GetCapabilitiesStudioResponse["tools"][number]["group"];
+		order: number;
 	}
 ): GetCapabilitiesStudioResponse["tools"][number] {
 	return {
 		id: overrides.id,
 		label: overrides.label,
 		description: overrides.description ?? `${overrides.label} description`,
-		category: overrides.category,
+		category: overrides.category ?? "analysis",
+		group: overrides.group,
+		order: overrides.order,
 		isSystem: overrides.isSystem ?? false,
-		isRequired: overrides.isRequired,
-		isToggleable: overrides.isToggleable,
+		isRequired: overrides.isRequired ?? false,
+		isToggleable: overrides.isToggleable ?? true,
 		behaviorSettingKey: overrides.behaviorSettingKey ?? null,
-		defaultTemplateNames: overrides.defaultTemplateNames ?? [],
 		enabled: overrides.enabled ?? true,
+		skillName: overrides.skillName ?? `${overrides.id}.md`,
+		skillLabel: overrides.skillLabel ?? `${overrides.label} skill`,
+		skillDescription: overrides.skillDescription ?? "skill description",
+		skillContent: overrides.skillContent ?? "skill content",
+		skillDocumentId: overrides.skillDocumentId ?? null,
+		skillHasOverride: overrides.skillHasOverride ?? false,
+		skillIsCustomized: overrides.skillIsCustomized ?? false,
 	};
 }
 
@@ -111,61 +122,110 @@ describe("tools-studio-utils", () => {
 		expect(parsed.body).toContain("Escalate when policy is unclear.");
 	});
 
-	it("builds deterministic tool sections for mandatory, optional, and custom", () => {
+	it("groups tools by behavior/actions and preserves deterministic order", () => {
 		const tools: GetCapabilitiesStudioResponse["tools"] = [
 			createTool({
 				id: "resolve",
 				label: "Finish: Resolve",
-				category: "action",
-				isRequired: false,
-				isToggleable: true,
-				behaviorSettingKey: "canResolve",
+				group: "actions",
+				order: 3,
 			}),
 			createTool({
 				id: "searchKnowledgeBase",
 				label: "Search Knowledge Base",
-				category: "context",
+				group: "behavior",
+				order: 1,
 				isRequired: true,
 				isToggleable: false,
-				isSystem: true,
 			}),
 			createTool({
 				id: "updateConversationTitle",
 				label: "Update Conversation Title",
-				category: "analysis",
-				isRequired: false,
-				isToggleable: true,
-				behaviorSettingKey: "autoGenerateTitle",
+				group: "behavior",
+				order: 3,
 			}),
 			createTool({
 				id: "sendMessage",
 				label: "Send Public Message",
-				category: "messaging",
+				group: "behavior",
+				order: 6,
 				isRequired: true,
 				isToggleable: false,
-				isSystem: true,
 			}),
 			createTool({
 				id: "escalate",
-				label: "Always Required Toggleable",
-				category: "system",
-				isRequired: true,
-				isToggleable: true,
-				behaviorSettingKey: "canEscalate",
+				label: "Finish: Escalate",
+				group: "actions",
+				order: 2,
 			}),
 		];
 
 		const sections = buildToolStudioSections(tools);
 
-		expect(sections.defaultTools.map((tool) => tool.id)).toEqual([
-			"escalate",
-			"sendMessage",
+		expect(sections.behaviorTools.map((tool) => tool.id)).toEqual([
 			"searchKnowledgeBase",
-		]);
-		expect(sections.optionalTools.map((tool) => tool.id)).toEqual([
-			"resolve",
 			"updateConversationTitle",
+			"sendMessage",
 		]);
-		expect(sections.customTools).toEqual([]);
+		expect(sections.actionTools.map((tool) => tool.id)).toEqual([
+			"escalate",
+			"resolve",
+		]);
+	});
+
+	it("normalizes malformed studio tools against catalog defaults", () => {
+		const normalizedTools = normalizeStudioTools([
+			{
+				id: "sendMessage",
+				enabled: false,
+				skillContent: "custom send content",
+				skillDocumentId: "01JTESTSKILLDOC0000000000",
+			},
+			{
+				id: "resolve",
+			},
+			{
+				id: "unknown-tool-id",
+				label: "ignore me",
+			},
+		]);
+
+		expect(normalizedTools).toHaveLength(AI_AGENT_TOOL_CATALOG.length);
+
+		const sendMessageTool = normalizedTools.find(
+			(tool) => tool.id === "sendMessage"
+		);
+		expect(sendMessageTool).toBeDefined();
+		expect(sendMessageTool?.group).toBe("behavior");
+		expect(sendMessageTool?.order).toBe(6);
+		expect(sendMessageTool?.enabled).toBe(false);
+		expect(sendMessageTool?.skillContent).toBe("custom send content");
+		expect(sendMessageTool?.skillHasOverride).toBe(true);
+
+		const resolveTool = normalizedTools.find((tool) => tool.id === "resolve");
+		expect(resolveTool).toBeDefined();
+		expect(resolveTool?.group).toBe("actions");
+		expect(resolveTool?.order).toBe(3);
+		expect(resolveTool?.enabled).toBe(true);
+	});
+
+	it("still produces Behavior and Actions sections from malformed input", () => {
+		const normalizedTools = normalizeStudioTools([
+			{
+				id: "sendMessage",
+				label: "Public reply",
+			},
+			{
+				id: "respond",
+			},
+		]);
+
+		const sections = buildToolStudioSections(normalizedTools);
+		expect(
+			sections.behaviorTools.some((tool) => tool.id === "sendMessage")
+		).toBe(true);
+		expect(sections.actionTools.some((tool) => tool.id === "respond")).toBe(
+			true
+		);
 	});
 });

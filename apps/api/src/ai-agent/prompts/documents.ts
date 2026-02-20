@@ -19,8 +19,6 @@ export const RESERVED_CORE_PROMPT_DOCUMENT_NAMES = new Set<string>(
 
 export const SKILL_PROMPT_NAME_REGEX = /^[a-z0-9][a-z0-9-]{1,62}\.md$/;
 
-export const DEFAULT_SKILL_SELECTION_LIMIT = 3;
-
 export class PromptDocumentValidationError extends Error {
 	constructor(message: string) {
 		super(message);
@@ -83,28 +81,6 @@ export function assertPromptDocumentKind(
 			"Prompt document kind must be 'core' or 'skill'"
 		);
 	}
-}
-
-export function extractSkillReferencesFromCapabilities(
-	capabilitiesMarkdown: string
-): string[] {
-	if (!capabilitiesMarkdown.trim()) {
-		return [];
-	}
-
-	const matches = capabilitiesMarkdown.match(/[a-z0-9][a-z0-9-]{1,62}\.md/g);
-	if (!matches) {
-		return [];
-	}
-
-	const names = new Set<string>();
-	for (const match of matches) {
-		if (isValidSkillPromptDocumentName(match)) {
-			names.add(match);
-		}
-	}
-
-	return Array.from(names);
 }
 
 export function isUniqueViolation(

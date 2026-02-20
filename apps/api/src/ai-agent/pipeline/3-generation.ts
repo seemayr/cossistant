@@ -23,7 +23,10 @@ import {
 	stepCountIs,
 	ToolLoopAgent,
 } from "@api/lib/ai";
-import { parseSkillFileContent } from "@cossistant/types";
+import {
+	AI_AGENT_RESERVED_TOOL_SKILL_TEMPLATE_NAMES,
+	parseSkillFileContent,
+} from "@cossistant/types";
 import type { PrepareStepFunction, ToolSet } from "ai";
 import {
 	detectPromptInjection,
@@ -32,12 +35,8 @@ import {
 import type { RoleAwareMessage } from "../context/conversation";
 import type { VisitorContext } from "../context/visitor";
 import type { AiDecision } from "../output/schemas";
+import type { ResolvedSkillPromptDocument } from "../prompts/resolver";
 import { resolvePromptBundle } from "../prompts/resolver";
-import {
-	createLoadSkillTool,
-	createRuntimeSkillRegistry,
-} from "../prompts/runtime-skill-loader";
-import { selectRelevantSkills } from "../prompts/skill-selector";
 import { buildSystemPrompt, type PromptSkillDocument } from "../prompts/system";
 import { getBehaviorSettings } from "../settings";
 import {
@@ -118,6 +117,7 @@ type GenerationInput = {
 const MIN_TOOL_INVOCATIONS_PER_RUN = 10;
 const MAX_TOOL_INVOCATIONS_PER_RUN = 50;
 const DEFAULT_TOOL_INVOCATIONS_PER_RUN = 15;
+const MAX_CUSTOM_SKILLS_IN_PROMPT = 5;
 const FINISH_TOOL_NAMES = [
 	"respond",
 	"escalate",
@@ -211,6 +211,41 @@ function buildStopConditions(params: {
 
 function getFinishToolsInToolset(tools: ToolSet): string[] {
 	return Object.keys(tools).filter((toolName) => isFinishToolName(toolName));
+}
+
+export function selectSkillsForPrompt(input: {
+	enabledSkills: ResolvedSkillPromptDocument[];
+	maxCustomSkills?: number;
+}): ResolvedSkillPromptDocument[] {
+	const maxCustomSkills = input.maxCustomSkills ?? MAX_CUSTOM_SKILLS_IN_PROMPT;
+	const reservedToolSkillNames = new Set<string>(
+		AI_AGENT_RESERVED_TOOL_SKILL_TEMPLATE_NAMES
+	);
+
+	const toolAttachedSkills = input.enabledSkills.filter(
+		(skill) => skill.source === "tool" || reservedToolSkillNames.has(skill.name)
+	);
+	toolAttachedSkills.sort((a, b) => {
+		if (a.priority !== b.priority) {
+			return a.priority - b.priority;
+		}
+		return a.name.localeCompare(b.name);
+	});
+	const customEnabledSkills = input.enabledSkills.filter(
+		(skill) =>
+			skill.source === "custom" && !reservedToolSkillNames.has(skill.name)
+	);
+	customEnabledSkills.sort((a, b) => {
+		if (b.priority !== a.priority) {
+			return b.priority - a.priority;
+		}
+		return a.name.localeCompare(b.name);
+	});
+
+	return [
+		...toolAttachedSkills,
+		...customEnabledSkills.slice(0, maxCustomSkills),
+	];
 }
 
 export function buildToolCallsByName(
@@ -416,52 +451,26 @@ export async function generate(
 		aiAgent,
 		mode,
 	});
-	const fallbackSelectedSkillDocuments = selectRelevantSkills({
+	const selectedSkillDocuments = selectSkillsForPrompt({
 		enabledSkills: promptBundle.enabledSkills,
-		conversationHistory,
-		mode,
-		humanCommand,
-		capabilitiesContent:
-			promptBundle.coreDocuments["capabilities.md"]?.content ?? "",
-	});
-	const runtimeSkillRegistry = createRuntimeSkillRegistry({
-		enabledSkills: promptBundle.enabledSkills,
-	});
-	const loadSkillTool = createLoadSkillTool({
-		registry: runtimeSkillRegistry,
-		conversationId: convId,
+		maxCustomSkills: MAX_CUSTOM_SKILLS_IN_PROMPT,
 	});
 	const runtimeTools: ToolSet = {
 		...tools,
-		loadSkill: loadSkillTool,
 	};
 	const runtimeFinishTools = getFinishToolsInToolset(runtimeTools);
-	const availableSkillCatalog = runtimeSkillRegistry.getCatalog();
 
-	const buildMergedSkillDocuments = (): PromptSkillDocument[] => {
-		const mergedByName = new Map<string, PromptSkillDocument>();
-
-		for (const skill of fallbackSelectedSkillDocuments) {
+	const buildResolvedSkillDocuments = (): PromptSkillDocument[] =>
+		selectedSkillDocuments.map((skill) => {
 			const parsedSkill = parseSkillFileContent({
 				content: skill.content,
 				canonicalFileName: skill.name,
 			});
-			mergedByName.set(skill.name, {
+			return {
 				name: skill.name,
 				content: parsedSkill.body,
-			});
-		}
-
-		for (const skill of runtimeSkillRegistry.getLoadedSkills()) {
-			// Runtime-loaded skill content should win over fallback selection.
-			mergedByName.set(skill.name, {
-				name: skill.name,
-				content: skill.content,
-			});
-		}
-
-		return Array.from(mergedByName.values());
-	};
+			};
+		});
 
 	const buildRuntimeSystemPrompt = () =>
 		buildSystemPrompt({
@@ -477,8 +486,7 @@ export async function generate(
 			smartDecision,
 			continuationHint,
 			promptBundle,
-			selectedSkillDocuments: buildMergedSkillDocuments(),
-			availableSkillCatalog,
+			selectedSkillDocuments: buildResolvedSkillDocuments(),
 		});
 
 	// Build dynamic system prompt with real-time context and tool instructions
@@ -507,12 +515,10 @@ export async function generate(
 	// Format conversation history for LLM with multi-party prefixes
 	const visitorName = visitorContext?.name ?? null;
 	const messages = formatMessagesForLlm(conversationHistory, visitorName);
-	const fallbackSkillNames = fallbackSelectedSkillDocuments.map(
-		(skill) => skill.name
-	);
+	const selectedSkillNames = selectedSkillDocuments.map((skill) => skill.name);
 
 	console.log(
-		`[ai-agent:generate] conv=${convId} | model=${aiAgent.model} | messages=${messages.length} | mode=${mode} | tools=${Object.keys(runtimeTools).length} | toolBudget=${maxToolInvocationsPerRun} | fallbackSkills=${fallbackSkillNames.join(",") || "none"} | skillCatalog=${availableSkillCatalog.length}`
+		`[ai-agent:generate] conv=${convId} | model=${aiAgent.model} | messages=${messages.length} | mode=${mode} | tools=${Object.keys(runtimeTools).length} | toolBudget=${maxToolInvocationsPerRun} | selectedSkills=${selectedSkillNames.join(",") || "none"}`
 	);
 
 	// Check for potential prompt injection in the latest visitor message (for monitoring)
@@ -568,14 +574,6 @@ export async function generate(
 		// Handle abort gracefully - this means a new message arrived
 		if (error instanceof Error && error.name === "AbortError") {
 			console.log(
-				`[ai-agent:generate] conv=${convId} | dynamicSkills=${
-					runtimeSkillRegistry
-						.getLoadedSkills()
-						.map((skill) => skill.name)
-						.join(",") || "none"
-				} | loadSkillCalls=${runtimeSkillRegistry.getLoadSkillCallCount()}`
-			);
-			console.log(
 				`[ai-agent:generate] conv=${convId} | Generation aborted - new message arrived`
 			);
 			const toolCallsByName = buildToolCallsByNameFromCounters(
@@ -623,13 +621,6 @@ export async function generate(
 	const sendPrivateMessageCallCount = toolCallsByName.sendPrivateMessage ?? 0;
 	const actionCalls = allToolCalls.filter((tc) =>
 		tc.toolName ? isFinishToolName(tc.toolName) : false
-	);
-	const loadedSkillNames = runtimeSkillRegistry
-		.getLoadedSkills()
-		.map((skill) => skill.name);
-
-	console.log(
-		`[ai-agent:generate] conv=${convId} | dynamicSkills=${loadedSkillNames.join(",") || "none"} | loadSkillCalls=${runtimeSkillRegistry.getLoadSkillCallCount()}`
 	);
 
 	console.log(
@@ -731,7 +722,7 @@ export async function generate(
 				smartDecision,
 				continuationHint,
 				promptBundle,
-				selectedSkillDocuments: buildMergedSkillDocuments(),
+				selectedSkillDocuments: buildResolvedSkillDocuments(),
 			})}\n\n## Repair Mode\n\nYou must complete this turn using ONLY these tools:\n- sendMessage(): send a short, safe, helpful reply to the visitor\n- respond(): finish the turn\n\nRules:\n- Call sendMessage() exactly once\n- Call respond() immediately after sendMessage()\n- Do not call any other tools`;
 
 			let repairResult: Awaited<ReturnType<typeof generateWithToolLoopAgent>>;

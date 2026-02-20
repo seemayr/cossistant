@@ -4,6 +4,7 @@ import {
 	getNonFinishToolCallCount,
 	getTotalToolCalls,
 	mergeToolCallsByName,
+	selectSkillsForPrompt,
 } from "./3-generation";
 
 describe("generation tool call accounting", () => {
@@ -64,5 +65,47 @@ describe("generation tool call accounting", () => {
 		});
 
 		expect(nonFinishTotal).toBe(5);
+	});
+
+	it("includes tool-attached skills and caps custom skills deterministically", () => {
+		const selected = selectSkillsForPrompt({
+			enabledSkills: [
+				{
+					id: "tool:send-message.md",
+					name: "send-message.md",
+					content: "tool send message",
+					priority: 1,
+					source: "tool",
+				},
+				{
+					id: "custom:mid.md",
+					name: "mid.md",
+					content: "custom mid",
+					priority: 5,
+					source: "custom",
+				},
+				{
+					id: "custom:high.md",
+					name: "high.md",
+					content: "custom high",
+					priority: 10,
+					source: "custom",
+				},
+				{
+					id: "custom:low.md",
+					name: "low.md",
+					content: "custom low",
+					priority: 1,
+					source: "custom",
+				},
+			],
+			maxCustomSkills: 2,
+		});
+
+		expect(selected.map((skill) => skill.name)).toEqual([
+			"send-message.md",
+			"high.md",
+			"mid.md",
+		]);
 	});
 });

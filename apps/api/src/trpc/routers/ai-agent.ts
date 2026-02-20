@@ -3,7 +3,6 @@ import {
 	PromptDocumentConflictError,
 	PromptDocumentValidationError,
 } from "@api/ai-agent/prompts/documents";
-import { resolvePromptBundle } from "@api/ai-agent/prompts/resolver";
 import { getBehaviorSettings } from "@api/ai-agent/settings";
 import {
 	createAiAgent,
@@ -21,7 +20,6 @@ import {
 	listAiAgentPromptDocuments,
 	toggleAiAgentSkillPromptDocument,
 	updateAiAgentSkillPromptDocument,
-	upsertAiAgentCorePromptDocument,
 } from "@api/db/queries/ai-agent-prompt-document";
 import {
 	getWebsiteBySlugWithAccess,
@@ -38,6 +36,9 @@ import { firecrawlService } from "@api/services/firecrawl";
 import { generateAgentBasePrompt } from "@api/services/prompt-generator";
 import { triggerAiTraining } from "@api/utils/queue-triggers";
 import {
+	AI_AGENT_DROPPED_SKILL_TEMPLATE_NAMES,
+	AI_AGENT_RESERVED_TOOL_SKILL_TEMPLATE_NAMES,
+	AI_AGENT_TOOL_CATALOG,
 	aiAgentPromptDocumentResponseSchema,
 	aiAgentResponseSchema,
 	createAiAgentRequestSchema,
@@ -51,15 +52,14 @@ import {
 	getBehaviorSettingsResponseSchema,
 	getCapabilitiesStudioRequestSchema,
 	getCapabilitiesStudioResponseSchema,
-	listPromptDocumentsRequestSchema,
-	listPromptDocumentsResponseSchema,
+	resetToolSkillOverrideRequestSchema,
 	toggleAiAgentActiveRequestSchema,
 	toggleSkillDocumentRequestSchema,
 	updateAiAgentRequestSchema,
 	updateBehaviorSettingsRequestSchema,
 	updateBehaviorSettingsResponseSchema,
 	updateSkillDocumentRequestSchema,
-	upsertCoreDocumentRequestSchema,
+	upsertToolSkillOverrideRequestSchema,
 } from "@cossistant/types";
 import { TRPCError } from "@trpc/server";
 import { and, count, eq, gt, isNull } from "drizzle-orm";
@@ -163,6 +163,29 @@ function handlePromptDocumentMutationError(error: unknown): never {
 	}
 
 	throw error;
+}
+
+const RESERVED_TOOL_SKILL_NAME_SET = new Set<string>(
+	AI_AGENT_RESERVED_TOOL_SKILL_TEMPLATE_NAMES
+);
+const DROPPED_SKILL_NAME_SET = new Set<string>(
+	AI_AGENT_DROPPED_SKILL_TEMPLATE_NAMES
+);
+
+function assertCustomSkillNameAllowed(name: string): void {
+	if (RESERVED_TOOL_SKILL_NAME_SET.has(name)) {
+		throw new TRPCError({
+			code: "BAD_REQUEST",
+			message: "This skill name is reserved for a default tool-attached skill.",
+		});
+	}
+
+	if (DROPPED_SKILL_NAME_SET.has(name)) {
+		throw new TRPCError({
+			code: "BAD_REQUEST",
+			message: "This skill name is reserved and cannot be used.",
+		});
+	}
 }
 
 async function assertModelAllowedForWebsite(params: {
@@ -713,75 +736,20 @@ export const aiAgentRouter = createTRPCRouter({
 				});
 			}
 
-			const [documents, promptBundle] = await Promise.all([
-				listAiAgentPromptDocuments(db, {
-					organizationId: websiteData.organizationId,
-					websiteId: websiteData.id,
-					aiAgentId: input.aiAgentId,
-				}),
-				resolvePromptBundle({
-					db,
-					aiAgent: agent,
-					mode: "respond_to_visitor",
-				}),
-			]);
-
-			return buildCapabilitiesStudioResponse({
-				aiAgent: agent,
-				documents,
-				promptBundle,
-			});
-		}),
-
-	listPromptDocuments: protectedProcedure
-		.input(listPromptDocumentsRequestSchema)
-		.output(listPromptDocumentsResponseSchema)
-		.query(async ({ ctx: { db, user }, input }) => {
-			const websiteData = await getWebsiteBySlugWithAccess(db, {
-				userId: user.id,
-				websiteSlug: input.websiteSlug,
-			});
-
-			if (!websiteData) {
-				throw new TRPCError({
-					code: "NOT_FOUND",
-					message: "Website not found or access denied",
-				});
-			}
-
-			const agent = await getAiAgentForWebsite(db, {
-				websiteId: websiteData.id,
-				organizationId: websiteData.organizationId,
-			});
-
-			if (!agent || agent.id !== input.aiAgentId) {
-				throw new TRPCError({
-					code: "NOT_FOUND",
-					message: "AI agent not found",
-				});
-			}
-
 			const documents = await listAiAgentPromptDocuments(db, {
 				organizationId: websiteData.organizationId,
 				websiteId: websiteData.id,
 				aiAgentId: input.aiAgentId,
 			});
 
-			const coreDocuments = documents
-				.filter((document) => document.kind === "core")
-				.map(toPromptDocumentResponse);
-			const skillDocuments = documents
-				.filter((document) => document.kind === "skill")
-				.map(toPromptDocumentResponse);
-
-			return {
-				coreDocuments,
-				skillDocuments,
-			};
+			return buildCapabilitiesStudioResponse({
+				aiAgent: agent,
+				documents,
+			});
 		}),
 
-	upsertCoreDocument: protectedProcedure
-		.input(upsertCoreDocumentRequestSchema)
+	upsertToolSkillOverride: protectedProcedure
+		.input(upsertToolSkillOverrideRequestSchema)
 		.output(aiAgentPromptDocumentResponseSchema)
 		.mutation(async ({ ctx: { db, user }, input }) => {
 			const websiteData = await getWebsiteBySlugWithAccess(db, {
@@ -808,22 +776,133 @@ export const aiAgentRouter = createTRPCRouter({
 				});
 			}
 
-			try {
-				const document = await upsertAiAgentCorePromptDocument(db, {
+			const tool = AI_AGENT_TOOL_CATALOG.find(
+				(entry) => entry.id === input.toolId
+			);
+			if (!tool) {
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message: "Unknown tool id",
+				});
+			}
+
+			const documents = await listAiAgentPromptDocuments(
+				db,
+				{
 					organizationId: websiteData.organizationId,
 					websiteId: websiteData.id,
 					aiAgentId: input.aiAgentId,
-					name: input.name,
+				},
+				{ kind: "skill" }
+			);
+			const existing = documents.find(
+				(document) => document.name === tool.defaultSkill.name
+			);
+
+			try {
+				if (existing) {
+					const updated = await updateAiAgentSkillPromptDocument(db, {
+						organizationId: websiteData.organizationId,
+						websiteId: websiteData.id,
+						aiAgentId: input.aiAgentId,
+						skillDocumentId: existing.id,
+						name: tool.defaultSkill.name,
+						content: input.content,
+						enabled: true,
+						priority: tool.order,
+						updatedByUserId: user.id,
+					});
+
+					if (!updated) {
+						throw new TRPCError({
+							code: "NOT_FOUND",
+							message: "Skill document not found",
+						});
+					}
+
+					return toPromptDocumentResponse(updated);
+				}
+
+				const created = await createAiAgentSkillPromptDocument(db, {
+					organizationId: websiteData.organizationId,
+					websiteId: websiteData.id,
+					aiAgentId: input.aiAgentId,
+					name: tool.defaultSkill.name,
 					content: input.content,
-					enabled: input.enabled,
-					priority: input.priority,
-					updatedByUserId: user.id,
+					enabled: true,
+					priority: tool.order,
+					createdByUserId: user.id,
 				});
 
-				return toPromptDocumentResponse(document);
+				return toPromptDocumentResponse(created);
 			} catch (error) {
 				handlePromptDocumentMutationError(error);
 			}
+		}),
+
+	resetToolSkillOverride: protectedProcedure
+		.input(resetToolSkillOverrideRequestSchema)
+		.output(z.object({ removed: z.boolean() }))
+		.mutation(async ({ ctx: { db, user }, input }) => {
+			const websiteData = await getWebsiteBySlugWithAccess(db, {
+				userId: user.id,
+				websiteSlug: input.websiteSlug,
+			});
+
+			if (!websiteData) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Website not found or access denied",
+				});
+			}
+
+			const agent = await getAiAgentForWebsite(db, {
+				websiteId: websiteData.id,
+				organizationId: websiteData.organizationId,
+			});
+
+			if (!agent || agent.id !== input.aiAgentId) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "AI agent not found",
+				});
+			}
+
+			const tool = AI_AGENT_TOOL_CATALOG.find(
+				(entry) => entry.id === input.toolId
+			);
+			if (!tool) {
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message: "Unknown tool id",
+				});
+			}
+
+			const documents = await listAiAgentPromptDocuments(
+				db,
+				{
+					organizationId: websiteData.organizationId,
+					websiteId: websiteData.id,
+					aiAgentId: input.aiAgentId,
+				},
+				{ kind: "skill" }
+			);
+			const existing = documents.find(
+				(document) => document.name === tool.defaultSkill.name
+			);
+
+			if (!existing) {
+				return { removed: false };
+			}
+
+			const removed = await deleteAiAgentSkillPromptDocument(db, {
+				organizationId: websiteData.organizationId,
+				websiteId: websiteData.id,
+				aiAgentId: input.aiAgentId,
+				skillDocumentId: existing.id,
+			});
+
+			return { removed };
 		}),
 
 	createSkillDocument: protectedProcedure
@@ -853,6 +932,8 @@ export const aiAgentRouter = createTRPCRouter({
 					message: "AI agent not found",
 				});
 			}
+
+			assertCustomSkillNameAllowed(input.name);
 
 			try {
 				const document = await createAiAgentSkillPromptDocument(db, {
@@ -898,6 +979,30 @@ export const aiAgentRouter = createTRPCRouter({
 					code: "NOT_FOUND",
 					message: "AI agent not found",
 				});
+			}
+
+			const skillDocuments = await listAiAgentPromptDocuments(
+				db,
+				{
+					organizationId: websiteData.organizationId,
+					websiteId: websiteData.id,
+					aiAgentId: input.aiAgentId,
+				},
+				{ kind: "skill" }
+			);
+			const existingSkill = skillDocuments.find(
+				(doc) => doc.id === input.skillDocumentId
+			);
+			if (!existingSkill) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Skill document not found",
+				});
+			}
+			assertCustomSkillNameAllowed(existingSkill.name);
+
+			if (input.name) {
+				assertCustomSkillNameAllowed(input.name);
 			}
 
 			try {
@@ -954,6 +1059,26 @@ export const aiAgentRouter = createTRPCRouter({
 				});
 			}
 
+			const skillDocuments = await listAiAgentPromptDocuments(
+				db,
+				{
+					organizationId: websiteData.organizationId,
+					websiteId: websiteData.id,
+					aiAgentId: input.aiAgentId,
+				},
+				{ kind: "skill" }
+			);
+			const existingSkill = skillDocuments.find(
+				(document) => document.id === input.skillDocumentId
+			);
+			if (!existingSkill) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Skill document not found",
+				});
+			}
+			assertCustomSkillNameAllowed(existingSkill.name);
+
 			const deleted = await deleteAiAgentSkillPromptDocument(db, {
 				organizationId: websiteData.organizationId,
 				websiteId: websiteData.id,
@@ -998,6 +1123,26 @@ export const aiAgentRouter = createTRPCRouter({
 					message: "AI agent not found",
 				});
 			}
+
+			const skillDocuments = await listAiAgentPromptDocuments(
+				db,
+				{
+					organizationId: websiteData.organizationId,
+					websiteId: websiteData.id,
+					aiAgentId: input.aiAgentId,
+				},
+				{ kind: "skill" }
+			);
+			const existingSkill = skillDocuments.find(
+				(doc) => doc.id === input.skillDocumentId
+			);
+			if (!existingSkill) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Skill document not found",
+				});
+			}
+			assertCustomSkillNameAllowed(existingSkill.name);
 
 			const document = await toggleAiAgentSkillPromptDocument(db, {
 				organizationId: websiteData.organizationId,

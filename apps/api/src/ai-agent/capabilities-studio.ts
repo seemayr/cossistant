@@ -1,10 +1,9 @@
-import type { ResolvedPromptBundle } from "@api/ai-agent/prompts/resolver";
 import { getBehaviorSettings } from "@api/ai-agent/settings";
 import type { AiAgentSelect } from "@api/db/schema/ai-agent";
 import type { AiAgentPromptDocumentSelect } from "@api/db/schema/ai-agent-prompt-document";
 import {
-	AI_AGENT_DEFAULT_SKILL_TEMPLATES,
-	AI_AGENT_SYSTEM_SKILL_METADATA,
+	AI_AGENT_DROPPED_SKILL_TEMPLATE_NAMES,
+	AI_AGENT_RESERVED_TOOL_SKILL_TEMPLATE_NAMES,
 	AI_AGENT_TOOL_CATALOG,
 	type AiAgentBehaviorSettingKey,
 	type GetCapabilitiesStudioResponse,
@@ -45,7 +44,7 @@ export function resolveToolEnabledState(
 
 function toPromptDocumentResponse(
 	document: AiAgentPromptDocumentSelect
-): GetCapabilitiesStudioResponse["skillDocuments"][number] {
+): GetCapabilitiesStudioResponse["customSkillDocuments"][number] {
 	return {
 		id: document.id,
 		organizationId: document.organizationId,
@@ -66,80 +65,63 @@ function toPromptDocumentResponse(
 export function buildCapabilitiesStudioResponse(input: {
 	aiAgent: AiAgentSelect;
 	documents: AiAgentPromptDocumentSelect[];
-	promptBundle: ResolvedPromptBundle;
 }): GetCapabilitiesStudioResponse {
-	const { aiAgent, documents, promptBundle } = input;
+	const { aiAgent, documents } = input;
 	const behaviorSettings = getBehaviorSettings(aiAgent);
-
-	const tools = AI_AGENT_TOOL_CATALOG.map((tool) => ({
-		id: tool.id,
-		label: tool.label,
-		description: tool.description,
-		category: tool.category,
-		isSystem: tool.isSystem,
-		isRequired: tool.isRequired,
-		isToggleable: tool.isToggleable,
-		behaviorSettingKey: tool.behaviorSettingKey,
-		defaultTemplateNames: [...tool.defaultTemplateNames],
-		enabled: resolveToolEnabledState(behaviorSettings, tool),
-	}));
-
-	const coreDocumentsByName = new Map(
-		documents
-			.filter((document) => document.kind === "core")
-			.map((document) => [document.name, document])
+	const droppedSkillNames = new Set<string>(
+		AI_AGENT_DROPPED_SKILL_TEMPLATE_NAMES
+	);
+	const reservedToolSkillNames = new Set<string>(
+		AI_AGENT_RESERVED_TOOL_SKILL_TEMPLATE_NAMES
 	);
 
-	const systemSkillDocuments = AI_AGENT_SYSTEM_SKILL_METADATA.map((meta) => {
-		const dbDocument = coreDocumentsByName.get(meta.name);
-		const resolved = promptBundle.coreDocuments[meta.name];
+	const allSkillDocuments = documents.filter(
+		(document) =>
+			document.kind === "skill" && !droppedSkillNames.has(document.name)
+	);
+	const skillDocumentsByName = new Map(
+		allSkillDocuments.map((document) => [document.name, document])
+	);
+
+	const tools = AI_AGENT_TOOL_CATALOG.map((tool) => {
+		const overrideSkillDocument = skillDocumentsByName.get(
+			tool.defaultSkill.name
+		);
+		const effectiveSkillContent =
+			overrideSkillDocument?.content ?? tool.defaultSkill.content;
 
 		return {
-			name: meta.name,
-			label: meta.label,
-			description: meta.description,
-			content: resolved.content,
-			source: resolved.source,
-			enabled: dbDocument?.enabled ?? true,
-			priority: dbDocument?.priority ?? resolved.priority ?? 0,
-			documentId: dbDocument?.id ?? null,
+			id: tool.id,
+			label: tool.label,
+			description: tool.description,
+			category: tool.category,
+			group: tool.group,
+			order: tool.order,
+			isSystem: tool.isSystem,
+			isRequired: tool.isRequired,
+			isToggleable: tool.isToggleable,
+			behaviorSettingKey: tool.behaviorSettingKey,
+			enabled: resolveToolEnabledState(behaviorSettings, tool),
+			skillName: tool.defaultSkill.name,
+			skillLabel: tool.defaultSkill.label,
+			skillDescription: tool.defaultSkill.description,
+			skillContent: effectiveSkillContent,
+			skillDocumentId: overrideSkillDocument?.id ?? null,
+			skillHasOverride: Boolean(overrideSkillDocument),
+			skillIsCustomized: overrideSkillDocument
+				? overrideSkillDocument.content.trim() !==
+					tool.defaultSkill.content.trim()
+				: false,
 		};
 	});
 
-	const skillDocuments = documents
-		.filter((document) => document.kind === "skill")
+	const customSkillDocuments = allSkillDocuments
+		.filter((document) => !reservedToolSkillNames.has(document.name))
 		.map(toPromptDocumentResponse);
-
-	const skillDocumentsByName = new Map(
-		skillDocuments.map((document) => [document.name, document])
-	);
-
-	const defaultSkillTemplates = AI_AGENT_DEFAULT_SKILL_TEMPLATES.map(
-		(template) => {
-			const overrideDocument = skillDocumentsByName.get(template.name);
-			const effectiveContent = overrideDocument?.content ?? template.content;
-
-			return {
-				name: template.name,
-				label: template.label,
-				description: template.description,
-				content: effectiveContent,
-				suggestedToolIds: [...template.suggestedToolIds],
-				isEnabled: overrideDocument?.enabled ?? false,
-				hasOverride: Boolean(overrideDocument),
-				isCustomized: overrideDocument
-					? overrideDocument.content.trim() !== template.content.trim()
-					: false,
-				skillDocumentId: overrideDocument?.id ?? null,
-			};
-		}
-	);
 
 	return {
 		aiAgentId: aiAgent.id,
 		tools,
-		defaultSkillTemplates,
-		systemSkillDocuments,
-		skillDocuments,
+		customSkillDocuments,
 	};
 }

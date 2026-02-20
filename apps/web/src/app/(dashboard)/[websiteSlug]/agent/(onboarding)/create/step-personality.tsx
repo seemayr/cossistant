@@ -3,6 +3,7 @@
 import type { RouterOutputs } from "@cossistant/api/types";
 import { AI_AGENT_TOOL_CATALOG } from "@cossistant/types";
 import { motion } from "motion/react";
+import { useMemo } from "react";
 import { CrawlLimitInfo } from "@/components/agents/crawl-limit-info";
 import { ModelSelect } from "@/components/agents/model-select";
 import { Button } from "@/components/ui/button";
@@ -13,12 +14,6 @@ import { AnalysisProgress } from "./analysis-progress";
 import { ManualDescriptionInput } from "./manual-description-input";
 
 type AnalysisStep = "crawling" | "analyzing" | "crafting" | "complete";
-
-const TOOL_MENTION_OPTIONS = AI_AGENT_TOOL_CATALOG.map((tool) => ({
-	id: tool.id,
-	name: tool.label,
-	description: tool.description,
-}));
 
 type StepPersonalityProps = {
 	isAnalyzing: boolean;
@@ -72,6 +67,16 @@ export function StepPersonality({
 	planInfo,
 	crawlPagesLimit,
 }: StepPersonalityProps) {
+	const toolMentionOptions = useMemo(
+		() =>
+			(AI_AGENT_TOOL_CATALOG ?? []).map((tool) => ({
+				id: tool.id,
+				name: tool.label,
+				description: tool.description,
+			})),
+		[]
+	);
+
 	return (
 		<motion.div
 			animate={{ opacity: 1, y: 0 }}
@@ -140,7 +145,7 @@ export function StepPersonality({
 							onChange={setBasePrompt}
 							placeholder="You are a helpful assistant..."
 							rows={10}
-							toolMentions={TOOL_MENTION_OPTIONS}
+							toolMentions={toolMentionOptions}
 							value={basePrompt}
 						/>
 					</div>

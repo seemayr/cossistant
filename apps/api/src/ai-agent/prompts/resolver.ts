@@ -10,7 +10,12 @@ import {
 import type { Database } from "@api/db";
 import { listAiAgentPromptDocuments } from "@api/db/queries/ai-agent-prompt-document";
 import type { AiAgentSelect } from "@api/db/schema/ai-agent";
-import type { AiAgentPromptDocumentSelect } from "@api/db/schema/ai-agent-prompt-document";
+import {
+	AI_AGENT_DROPPED_SKILL_TEMPLATE_NAMES,
+	AI_AGENT_RESERVED_TOOL_SKILL_TEMPLATE_NAMES,
+	AI_AGENT_TOOL_CATALOG,
+	type AiAgentBehaviorSettingKey,
+} from "@cossistant/types";
 import type { ResponseMode } from "../pipeline/2-decision";
 import { getBehaviorSettings } from "../settings";
 import { CORE_SECURITY_PROMPT } from "./security";
@@ -19,7 +24,7 @@ import { PROMPT_TEMPLATES } from "./templates";
 export type ResolvedCorePromptDocument = {
 	name: CorePromptDocumentName;
 	content: string;
-	source: "db" | "fallback";
+	source: "fallback";
 	priority: number;
 };
 
@@ -28,6 +33,7 @@ export type ResolvedSkillPromptDocument = {
 	name: string;
 	content: string;
 	priority: number;
+	source: "tool" | "custom";
 };
 
 export type ResolvedPromptBundle = {
@@ -46,12 +52,10 @@ function buildFallbackCoreDocuments(
 	mode: ResponseMode
 ): Record<CorePromptDocumentName, string> {
 	const settings = getBehaviorSettings(aiAgent);
-
 	const behaviorSections = [
 		buildEscalationInstructions(settings),
 		buildModeBehaviorInstructions(mode),
 	].filter(Boolean);
-
 	const capabilities = buildCapabilitiesInstructions(settings);
 
 	return {
@@ -68,29 +72,37 @@ function buildFallbackCoreDocuments(
 	};
 }
 
-function chooseCoreDocument(
-	documents: AiAgentPromptDocumentSelect[],
-	name: CorePromptDocumentName,
-	fallback: string
-): ResolvedCorePromptDocument {
-	const fromDb = documents.find(
-		(document) => document.kind === "core" && document.name === name
-	);
-	if (fromDb) {
-		return {
-			name,
-			content: fromDb.content,
-			source: "db",
-			priority: fromDb.priority,
-		};
+function getBehaviorSettingValue(
+	settings: ReturnType<typeof getBehaviorSettings>,
+	key: AiAgentBehaviorSettingKey
+): boolean {
+	switch (key) {
+		case "canResolve":
+			return settings.canResolve;
+		case "canMarkSpam":
+			return settings.canMarkSpam;
+		case "canSetPriority":
+			return settings.canSetPriority;
+		case "canEscalate":
+			return settings.canEscalate;
+		case "autoGenerateTitle":
+			return settings.autoGenerateTitle;
+		case "autoAnalyzeSentiment":
+			return settings.autoAnalyzeSentiment;
+		default:
+			return false;
+	}
+}
+
+function isToolEnabledAtRuntime(
+	settings: ReturnType<typeof getBehaviorSettings>,
+	tool: (typeof AI_AGENT_TOOL_CATALOG)[number]
+): boolean {
+	if (!(tool.isToggleable && tool.behaviorSettingKey)) {
+		return true;
 	}
 
-	return {
-		name,
-		content: fallback,
-		source: "fallback",
-		priority: 0,
-	};
+	return getBehaviorSettingValue(settings, tool.behaviorSettingKey);
 }
 
 export async function resolvePromptBundle(
@@ -98,66 +110,84 @@ export async function resolvePromptBundle(
 ): Promise<ResolvedPromptBundle> {
 	const { db, aiAgent, mode } = input;
 	const fallbackDocuments = buildFallbackCoreDocuments(aiAgent, mode);
+	const behaviorSettings = getBehaviorSettings(aiAgent);
+	const droppedSkillNames = new Set<string>(
+		AI_AGENT_DROPPED_SKILL_TEMPLATE_NAMES
+	);
+	const reservedToolSkillNames = new Set<string>(
+		AI_AGENT_RESERVED_TOOL_SKILL_TEMPLATE_NAMES
+	);
 
-	const documents = await listAiAgentPromptDocuments(
+	const coreDocuments = CORE_PROMPT_DOCUMENT_NAMES.reduce(
+		(accumulator, name) => {
+			accumulator[name] = {
+				name,
+				content: fallbackDocuments[name],
+				source: "fallback",
+				priority: 0,
+			};
+			return accumulator;
+		},
+		{} as Record<CorePromptDocumentName, ResolvedCorePromptDocument>
+	);
+
+	const skillDocuments = await listAiAgentPromptDocuments(
 		db,
 		{
 			organizationId: aiAgent.organizationId,
 			websiteId: aiAgent.websiteId,
 			aiAgentId: aiAgent.id,
 		},
-		{ enabled: true }
+		{ kind: "skill" }
+	);
+	const skillDocumentsByName = new Map(
+		skillDocuments.map((document) => [document.name, document])
 	);
 
-	const coreDocuments = CORE_PROMPT_DOCUMENT_NAMES.reduce(
-		(accumulator, name) => {
-			accumulator[name] = chooseCoreDocument(
-				documents,
-				name,
-				fallbackDocuments[name]
-			);
-			return accumulator;
-		},
-		{} as Record<CorePromptDocumentName, ResolvedCorePromptDocument>
-	);
+	const enabledToolSkills: ResolvedSkillPromptDocument[] =
+		AI_AGENT_TOOL_CATALOG.filter((tool) =>
+			isToolEnabledAtRuntime(behaviorSettings, tool)
+		)
+			.filter((tool) => !droppedSkillNames.has(tool.defaultSkill.name))
+			.map((tool) => {
+				const overrideDocument = skillDocumentsByName.get(
+					tool.defaultSkill.name
+				);
+				return {
+					id: overrideDocument?.id ?? `default:${tool.defaultSkill.name}`,
+					name: tool.defaultSkill.name,
+					content: overrideDocument?.content ?? tool.defaultSkill.content,
+					priority: tool.order,
+					source: "tool" as const,
+				};
+			})
+			.sort((a, b) => {
+				if (a.priority !== b.priority) {
+					return a.priority - b.priority;
+				}
+				return a.name.localeCompare(b.name);
+			});
 
-	// capabilities.md must always resolve to content, even if all docs are empty
-	if (!coreDocuments["capabilities.md"].content.trim()) {
-		coreDocuments["capabilities.md"] = {
-			name: "capabilities.md",
-			content: fallbackDocuments["capabilities.md"],
-			source: "fallback",
-			priority: 0,
-		};
-	}
-
-	// decision.md must always resolve to content so the decision stage stays prompt-driven
-	if (!coreDocuments["decision.md"].content.trim()) {
-		coreDocuments["decision.md"] = {
-			name: "decision.md",
-			content: fallbackDocuments["decision.md"],
-			source: "fallback",
-			priority: 0,
-		};
-	}
-
-	const enabledSkills: ResolvedSkillPromptDocument[] = documents
-		.filter((document) => document.kind === "skill")
-		.sort((a, b) => {
-			if (b.priority !== a.priority) {
-				return b.priority - a.priority;
-			}
-			return a.name.localeCompare(b.name);
-		})
+	const enabledCustomSkills: ResolvedSkillPromptDocument[] = skillDocuments
+		.filter((document) => document.enabled)
+		.filter((document) => !reservedToolSkillNames.has(document.name))
+		.filter((document) => !droppedSkillNames.has(document.name))
 		.map((document) => ({
 			id: document.id,
 			name: document.name,
 			content: document.content,
 			priority: document.priority,
-		}));
+			source: "custom" as const,
+		}))
+		.sort((a, b) => {
+			if (b.priority !== a.priority) {
+				return b.priority - a.priority;
+			}
+			return a.name.localeCompare(b.name);
+		});
 
 	return {
 		coreDocuments,
-		enabledSkills,
+		enabledSkills: [...enabledToolSkills, ...enabledCustomSkills],
 	};
 }

@@ -15,6 +15,8 @@ import type { ConversationSeen } from "@cossistant/types/schemas";
 import { AnimatePresence } from "motion/react";
 import type { RefObject } from "react";
 import { memo, useEffect, useMemo, useRef } from "react";
+import { Avatar } from "@/components/ui/avatar";
+import { Logo } from "@/components/ui/logo";
 import type { ConversationHeader } from "@/contexts/inboxes";
 import { useVisitorPresenceById } from "@/contexts/visitor-presence";
 import { useWebsite } from "@/contexts/website";
@@ -24,6 +26,7 @@ import { useSoundPreferences } from "@/hooks/use-sound-preferences";
 import { extractEventPart } from "@/lib/timeline-events";
 import { shouldDisplayToolTimelineItem } from "@/lib/tool-timeline-visibility";
 import { cn } from "@/lib/utils";
+import { getVisitorNameWithFallback } from "@/lib/visitors";
 import { ConversationEvent } from "./event";
 import { TimelineActivityGroup } from "./timeline-activity-group";
 import { TimelineMessageGroup } from "./timeline-message-group";
@@ -49,6 +52,42 @@ type ConversationTimelineListProps = {
 	/** Height of the input/escalation panel for dynamic bottom padding */
 	inputHeight?: number;
 };
+
+function StandaloneToolAvatar({
+	item,
+	teamMembers,
+	visitor,
+}: {
+	item: TimelineItem;
+	teamMembers: RouterOutputs["user"]["getWebsiteMembers"];
+	visitor: ConversationHeader["visitor"];
+}) {
+	if (item.userId) {
+		const member = teamMembers.find((m) => m.id === item.userId);
+		return (
+			<Avatar
+				className="size-6"
+				fallbackName={member?.name || "Team"}
+				url={member?.image}
+			/>
+		);
+	}
+	if (item.aiAgentId) {
+		return (
+			<div className="flex size-6 shrink-0 items-center justify-center">
+				<Logo className="size-5 text-primary/90" />
+			</div>
+		);
+	}
+	const visitorName = getVisitorNameWithFallback(visitor);
+	return (
+		<Avatar
+			className="size-6"
+			fallbackName={visitorName}
+			url={visitor?.contact?.image}
+		/>
+	);
+}
 
 function ConversationTimelineListComponent({
 	ref,
@@ -239,11 +278,22 @@ function ConversationTimelineListComponent({
 								const key = timelineItem.id ?? `timeline-tool-${index}`;
 
 								return (
-									<ToolCall
-										item={timelineItem}
-										key={key}
-										mode={isDeveloperModeEnabled ? "developer" : "default"}
-									/>
+									<div className="flex w-full flex-row gap-2" key={key}>
+										<div className="flex shrink-0 flex-col justify-start pt-0.5">
+											<StandaloneToolAvatar
+												item={timelineItem}
+												teamMembers={teamMembers}
+												visitor={visitor}
+											/>
+										</div>
+										<div className="min-w-0 flex-1">
+											<ToolCall
+												item={timelineItem}
+												mode={isDeveloperModeEnabled ? "developer" : "default"}
+												showIcon={false}
+											/>
+										</div>
+									</div>
 								);
 							}
 

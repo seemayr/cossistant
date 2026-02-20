@@ -486,6 +486,83 @@ describe("groupTimelineItems", () => {
 		}
 	});
 
+	it("renders aiCreditUsage as a standalone timeline_tool", () => {
+		const base = new Date("2024-01-01T12:00:00.000Z").getTime();
+		const items: TimelineItem[] = [
+			createToolItem({
+				id: "credit-1",
+				createdAt: new Date(base).toISOString(),
+				toolName: "aiCreditUsage",
+				aiAgentId: "ai-1",
+			}),
+		];
+		// Set item.tool so the classifier can detect it
+		(items[0] as TimelineItem).tool = "aiCreditUsage";
+
+		const grouped = groupTimelineItems(
+			items,
+			items.map((item) => new Date(item.createdAt).getTime())
+		);
+
+		expect(grouped).toHaveLength(2);
+		expect(grouped[0]?.type).toBe("day_separator");
+		expect(grouped[1]?.type).toBe("timeline_tool");
+
+		if (grouped[1]?.type === "timeline_tool") {
+			expect(grouped[1].item.id).toBe("credit-1");
+			expect(grouped[1].tool).toBe("aiCreditUsage");
+		}
+	});
+
+	it("aiCreditUsage between other tools breaks the activity group", () => {
+		const base = new Date("2024-01-01T12:00:00.000Z").getTime();
+		const creditItem = createToolItem({
+			id: "credit-1",
+			createdAt: new Date(base + 2 * MINUTE_MS).toISOString(),
+			toolName: "aiCreditUsage",
+			aiAgentId: "ai-1",
+		});
+		(creditItem as TimelineItem).tool = "aiCreditUsage";
+
+		const items: TimelineItem[] = [
+			createToolItem({
+				id: "t1",
+				createdAt: new Date(base).toISOString(),
+				toolName: "searchKnowledgeBase",
+				aiAgentId: "ai-1",
+			}),
+			creditItem,
+			createToolItem({
+				id: "t2",
+				createdAt: new Date(base + 3 * MINUTE_MS).toISOString(),
+				toolName: "updateSentiment",
+				aiAgentId: "ai-1",
+			}),
+		];
+
+		const grouped = groupTimelineItems(
+			items,
+			items.map((item) => new Date(item.createdAt).getTime())
+		);
+
+		// day_sep, activity_group(t1), timeline_tool(credit), activity_group(t2)
+		expect(grouped).toHaveLength(4);
+		expect(grouped[0]?.type).toBe("day_separator");
+		expect(grouped[1]?.type).toBe("activity_group");
+		expect(grouped[2]?.type).toBe("timeline_tool");
+		expect(grouped[3]?.type).toBe("activity_group");
+
+		if (grouped[1]?.type === "activity_group") {
+			expect(grouped[1].items.map((item) => item.id)).toEqual(["t1"]);
+		}
+		if (grouped[2]?.type === "timeline_tool") {
+			expect(grouped[2].item.id).toBe("credit-1");
+		}
+		if (grouped[3]?.type === "activity_group") {
+			expect(grouped[3].items.map((item) => item.id)).toEqual(["t2"]);
+		}
+	});
+
 	it("breaks activity groups at day boundaries", () => {
 		const items: TimelineItem[] = [
 			createEventItem({
