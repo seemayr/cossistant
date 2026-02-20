@@ -1,6 +1,8 @@
+import { getBehaviorPromptDefinition } from "@api/ai-agent/behaviors/catalog";
 import {
 	CORE_PROMPT_DOCUMENT_NAMES,
 	type CorePromptDocumentName,
+	EDITABLE_BEHAVIOR_CORE_PROMPT_DOCUMENT_NAME_SET,
 } from "@api/ai-agent/prompts/documents";
 import {
 	buildCapabilitiesInstructions,
@@ -24,7 +26,7 @@ import { PROMPT_TEMPLATES } from "./templates";
 export type ResolvedCorePromptDocument = {
 	name: CorePromptDocumentName;
 	content: string;
-	source: "fallback";
+	source: "fallback" | "override";
 	priority: number;
 };
 
@@ -57,13 +59,19 @@ function buildFallbackCoreDocuments(
 		buildModeBehaviorInstructions(mode),
 	].filter(Boolean);
 	const capabilities = buildCapabilitiesInstructions(settings);
+	const visitorContactBehavior = getBehaviorPromptDefinition("visitor_contact");
+	const smartDecisionBehavior = getBehaviorPromptDefinition("smart_decision");
 
 	return {
 		"agent.md": aiAgent.basePrompt,
 		"security.md": CORE_SECURITY_PROMPT,
 		"behaviour.md": behaviorSections.join("\n\n"),
+		"visitor-contact.md":
+			visitorContactBehavior?.defaultContent ??
+			PROMPT_TEMPLATES.VISITOR_IDENTIFICATION_SOFT,
 		"participation.md": PROMPT_TEMPLATES.PARTICIPATION_POLICY,
-		"decision.md": PROMPT_TEMPLATES.DECISION_POLICY,
+		"decision.md":
+			smartDecisionBehavior?.defaultContent ?? PROMPT_TEMPLATES.DECISION_POLICY,
 		"grounding.md":
 			mode === "respond_to_visitor"
 				? PROMPT_TEMPLATES.GROUNDING_INSTRUCTIONS
@@ -131,14 +139,36 @@ export async function resolvePromptBundle(
 		{} as Record<CorePromptDocumentName, ResolvedCorePromptDocument>
 	);
 
-	const skillDocuments = await listAiAgentPromptDocuments(
-		db,
-		{
-			organizationId: aiAgent.organizationId,
-			websiteId: aiAgent.websiteId,
-			aiAgentId: aiAgent.id,
-		},
-		{ kind: "skill" }
+	const promptDocuments = await listAiAgentPromptDocuments(db, {
+		organizationId: aiAgent.organizationId,
+		websiteId: aiAgent.websiteId,
+		aiAgentId: aiAgent.id,
+	});
+
+	for (const document of promptDocuments) {
+		if (document.kind !== "core" || !document.enabled) {
+			continue;
+		}
+
+		if (!EDITABLE_BEHAVIOR_CORE_PROMPT_DOCUMENT_NAME_SET.has(document.name)) {
+			continue;
+		}
+
+		const coreName = document.name as CorePromptDocumentName;
+		if (!coreDocuments[coreName]) {
+			continue;
+		}
+
+		coreDocuments[coreName] = {
+			name: coreName,
+			content: document.content,
+			source: "override",
+			priority: document.priority,
+		};
+	}
+
+	const skillDocuments = promptDocuments.filter(
+		(document) => document.kind === "skill"
 	);
 	const skillDocumentsByName = new Map(
 		skillDocuments.map((document) => [document.name, document])

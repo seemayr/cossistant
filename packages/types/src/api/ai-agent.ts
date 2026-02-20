@@ -31,11 +31,26 @@ const AI_AGENT_CORE_PROMPT_DOCUMENT_NAMES = [
 	"agent.md",
 	"security.md",
 	"behaviour.md",
+	"visitor-contact.md",
 	"participation.md",
 	"decision.md",
 	"grounding.md",
 	"capabilities.md",
 ] as const;
+
+export const AI_AGENT_BEHAVIOR_PROMPT_IDS = [
+	"visitor_contact",
+	"smart_decision",
+] as const;
+export type AiAgentBehaviorPromptId =
+	(typeof AI_AGENT_BEHAVIOR_PROMPT_IDS)[number];
+
+export const AI_AGENT_BEHAVIOR_PROMPT_DOCUMENT_NAMES = [
+	"visitor-contact.md",
+	"decision.md",
+] as const;
+export type AiAgentBehaviorPromptDocumentName =
+	(typeof AI_AGENT_BEHAVIOR_PROMPT_DOCUMENT_NAMES)[number];
 
 export const aiAgentPromptDocumentKindSchema = z.enum(["core", "skill"]);
 
@@ -599,6 +614,85 @@ export const resetToolSkillOverrideRequestSchema = z.object({
 	toolId: aiAgentToolIdSchema,
 });
 
+export const aiAgentBehaviorPromptIdSchema = z.enum(
+	AI_AGENT_BEHAVIOR_PROMPT_IDS
+);
+export const aiAgentBehaviorPromptDocumentNameSchema = z.enum(
+	AI_AGENT_BEHAVIOR_PROMPT_DOCUMENT_NAMES
+);
+
+export const aiAgentBehaviorPromptPresetSchema = z.object({
+	id: z.string(),
+	label: z.string(),
+	description: z.string(),
+	content: z.string(),
+});
+
+export const aiAgentBehaviorStudioEntrySchema = z.object({
+	id: aiAgentBehaviorPromptIdSchema,
+	label: z.string(),
+	description: z.string(),
+	documentName: aiAgentBehaviorPromptDocumentNameSchema,
+	content: z.string(),
+	defaultContent: z.string(),
+	hasOverride: z.boolean(),
+	documentId: z.ulid().nullable(),
+	presets: z.array(aiAgentBehaviorPromptPresetSchema),
+});
+
+export const getBehaviorStudioRequestSchema = z.object({
+	websiteSlug: z.string().openapi({
+		description: "The website slug.",
+		example: "my-website",
+	}),
+	aiAgentId: z.ulid().openapi({
+		description: "The AI agent ID.",
+		example: "01JG000000000000000000000",
+	}),
+});
+
+export const getBehaviorStudioResponseSchema = z.object({
+	aiAgentId: z.ulid(),
+	behaviors: z.array(aiAgentBehaviorStudioEntrySchema),
+});
+
+export const upsertBehaviorPromptRequestSchema = z.object({
+	websiteSlug: z.string().openapi({
+		description: "The website slug.",
+		example: "my-website",
+	}),
+	aiAgentId: z.ulid().openapi({
+		description: "The AI agent ID.",
+		example: "01JG000000000000000000000",
+	}),
+	behaviorId: aiAgentBehaviorPromptIdSchema,
+	content: z.string().max(50_000).openapi({
+		description: "Prompt content for the selected behavior.",
+		example: "## Visitor Identification\\nAsk only if needed for account work.",
+	}),
+});
+
+export const upsertBehaviorPromptResponseSchema = z.object({
+	removed: z.boolean(),
+	document: aiAgentPromptDocumentResponseSchema.nullable(),
+});
+
+export const resetBehaviorPromptRequestSchema = z.object({
+	websiteSlug: z.string().openapi({
+		description: "The website slug.",
+		example: "my-website",
+	}),
+	aiAgentId: z.ulid().openapi({
+		description: "The AI agent ID.",
+		example: "01JG000000000000000000000",
+	}),
+	behaviorId: aiAgentBehaviorPromptIdSchema,
+});
+
+export const resetBehaviorPromptResponseSchema = z.object({
+	removed: z.boolean(),
+});
+
 export type AiAgentResponse = z.infer<typeof aiAgentResponseSchema>;
 export type CreateAiAgentRequest = z.infer<typeof createAiAgentRequestSchema>;
 export type UpdateAiAgentRequest = z.infer<typeof updateAiAgentRequestSchema>;
@@ -642,6 +736,30 @@ export type UpsertToolSkillOverrideRequest = z.infer<
 >;
 export type ResetToolSkillOverrideRequest = z.infer<
 	typeof resetToolSkillOverrideRequestSchema
+>;
+export type AiAgentBehaviorPromptPreset = z.infer<
+	typeof aiAgentBehaviorPromptPresetSchema
+>;
+export type AiAgentBehaviorStudioEntry = z.infer<
+	typeof aiAgentBehaviorStudioEntrySchema
+>;
+export type GetBehaviorStudioRequest = z.infer<
+	typeof getBehaviorStudioRequestSchema
+>;
+export type GetBehaviorStudioResponse = z.infer<
+	typeof getBehaviorStudioResponseSchema
+>;
+export type UpsertBehaviorPromptRequest = z.infer<
+	typeof upsertBehaviorPromptRequestSchema
+>;
+export type UpsertBehaviorPromptResponse = z.infer<
+	typeof upsertBehaviorPromptResponseSchema
+>;
+export type ResetBehaviorPromptRequest = z.infer<
+	typeof resetBehaviorPromptRequestSchema
+>;
+export type ResetBehaviorPromptResponse = z.infer<
+	typeof resetBehaviorPromptResponseSchema
 >;
 
 /**
@@ -689,15 +807,6 @@ export const aiAgentBehaviorSettingsSchema = z
 				"Maximum number of non-finish tool invocations allowed per run.",
 			example: 15,
 		}),
-
-		// Visitor identification
-		visitorContactPolicy: z
-			.enum(["only_if_needed", "ask_early", "ask_after_time"])
-			.openapi({
-				description:
-					"How aggressively the AI should ask for visitor contact information.",
-				example: "only_if_needed",
-			}),
 
 		// Background analysis
 		autoAnalyzeSentiment: z.boolean().openapi({

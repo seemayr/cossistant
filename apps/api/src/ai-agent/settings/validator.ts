@@ -30,12 +30,6 @@ export const behaviorSettingsSchema = z.object({
 	defaultEscalationUserId: z.string().nullable(),
 	maxToolInvocationsPerRun: z.number(),
 
-	visitorContactPolicy: z.enum([
-		"only_if_needed",
-		"ask_early",
-		"ask_after_time",
-	]),
-
 	autoAnalyzeSentiment: z.boolean(),
 	autoGenerateTitle: z.boolean(),
 	autoCategorize: z.boolean(),

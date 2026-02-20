@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import type { AiAgentSelect } from "@api/db/schema/ai-agent";
 import type { ConversationSelect } from "@api/db/schema/conversation";
 import type { RoleAwareMessage } from "../context/conversation";
+import type { VisitorContext } from "../context/visitor";
 import { getDefaultBehaviorSettings } from "../settings/defaults";
 import { buildSystemPrompt, type PromptSkillDocument } from "./system";
 
@@ -55,6 +56,22 @@ function buildPromptWithSkills(skills?: PromptSkillDocument[]): string {
 	});
 }
 
+function buildPromptWithVisitor(options: {
+	visitorContext: VisitorContext | null;
+	promptBundle?: Parameters<typeof buildSystemPrompt>[0]["promptBundle"];
+	mode?: Parameters<typeof buildSystemPrompt>[0]["mode"];
+}): string {
+	return buildSystemPrompt({
+		aiAgent: createAgent(),
+		conversation: createConversation(),
+		conversationHistory: [] as RoleAwareMessage[],
+		visitorContext: options.visitorContext,
+		mode: options.mode ?? "respond_to_visitor",
+		humanCommand: null,
+		promptBundle: options.promptBundle,
+	});
+}
+
 describe("buildSystemPrompt skill sections", () => {
 	it("renders required tool skills and contextual custom skills in separate sections", () => {
 		const prompt = buildPromptWithSkills([
@@ -88,5 +105,86 @@ describe("buildSystemPrompt skill sections", () => {
 
 		expect(prompt).not.toContain("## Tool Skills (Required)");
 		expect(prompt).not.toContain("## Custom Skills (Contextual)");
+	});
+});
+
+describe("buildSystemPrompt visitor contact behavior", () => {
+	it("includes visitor contact instructions for unidentified visitors", () => {
+		const prompt = buildPromptWithVisitor({
+			visitorContext: { isIdentified: false } as VisitorContext,
+		});
+
+		expect(prompt).toContain("## Visitor Identification");
+		expect(prompt).toContain("only if needed");
+	});
+
+	it("uses visitor-contact core override when provided", () => {
+		const prompt = buildPromptWithVisitor({
+			visitorContext: { isIdentified: false } as VisitorContext,
+			promptBundle: {
+				coreDocuments: {
+					"security.md": {
+						name: "security.md",
+						content: "",
+						source: "fallback",
+						priority: 0,
+					},
+					"agent.md": {
+						name: "agent.md",
+						content: "",
+						source: "fallback",
+						priority: 0,
+					},
+					"behaviour.md": {
+						name: "behaviour.md",
+						content: "",
+						source: "fallback",
+						priority: 0,
+					},
+					"visitor-contact.md": {
+						name: "visitor-contact.md",
+						content:
+							"## Visitor Identification\\n\\nCustom visitor contact policy.",
+						source: "override",
+						priority: 1,
+					},
+					"participation.md": {
+						name: "participation.md",
+						content: "",
+						source: "fallback",
+						priority: 0,
+					},
+					"decision.md": {
+						name: "decision.md",
+						content: "",
+						source: "fallback",
+						priority: 0,
+					},
+					"grounding.md": {
+						name: "grounding.md",
+						content: "",
+						source: "fallback",
+						priority: 0,
+					},
+					"capabilities.md": {
+						name: "capabilities.md",
+						content: "",
+						source: "fallback",
+						priority: 0,
+					},
+				},
+				enabledSkills: [],
+			},
+		});
+
+		expect(prompt).toContain("Custom visitor contact policy.");
+	});
+
+	it("does not include visitor contact behavior when visitor is already identified", () => {
+		const prompt = buildPromptWithVisitor({
+			visitorContext: { isIdentified: true } as VisitorContext,
+		});
+
+		expect(prompt).not.toContain("## Visitor Identification");
 	});
 });

@@ -38,10 +38,6 @@ export type AiAgentBehaviorSettings = {
 	/** Maximum tool calls allowed per pipeline run (excluding finish actions) */
 	maxToolInvocationsPerRun: number;
 
-	// Visitor identification
-	/** How aggressively the AI should ask for visitor contact info */
-	visitorContactPolicy: "only_if_needed" | "ask_early" | "ask_after_time";
-
 	// Background analysis (runs silently, creates private events)
 	/** Automatically analyze and set conversation sentiment */
 	autoAnalyzeSentiment: boolean;

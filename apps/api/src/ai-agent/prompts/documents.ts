@@ -4,6 +4,7 @@ export const CORE_PROMPT_DOCUMENT_NAMES = [
 	"agent.md",
 	"security.md",
 	"behaviour.md",
+	"visitor-contact.md",
 	"participation.md",
 	"decision.md",
 	"grounding.md",
@@ -15,6 +16,15 @@ export type CorePromptDocumentName =
 
 export const RESERVED_CORE_PROMPT_DOCUMENT_NAMES = new Set<string>(
 	CORE_PROMPT_DOCUMENT_NAMES
+);
+
+export const EDITABLE_BEHAVIOR_CORE_PROMPT_DOCUMENT_NAMES = [
+	"visitor-contact.md",
+	"decision.md",
+] as const;
+
+export const EDITABLE_BEHAVIOR_CORE_PROMPT_DOCUMENT_NAME_SET = new Set<string>(
+	EDITABLE_BEHAVIOR_CORE_PROMPT_DOCUMENT_NAMES
 );
 
 export const SKILL_PROMPT_NAME_REGEX = /^[a-z0-9][a-z0-9-]{1,62}\.md$/;

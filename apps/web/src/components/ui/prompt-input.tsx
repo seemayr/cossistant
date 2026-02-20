@@ -2,7 +2,7 @@
 
 import { Maximize2 } from "lucide-react";
 import type * as React from "react";
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { PromptEditModal } from "@/components/ui/prompt-edit-modal";
@@ -37,6 +37,8 @@ export function PromptInput({
 }: PromptInputProps) {
 	const [isDialogOpen, setIsDialogOpen] = useState(false);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
+	const generatedInputId = useId();
+	const inputId = `prompt-input-${generatedInputId.replace(/:/g, "")}`;
 
 	const characterCount = value.length;
 	const isOverLimit = characterCount > maxLength;
@@ -45,7 +47,7 @@ export function PromptInput({
 	return (
 		<div className="flex flex-col gap-2">
 			{label && (
-				<label className="font-medium text-sm" htmlFor="prompt-input">
+				<label className="font-medium text-sm" htmlFor={inputId}>
 					{label}
 				</label>
 			)}
@@ -86,12 +88,12 @@ export function PromptInput({
 					>
 						<textarea
 							className={cn(
-								"field-sizing-content flex w-full resize-none border-0 bg-transparent px-3 py-3 pt-10 font-mono text-sm outline-none",
+								"field-sizing-content flex w-full resize-none border-0 bg-transparent px-3 py-10 py-3 font-mono text-sm outline-none",
 								"placeholder:text-muted-foreground",
 								"disabled:cursor-not-allowed"
 							)}
 							disabled={disabled}
-							id="prompt-input"
+							id={inputId}
 							onChange={(e) => onChange(e.target.value)}
 							placeholder={placeholder}
 							ref={textareaRef}
@@ -100,18 +102,22 @@ export function PromptInput({
 						/>
 					</ScrollArea>
 				</div>
-			</div>
-			<div className="flex items-center justify-between">
-				{error ? <p className="text-destructive text-xs">{error}</p> : <div />}
-				<span
-					className={cn(
-						"text-muted-foreground text-xs tabular-nums",
-						isNearLimit && "text-amber-500",
-						isOverLimit && "text-destructive"
+				<div className="absolute right-1 bottom-1 flex items-center justify-between rounded bg-background px-1">
+					{error ? (
+						<p className="text-destructive text-xs">{error}</p>
+					) : (
+						<div />
 					)}
-				>
-					{characterCount.toLocaleString()} / {maxLength.toLocaleString()}
-				</span>
+					<span
+						className={cn(
+							"text-muted-foreground text-xs tabular-nums",
+							isNearLimit && "text-amber-500",
+							isOverLimit && "text-destructive"
+						)}
+					>
+						{characterCount.toLocaleString()} / {maxLength.toLocaleString()}
+					</span>
+				</div>
 			</div>
 
 			<PromptEditModal

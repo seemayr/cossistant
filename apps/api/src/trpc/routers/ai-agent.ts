@@ -1,3 +1,7 @@
+import {
+	getBehaviorPromptCatalog,
+	getBehaviorPromptDefinition,
+} from "@api/ai-agent/behaviors/catalog";
 import { buildCapabilitiesStudioResponse } from "@api/ai-agent/capabilities-studio";
 import {
 	PromptDocumentConflictError,
@@ -16,10 +20,12 @@ import {
 } from "@api/db/queries/ai-agent";
 import {
 	createAiAgentSkillPromptDocument,
+	deleteAiAgentCorePromptDocumentByName,
 	deleteAiAgentSkillPromptDocument,
 	listAiAgentPromptDocuments,
 	toggleAiAgentSkillPromptDocument,
 	updateAiAgentSkillPromptDocument,
+	upsertAiAgentCorePromptDocument,
 } from "@api/db/queries/ai-agent-prompt-document";
 import {
 	getWebsiteBySlugWithAccess,
@@ -50,8 +56,12 @@ import {
 	getAiAgentRequestSchema,
 	getBehaviorSettingsRequestSchema,
 	getBehaviorSettingsResponseSchema,
+	getBehaviorStudioRequestSchema,
+	getBehaviorStudioResponseSchema,
 	getCapabilitiesStudioRequestSchema,
 	getCapabilitiesStudioResponseSchema,
+	resetBehaviorPromptRequestSchema,
+	resetBehaviorPromptResponseSchema,
 	resetToolSkillOverrideRequestSchema,
 	toggleAiAgentActiveRequestSchema,
 	toggleSkillDocumentRequestSchema,
@@ -59,6 +69,8 @@ import {
 	updateBehaviorSettingsRequestSchema,
 	updateBehaviorSettingsResponseSchema,
 	updateSkillDocumentRequestSchema,
+	upsertBehaviorPromptRequestSchema,
+	upsertBehaviorPromptResponseSchema,
 	upsertToolSkillOverrideRequestSchema,
 } from "@cossistant/types";
 import { TRPCError } from "@trpc/server";
@@ -706,6 +718,201 @@ export const aiAgentRouter = createTRPCRouter({
 
 			// Return the updated settings merged with defaults
 			return getBehaviorSettings(agent);
+		}),
+
+	getBehaviorStudio: protectedProcedure
+		.input(getBehaviorStudioRequestSchema)
+		.output(getBehaviorStudioResponseSchema)
+		.query(async ({ ctx: { db, user }, input }) => {
+			const websiteData = await getWebsiteBySlugWithAccess(db, {
+				userId: user.id,
+				websiteSlug: input.websiteSlug,
+			});
+
+			if (!websiteData) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Website not found or access denied",
+				});
+			}
+
+			const agent = await getAiAgentForWebsite(db, {
+				websiteId: websiteData.id,
+				organizationId: websiteData.organizationId,
+			});
+
+			if (!agent || agent.id !== input.aiAgentId) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "AI agent not found",
+				});
+			}
+
+			const coreDocuments = await listAiAgentPromptDocuments(
+				db,
+				{
+					organizationId: websiteData.organizationId,
+					websiteId: websiteData.id,
+					aiAgentId: input.aiAgentId,
+				},
+				{ kind: "core" }
+			);
+			const coreDocumentByName = new Map(
+				coreDocuments
+					.filter((document) => document.enabled)
+					.map((document) => [document.name, document])
+			);
+
+			const behaviors = getBehaviorPromptCatalog().map((behavior) => {
+				const overrideDocument = coreDocumentByName.get(behavior.documentName);
+				const content = overrideDocument?.content ?? behavior.defaultContent;
+				const hasOverride = overrideDocument
+					? overrideDocument.content.trim() !== behavior.defaultContent.trim()
+					: false;
+
+				return {
+					id: behavior.id,
+					label: behavior.label,
+					description: behavior.description,
+					documentName: behavior.documentName,
+					content,
+					defaultContent: behavior.defaultContent,
+					hasOverride,
+					documentId: overrideDocument?.id ?? null,
+					presets: [...behavior.presets],
+				};
+			});
+
+			return {
+				aiAgentId: agent.id,
+				behaviors,
+			};
+		}),
+
+	upsertBehaviorPrompt: protectedProcedure
+		.input(upsertBehaviorPromptRequestSchema)
+		.output(upsertBehaviorPromptResponseSchema)
+		.mutation(async ({ ctx: { db, user }, input }) => {
+			const websiteData = await getWebsiteBySlugWithAccess(db, {
+				userId: user.id,
+				websiteSlug: input.websiteSlug,
+			});
+
+			if (!websiteData) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Website not found or access denied",
+				});
+			}
+
+			const agent = await getAiAgentForWebsite(db, {
+				websiteId: websiteData.id,
+				organizationId: websiteData.organizationId,
+			});
+
+			if (!agent || agent.id !== input.aiAgentId) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "AI agent not found",
+				});
+			}
+
+			const behaviorDefinition = getBehaviorPromptDefinition(input.behaviorId);
+			if (!behaviorDefinition) {
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message: "Unknown behavior id",
+				});
+			}
+
+			const nextContent = input.content.trim();
+			if (!nextContent) {
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message: "Behavior content cannot be empty",
+				});
+			}
+
+			const defaultContent = behaviorDefinition.defaultContent.trim();
+			if (nextContent === defaultContent) {
+				const removed = await deleteAiAgentCorePromptDocumentByName(db, {
+					organizationId: websiteData.organizationId,
+					websiteId: websiteData.id,
+					aiAgentId: input.aiAgentId,
+					name: behaviorDefinition.documentName,
+				});
+
+				return {
+					removed,
+					document: null,
+				};
+			}
+
+			try {
+				const document = await upsertAiAgentCorePromptDocument(db, {
+					organizationId: websiteData.organizationId,
+					websiteId: websiteData.id,
+					aiAgentId: input.aiAgentId,
+					name: behaviorDefinition.documentName,
+					content: nextContent,
+					updatedByUserId: user.id,
+				});
+
+				return {
+					removed: false,
+					document: toPromptDocumentResponse(document),
+				};
+			} catch (error) {
+				handlePromptDocumentMutationError(error);
+			}
+		}),
+
+	resetBehaviorPrompt: protectedProcedure
+		.input(resetBehaviorPromptRequestSchema)
+		.output(resetBehaviorPromptResponseSchema)
+		.mutation(async ({ ctx: { db, user }, input }) => {
+			const websiteData = await getWebsiteBySlugWithAccess(db, {
+				userId: user.id,
+				websiteSlug: input.websiteSlug,
+			});
+
+			if (!websiteData) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Website not found or access denied",
+				});
+			}
+
+			const agent = await getAiAgentForWebsite(db, {
+				websiteId: websiteData.id,
+				organizationId: websiteData.organizationId,
+			});
+
+			if (!agent || agent.id !== input.aiAgentId) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "AI agent not found",
+				});
+			}
+
+			const behaviorDefinition = getBehaviorPromptDefinition(input.behaviorId);
+			if (!behaviorDefinition) {
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message: "Unknown behavior id",
+				});
+			}
+
+			const removed = await deleteAiAgentCorePromptDocumentByName(db, {
+				organizationId: websiteData.organizationId,
+				websiteId: websiteData.id,
+				aiAgentId: input.aiAgentId,
+				name: behaviorDefinition.documentName,
+			});
+
+			return {
+				removed,
+			};
 		}),
 
 	getCapabilitiesStudio: protectedProcedure

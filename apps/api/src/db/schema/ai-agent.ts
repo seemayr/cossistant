@@ -25,13 +25,11 @@ import { website } from "./website";
  * These settings control how the AI agent behaves in conversations.
  */
 export type AiAgentBehaviorSettings = {
-	// Response triggers
-	responseMode: "always" | "when_no_human" | "on_mention" | "manual";
-	responseDelayMs: number;
-
-	// Human interaction
-	pauseOnHumanReply: boolean;
-	pauseDurationMinutes: number | null;
+	// Legacy keys kept optional for backward compatibility
+	responseMode?: "always" | "when_no_human" | "on_mention" | "manual";
+	responseDelayMs?: number;
+	pauseOnHumanReply?: boolean;
+	pauseDurationMinutes?: number | null;
 
 	// Capability toggles
 	canResolve: boolean;
@@ -43,11 +41,8 @@ export type AiAgentBehaviorSettings = {
 
 	// Escalation config
 	defaultEscalationUserId: string | null;
-	autoAssignOnEscalation: boolean;
+	autoAssignOnEscalation?: boolean;
 	maxToolInvocationsPerRun: number;
-
-	// Visitor identification
-	visitorContactPolicy: "only_if_needed" | "ask_early" | "ask_after_time";
 
 	// Background analysis (runs silently)
 	autoAnalyzeSentiment: boolean;

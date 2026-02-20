@@ -7,6 +7,7 @@
 import type { AiAgentSelect } from "@api/db/schema/ai-agent";
 import type { ConversationSelect } from "@api/db/schema/conversation";
 import type { ToolSet } from "ai";
+import { getBehaviorPromptDefinition } from "../behaviors/catalog";
 import type { RoleAwareMessage } from "../context/conversation";
 import {
 	formatConversationMetaForPrompt,
@@ -86,6 +87,7 @@ export function buildSystemPrompt(input: BuildPromptInput): string {
 	} = input;
 	const settings = getBehaviorSettings(aiAgent);
 	const coreDocuments = promptBundle?.coreDocuments;
+	const visitorContactBehavior = getBehaviorPromptDefinition("visitor_contact");
 
 	const securityDocument = getCoreDocumentContent(
 		coreDocuments?.["security.md"]?.content,
@@ -110,6 +112,11 @@ export function buildSystemPrompt(input: BuildPromptInput): string {
 	const capabilitiesDocument = getCoreDocumentContent(
 		coreDocuments?.["capabilities.md"]?.content,
 		""
+	);
+	const visitorContactDocument = getCoreDocumentContent(
+		coreDocuments?.["visitor-contact.md"]?.content,
+		visitorContactBehavior?.defaultContent ??
+			PROMPT_TEMPLATES.VISITOR_IDENTIFICATION_SOFT
 	);
 
 	const parts: string[] = [];
@@ -144,36 +151,13 @@ export function buildSystemPrompt(input: BuildPromptInput): string {
 	}
 
 	// Ask for identification only when visitor isn't identified and we're responding
-	if (visitorContext && visitorContext.isIdentified === false) {
-		const conversationMeta = getConversationMeta(
-			conversation,
-			conversationHistory
-		);
-		const visitorMessageCount = conversationMeta.visitorMessageCount;
-		const policy = settings.visitorContactPolicy ?? "only_if_needed";
-
-		let identificationPrompt: string | null = null;
-
-		if (mode === "respond_to_visitor") {
-			switch (policy) {
-				case "ask_early":
-					identificationPrompt = PROMPT_TEMPLATES.VISITOR_IDENTIFICATION_EARLY;
-					break;
-				case "ask_after_time":
-					if (visitorMessageCount >= 2) {
-						identificationPrompt =
-							PROMPT_TEMPLATES.VISITOR_IDENTIFICATION_DELAYED;
-					}
-					break;
-				default:
-					identificationPrompt = PROMPT_TEMPLATES.VISITOR_IDENTIFICATION_SOFT;
-					break;
-			}
-		}
-
-		if (identificationPrompt) {
-			parts.push(identificationPrompt);
-		}
+	if (
+		mode === "respond_to_visitor" &&
+		visitorContext &&
+		visitorContext.isIdentified === false &&
+		visitorContactDocument
+	) {
+		parts.push(visitorContactDocument);
 	}
 
 	// Add grounding instructions to prevent hallucinations

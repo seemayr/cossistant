@@ -1,3 +1,4 @@
+import { validateBehaviorSettings } from "@api/ai-agent/settings";
 import type { Database } from "@api/db";
 import {
 	type AiAgentBehaviorSettings,
@@ -333,10 +334,10 @@ export async function updateAiAgentBehaviorSettings(
 	}
 
 	// Merge new settings with existing settings
-	const mergedSettings: AiAgentBehaviorSettings = {
+	const mergedSettings = validateBehaviorSettings({
 		...(currentAgent.behaviorSettings ?? {}),
 		...params.behaviorSettings,
-	} as AiAgentBehaviorSettings;
+	});
 
 	const [agent] = await db
 		.update(aiAgent)

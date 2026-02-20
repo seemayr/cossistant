@@ -73,6 +73,27 @@ function createSkillDocument(
 	};
 }
 
+function createCoreDocument(
+	overrides: Partial<AiAgentPromptDocumentSelect>
+): AiAgentPromptDocumentSelect {
+	return {
+		id: "01JTESTCOREDOC0000000000",
+		organizationId: "01JTESTORG00000000000000",
+		websiteId: "01JTESTWEB00000000000000",
+		aiAgentId: "01JTESTAGENT0000000000000",
+		kind: "core",
+		name: "decision.md",
+		content: "## Decision Policy\n\nFallback decision policy",
+		enabled: true,
+		priority: 0,
+		createdByUserId: null,
+		updatedByUserId: null,
+		createdAt: new Date().toISOString(),
+		updatedAt: new Date().toISOString(),
+		...overrides,
+	};
+}
+
 describe("resolvePromptBundle", () => {
 	beforeEach(() => {
 		mockedDocuments = [];
@@ -139,6 +160,34 @@ describe("resolvePromptBundle", () => {
 		);
 		expect(resolveSkill?.content).toBe("custom resolve behavior");
 		expect(resolveSkill?.source).toBe("tool");
+	});
+
+	it("loads editable core overrides and ignores non-editable core overrides", async () => {
+		mockedDocuments = [
+			createCoreDocument({
+				id: "01JTESTDECISIONOVERRIDE0000",
+				name: "decision.md",
+				content: "custom decision core document",
+			}),
+			createCoreDocument({
+				id: "01JTESTSECURITYOVERRIDE0000",
+				name: "security.md",
+				content: "attempted security override",
+			}),
+		];
+
+		const { resolvePromptBundle } = await resolverModulePromise;
+		const bundle = await resolvePromptBundle({
+			db: {} as never,
+			aiAgent: createAgent(),
+			mode: "respond_to_visitor",
+		});
+
+		expect(bundle.coreDocuments["decision.md"]?.content).toBe(
+			"custom decision core document"
+		);
+		expect(bundle.coreDocuments["decision.md"]?.source).toBe("override");
+		expect(bundle.coreDocuments["security.md"]?.source).toBe("fallback");
 	});
 
 	it("includes enabled custom skills and excludes dropped names", async () => {

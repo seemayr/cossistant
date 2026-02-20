@@ -45,9 +45,6 @@ export function getDefaultBehaviorSettings(): AiAgentBehaviorSettings {
 		defaultEscalationUserId: null,
 		maxToolInvocationsPerRun: DEFAULT_TOOL_INVOCATIONS_PER_RUN,
 
-		// Visitor identification
-		visitorContactPolicy: "only_if_needed",
-
 		// Background analysis - all enabled by default
 		autoAnalyzeSentiment: true,
 		autoGenerateTitle: true,
@@ -77,9 +74,18 @@ export function getBehaviorSettings(
 	};
 
 	return {
-		...merged,
+		canResolve: merged.canResolve,
+		canMarkSpam: merged.canMarkSpam,
+		canAssign: merged.canAssign,
+		canSetPriority: merged.canSetPriority,
+		canCategorize: merged.canCategorize,
+		canEscalate: merged.canEscalate,
+		defaultEscalationUserId: merged.defaultEscalationUserId,
 		maxToolInvocationsPerRun: clampToolInvocationBudget(
 			merged.maxToolInvocationsPerRun
 		),
+		autoAnalyzeSentiment: merged.autoAnalyzeSentiment,
+		autoGenerateTitle: merged.autoGenerateTitle,
+		autoCategorize: merged.autoCategorize,
 	};
 }

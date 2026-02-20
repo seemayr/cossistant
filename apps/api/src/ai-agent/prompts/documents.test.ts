@@ -11,8 +11,12 @@ describe("prompt document rules", () => {
 	it("accepts reserved core document names", () => {
 		expect(isCorePromptDocumentName("capabilities.md")).toBe(true);
 		expect(isCorePromptDocumentName("decision.md")).toBe(true);
+		expect(isCorePromptDocumentName("visitor-contact.md")).toBe(true);
 		expect(() => assertCorePromptDocumentName("capabilities.md")).not.toThrow();
 		expect(() => assertCorePromptDocumentName("decision.md")).not.toThrow();
+		expect(() =>
+			assertCorePromptDocumentName("visitor-contact.md")
+		).not.toThrow();
 	});
 
 	it("rejects non-core names for core documents", () => {
@@ -26,10 +30,14 @@ describe("prompt document rules", () => {
 		expect(isValidSkillPromptDocumentName("Capable.md")).toBe(false);
 		expect(isValidSkillPromptDocumentName("capabilities.md")).toBe(false);
 		expect(isValidSkillPromptDocumentName("decision.md")).toBe(false);
+		expect(isValidSkillPromptDocumentName("visitor-contact.md")).toBe(false);
 		expect(() => assertSkillPromptDocumentName("capabilities.md")).toThrow(
 			PromptDocumentValidationError
 		);
 		expect(() => assertSkillPromptDocumentName("decision.md")).toThrow(
+			PromptDocumentValidationError
+		);
+		expect(() => assertSkillPromptDocumentName("visitor-contact.md")).toThrow(
 			PromptDocumentValidationError
 		);
 	});

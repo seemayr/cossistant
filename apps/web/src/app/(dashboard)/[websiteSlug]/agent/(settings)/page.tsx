@@ -15,9 +15,7 @@ import { useWebsite } from "@/contexts/website";
 import { useTRPC } from "@/lib/trpc/client";
 import { AIAgentForm } from "../ai-agent-form";
 import { DeleteAgentDialog } from "../delete-agent-dialog";
-import { BackgroundAnalysisForm } from "./behavior/background-analysis-form";
 import { ToolInvocationBudgetForm } from "./behavior/tool-invocation-budget-form";
-import { VisitorContactForm } from "./behavior/visitor-contact-form";
 
 export default function AgentsPage() {
 	const website = useWebsite();
@@ -73,19 +71,17 @@ export default function AgentsPage() {
 					<div className="space-y-8">
 						<SettingsRow
 							description="Loading behavior settings..."
-							title="Visitor Contact Policy"
+							title="Tool Invocation Budget"
 						>
 							<div className="space-y-3 p-4">
-								<Skeleton className="h-10 w-full" />
-								<Skeleton className="h-10 w-full" />
 								<Skeleton className="h-10 w-full" />
 							</div>
 						</SettingsRow>
 					</div>
 				) : isBehaviorSettingsError ? (
 					<SettingsRow
-						description="Policy controls for contact collection and background analysis."
-						title="Agent Policies"
+						description="Control how many non-finish tool invocations the AI can use per run."
+						title="Tool Invocation Budget"
 					>
 						<div className="p-4">
 							<p className="text-destructive text-sm">
@@ -94,40 +90,16 @@ export default function AgentsPage() {
 						</div>
 					</SettingsRow>
 				) : behaviorSettings ? (
-					<>
-						<SettingsRow
-							description="Control how and when the AI asks for visitor contact details."
-							title="Visitor Contact Policy"
-						>
-							<VisitorContactForm
-								aiAgentId={aiAgent.id}
-								initialData={behaviorSettings}
-								websiteSlug={website.slug}
-							/>
-						</SettingsRow>
-
-						<SettingsRow
-							description="Enable automatic background analysis that runs silently during conversations."
-							title="Background Analysis"
-						>
-							<BackgroundAnalysisForm
-								aiAgentId={aiAgent.id}
-								initialData={behaviorSettings}
-								websiteSlug={website.slug}
-							/>
-						</SettingsRow>
-
-						<SettingsRow
-							description="Control how many non-finish tool invocations the AI can use per run."
-							title="Tool Invocation Budget"
-						>
-							<ToolInvocationBudgetForm
-								aiAgentId={aiAgent.id}
-								initialData={behaviorSettings}
-								websiteSlug={website.slug}
-							/>
-						</SettingsRow>
-					</>
+					<SettingsRow
+						description="Control how many non-finish tool invocations the AI can use per run."
+						title="Tool Invocation Budget"
+					>
+						<ToolInvocationBudgetForm
+							aiAgentId={aiAgent.id}
+							initialData={behaviorSettings}
+							websiteSlug={website.slug}
+						/>
+					</SettingsRow>
 				) : null}
 
 				<SettingsRow
