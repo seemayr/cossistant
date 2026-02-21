@@ -1,15 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import {
-	DiscordIcon,
-	GithubIcon,
-} from "@/app/(lander-docs)/components/login-form";
+
 import { LogoText } from "@/components/ui/logo";
 import { TopbarButton } from "@/components/ui/topbar-button";
-import { DISCORD_INVITE } from "@/constants";
 import { cn } from "@/lib/utils";
-import { GitHubLink } from "../github-link";
 
 export function TopBar({
 	className,
@@ -21,43 +16,33 @@ export function TopBar({
 	return (
 		<div
 			className={cn(
-				"fixed top-0 right-0 left-0 z-50 border-grid-x border-b border-dashed bg-background/50 backdrop-blur-xl",
+				"fixed top-0 right-0 left-0 z-50 border-grid-x border-dashed bg-background/90 backdrop-blur-xl",
 				className
 			)}
 		>
 			<div className="container-wrapper mx-auto">
 				<div className="container mx-auto flex items-center justify-between py-4">
-					<div className="w-60">
+					<div className="flex items-center gap-6">
 						<Link className="flex items-center" href="/">
 							<LogoText />
 						</Link>
+						<div className="hidden items-center space-x-4 md:flex">
+							<TopbarButton className="text-foreground" href="/docs">
+								Docs
+							</TopbarButton>
+							<TopbarButton href="/blog">Blog</TopbarButton>
+							<TopbarButton className="text-foreground" href="/changelog">
+								Changelog
+							</TopbarButton>
+							<TopbarButton className="text-foreground" href="/pricing">
+								Pricing
+							</TopbarButton>
+						</div>
 					</div>
 
-					{/* Navigation */}
-					<div className="hidden items-center space-x-4 md:flex">
-						<TopbarButton className="text-foreground" href="/docs">
-							Docs
-						</TopbarButton>
-						<TopbarButton href="/blog">Blog</TopbarButton>
-						<TopbarButton className="text-foreground" href="/changelog">
-							Changelog
-						</TopbarButton>
-						<TopbarButton className="text-foreground" href="/pricing">
-							Pricing
-						</TopbarButton>
-					</div>
-
-					<div className="flex w-60 items-center justify-end gap-4">
+					<div className="flex w-60 items-center justify-end gap-3">
 						{children}
 					</div>
-
-					{/* Right side actions */}
-					{/* {process.env.NODE_ENV === "development" && (
-            <div className="flex items-center space-x-4">
-              <ThemeToggle />
-              <SignInButtons />
-            </div>
-          )} */}
 				</div>
 			</div>
 		</div>

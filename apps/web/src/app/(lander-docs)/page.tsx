@@ -37,7 +37,7 @@ export default async function Landing() {
               Human + AI agent support your users love in under 10 lines of
               code.
             </h3> */}
-						<div className="mt-6 flex w-full flex-col gap-3 md:max-w-[75%] md:gap-6 lg:max-w-full lg:flex-row lg:items-center">
+						<div className="mt-6 flex w-full flex-col gap-3 md:max-w-[75%] lg:max-w-full lg:flex-row lg:items-center">
 							<Button
 								asChild
 								className="h-12 border border-transparent font-medium text-md has-[>svg]:px-4 lg:w-[250px]"

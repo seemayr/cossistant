@@ -55,11 +55,6 @@ export async function StarsCount() {
 
 		return (
 			<span className="flex w-auto items-center gap-2 text-muted-foreground text-xs tabular-nums">
-				<Icon
-					className="size-3 text-muted-foreground"
-					filledOnHover
-					name="star"
-				/>
 				{json.stargazers_count >= 1000
 					? `${(json.stargazers_count / 1000).toFixed(1)}k`
 					: json.stargazers_count.toLocaleString()}

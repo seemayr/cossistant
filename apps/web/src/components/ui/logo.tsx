@@ -27,7 +27,7 @@ export function LogoText({ className }: Props) {
 	return (
 		<span
 			className={cn(
-				"flex items-center gap-1 font-f37-stout text-[24px] text-primary leading-[24px]",
+				"flex items-center gap-1 pb-[3px] font-f37-stout text-[24px] text-primary leading-[24px]",
 				className
 			)}
 		>
