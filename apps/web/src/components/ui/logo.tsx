@@ -31,7 +31,7 @@ export function LogoText({ className }: Props) {
 				className
 			)}
 		>
-			<Logo className="mt-1 h-3.5" />
+			<Logo className="mt-1 h-4.5" />
 			cossistant
 		</span>
 	);

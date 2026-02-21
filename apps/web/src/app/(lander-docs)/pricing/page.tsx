@@ -215,7 +215,7 @@ export default function PricingPage() {
 			{/* Pricing Cards */}
 			<div className="mt-14 grid grid-cols-1 border-primary/10 border-y border-dashed xl:grid-cols-4">
 				<div className="hidden flex-col border-primary/10 border-r border-dashed last-of-type:border-r-0 xl:flex">
-					<div className="sticky top-18 z-1 h-[233px] w-full border-primary/10 border-b border-dashed bg-background" />
+					<div className="sticky top-14 z-1 h-[233px] w-full border-primary/10 border-b border-dashed bg-background" />
 					<div className="flex-1 pt-0">
 						{(() => {
 							const { primary, secondary } = groupFeaturesByCategory(
@@ -256,7 +256,7 @@ export default function PricingPage() {
 						className="flex flex-col border-primary/10 border-b border-dashed last-of-type:border-r-0 xl:border-r xl:border-b-0"
 						key={plan.name}
 					>
-						<div className="sticky top-18 z-10 flex flex-col space-y-1.5 border-primary/10 border-b border-dashed bg-background p-6">
+						<div className="sticky top-14 z-10 flex flex-col space-y-1.5 border-primary/10 border-b border-dashed bg-background p-6">
 							<div className="flex items-center gap-2">
 								<h3 className="font-medium text-2xl leading-none tracking-tight">
 									{plan.displayName}

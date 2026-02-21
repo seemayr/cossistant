@@ -26,6 +26,9 @@ export function Providers({ children }: ProviderProps) {
 		<SupportProvider apiUrl={API_URL} wsUrl={WS_URL}>
 			<NuqsAdapter>
 				<RootProvider
+					search={{
+						enabled: false,
+					}}
 					theme={{
 						attribute: "class",
 						defaultTheme: "system",

@@ -10,6 +10,16 @@ import { z } from "zod";
 
 import { transformers } from "@/lib/highlight-code";
 
+const searchKindSchema = z.enum([
+	"guide",
+	"component",
+	"hook",
+	"type",
+	"concept",
+	"article",
+	"release",
+]);
+
 export default defineConfig({
 	mdxOptions: {
 		rehypePlugins: (plugins) => {
@@ -36,6 +46,13 @@ export const docs = defineDocs({
 		schema: frontmatterSchema.extend({
 			preview: z.string().optional(),
 			index: z.boolean().default(false),
+			search: z
+				.object({
+					kind: searchKindSchema.optional(),
+					tags: z.array(z.string()).optional(),
+					aliases: z.array(z.string()).optional(),
+				})
+				.optional(),
 			/**
 			 * API routes only
 			 */
