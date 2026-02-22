@@ -302,7 +302,7 @@ export function FakeSupportWidget({ className }: { className?: string }) {
 						onNavigate={handleNavigate}
 					>
 						<div className="relative flex flex-col items-end gap-4 py-10">
-							<div className="relative flex h-[550px] w-[360px] flex-col overflow-hidden rounded-lg border border-co-border bg-co-background">
+							<div className="relative flex h-[550px] w-[360px] flex-col overflow-hidden rounded border border-co-border bg-co-background shadow-2xl dark:shadow-primary/10">
 								{currentView === "home" ? (
 									<div className="relative flex h-full w-full flex-col">
 										<FakeHomePage

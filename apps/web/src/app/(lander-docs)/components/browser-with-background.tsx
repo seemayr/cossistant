@@ -34,10 +34,10 @@ export function BrowserWithBackground({
 			{/* Browser Window Container */}
 			<div className="relative z-10 flex flex-1 items-center justify-center">
 				<div
-					className={`fake-browser-wrapper overflow-hidden rounded-lg border border-primary/10 shadow-2xl dark:shadow-primary/5 ${browserClassName}`}
+					className={`fake-browser-wrapper overflow-hidden rounded-md border border-primary/10 shadow-2xl dark:shadow-primary/5 ${browserClassName}`}
 				>
 					{/* iOS Browser Chrome */}
-					<div className="flex h-full w-full flex-col overflow-hidden dark:bg-background-100">
+					<div className="flex h-full w-full flex-col overflow-hidden bg-background dark:bg-background-100">
 						{/* Browser Top Bar */}
 						<div className="flex items-center justify-between gap-2 border-primary/5 border-b px-4 py-1 dark:bg-background-100">
 							{/* Traffic Lights */}

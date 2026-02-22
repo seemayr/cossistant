@@ -110,7 +110,7 @@ export function ComponentPreviewTabs({
 				{tab === "code" && (
 					<div
 						className={cn(
-							"scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-background-100 h-full w-full overflow-auto bg-background-100 px-5 py-4",
+							"scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-background-100 h-full w-full overflow-auto px-5 py-4 dark:bg-background-100",
 							sizeClasses
 						)}
 					>
