@@ -13,6 +13,7 @@ import {
 } from "better-auth/plugins";
 import type { BetterAuthPlugin } from "better-auth/types";
 import React from "react";
+import { syncUserToDefaultResendAudience } from "./auth-user-audience";
 import polarClient from "./polar";
 
 // Needed for email templates
@@ -29,6 +30,15 @@ export const auth = betterAuth({
 			...schema,
 		},
 	}),
+	databaseHooks: {
+		user: {
+			create: {
+				after: async (user) => {
+					await syncUserToDefaultResendAudience(user);
+				},
+			},
+		},
+	},
 	emailAndPassword: {
 		enabled: true,
 		autoSignIn: true,
