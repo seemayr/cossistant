@@ -246,6 +246,36 @@ export const updateWebsiteRequestSchema = z
 
 export type UpdateWebsiteRequest = z.infer<typeof updateWebsiteRequestSchema>;
 
+export const deleteWebsiteRequestSchema = z
+	.object({
+		websiteSlug: z.string().openapi({
+			description: "The website slug.",
+			example: "my-website",
+		}),
+	})
+	.openapi({
+		description: "Payload to permanently delete a website.",
+	});
+
+export type DeleteWebsiteRequest = z.infer<typeof deleteWebsiteRequestSchema>;
+
+export const deleteWebsiteResponseSchema = z
+	.object({
+		id: z.ulid().openapi({
+			description: "The deleted website's unique identifier.",
+			example: "01JG000000000000000000000",
+		}),
+		slug: z.string().openapi({
+			description: "The deleted website's slug.",
+			example: "my-website",
+		}),
+	})
+	.openapi({
+		description: "Response returned after successful website deletion.",
+	});
+
+export type DeleteWebsiteResponse = z.infer<typeof deleteWebsiteResponseSchema>;
+
 /**
  * Website creation response schema
  */

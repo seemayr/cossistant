@@ -125,6 +125,18 @@ async function readFileAsObjectUrl(file: File) {
 	return URL.createObjectURL(file);
 }
 
+function isBlobUrl(url: string | null | undefined): url is string {
+	return Boolean(url?.startsWith("blob:"));
+}
+
+function revokeObjectUrlSafely(url: string | null | undefined) {
+	if (!isBlobUrl(url)) {
+		return;
+	}
+
+	URL.revokeObjectURL(url);
+}
+
 async function loadImage(src: string): Promise<HTMLImageElement> {
 	return new Promise((resolve, reject) => {
 		const image = new Image();
@@ -407,29 +419,45 @@ export const AvatarInput =
 		useEffect(() => {
 			const previous = lastPreviewUrlRef.current;
 			if (previous && previous !== localPreviewUrl) {
-				URL.revokeObjectURL(previous);
+				revokeObjectUrlSafely(previous);
 			}
 
 			lastPreviewUrlRef.current = localPreviewUrl;
 
 			return () => {
 				if (lastPreviewUrlRef.current) {
-					URL.revokeObjectURL(lastPreviewUrlRef.current);
+					revokeObjectUrlSafely(lastPreviewUrlRef.current);
 					lastPreviewUrlRef.current = null;
 				}
 			};
 		}, [localPreviewUrl]);
 
 		useEffect(() => {
-			if (!value) {
+			const controlledPreviewUrl =
+				resolvedValue?.previewUrl ?? resolvedValue?.url ?? null;
+
+			if (!controlledPreviewUrl) {
 				setLocalPreviewUrl((previous) => {
-					if (previous) {
-						URL.revokeObjectURL(previous);
-					}
+					revokeObjectUrlSafely(previous);
 					return null;
 				});
+				return;
 			}
-		}, [value]);
+
+			setLocalPreviewUrl((previous) => {
+				if (!previous || previous === controlledPreviewUrl) {
+					return previous;
+				}
+
+				// Keep local blob preview until parent state catches up, then defer to controlled value.
+				if (isBlobUrl(previous) || !isBlobUrl(controlledPreviewUrl)) {
+					revokeObjectUrlSafely(previous);
+					return null;
+				}
+
+				return previous;
+			});
+		}, [resolvedValue?.previewUrl, resolvedValue?.url]);
 
 		const sanitizedAccept = useMemo(() => {
 			if (!accept) {
@@ -468,7 +496,7 @@ export const AvatarInput =
 
 				setLocalPreviewUrl((previous) => {
 					if (previous && previous !== nextPreviewUrl) {
-						URL.revokeObjectURL(previous);
+						revokeObjectUrlSafely(previous);
 					}
 					return nextPreviewUrl;
 				});
@@ -528,9 +556,7 @@ export const AvatarInput =
 							: new Error("Unexpected error while uploading avatar");
 					onError?.(message);
 					setLocalPreviewUrl((previous) => {
-						if (previous) {
-							URL.revokeObjectURL(previous);
-						}
+						revokeObjectUrlSafely(previous);
 						return resolvedValue?.previewUrl ?? resolvedValue?.url ?? null;
 					});
 					throw message;
@@ -603,7 +629,7 @@ export const AvatarInput =
 		const closeCropper = useCallback(() => {
 			setCropState((current) => {
 				if (current) {
-					URL.revokeObjectURL(current.objectUrl);
+					revokeObjectUrlSafely(current.objectUrl);
 				}
 				return null;
 			});
@@ -636,9 +662,7 @@ export const AvatarInput =
 
 		const removeAvatar = useCallback(() => {
 			setLocalPreviewUrl((previous) => {
-				if (previous) {
-					URL.revokeObjectURL(previous);
-				}
+				revokeObjectUrlSafely(previous);
 				return null;
 			});
 			onChange?.(null);
@@ -701,17 +725,22 @@ export const AvatarInput =
 						>
 							<AvatarContainer className="size-full">
 								{resolvedPreviewUrl ? (
-									<AvatarImage alt="Avatar preview" src={resolvedPreviewUrl} />
+									<>
+										<AvatarImage
+											alt="Avatar preview"
+											src={resolvedPreviewUrl}
+										/>
+										<AvatarFallback className="text-base">
+											{fallbackInitials ??
+												(resolvedValue?.name ? resolvedValue.name[0] : "")}
+										</AvatarFallback>
+									</>
 								) : (
 									<div className="flex size-full flex-col items-center justify-center gap-1 text-muted-foreground">
 										<ImageIcon aria-hidden="true" className="size-5" />
 										<span className="text-xs">Preview</span>
 									</div>
 								)}
-								<AvatarFallback className="text-base">
-									{fallbackInitials ??
-										(resolvedValue?.name ? resolvedValue.name[0] : "")}
-								</AvatarFallback>
 							</AvatarContainer>
 							{isUploading && (
 								<div className="absolute inset-0 flex items-center justify-center rounded bg-background/70">

@@ -1,9 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import { AI_AGENT_TOOL_CATALOG } from "@cossistant/types";
 import {
+	buildRuntimeCustomSkillCatalog,
 	buildRuntimeSkillDocuments,
-	buildSelectedSkillUsage,
 	buildToolCallsByName,
+	buildUsedCustomSkillUsage,
 	getNonFinishToolCallCount,
 	getTotalToolCalls,
 	mergeToolCallsByName,
@@ -165,15 +166,16 @@ describe("generation tool call accounting", () => {
 		expect(byName.get("high.md")?.source).toBe("custom");
 	});
 
-	it("builds selected skill usage metadata with deterministic order", () => {
-		const selected = buildRuntimeSkillDocuments({
+	it("tracks only loaded custom skills as usage", () => {
+		const catalog = buildRuntimeCustomSkillCatalog({
 			enabledSkills: [
 				{
-					id: "tool:send-message.md",
-					name: "send-message.md",
-					content: "override send guidance",
-					priority: 6,
-					source: "tool",
+					id: "custom:returns.md",
+					name: "returns.md",
+					content:
+						"---\nname: returns-playbook\ndescription: Handle return and exchange workflows.\n---\n\nUse this for return policy questions.",
+					priority: 8,
+					source: "custom",
 				},
 				{
 					id: "custom:high.md",
@@ -190,30 +192,17 @@ describe("generation tool call accounting", () => {
 					source: "custom",
 				},
 			],
-			runtimeToolIds: ["sendMessage", "respond"],
-			maxCustomSkills: 1,
 		});
 
-		const selectedSkills = buildSelectedSkillUsage(selected);
+		const usedCustomSkills = buildUsedCustomSkillUsage({
+			customSkillCatalog: catalog,
+			loadedCustomSkillFileNames: new Set(["returns.md", "missing.md"]),
+		});
 
-		expect(selectedSkills).toEqual([
+		expect(usedCustomSkills).toEqual([
 			{
-				name: "send-message.md",
-				source: "tool",
-				toolId: "sendMessage",
-				toolLabel: "Send Public Message",
-			},
-			{
-				name: "respond.md",
-				source: "tool",
-				toolId: "respond",
-				toolLabel: "Finish: Respond",
-			},
-			{
-				name: "high.md",
-				source: "custom",
-				toolId: undefined,
-				toolLabel: undefined,
+				name: "returns.md",
+				description: "Handle return and exchange workflows.",
 			},
 		]);
 	});

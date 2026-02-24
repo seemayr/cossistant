@@ -66,6 +66,19 @@ function formatContactOrganizationResponse(
 	};
 }
 
+export function normalizeIdentifyContactIdentifiers(params: {
+	externalId?: string;
+	email?: string;
+}) {
+	const normalizedExternalId = params.externalId?.trim() || undefined;
+	const normalizedEmail = params.email?.trim() || undefined;
+
+	return {
+		externalId: normalizedExternalId,
+		email: normalizedEmail,
+	};
+}
+
 // POST /contacts/identify - Identify a visitor and create/update their contact
 contactRouter.openapi(
 	{
@@ -164,6 +177,21 @@ contactRouter.openapi(
 				);
 			}
 
+			const { externalId, email } = normalizeIdentifyContactIdentifiers({
+				externalId: body.externalId,
+				email: body.email,
+			});
+
+			if (!(externalId || email)) {
+				return c.json(
+					{
+						error: "BAD_REQUEST",
+						message: "Either externalId or email is required",
+					},
+					400
+				);
+			}
+
 			// Verify visitor exists
 			const visitor = await findVisitorForWebsite(db, {
 				visitorId: body.visitorId,
@@ -181,8 +209,8 @@ contactRouter.openapi(
 			const contact = await identifyContact(db, {
 				websiteId: website.id,
 				organizationId: website.organizationId,
-				externalId: body.externalId,
-				email: body.email,
+				externalId,
+				email,
 				name: body.name,
 				image: body.image,
 				metadata: body.metadata,

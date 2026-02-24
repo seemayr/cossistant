@@ -531,14 +531,14 @@ export const aiAgentRouter = createTRPCRouter({
 			if (input.sourceUrl) {
 				// Run brand extraction (which scrapes internally) and site mapping in parallel
 				// extractBrandInfo returns company name, description, logo, favicon, AND markdown content
-				// Use maxAge of 1 hour (3600 seconds) to enable Firecrawl caching - avoids re-paying
+				// Use maxAge of 1 hour (in ms) to enable Firecrawl caching - avoids re-paying
 				// for API calls when user refreshes the page during onboarding
-				const cacheOptions = { maxAge: 3600 };
+				const cacheOptions = { maxAge: 3_600_000 };
 				[brandInfo, mapResult] = await Promise.all([
 					firecrawlService.extractBrandInfo(input.sourceUrl, cacheOptions),
 					firecrawlService.mapSite(input.sourceUrl, {
 						limit: 100,
-						...cacheOptions,
+						ignoreCache: false,
 					}),
 				]);
 

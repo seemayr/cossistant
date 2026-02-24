@@ -347,6 +347,39 @@ export function getSubscriptionForWebsite(
 	return getSubscriptionsForWebsite(customerState, websiteId)[0] ?? null;
 }
 
+export type WebsiteDeletionSubscriptionPartition = {
+	freeToRevoke: WebsiteSubscription[];
+	blockingPaidOrUnknown: WebsiteSubscription[];
+};
+
+export function partitionWebsiteSubscriptionsForDeletion(
+	customerState: CustomerState | null,
+	websiteId: string
+): WebsiteDeletionSubscriptionPartition {
+	const subscriptions = getSubscriptionsForWebsite(customerState, websiteId);
+	const freeToRevoke: WebsiteSubscription[] = [];
+	const blockingPaidOrUnknown: WebsiteSubscription[] = [];
+
+	for (const subscription of subscriptions) {
+		const mappedPlan = mapPolarProductToPlan(
+			subscription.productName,
+			subscription.productId
+		);
+
+		if (mappedPlan === "free") {
+			freeToRevoke.push(subscription);
+			continue;
+		}
+
+		blockingPaidOrUnknown.push(subscription);
+	}
+
+	return {
+		freeToRevoke,
+		blockingPaidOrUnknown,
+	};
+}
+
 /**
  * Get website subscription by organization + website IDs.
  */

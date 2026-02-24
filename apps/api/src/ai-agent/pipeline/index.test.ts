@@ -401,16 +401,10 @@ describe("runAiAgentPipeline retryability and typing cleanup", () => {
 				sendMessage: 0,
 				sendPrivateMessage: 0,
 			},
-			selectedSkills: [
-				{
-					name: "send-message.md",
-					source: "tool",
-					toolId: "sendMessage",
-					toolLabel: "Send Public Message",
-				},
+			usedCustomSkills: [
 				{
 					name: "custom-playbook.md",
-					source: "custom",
+					description: "Custom support playbook",
 				},
 			],
 		});
@@ -482,6 +476,40 @@ describe("runAiAgentPipeline retryability and typing cleanup", () => {
 
 		expect(result.status).toBe("skipped");
 		expect(generateMock).not.toHaveBeenCalled();
+		expect(createTimelineItemMock).not.toHaveBeenCalled();
+	});
+
+	it("does not log skill usage when generation uses no custom skills", async () => {
+		const { runAiAgentPipeline } = await pipelineModulePromise;
+		generateMock.mockResolvedValue({
+			decision: {
+				action: "skip",
+				reasoning: "nothing to send",
+				confidence: 0.8,
+			},
+			toolCalls: {
+				sendMessage: 0,
+				sendPrivateMessage: 0,
+			},
+			usedCustomSkills: [],
+		});
+
+		const result = await runAiAgentPipeline({
+			db: {} as never,
+			input: {
+				conversationId: "conv-1",
+				messageId: "trigger-msg-1",
+				messageCreatedAt: new Date().toISOString(),
+				websiteId: "site-1",
+				organizationId: "org-1",
+				visitorId: "visitor-1",
+				aiAgentId: "ai-1",
+				workflowRunId: "workflow-no-used-custom-skills",
+				jobId: "job-no-used-custom-skills",
+			},
+		});
+
+		expect(result.status).toBe("completed");
 		expect(createTimelineItemMock).not.toHaveBeenCalled();
 	});
 
@@ -684,12 +712,9 @@ describe("runAiAgentPipeline retryability and typing cleanup", () => {
 				sendMessage: 0,
 				sendPrivateMessage: 0,
 			},
-			selectedSkills: [
+			usedCustomSkills: [
 				{
-					name: "respond.md",
-					source: "tool",
-					toolId: "respond",
-					toolLabel: "Finish Respond",
+					name: "custom-playbook.md",
 				},
 			],
 		});

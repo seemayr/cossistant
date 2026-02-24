@@ -38,18 +38,20 @@ describe("ai credit pricing config", () => {
 	it("counts excluded tools and billable tools correctly", () => {
 		expect(isExcludedToolName("sendMessage")).toBe(true);
 		expect(isExcludedToolName("respond")).toBe(true);
+		expect(isExcludedToolName("loadSkill")).toBe(true);
 		expect(isExcludedToolName("searchKnowledgeBase")).toBe(false);
 
 		const stats = getToolCallStats({
 			sendMessage: 4,
 			sendPrivateMessage: 1,
+			loadSkill: 3,
 			searchKnowledgeBase: 2,
 			respond: 1,
 			ignoreInvalid: -3,
 		});
 
-		expect(stats.totalToolCount).toBe(8);
-		expect(stats.excludedToolCount).toBe(6);
+		expect(stats.totalToolCount).toBe(11);
+		expect(stats.excludedToolCount).toBe(9);
 		expect(stats.billableToolCount).toBe(2);
 	});
 

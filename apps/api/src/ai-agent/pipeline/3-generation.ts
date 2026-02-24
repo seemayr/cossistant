@@ -27,8 +27,10 @@ import {
 	AI_AGENT_RESERVED_TOOL_SKILL_TEMPLATE_NAMES,
 	AI_AGENT_TOOL_CATALOG,
 	parseSkillFileContent,
+	stripSkillMarkdownExtension,
 } from "@cossistant/types";
-import type { PrepareStepFunction, ToolSet } from "ai";
+import { type PrepareStepFunction, type ToolSet, tool } from "ai";
+import { z } from "zod";
 import {
 	detectPromptInjection,
 	logInjectionAttempt,
@@ -72,15 +74,13 @@ export type GenerationResult = {
 	toolCallsByName?: Record<string, number>;
 	/** Total number of tool calls from this generation */
 	totalToolCalls?: number;
-	/** Skills included in the prompt context for this run */
-	selectedSkills?: SelectedSkillUsage[];
+	/** Custom skills explicitly read via loadSkill() in this run */
+	usedCustomSkills?: UsedCustomSkill[];
 };
 
-export type SelectedSkillUsage = {
+export type UsedCustomSkill = {
 	name: string;
-	source: "tool" | "custom";
-	toolId?: string;
-	toolLabel?: string;
+	description?: string;
 };
 
 type GenerationInput = {
@@ -138,8 +138,17 @@ const FINISH_TOOL_NAMES = [
 ] as const;
 const FINISH_TOOL_NAME_SET = new Set<string>(FINISH_TOOL_NAMES);
 const TOOL_METADATA_BY_DEFAULT_SKILL_NAME = new Map(
-	AI_AGENT_TOOL_CATALOG.map((tool) => [tool.defaultSkill.name, tool])
+	AI_AGENT_TOOL_CATALOG.map((entry) => [entry.defaultSkill.name, entry])
 );
+const LOAD_SKILL_TOOL_NAME = "loadSkill";
+
+export type RuntimeCustomSkillCatalogEntry = {
+	fileName: string;
+	displayName: string;
+	description: string;
+	content: string;
+	priority: number;
+};
 
 type ToolCallLike = {
 	toolName?: string;
@@ -278,16 +287,16 @@ export function buildRuntimeSkillDocuments(input: {
 	);
 
 	const runtimeToolSkills: ResolvedSkillPromptDocument[] =
-		AI_AGENT_TOOL_CATALOG.filter((tool) => runtimeToolIdSet.has(tool.id)).map(
-			(tool) => {
+		AI_AGENT_TOOL_CATALOG.filter((entry) => runtimeToolIdSet.has(entry.id)).map(
+			(entry) => {
 				const overrideDocument = enabledToolSkillsByName.get(
-					tool.defaultSkill.name
+					entry.defaultSkill.name
 				);
 				return {
-					id: overrideDocument?.id ?? `default:${tool.defaultSkill.name}`,
-					name: tool.defaultSkill.name,
-					content: overrideDocument?.content ?? tool.defaultSkill.content,
-					priority: tool.order,
+					id: overrideDocument?.id ?? `default:${entry.defaultSkill.name}`,
+					name: entry.defaultSkill.name,
+					content: overrideDocument?.content ?? entry.defaultSkill.content,
+					priority: entry.order,
 					source: "tool",
 				};
 			}
@@ -309,21 +318,111 @@ export function buildRuntimeSkillDocuments(input: {
 	return [...runtimeToolSkills, ...customSkills];
 }
 
-export function buildSelectedSkillUsage(
-	selectedSkillDocuments: ResolvedSkillPromptDocument[]
-): SelectedSkillUsage[] {
-	return selectedSkillDocuments.map((skill) => {
+export function buildRuntimeCustomSkillCatalog(input: {
+	enabledSkills: ResolvedSkillPromptDocument[];
+}): RuntimeCustomSkillCatalogEntry[] {
+	const reservedToolSkillNames = new Set<string>(
+		AI_AGENT_RESERVED_TOOL_SKILL_TEMPLATE_NAMES
+	);
+
+	return input.enabledSkills
+		.filter(
+			(skill) =>
+				skill.source === "custom" && !reservedToolSkillNames.has(skill.name)
+		)
+		.sort((a, b) => {
+			if (b.priority !== a.priority) {
+				return b.priority - a.priority;
+			}
+			return a.name.localeCompare(b.name);
+		})
+		.map((skill) => {
+			const parsedSkill = parseSkillFileContent({
+				content: skill.content,
+				canonicalFileName: skill.name,
+			});
+
+			return {
+				fileName: skill.name,
+				displayName: parsedSkill.name,
+				description: parsedSkill.description,
+				content: parsedSkill.body,
+				priority: skill.priority,
+			};
+		});
+}
+
+function resolveCustomSkillFromCatalog(params: {
+	catalog: RuntimeCustomSkillCatalogEntry[];
+	skillName: string;
+}): RuntimeCustomSkillCatalogEntry | undefined {
+	const normalized = params.skillName.trim().toLowerCase();
+	if (!normalized) {
+		return;
+	}
+
+	return params.catalog.find((skill) => {
+		if (skill.fileName.toLowerCase() === normalized) {
+			return true;
+		}
+
+		if (
+			stripSkillMarkdownExtension(skill.fileName).toLowerCase() === normalized
+		) {
+			return true;
+		}
+
+		return skill.displayName.toLowerCase() === normalized;
+	});
+}
+
+export function buildUsedCustomSkillUsage(input: {
+	customSkillCatalog: RuntimeCustomSkillCatalogEntry[];
+	loadedCustomSkillFileNames: Set<string>;
+}): UsedCustomSkill[] {
+	return input.customSkillCatalog
+		.filter((skill) => input.loadedCustomSkillFileNames.has(skill.fileName))
+		.map((skill) => ({
+			name: skill.fileName,
+			description: skill.description,
+		}));
+}
+
+function buildPromptSkillDocuments(input: {
+	toolSkillDocuments: ResolvedSkillPromptDocument[];
+	customSkillCatalog: RuntimeCustomSkillCatalogEntry[];
+	loadedCustomSkillFileNames: Set<string>;
+}): PromptSkillDocument[] {
+	const toolSkillDocuments = input.toolSkillDocuments.map((skill) => {
 		const toolMetadata =
 			skill.source === "tool"
 				? TOOL_METADATA_BY_DEFAULT_SKILL_NAME.get(skill.name)
 				: undefined;
+		const parsedSkill = parseSkillFileContent({
+			content: skill.content,
+			canonicalFileName: skill.name,
+		});
 		return {
-			name: skill.name,
+			name: parsedSkill.name,
+			content: parsedSkill.body,
 			source: skill.source,
 			toolId: toolMetadata?.id,
 			toolLabel: toolMetadata?.label,
-		};
+		} satisfies PromptSkillDocument;
 	});
+
+	const loadedCustomSkillDocuments = input.customSkillCatalog
+		.filter((skill) => input.loadedCustomSkillFileNames.has(skill.fileName))
+		.map(
+			(skill) =>
+				({
+					name: skill.displayName,
+					content: skill.content,
+					source: "custom",
+				}) satisfies PromptSkillDocument
+		);
+
+	return [...toolSkillDocuments, ...loadedCustomSkillDocuments];
 }
 
 export function buildToolCallsByName(
@@ -532,31 +631,69 @@ export async function generate(
 	const runtimeTools: ToolSet = {
 		...tools,
 	};
-	const selectedSkillDocuments = buildRuntimeSkillDocuments({
+	const toolSkillDocuments = buildRuntimeSkillDocuments({
 		enabledSkills: promptBundle.enabledSkills,
 		runtimeToolIds: Object.keys(runtimeTools),
-		maxCustomSkills: MAX_CUSTOM_SKILLS_IN_PROMPT,
+		maxCustomSkills: 0,
 	});
-	const selectedSkills = buildSelectedSkillUsage(selectedSkillDocuments);
+	const customSkillCatalog = buildRuntimeCustomSkillCatalog({
+		enabledSkills: promptBundle.enabledSkills,
+	});
+	const availableCustomSkills = customSkillCatalog.map((skill) => ({
+		name: skill.fileName,
+		description: skill.description,
+	}));
+	const loadedCustomSkillFileNames = new Set<string>();
+
+	if (customSkillCatalog.length > 0) {
+		runtimeTools[LOAD_SKILL_TOOL_NAME] = tool({
+			description:
+				"Load the full instructions for one custom skill from the Available Custom Skills list. Call this only when the current conversation clearly matches that skill.",
+			inputSchema: z.object({
+				skillName: z
+					.string()
+					.min(1)
+					.describe(
+						"Exact custom skill name from Available Custom Skills (for example: refunds.md)."
+					),
+			}),
+			execute: async ({ skillName }) => {
+				const matchedSkill = resolveCustomSkillFromCatalog({
+					catalog: customSkillCatalog,
+					skillName,
+				});
+
+				if (!matchedSkill) {
+					return {
+						success: false,
+						error: `Unknown custom skill '${skillName}'. Available: ${customSkillCatalog.map((skill) => skill.fileName).join(", ")}`,
+					};
+				}
+
+				loadedCustomSkillFileNames.add(matchedSkill.fileName);
+
+				return {
+					success: true,
+					name: matchedSkill.fileName,
+					description: matchedSkill.description,
+					content: matchedSkill.content,
+				};
+			},
+		});
+	}
+
+	const buildUsedCustomSkills = (): UsedCustomSkill[] =>
+		buildUsedCustomSkillUsage({
+			customSkillCatalog,
+			loadedCustomSkillFileNames,
+		});
 	const runtimeFinishTools = getFinishToolsInToolset(runtimeTools);
 
 	const buildResolvedSkillDocuments = (): PromptSkillDocument[] =>
-		selectedSkillDocuments.map((skill) => {
-			const toolMetadata =
-				skill.source === "tool"
-					? TOOL_METADATA_BY_DEFAULT_SKILL_NAME.get(skill.name)
-					: undefined;
-			const parsedSkill = parseSkillFileContent({
-				content: skill.content,
-				canonicalFileName: skill.name,
-			});
-			return {
-				name: parsedSkill.name,
-				content: parsedSkill.body,
-				source: skill.source,
-				toolId: toolMetadata?.id,
-				toolLabel: toolMetadata?.label,
-			};
+		buildPromptSkillDocuments({
+			toolSkillDocuments,
+			customSkillCatalog,
+			loadedCustomSkillFileNames,
 		});
 
 	const buildRuntimeSystemPrompt = () =>
@@ -573,6 +710,7 @@ export async function generate(
 			smartDecision,
 			continuationHint,
 			promptBundle,
+			availableCustomSkills,
 			selectedSkillDocuments: buildResolvedSkillDocuments(),
 		});
 
@@ -602,10 +740,13 @@ export async function generate(
 	// Format conversation history for LLM with multi-party prefixes
 	const visitorName = visitorContext?.name ?? null;
 	const messages = formatMessagesForLlm(conversationHistory, visitorName);
-	const selectedSkillNames = selectedSkills.map((skill) => skill.name);
+	const runtimeToolSkillNames = toolSkillDocuments.map((skill) => skill.name);
+	const availableCustomSkillNames = availableCustomSkills.map(
+		(skill) => skill.name
+	);
 
 	console.log(
-		`[ai-agent:generate] conv=${convId} | model=${aiAgent.model} | messages=${messages.length} | mode=${mode} | tools=${Object.keys(runtimeTools).length} | toolBudget=${maxToolInvocationsPerRun} | selectedSkills=${selectedSkillNames.join(",") || "none"}`
+		`[ai-agent:generate] conv=${convId} | model=${aiAgent.model} | messages=${messages.length} | mode=${mode} | tools=${Object.keys(runtimeTools).length} | toolBudget=${maxToolInvocationsPerRun} | toolSkills=${runtimeToolSkillNames.join(",") || "none"} | availableCustomSkills=${availableCustomSkillNames.join(",") || "none"}`
 	);
 
 	// Check for potential prompt injection in the latest visitor message (for monitoring)
@@ -679,7 +820,7 @@ export async function generate(
 				},
 				toolCallsByName,
 				totalToolCalls: getTotalToolCalls(toolCallsByName),
-				selectedSkills,
+				usedCustomSkills: buildUsedCustomSkills(),
 			};
 		}
 		// Re-throw other errors
@@ -754,7 +895,7 @@ export async function generate(
 					},
 					toolCallsByName,
 					totalToolCalls,
-					selectedSkills,
+					usedCustomSkills: buildUsedCustomSkills(),
 				};
 			}
 
@@ -781,7 +922,7 @@ export async function generate(
 				},
 				toolCallsByName,
 				totalToolCalls,
-				selectedSkills,
+				usedCustomSkills: buildUsedCustomSkills(),
 			};
 		}
 
@@ -812,6 +953,7 @@ export async function generate(
 				smartDecision,
 				continuationHint,
 				promptBundle,
+				availableCustomSkills,
 				selectedSkillDocuments: buildResolvedSkillDocuments(),
 			})}\n\n## Repair Mode\n\nYou must complete this turn using ONLY these tools:\n- sendMessage(): send a short, safe, helpful reply to the visitor\n- respond(): finish the turn\n\nRules:\n- Call sendMessage() exactly once\n- Call respond() immediately after sendMessage()\n- Do not call any other tools`;
 
@@ -873,7 +1015,7 @@ export async function generate(
 						totalToolCalls: getTotalToolCalls(
 							combinedRepairAbortToolCallsByName
 						),
-						selectedSkills,
+						usedCustomSkills: buildUsedCustomSkills(),
 					};
 				}
 				throw error;
@@ -922,7 +1064,7 @@ export async function generate(
 					},
 					toolCallsByName: combinedRepairToolCallsByName,
 					totalToolCalls: repairTotalToolCalls,
-					selectedSkills,
+					usedCustomSkills: buildUsedCustomSkills(),
 				};
 			}
 
@@ -949,7 +1091,7 @@ export async function generate(
 				},
 				toolCallsByName: combinedRepairToolCallsByName,
 				totalToolCalls: repairTotalToolCalls,
-				selectedSkills,
+				usedCustomSkills: buildUsedCustomSkills(),
 			};
 		}
 	}
@@ -981,7 +1123,7 @@ export async function generate(
 			},
 			toolCallsByName,
 			totalToolCalls,
-			selectedSkills,
+			usedCustomSkills: buildUsedCustomSkills(),
 		};
 	}
 
@@ -1019,7 +1161,7 @@ export async function generate(
 		},
 		toolCallsByName,
 		totalToolCalls,
-		selectedSkills,
+		usedCustomSkills: buildUsedCustomSkills(),
 	};
 }
 

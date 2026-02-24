@@ -321,24 +321,69 @@ export async function identifyContact(
 		contactOrganizationId?: string;
 	}
 ): Promise<ContactRecord> {
-	// Try to find existing contact by externalId or email
-	let existingContact: ContactRecord | null = null;
+	const now = new Date().toISOString();
 
 	if (params.externalId) {
-		existingContact = await findContactByExternalId(db, {
-			externalId: params.externalId,
-			websiteId: params.websiteId,
-		});
+		const upsertSet: Partial<ContactInsert> = {
+			updatedAt: now,
+			deletedAt: null,
+		};
+
+		if (params.externalId) {
+			upsertSet.externalId = params.externalId;
+		}
+		if (params.email) {
+			upsertSet.email = params.email;
+		}
+		if (params.name) {
+			upsertSet.name = params.name;
+		}
+		if (params.image) {
+			upsertSet.image = params.image;
+		}
+		if (params.contactOrganizationId) {
+			upsertSet.contactOrganizationId = params.contactOrganizationId;
+		}
+		if (params.metadata) {
+			upsertSet.metadata =
+				sql`coalesce(${contact.metadata}, '{}'::jsonb) || ${JSON.stringify(params.metadata)}::jsonb` as ContactInsert["metadata"];
+		}
+
+		const [upserted] = await db
+			.insert(contact)
+			.values({
+				websiteId: params.websiteId,
+				organizationId: params.organizationId,
+				externalId: params.externalId,
+				email: params.email,
+				name: params.name,
+				image: params.image,
+				metadata: params.metadata,
+				contactOrganizationId: params.contactOrganizationId,
+				createdAt: now,
+				updatedAt: now,
+			})
+			.onConflictDoUpdate({
+				target: [contact.externalId, contact.websiteId],
+				set: upsertSet,
+			})
+			.returning();
+
+		if (!upserted) {
+			throw new Error("Failed to upsert contact");
+		}
+
+		return upserted;
 	}
 
-	if (!existingContact && params.email) {
+	// Try to find existing contact by email
+	let existingContact: ContactRecord | null = null;
+	if (params.email) {
 		existingContact = await findContactByEmail(db, {
 			email: params.email,
 			websiteId: params.websiteId,
 		});
 	}
-
-	const now = new Date().toISOString();
 
 	if (existingContact) {
 		// Update existing contact

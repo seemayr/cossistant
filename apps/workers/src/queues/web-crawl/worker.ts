@@ -417,6 +417,14 @@ async function processWebCrawlJob(
 		}
 	}
 
+	// Fetch all paginated results once the crawl is marked completed.
+	// Firecrawl can paginate status data when payloads are large.
+	if (crawlStatus.status === "completed") {
+		crawlStatus = await firecrawlService.getCrawlStatus(crawlResult.jobId, {
+			includeAllPages: true,
+		});
+	}
+
 	// 7. Handle poll timeout
 	if (crawlStatus.status === "crawling") {
 		await updateLinkSource(db, {
@@ -437,20 +445,43 @@ async function processWebCrawlJob(
 
 	// 8. Handle failure
 	if (crawlStatus.status === "failed") {
+		let errorMessage = crawlStatus.error ?? "Crawl failed";
+
+		// Enrich failure diagnostics with page-level Firecrawl crawl errors.
+		const crawlErrorsResult = await firecrawlService.getCrawlErrors(
+			crawlResult.jobId
+		);
+		if (
+			crawlErrorsResult.success &&
+			crawlErrorsResult.errors &&
+			crawlErrorsResult.errors.length > 0
+		) {
+			const sampledErrors = crawlErrorsResult.errors
+				.slice(0, 3)
+				.map((entry) => {
+					if (entry.url) {
+						return `${entry.url}: ${entry.error}`;
+					}
+					return entry.error;
+				})
+				.join(" | ");
+			errorMessage = `${errorMessage} | ${sampledErrors}`.slice(0, 1000);
+		}
+
 		await updateLinkSource(db, {
 			id: linkSourceId,
 			websiteId,
 			status: "failed",
-			errorMessage: crawlStatus.error ?? "Crawl failed",
+			errorMessage,
 		});
 		await emitCrawlFailed({
 			websiteId,
 			organizationId,
 			linkSourceId,
 			url,
-			error: crawlStatus.error ?? "Crawl failed",
+			error: errorMessage,
 		});
-		throw new Error(crawlStatus.error ?? "Crawl failed");
+		throw new Error(errorMessage);
 	}
 
 	await job.updateProgress(85);

@@ -1,3 +1,5 @@
+import { and, db, eq } from "@api/db";
+import { member } from "@api/db/schema";
 import { PageContent } from "@/components/ui/layout";
 import {
 	SettingsHeader,
@@ -6,6 +8,7 @@ import {
 } from "@/components/ui/layout/settings-layout";
 import { ensureWebsiteAccess } from "@/lib/auth/website-access";
 import { DefaultParticipantsForm } from "./default-participants-form";
+import { DeleteWebsiteSection } from "./delete-website-section";
 import { UserProfileForm } from "./user-profile-form";
 import { WebsiteInformationForm } from "./website-information-form";
 
@@ -20,6 +23,17 @@ export default async function GeneralSettingsPage({
 }: GeneralSettingsPageProps) {
 	const { websiteSlug } = await params;
 	const { user, website } = await ensureWebsiteAccess(websiteSlug);
+	const [membership] = await db
+		.select({ role: member.role })
+		.from(member)
+		.where(
+			and(
+				eq(member.organizationId, website.organizationId),
+				eq(member.userId, user.id)
+			)
+		)
+		.limit(1);
+	const isOwner = membership?.role === "owner";
 
 	return (
 		<SettingsPage>
@@ -62,6 +76,12 @@ export default async function GeneralSettingsPage({
 						websiteSlug={website.slug}
 					/>
 				</SettingsRow>
+				{isOwner ? (
+					<DeleteWebsiteSection
+						websiteName={website.name}
+						websiteSlug={website.slug}
+					/>
+				) : null}
 			</PageContent>
 		</SettingsPage>
 	);

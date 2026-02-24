@@ -37,16 +37,13 @@ describe("AI skill usage timeline logging", () => {
 			workflowRunId: "wf-1",
 			triggerMessageId: "msg-1",
 			triggerVisibility: "private",
-			selectedSkills: [
-				{
-					name: "send-message.md",
-					source: "tool",
-					toolId: "sendMessage",
-					toolLabel: "Send Public Message",
-				},
+			usedCustomSkills: [
 				{
 					name: "billing-playbook.md",
-					source: "custom",
+					description: "Use for billing and invoice issues.",
+				},
+				{
+					name: "refunds.md",
 				},
 			],
 		});
@@ -63,7 +60,7 @@ describe("AI skill usage timeline logging", () => {
 		};
 		expect(createCall?.item.visibility).toBe("private");
 		expect(createCall?.item.tool).toBe("aiSkillUsage");
-		expect(createCall?.item.text).toContain("AI loaded skills (2)");
+		expect(createCall?.item.text).toContain("AI used custom skills (2)");
 		expect(createCall?.item.parts[0]?.toolName).toBe("aiSkillUsage");
 		expect(
 			(
@@ -98,7 +95,7 @@ describe("AI skill usage timeline logging", () => {
 			aiAgentId: "ai-1",
 			workflowRunId: "wf-deterministic",
 			triggerMessageId: "msg-1",
-			selectedSkills: [{ name: "respond.md", source: "tool" }],
+			usedCustomSkills: [{ name: "refunds.md" }],
 		});
 
 		const createCall = createTimelineItemMock.mock.calls[0]?.[0] as {
@@ -107,6 +104,25 @@ describe("AI skill usage timeline logging", () => {
 		expect(createCall?.item.id).toBe(
 			getAiSkillUsageTimelineItemId("wf-deterministic")
 		);
+	});
+
+	it("skips timeline logging when no custom skills were used", async () => {
+		const { logAiSkillUsageTimeline } = await skillUsageTimelineModulePromise;
+
+		await logAiSkillUsageTimeline({
+			db: {} as never,
+			organizationId: "org-1",
+			websiteId: "site-1",
+			conversationId: "conv-1",
+			visitorId: "visitor-1",
+			aiAgentId: "ai-1",
+			workflowRunId: "wf-empty",
+			triggerMessageId: "msg-1",
+			usedCustomSkills: [],
+		});
+
+		expect(createTimelineItemMock).not.toHaveBeenCalled();
+		expect(updateTimelineItemMock).not.toHaveBeenCalled();
 	});
 
 	it("updates existing timeline rows on duplicate-key create failures", async () => {
@@ -126,7 +142,7 @@ describe("AI skill usage timeline logging", () => {
 			aiAgentId: "ai-1",
 			workflowRunId: "wf-duplicate",
 			triggerMessageId: "msg-1",
-			selectedSkills: [{ name: "respond.md", source: "tool" }],
+			usedCustomSkills: [{ name: "refunds.md" }],
 		});
 
 		expect(createTimelineItemMock).toHaveBeenCalledTimes(1);

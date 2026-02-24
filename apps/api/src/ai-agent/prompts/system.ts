@@ -36,6 +36,11 @@ export type PromptSkillDocument = {
 	toolLabel?: string;
 };
 
+export type AvailableCustomSkill = {
+	name: string;
+	description: string;
+};
+
 type BuildPromptInput = {
 	aiAgent: AiAgentSelect;
 	conversation: ConversationSelect;
@@ -54,6 +59,8 @@ type BuildPromptInput = {
 	continuationHint?: ContinuationHint;
 	/** Prompt documents resolved from DB with fallbacks */
 	promptBundle?: ResolvedPromptBundle;
+	/** Available custom skills (metadata only) for optional on-demand loading */
+	availableCustomSkills?: AvailableCustomSkill[];
 	/** Subset of enabled/runtime skills selected for this run */
 	selectedSkillDocuments?: PromptSkillDocument[];
 };
@@ -83,6 +90,7 @@ export function buildSystemPrompt(input: BuildPromptInput): string {
 		smartDecision,
 		continuationHint,
 		promptBundle,
+		availableCustomSkills,
 		selectedSkillDocuments,
 	} = input;
 	const settings = getBehaviorSettings(aiAgent);
@@ -181,9 +189,10 @@ export function buildSystemPrompt(input: BuildPromptInput): string {
 		parts.push(capabilitiesDocument);
 	}
 
-	const selectedSkillSections = buildSelectedSkillsSections(
-		selectedSkillDocuments
-	);
+	const selectedSkillSections = buildSelectedSkillsSections({
+		selectedSkillDocuments,
+		availableCustomSkills,
+	});
 	for (const section of selectedSkillSections) {
 		parts.push(section);
 	}
@@ -321,19 +330,27 @@ function getCoreDocumentContent(
 	return fallback.trim();
 }
 
-function buildSelectedSkillsSections(
-	selectedSkillDocuments: PromptSkillDocument[] | undefined
-): string[] {
-	if (!selectedSkillDocuments || selectedSkillDocuments.length === 0) {
-		return [];
-	}
-
+function buildSelectedSkillsSections(params: {
+	selectedSkillDocuments: PromptSkillDocument[] | undefined;
+	availableCustomSkills: AvailableCustomSkill[] | undefined;
+}): string[] {
+	const selectedSkillDocuments = params.selectedSkillDocuments ?? [];
+	const availableCustomSkills = params.availableCustomSkills ?? [];
 	const toolSkills = selectedSkillDocuments.filter(
 		(skill) => skill.source === "tool"
 	);
 	const customSkills = selectedSkillDocuments.filter(
 		(skill) => skill.source === "custom"
 	);
+
+	if (
+		toolSkills.length === 0 &&
+		customSkills.length === 0 &&
+		availableCustomSkills.length === 0
+	) {
+		return [];
+	}
+
 	const sections: string[] = [];
 
 	if (toolSkills.length > 0) {
@@ -352,6 +369,21 @@ function buildSelectedSkillsSections(
 		);
 	}
 
+	if (availableCustomSkills.length > 0) {
+		const metadataLines = availableCustomSkills.map(
+			(skill) => `- **${skill.name}**: ${skill.description}`
+		);
+
+		sections.push(
+			[
+				"## Available Custom Skills",
+				"These skills are optional. Read descriptions first, and only call `loadSkill` when a skill clearly matches the current conversation.",
+				"When you load a skill, use the exact `skillName` shown below.",
+				metadataLines.join("\n"),
+			].join("\n\n")
+		);
+	}
+
 	if (customSkills.length > 0) {
 		const customSections = customSkills.map(
 			(skill) => `### ${skill.name}\n\n${skill.content.trim()}`
@@ -359,8 +391,8 @@ function buildSelectedSkillsSections(
 
 		sections.push(
 			[
-				"## Custom Skills (Contextual)",
-				"These instructions are contextual. Apply them only when relevant to the current conversation.",
+				"## Loaded Custom Skills (Contextual)",
+				"These are the custom skills you already loaded via `loadSkill` in this run. Apply them only when relevant to the current conversation.",
 				customSections.join("\n\n"),
 			].join("\n\n")
 		);

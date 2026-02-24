@@ -3,8 +3,17 @@ import { env } from "@api/env";
 // Regex patterns for URL filtering (defined at top level for performance)
 const TRAILING_SLASH_REGEX = /\/$/;
 const LEADING_SLASH_REGEX = /^\//;
+const REGEX_SPECIAL_CHARS_REGEX = /[.*+?^${}()|[\]\\]/g;
+const REGEX_HINT_REGEX = /[[\]()+?^$|\\]/;
 
-// Firecrawl API types based on their SDK documentation (v2)
+const FIRECRAWL_API_BASE = "https://api.firecrawl.dev/v2";
+const FIRECRAWL_REQUEST_TIMEOUT_MS = 30_000;
+const FIRECRAWL_MAX_RETRIES = 3;
+const FIRECRAWL_RETRY_BASE_DELAY_MS = 500;
+const FIRECRAWL_MAX_ERROR_BODY_LENGTH = 500;
+const FIRECRAWL_MAX_PAGINATION_REQUESTS = 200;
+const RETRYABLE_STATUS_CODES = new Set([408, 425, 429, 500, 502, 503, 504]);
+
 type FirecrawlScrapeOptions = {
 	formats?: Array<"markdown" | "html">;
 	/** Only return the main content of the page (excludes nav, headers, footers) */
@@ -13,6 +22,8 @@ type FirecrawlScrapeOptions = {
 	includeTags?: string[];
 	/** HTML tags to exclude (e.g., ["nav", "footer", ".sidebar"]) */
 	excludeTags?: string[];
+	/** Remove base64 images from extracted content */
+	removeBase64Images?: boolean;
 	/** Custom parsers to use */
 	parsers?: string[];
 };
@@ -27,22 +38,45 @@ type FirecrawlBatchScrapeParams = {
 };
 
 type FirecrawlBatchScrapeResponse = {
-	success: boolean;
+	success?: boolean;
 	id?: string;
 	url?: string;
 	error?: string;
 };
 
-type FirecrawlBatchScrapeStatusResponse = {
-	success: boolean;
-	status: "scraping" | "completed" | "failed";
+type FirecrawlPageMetadata = {
+	title?: string;
+	description?: string;
+	sourceURL?: string;
+	sourceUrl?: string;
+	url?: string;
+	ogTitle?: string;
+	ogDescription?: string;
+	ogImage?: string;
+	favicon?: string;
+	language?: string;
+	keywords?: string;
+};
+
+type FirecrawlPageData = {
+	markdown?: string;
+	html?: string;
+	metadata?: FirecrawlPageMetadata;
+};
+
+type FirecrawlStatusResponseBase = {
+	success?: boolean;
+	status?: string;
 	completed?: number;
 	total?: number;
 	creditsUsed?: number;
 	expiresAt?: string;
+	next?: string;
 	data?: FirecrawlPageData[];
 	error?: string;
 };
+
+type FirecrawlBatchScrapeStatusResponse = FirecrawlStatusResponseBase;
 
 type FirecrawlCrawlParams = {
 	limit?: number;
@@ -50,45 +84,54 @@ type FirecrawlCrawlParams = {
 	maxDiscoveryDepth?: number;
 	includePaths?: string[];
 	excludePaths?: string[];
+	sitemap?: "include" | "skip" | "only";
+	ignoreQueryParameters?: boolean;
+	crawlEntireDomain?: boolean;
+	allowSubdomains?: boolean;
+	maxConcurrency?: number;
+	delay?: number;
 	scrapeOptions?: FirecrawlScrapeOptions;
 };
 
 type FirecrawlCrawlResponse = {
-	success: boolean;
+	success?: boolean;
 	id?: string;
 	error?: string;
 };
 
-type FirecrawlPageData = {
-	markdown?: string;
-	html?: string;
-	metadata?: {
-		title?: string;
-		description?: string;
-		sourceURL?: string;
-		ogTitle?: string;
-		ogDescription?: string;
-		ogImage?: string;
-		favicon?: string;
-		language?: string;
-		keywords?: string;
-	};
-};
-
 type FirecrawlScrapeResponse = {
-	success: boolean;
+	success?: boolean;
 	data?: FirecrawlPageData;
 	error?: string;
 };
 
-type FirecrawlCrawlStatusResponse = {
-	success: boolean;
-	status: "scraping" | "completed" | "failed";
-	completed?: number;
-	total?: number;
-	creditsUsed?: number;
-	expiresAt?: string;
-	data?: FirecrawlPageData[];
+type FirecrawlCrawlStatusResponse = FirecrawlStatusResponseBase;
+
+type FirecrawlMapLink =
+	| string
+	| {
+			url?: string;
+			title?: string;
+			description?: string;
+	  };
+
+// Firecrawl Map API response type
+type FirecrawlMapResponse = {
+	success?: boolean;
+	links?: FirecrawlMapLink[];
+	error?: string;
+};
+
+type FirecrawlCrawlError = {
+	error?: string;
+	url?: string;
+	documentUrl?: string;
+	document_url?: string;
+};
+
+type FirecrawlCrawlErrorsResponse = {
+	success?: boolean;
+	data?: FirecrawlCrawlError[];
 	error?: string;
 };
 
@@ -111,6 +154,11 @@ export type CrawlStatus = {
 		sizeBytes: number;
 	}>;
 	error?: string;
+};
+
+export type CrawlErrorDetails = {
+	url: string | null;
+	error: string;
 };
 
 export type ScrapeResult = {
@@ -198,7 +246,7 @@ export type BatchScrapeOptions = {
 export type MapOptions = {
 	/** Search query to filter URLs */
 	search?: string;
-	/** Ignore sitemap and only use links found on the page (default: false) */
+	/** Ignore sitemap and only use links found on the page */
 	ignoreSitemap?: boolean;
 	/** Only use URLs from sitemap, ignore discovered links */
 	sitemapOnly?: boolean;
@@ -206,18 +254,147 @@ export type MapOptions = {
 	includeSubdomains?: boolean;
 	/** Maximum number of URLs to return (max 5000) */
 	limit?: number;
-	/** Cache duration in seconds. Use cached results if available within this age. */
+	/** Firecrawl v2 map option for bypassing cache */
+	ignoreCache?: boolean;
+	/**
+	 * Deprecated compatibility field.
+	 * Firecrawl map endpoint does not support maxAge.
+	 * When set to 0 or less, it forces ignoreCache=true.
+	 */
 	maxAge?: number;
 };
 
-// Firecrawl Map API response type
-type FirecrawlMapResponse = {
-	success: boolean;
-	links?: string[];
-	error?: string;
-};
+function sleep(ms: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
-const FIRECRAWL_API_BASE = "https://api.firecrawl.dev/v2";
+function escapeRegex(value: string): string {
+	return value.replace(REGEX_SPECIAL_CHARS_REGEX, "\\$&");
+}
+
+function isLikelyRegexPattern(pattern: string): boolean {
+	return (
+		pattern.startsWith("^") ||
+		pattern.endsWith("$") ||
+		pattern.includes(".*") ||
+		REGEX_HINT_REGEX.test(pattern)
+	);
+}
+
+function toFirecrawlPathPattern(rawPattern: string): string {
+	const pattern = rawPattern.trim();
+	if (!pattern) {
+		return "";
+	}
+
+	if (isLikelyRegexPattern(pattern)) {
+		return pattern;
+	}
+
+	if (pattern.includes("*")) {
+		return `^${pattern
+			.split("*")
+			.map((part) => escapeRegex(part))
+			.join(".*")}$`;
+	}
+
+	const normalized = pattern.endsWith("/") ? pattern.slice(0, -1) : pattern;
+	return `^${escapeRegex(normalized)}(?:/.*)?$`;
+}
+
+function normalizePathPatterns(
+	patterns?: string[] | null
+): string[] | undefined {
+	if (!patterns || patterns.length === 0) {
+		return;
+	}
+
+	const normalized = patterns
+		.map((pattern) => toFirecrawlPathPattern(pattern))
+		.filter((pattern) => pattern.length > 0);
+
+	return normalized.length > 0 ? normalized : undefined;
+}
+
+function truncateErrorBody(errorBody: string): string {
+	if (errorBody.length <= FIRECRAWL_MAX_ERROR_BODY_LENGTH) {
+		return errorBody;
+	}
+
+	return `${errorBody.slice(0, FIRECRAWL_MAX_ERROR_BODY_LENGTH)}...`;
+}
+
+function isRetryableError(error: unknown): boolean {
+	if (!(error instanceof Error)) {
+		return false;
+	}
+
+	if (error.name === "AbortError") {
+		return true;
+	}
+
+	const message = error.message.toLowerCase();
+	return (
+		message.includes("fetch failed") ||
+		message.includes("timed out") ||
+		message.includes("timeout") ||
+		message.includes("socket") ||
+		message.includes("econnreset") ||
+		message.includes("enotfound")
+	);
+}
+
+function retryDelayMs(attempt: number): number {
+	const exponential = FIRECRAWL_RETRY_BASE_DELAY_MS * 2 ** attempt;
+	const jitter = Math.floor(Math.random() * 250);
+	return Math.min(exponential + jitter, 5000);
+}
+
+function resolvePageUrl(metadata?: FirecrawlPageMetadata): string | null {
+	return metadata?.sourceURL ?? metadata?.sourceUrl ?? metadata?.url ?? null;
+}
+
+function normalizePages(pages: FirecrawlPageData[] | undefined): Array<{
+	url: string;
+	title: string | null;
+	markdown: string;
+	sizeBytes: number;
+}> {
+	if (!pages || pages.length === 0) {
+		return [];
+	}
+
+	const dedupedByUrl = new Map<
+		string,
+		{
+			url: string;
+			title: string | null;
+			markdown: string;
+			sizeBytes: number;
+		}
+	>();
+
+	for (const page of pages) {
+		const markdown = page.markdown ?? "";
+		if (!markdown) {
+			continue;
+		}
+
+		const sourceUrl = resolvePageUrl(page.metadata);
+		if (!sourceUrl || dedupedByUrl.has(sourceUrl)) {
+			continue;
+		}
+
+		dedupedByUrl.set(sourceUrl, {
+			url: sourceUrl,
+			title: page.metadata?.title ?? page.metadata?.ogTitle ?? null,
+			markdown,
+			sizeBytes: new TextEncoder().encode(markdown).length,
+		});
+	}
+
+	return Array.from(dedupedByUrl.values());
+}
 
 /**
  * Firecrawl service for web crawling
@@ -241,6 +418,113 @@ export class FirecrawlService {
 		return Boolean(this.apiKey);
 	}
 
+	private buildUrl(pathOrUrl: string): string {
+		if (pathOrUrl.startsWith("http://") || pathOrUrl.startsWith("https://")) {
+			return pathOrUrl;
+		}
+
+		return `${FIRECRAWL_API_BASE}${pathOrUrl}`;
+	}
+
+	private async requestWithRetry(
+		pathOrUrl: string,
+		init: RequestInit
+	): Promise<Response> {
+		let attempt = 0;
+
+		while (true) {
+			const controller = new AbortController();
+			const timeout = setTimeout(
+				() => controller.abort(),
+				FIRECRAWL_REQUEST_TIMEOUT_MS
+			);
+
+			try {
+				const response = await fetch(this.buildUrl(pathOrUrl), {
+					...init,
+					signal: controller.signal,
+				});
+
+				if (
+					RETRYABLE_STATUS_CODES.has(response.status) &&
+					attempt < FIRECRAWL_MAX_RETRIES
+				) {
+					attempt++;
+					await sleep(retryDelayMs(attempt));
+					continue;
+				}
+
+				return response;
+			} catch (error) {
+				if (attempt < FIRECRAWL_MAX_RETRIES && isRetryableError(error)) {
+					attempt++;
+					await sleep(retryDelayMs(attempt));
+					continue;
+				}
+
+				throw error;
+			} finally {
+				clearTimeout(timeout);
+			}
+		}
+	}
+
+	private async readErrorBody(response: Response): Promise<string> {
+		const body = await response.text();
+		return truncateErrorBody(body || "No error body");
+	}
+
+	private async collectPaginatedPages(
+		nextUrl?: string
+	): Promise<FirecrawlPageData[]> {
+		if (!nextUrl) {
+			return [];
+		}
+
+		const pages: FirecrawlPageData[] = [];
+		let cursor: string | undefined = nextUrl;
+		let requests = 0;
+
+		while (cursor && requests < FIRECRAWL_MAX_PAGINATION_REQUESTS) {
+			requests++;
+
+			const response = await this.requestWithRetry(cursor, {
+				method: "GET",
+				headers: {
+					Authorization: `Bearer ${this.apiKey}`,
+				},
+			});
+
+			if (!response.ok) {
+				const errorText = await this.readErrorBody(response);
+				console.error("[firecrawl] Failed to fetch paginated crawl results", {
+					status: response.status,
+					error: errorText,
+				});
+				break;
+			}
+
+			const data = (await response.json()) as {
+				data?: FirecrawlPageData[];
+				next?: string;
+			};
+
+			if (data.data && data.data.length > 0) {
+				pages.push(...data.data);
+			}
+
+			cursor = data.next;
+		}
+
+		if (cursor) {
+			console.warn(
+				"[firecrawl] Pagination truncated after max requests. Consider reducing crawl scope."
+			);
+		}
+
+		return pages;
+	}
+
 	/**
 	 * Start an async crawl job using v2 API
 	 * @param url - The URL to crawl
@@ -254,6 +538,13 @@ export class FirecrawlService {
 			maxDepth?: number;
 			includePaths?: string[];
 			excludePaths?: string[];
+			sitemapMode?: "include" | "skip" | "only";
+			ignoreSitemap?: boolean;
+			ignoreQueryParameters?: boolean;
+			crawlEntireDomain?: boolean;
+			allowSubdomains?: boolean;
+			maxConcurrency?: number;
+			delay?: number;
 		} = {}
 	): Promise<CrawlResult> {
 		if (!this.isConfigured()) {
@@ -270,22 +561,43 @@ export class FirecrawlService {
 				url,
 				limit,
 				maxDiscoveryDepth: maxDepth,
+				// Better default for KB quality/cost: avoid duplicate pages by query string
+				ignoreQueryParameters: options.ignoreQueryParameters ?? true,
+				sitemap: options.ignoreSitemap
+					? "skip"
+					: (options.sitemapMode ?? "include"),
 				scrapeOptions: {
 					formats: ["markdown"],
-					// Enable onlyMainContent for cleaner extracts (excludes nav, headers, footers)
+					// Cleaner extracts (excludes nav, headers, footers)
 					onlyMainContent: true,
+					removeBase64Images: true,
 				},
 			};
 
-			// Only include paths if they are non-empty arrays
-			if (includePaths && includePaths.length > 0) {
-				crawlParams.includePaths = includePaths;
-			}
-			if (excludePaths && excludePaths.length > 0) {
-				crawlParams.excludePaths = excludePaths;
+			const normalizedIncludePaths = normalizePathPatterns(includePaths);
+			if (normalizedIncludePaths) {
+				crawlParams.includePaths = normalizedIncludePaths;
 			}
 
-			const response = await fetch(`${FIRECRAWL_API_BASE}/crawl`, {
+			const normalizedExcludePaths = normalizePathPatterns(excludePaths);
+			if (normalizedExcludePaths) {
+				crawlParams.excludePaths = normalizedExcludePaths;
+			}
+
+			if (options.crawlEntireDomain !== undefined) {
+				crawlParams.crawlEntireDomain = options.crawlEntireDomain;
+			}
+			if (options.allowSubdomains !== undefined) {
+				crawlParams.allowSubdomains = options.allowSubdomains;
+			}
+			if (options.maxConcurrency !== undefined) {
+				crawlParams.maxConcurrency = options.maxConcurrency;
+			}
+			if (options.delay !== undefined) {
+				crawlParams.delay = options.delay;
+			}
+
+			const response = await this.requestWithRetry("/crawl", {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
@@ -295,7 +607,7 @@ export class FirecrawlService {
 			});
 
 			if (!response.ok) {
-				const errorText = await response.text();
+				const errorText = await this.readErrorBody(response);
 				return {
 					success: false,
 					error: `Firecrawl API error: ${response.status} ${errorText}`,
@@ -304,7 +616,7 @@ export class FirecrawlService {
 
 			const data = (await response.json()) as FirecrawlCrawlResponse;
 
-			if (!(data.success && data.id)) {
+			if (!(data.success !== false && data.id)) {
 				return {
 					success: false,
 					error: data.error ?? "Unknown error starting crawl",
@@ -327,7 +639,10 @@ export class FirecrawlService {
 	/**
 	 * Get the status of a crawl job
 	 */
-	async getCrawlStatus(jobId: string): Promise<CrawlStatus> {
+	async getCrawlStatus(
+		jobId: string,
+		options: { includeAllPages?: boolean } = {}
+	): Promise<CrawlStatus> {
 		if (!this.isConfigured()) {
 			return {
 				status: "failed",
@@ -336,7 +651,7 @@ export class FirecrawlService {
 		}
 
 		try {
-			const response = await fetch(`${FIRECRAWL_API_BASE}/crawl/${jobId}`, {
+			const response = await this.requestWithRetry(`/crawl/${jobId}`, {
 				method: "GET",
 				headers: {
 					Authorization: `Bearer ${this.apiKey}`,
@@ -344,7 +659,7 @@ export class FirecrawlService {
 			});
 
 			if (!response.ok) {
-				const errorText = await response.text();
+				const errorText = await this.readErrorBody(response);
 				return {
 					status: "failed",
 					error: `Firecrawl API error: ${response.status} ${errorText}`,
@@ -353,25 +668,32 @@ export class FirecrawlService {
 
 			const data = (await response.json()) as FirecrawlCrawlStatusResponse;
 
-			if (!data.success) {
+			if (!data.status) {
 				return {
 					status: "failed",
-					error: data.error ?? "Unknown error checking crawl status",
+					error: data.error ?? "Invalid response checking crawl status",
 				};
 			}
 
-			// Map Firecrawl status to our internal status
-			const statusMap: Record<
-				FirecrawlCrawlStatusResponse["status"],
-				CrawlStatus["status"]
-			> = {
+			const statusMap: Record<string, CrawlStatus["status"]> = {
+				queued: "pending",
 				scraping: "crawling",
 				completed: "completed",
 				failed: "failed",
+				cancelled: "failed",
 			};
 
 			const status = statusMap[data.status] ?? "pending";
 
+			let allPages = data.data ?? [];
+			if (options.includeAllPages && data.next) {
+				allPages = [
+					...allPages,
+					...(await this.collectPaginatedPages(data.next)),
+				];
+			}
+
+			const normalizedPages = normalizePages(allPages);
 			const result: CrawlStatus = {
 				status,
 				progress:
@@ -381,19 +703,8 @@ export class FirecrawlService {
 								total: data.total,
 							}
 						: undefined,
+				pages: normalizedPages.length > 0 ? normalizedPages : undefined,
 			};
-
-			// If completed, include the crawled pages
-			if (status === "completed" && data.data) {
-				result.pages = data.data
-					.filter((page) => page.markdown && page.metadata?.sourceURL)
-					.map((page) => ({
-						url: page.metadata?.sourceURL ?? "",
-						title: page.metadata?.title ?? page.metadata?.ogTitle ?? null,
-						markdown: page.markdown ?? "",
-						sizeBytes: new TextEncoder().encode(page.markdown ?? "").length,
-					}));
-			}
 
 			if (status === "failed") {
 				result.error = data.error ?? "Crawl failed";
@@ -405,6 +716,65 @@ export class FirecrawlService {
 			return {
 				status: "failed",
 				error: `Failed to get crawl status: ${message}`,
+			};
+		}
+	}
+
+	/**
+	 * Get crawl page-level errors for better diagnostics when a crawl fails.
+	 */
+	async getCrawlErrors(jobId: string): Promise<{
+		success: boolean;
+		errors?: CrawlErrorDetails[];
+		error?: string;
+	}> {
+		if (!this.isConfigured()) {
+			return {
+				success: false,
+				error: "Firecrawl API key not configured",
+			};
+		}
+
+		try {
+			const response = await this.requestWithRetry(`/crawl/${jobId}/errors`, {
+				method: "GET",
+				headers: {
+					Authorization: `Bearer ${this.apiKey}`,
+				},
+			});
+
+			if (!response.ok) {
+				const errorText = await this.readErrorBody(response);
+				return {
+					success: false,
+					error: `Firecrawl API error: ${response.status} ${errorText}`,
+				};
+			}
+
+			const data = (await response.json()) as FirecrawlCrawlErrorsResponse;
+			if (data.success === false) {
+				return {
+					success: false,
+					error: data.error ?? "Unknown error getting crawl errors",
+				};
+			}
+
+			const errors = (data.data ?? [])
+				.filter((entry) => Boolean(entry.error))
+				.map((entry) => ({
+					url: entry.url ?? entry.documentUrl ?? entry.document_url ?? null,
+					error: entry.error ?? "Unknown crawl error",
+				}));
+
+			return {
+				success: true,
+				errors,
+			};
+		} catch (error) {
+			const message = error instanceof Error ? error.message : "Unknown error";
+			return {
+				success: false,
+				error: `Failed to get crawl errors: ${message}`,
 			};
 		}
 	}
@@ -423,7 +793,7 @@ export class FirecrawlService {
 		}
 
 		try {
-			const response = await fetch(`${FIRECRAWL_API_BASE}/crawl/${jobId}`, {
+			const response = await this.requestWithRetry(`/crawl/${jobId}`, {
 				method: "DELETE",
 				headers: {
 					Authorization: `Bearer ${this.apiKey}`,
@@ -431,7 +801,7 @@ export class FirecrawlService {
 			});
 
 			if (!response.ok) {
-				const errorText = await response.text();
+				const errorText = await this.readErrorBody(response);
 				return {
 					success: false,
 					error: `Firecrawl API error: ${response.status} ${errorText}`,
@@ -493,7 +863,7 @@ export class FirecrawlService {
 				batchParams.excludeTags = options.excludeTags;
 			}
 
-			const response = await fetch(`${FIRECRAWL_API_BASE}/batch/scrape`, {
+			const response = await this.requestWithRetry("/batch/scrape", {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
@@ -503,7 +873,7 @@ export class FirecrawlService {
 			});
 
 			if (!response.ok) {
-				const errorText = await response.text();
+				const errorText = await this.readErrorBody(response);
 				return {
 					success: false,
 					error: `Firecrawl API error: ${response.status} ${errorText}`,
@@ -512,7 +882,7 @@ export class FirecrawlService {
 
 			const data = (await response.json()) as FirecrawlBatchScrapeResponse;
 
-			if (!(data.success && data.id)) {
+			if (!(data.success !== false && data.id)) {
 				return {
 					success: false,
 					error: data.error ?? "Unknown error starting batch scrape",
@@ -535,7 +905,10 @@ export class FirecrawlService {
 	/**
 	 * Get the status of a batch scrape job
 	 */
-	async getBatchScrapeStatus(jobId: string): Promise<BatchScrapeStatus> {
+	async getBatchScrapeStatus(
+		jobId: string,
+		options: { includeAllPages?: boolean } = {}
+	): Promise<BatchScrapeStatus> {
 		if (!this.isConfigured()) {
 			return {
 				status: "failed",
@@ -544,18 +917,15 @@ export class FirecrawlService {
 		}
 
 		try {
-			const response = await fetch(
-				`${FIRECRAWL_API_BASE}/batch/scrape/${jobId}`,
-				{
-					method: "GET",
-					headers: {
-						Authorization: `Bearer ${this.apiKey}`,
-					},
-				}
-			);
+			const response = await this.requestWithRetry(`/batch/scrape/${jobId}`, {
+				method: "GET",
+				headers: {
+					Authorization: `Bearer ${this.apiKey}`,
+				},
+			});
 
 			if (!response.ok) {
-				const errorText = await response.text();
+				const errorText = await this.readErrorBody(response);
 				return {
 					status: "failed",
 					error: `Firecrawl API error: ${response.status} ${errorText}`,
@@ -565,25 +935,33 @@ export class FirecrawlService {
 			const data =
 				(await response.json()) as FirecrawlBatchScrapeStatusResponse;
 
-			if (!data.success) {
+			if (!data.status) {
 				return {
 					status: "failed",
-					error: data.error ?? "Unknown error checking batch scrape status",
+					error: data.error ?? "Invalid response checking batch scrape status",
 				};
 			}
 
 			// Map Firecrawl status to our internal status
-			const statusMap: Record<
-				FirecrawlBatchScrapeStatusResponse["status"],
-				BatchScrapeStatus["status"]
-			> = {
+			const statusMap: Record<string, BatchScrapeStatus["status"]> = {
+				queued: "pending",
 				scraping: "scraping",
 				completed: "completed",
 				failed: "failed",
+				cancelled: "failed",
 			};
 
 			const status = statusMap[data.status] ?? "pending";
 
+			let allPages = data.data ?? [];
+			if (options.includeAllPages && data.next) {
+				allPages = [
+					...allPages,
+					...(await this.collectPaginatedPages(data.next)),
+				];
+			}
+
+			const normalizedPages = normalizePages(allPages);
 			const result: BatchScrapeStatus = {
 				status,
 				progress:
@@ -593,19 +971,8 @@ export class FirecrawlService {
 								total: data.total,
 							}
 						: undefined,
+				pages: normalizedPages.length > 0 ? normalizedPages : undefined,
 			};
-
-			// If completed, include the scraped pages
-			if (status === "completed" && data.data) {
-				result.pages = data.data
-					.filter((page) => page.markdown && page.metadata?.sourceURL)
-					.map((page) => ({
-						url: page.metadata?.sourceURL ?? "",
-						title: page.metadata?.title ?? page.metadata?.ogTitle ?? null,
-						markdown: page.markdown ?? "",
-						sizeBytes: new TextEncoder().encode(page.markdown ?? "").length,
-					}));
-			}
 
 			if (status === "failed") {
 				result.error = data.error ?? "Batch scrape failed";
@@ -635,18 +1002,15 @@ export class FirecrawlService {
 		}
 
 		try {
-			const response = await fetch(
-				`${FIRECRAWL_API_BASE}/batch/scrape/${jobId}`,
-				{
-					method: "DELETE",
-					headers: {
-						Authorization: `Bearer ${this.apiKey}`,
-					},
-				}
-			);
+			const response = await this.requestWithRetry(`/batch/scrape/${jobId}`, {
+				method: "DELETE",
+				headers: {
+					Authorization: `Bearer ${this.apiKey}`,
+				},
+			});
 
 			if (!response.ok) {
-				const errorText = await response.text();
+				const errorText = await this.readErrorBody(response);
 				return {
 					success: false,
 					error: `Firecrawl API error: ${response.status} ${errorText}`,
@@ -665,12 +1029,15 @@ export class FirecrawlService {
 
 	/**
 	 * Scrape a single page (synchronous, returns immediately with content)
-	 * Uses Firecrawl v2 API with cache disabled for fresh results
-	 * Useful for extracting brand information from a homepage
+	 * Uses Firecrawl v2 API with optional cache age for better onboarding speed.
+	 * Useful for extracting brand information from a homepage.
 	 */
 	async scrapeSinglePage(
 		url: string,
-		options?: { maxAge?: number }
+		options?: {
+			/** Max cache age in milliseconds */
+			maxAge?: number;
+		}
 	): Promise<ScrapeResult> {
 		if (!this.isConfigured()) {
 			return {
@@ -682,23 +1049,20 @@ export class FirecrawlService {
 		console.log("[firecrawl] scrapeSinglePage called for:", url);
 
 		try {
-			// Firecrawl v2 API scrape request
-			// maxAge enables caching - value in seconds (default 1 hour for onboarding)
 			const requestBody: Record<string, unknown> = {
 				url,
 				formats: ["markdown", "html"],
-				// Don't use onlyMainContent - we need full page for meta tags extraction
+				// Keep full page for meta tags extraction
 				onlyMainContent: false,
 			};
 
-			// Add maxAge for caching if specified (in seconds)
 			if (options?.maxAge !== undefined) {
 				requestBody.maxAge = options.maxAge;
 			}
 
 			console.log("[firecrawl] Scrape request body:", requestBody);
 
-			const response = await fetch(`${FIRECRAWL_API_BASE}/scrape`, {
+			const response = await this.requestWithRetry("/scrape", {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
@@ -708,7 +1072,7 @@ export class FirecrawlService {
 			});
 
 			if (!response.ok) {
-				const errorText = await response.text();
+				const errorText = await this.readErrorBody(response);
 				console.error("[firecrawl] API error response:", {
 					status: response.status,
 					body: errorText,
@@ -721,7 +1085,6 @@ export class FirecrawlService {
 
 			const data = (await response.json()) as FirecrawlScrapeResponse;
 
-			// Log the raw API response for debugging
 			console.log("[firecrawl] Raw API response:", {
 				success: data.success,
 				hasData: !!data.data,
@@ -730,7 +1093,7 @@ export class FirecrawlService {
 				error: data.error,
 			});
 
-			if (!(data.success && data.data)) {
+			if (!data.data) {
 				return {
 					success: false,
 					error: data.error ?? "Unknown error scraping page",
@@ -752,7 +1115,7 @@ export class FirecrawlService {
 					favicon: data.data.metadata?.favicon,
 					language: data.data.metadata?.language,
 					keywords: data.data.metadata?.keywords,
-					sourceUrl: data.data.metadata?.sourceURL ?? url,
+					sourceUrl: resolvePageUrl(data.data.metadata) ?? url,
 				},
 			};
 
@@ -777,10 +1140,7 @@ export class FirecrawlService {
 
 	/**
 	 * Map a website to discover all URLs
-	 * Uses Firecrawl v2 /map endpoint to quickly discover pages without scraping content
-	 * Cache disabled for fresh results
-	 *
-	 * By default, uses the sitemap (ignoreSitemap: false) to discover more URLs
+	 * Uses Firecrawl v2 /map endpoint to quickly discover pages without scraping content.
 	 */
 	async mapSite(url: string, options: MapOptions = {}): Promise<MapResult> {
 		if (!this.isConfigured()) {
@@ -793,21 +1153,29 @@ export class FirecrawlService {
 		console.log("[firecrawl] mapSite called for:", url, "options:", options);
 
 		try {
-			// Firecrawl v2 API map request
-			// Note: v2 /map endpoint has different parameters than v1
 			const requestBody: Record<string, unknown> = {
 				url,
-				search: options.search,
 				includeSubdomains: options.includeSubdomains ?? false,
 				limit: options.limit ?? 100,
 			};
 
-			// Add maxAge for caching if specified (in seconds)
-			if (options.maxAge !== undefined) {
-				requestBody.maxAge = options.maxAge;
+			if (options.search) {
+				requestBody.search = options.search;
 			}
 
-			const response = await fetch(`${FIRECRAWL_API_BASE}/map`, {
+			if (options.sitemapOnly) {
+				requestBody.sitemap = "only";
+			} else if (options.ignoreSitemap) {
+				requestBody.sitemap = "skip";
+			}
+
+			if (options.ignoreCache !== undefined) {
+				requestBody.ignoreCache = options.ignoreCache;
+			} else if (options.maxAge !== undefined && options.maxAge <= 0) {
+				requestBody.ignoreCache = true;
+			}
+
+			const response = await this.requestWithRetry("/map", {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
@@ -817,7 +1185,7 @@ export class FirecrawlService {
 			});
 
 			if (!response.ok) {
-				const errorText = await response.text();
+				const errorText = await this.readErrorBody(response);
 				console.error("[firecrawl] Map API error:", {
 					status: response.status,
 					body: errorText,
@@ -829,23 +1197,26 @@ export class FirecrawlService {
 			}
 
 			const data = (await response.json()) as FirecrawlMapResponse;
-
-			console.log("[firecrawl] Map API response:", {
-				success: data.success,
-				linksCount: data.links?.length ?? 0,
-				error: data.error,
-			});
-
-			if (!data.success) {
+			if (data.success === false) {
 				return {
 					success: false,
 					error: data.error ?? "Unknown error mapping site",
 				};
 			}
 
+			const urls = (data.links ?? [])
+				.map((entry) => (typeof entry === "string" ? entry : entry.url))
+				.filter((entry): entry is string => Boolean(entry));
+
+			console.log("[firecrawl] Map API response:", {
+				success: data.success,
+				linksCount: urls.length,
+				error: data.error,
+			});
+
 			return {
 				success: true,
-				urls: data.links ?? [],
+				urls,
 			};
 		} catch (error) {
 			const message = error instanceof Error ? error.message : "Unknown error";

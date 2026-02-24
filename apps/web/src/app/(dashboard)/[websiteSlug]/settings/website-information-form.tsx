@@ -27,6 +27,7 @@ import { SettingsRowFooter } from "@/components/ui/layout/settings-layout";
 import { Spinner } from "@/components/ui/spinner";
 import { authClient } from "@/lib/auth/client";
 import { useTRPC } from "@/lib/trpc/client";
+import { buildUniqueUploadIdentity } from "@/lib/uploads/avatar-upload-key";
 import { isValidDomain } from "@/lib/utils";
 
 const PROTOCOL_REGEX = /^https?:\/\//i;
@@ -173,6 +174,11 @@ export function WebsiteInformationForm({
 							}),
 						}),
 						queryClient.invalidateQueries({
+							queryKey: trpc.website.listByOrganization.queryKey({
+								organizationId,
+							}),
+						}),
+						queryClient.invalidateQueries({
 							queryKey: trpc.user.me.queryKey(),
 						}),
 					]);
@@ -208,10 +214,12 @@ export function WebsiteInformationForm({
 			try {
 				toast.loading("Uploading logo…", { id: logoUploadToastId });
 				logoProgressToastAtRef.current = Date.now();
+				const uploadIdentity = buildUniqueUploadIdentity(file);
 
 				const uploadDetails = await createSignedUrl({
 					contentType: file.type,
-					fileName: file.name,
+					fileName: uploadIdentity.fileName,
+					fileExtension: uploadIdentity.fileExtension,
 					websiteId,
 					scope: {
 						type: "user",
@@ -240,7 +248,9 @@ export function WebsiteInformationForm({
 
 				const publicUrl = uploadDetails.publicUrl;
 
-				toast.success("Logo uploaded.", { id: logoUploadToastId });
+				toast.success("Logo uploaded. Click Save to apply.", {
+					id: logoUploadToastId,
+				});
 
 				return {
 					url: publicUrl,

@@ -24,6 +24,7 @@ import { Input } from "@/components/ui/input";
 import { SettingsRowFooter } from "@/components/ui/layout/settings-layout";
 import { authClient } from "@/lib/auth/client";
 import { useTRPC } from "@/lib/trpc/client";
+import { buildUniqueUploadIdentity } from "@/lib/uploads/avatar-upload-key";
 
 const avatarValueSchema = z
 	.union([
@@ -145,10 +146,12 @@ export function UserProfileForm({
 					id: avatarUploadToastId,
 				});
 				avatarProgressToastAtRef.current = Date.now();
+				const uploadIdentity = buildUniqueUploadIdentity(file);
 
 				const uploadDetails = await createSignedUrl({
 					contentType: file.type,
-					fileName: file.name,
+					fileName: uploadIdentity.fileName,
+					fileExtension: uploadIdentity.fileExtension,
 					websiteId,
 					path: `users/${userId}/avatars`,
 					scope: {
@@ -181,7 +184,7 @@ export function UserProfileForm({
 
 				const publicUrl = uploadDetails.publicUrl;
 
-				toast.success("Profile picture uploaded.", {
+				toast.success("Profile picture uploaded. Click Save to apply.", {
 					id: avatarUploadToastId,
 				});
 

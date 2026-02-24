@@ -4,7 +4,11 @@ import type { ConversationSelect } from "@api/db/schema/conversation";
 import type { RoleAwareMessage } from "../context/conversation";
 import type { VisitorContext } from "../context/visitor";
 import { getDefaultBehaviorSettings } from "../settings/defaults";
-import { buildSystemPrompt, type PromptSkillDocument } from "./system";
+import {
+	type AvailableCustomSkill,
+	buildSystemPrompt,
+	type PromptSkillDocument,
+} from "./system";
 
 function createAgent(): AiAgentSelect {
 	return {
@@ -44,7 +48,10 @@ function createConversation(): ConversationSelect {
 	} as ConversationSelect;
 }
 
-function buildPromptWithSkills(skills?: PromptSkillDocument[]): string {
+function buildPromptWithSkills(options?: {
+	selectedSkills?: PromptSkillDocument[];
+	availableCustomSkills?: AvailableCustomSkill[];
+}): string {
 	return buildSystemPrompt({
 		aiAgent: createAgent(),
 		conversation: createConversation(),
@@ -52,7 +59,8 @@ function buildPromptWithSkills(skills?: PromptSkillDocument[]): string {
 		visitorContext: null,
 		mode: "respond_to_visitor",
 		humanCommand: null,
-		selectedSkillDocuments: skills,
+		availableCustomSkills: options?.availableCustomSkills,
+		selectedSkillDocuments: options?.selectedSkills,
 	});
 }
 
@@ -73,38 +81,84 @@ function buildPromptWithVisitor(options: {
 }
 
 describe("buildSystemPrompt skill sections", () => {
-	it("renders required tool skills and contextual custom skills in separate sections", () => {
-		const prompt = buildPromptWithSkills([
-			{
-				name: "send-message",
-				content: "Use sendMessage first.",
-				source: "tool",
-				toolId: "sendMessage",
-				toolLabel: "Send Public Message",
-			},
-			{
-				name: "refund-playbook",
-				content: "Handle refund requests with policy references.",
-				source: "custom",
-			},
-		]);
+	it("renders tool skills, available custom metadata, and loaded custom skills separately", () => {
+		const prompt = buildPromptWithSkills({
+			selectedSkills: [
+				{
+					name: "send-message",
+					content: "Use sendMessage first.",
+					source: "tool",
+					toolId: "sendMessage",
+					toolLabel: "Send Public Message",
+				},
+				{
+					name: "refund-playbook",
+					content: "Handle refund requests with policy references.",
+					source: "custom",
+				},
+			],
+			availableCustomSkills: [
+				{
+					name: "refunds.md",
+					description: "Use for refund policy and workflow requests.",
+				},
+			],
+		});
 
 		const toolSectionIndex = prompt.indexOf("## Tool Skills (Required)");
-		const customSectionIndex = prompt.indexOf("## Custom Skills (Contextual)");
+		const availableSectionIndex = prompt.indexOf("## Available Custom Skills");
+		const customSectionIndex = prompt.indexOf(
+			"## Loaded Custom Skills (Contextual)"
+		);
 
 		expect(toolSectionIndex).toBeGreaterThan(-1);
+		expect(availableSectionIndex).toBeGreaterThan(-1);
 		expect(customSectionIndex).toBeGreaterThan(-1);
-		expect(customSectionIndex).toBeGreaterThan(toolSectionIndex);
+		expect(availableSectionIndex).toBeGreaterThan(toolSectionIndex);
+		expect(customSectionIndex).toBeGreaterThan(availableSectionIndex);
 		expect(prompt).toContain("### Send Public Message");
 		expect(prompt).toContain("Use sendMessage first.");
+		expect(prompt).toContain(
+			"**refunds.md**: Use for refund policy and workflow requests."
+		);
 		expect(prompt).toContain("### refund-playbook");
 	});
 
-	it("omits skill sections when none are selected", () => {
-		const prompt = buildPromptWithSkills();
+	it("renders available custom metadata without full custom content before load", () => {
+		const prompt = buildPromptWithSkills({
+			selectedSkills: [
+				{
+					name: "send-message",
+					content: "Use sendMessage first.",
+					source: "tool",
+					toolId: "sendMessage",
+					toolLabel: "Send Public Message",
+				},
+			],
+			availableCustomSkills: [
+				{
+					name: "refunds.md",
+					description: "Use for refund policy and workflow requests.",
+				},
+			],
+		});
+
+		expect(prompt).toContain("## Available Custom Skills");
+		expect(prompt).toContain(
+			"**refunds.md**: Use for refund policy and workflow requests."
+		);
+		expect(prompt).not.toContain("## Loaded Custom Skills (Contextual)");
+		expect(prompt).not.toContain(
+			"Handle refund requests with policy references."
+		);
+	});
+
+	it("omits skill sections when no skills are available or loaded", () => {
+		const prompt = buildPromptWithSkills({});
 
 		expect(prompt).not.toContain("## Tool Skills (Required)");
-		expect(prompt).not.toContain("## Custom Skills (Contextual)");
+		expect(prompt).not.toContain("## Available Custom Skills");
+		expect(prompt).not.toContain("## Loaded Custom Skills (Contextual)");
 	});
 });
 

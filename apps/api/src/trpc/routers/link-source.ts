@@ -340,18 +340,16 @@ export const linkSourceRouter = createTRPCRouter({
 					// Continue with deletion even if cancellation fails
 				}
 
-				// Cancel Firecrawl batch scrape job (for active scrapes)
+				// Cancel Firecrawl crawl job (for active crawls)
 				if (linkSourceEntry.firecrawlJobId) {
 					try {
-						await firecrawlService.cancelBatchScrape(
-							linkSourceEntry.firecrawlJobId
-						);
+						await firecrawlService.cancelCrawl(linkSourceEntry.firecrawlJobId);
 						console.log(
-							`[link-source:delete] Cancelled Firecrawl batch scrape job ${linkSourceEntry.firecrawlJobId}`
+							`[link-source:delete] Cancelled Firecrawl crawl job ${linkSourceEntry.firecrawlJobId}`
 						);
 					} catch (error) {
 						console.error(
-							"[link-source:delete] Failed to cancel Firecrawl batch scrape job:",
+							"[link-source:delete] Failed to cancel Firecrawl crawl job:",
 							error
 						);
 						// Continue with deletion even if cancellation fails
@@ -440,18 +438,16 @@ export const linkSourceRouter = createTRPCRouter({
 				// Continue even if cancellation fails
 			}
 
-			// Cancel Firecrawl batch scrape job (for active scrapes)
+			// Cancel Firecrawl crawl job (for active crawls)
 			if (linkSourceEntry.firecrawlJobId) {
 				try {
-					await firecrawlService.cancelBatchScrape(
-						linkSourceEntry.firecrawlJobId
-					);
+					await firecrawlService.cancelCrawl(linkSourceEntry.firecrawlJobId);
 					console.log(
-						`[link-source:cancel] Cancelled Firecrawl batch scrape job ${linkSourceEntry.firecrawlJobId}`
+						`[link-source:cancel] Cancelled Firecrawl crawl job ${linkSourceEntry.firecrawlJobId}`
 					);
 				} catch (error) {
 					console.error(
-						"[link-source:cancel] Failed to cancel Firecrawl batch scrape job:",
+						"[link-source:cancel] Failed to cancel Firecrawl crawl job:",
 						error
 					);
 					// Continue even if cancellation fails
@@ -557,7 +553,8 @@ export const linkSourceRouter = createTRPCRouter({
 					createdBy: user.id,
 					includePaths: linkSourceEntry.includePaths,
 					excludePaths: linkSourceEntry.excludePaths,
-					maxDepth: 5,
+					// Keep recrawl conservative and aligned with create defaults.
+					maxDepth: 1,
 				});
 			} catch (error) {
 				// If queueing fails, mark the link source as failed

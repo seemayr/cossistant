@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { cn } from "@/lib/utils";
 
 type WebsiteImageProps = {
@@ -20,11 +19,15 @@ function WebsiteImage({ name, logoUrl, className }: WebsiteImageProps) {
 			)}
 		>
 			{logoUrl ? (
-				<Image
+				// biome-ignore lint/performance/noImgElement: Website logos are user-uploaded assets and may be SVGs.
+				<img
 					alt={name}
 					className="size-full object-contain"
-					fill
+					decoding="async"
+					height={28}
+					loading="lazy"
 					src={logoUrl}
+					width={28}
 				/>
 			) : (
 				<span className="font-medium font-mono text-muted-foreground text-xs leading-none">

@@ -579,8 +579,8 @@ export async function runAiAgentPipeline(
 			await finalizeAiCreditUsage(generationResult);
 		}
 
-		const selectedSkills = generationResult.selectedSkills;
-		if (selectedSkills && selectedSkills.length > 0) {
+		const usedCustomSkills = generationResult.usedCustomSkills;
+		if (usedCustomSkills && usedCustomSkills.length > 0) {
 			try {
 				await logAiSkillUsageTimeline({
 					db: ctx.db,
@@ -592,7 +592,7 @@ export async function runAiAgentPipeline(
 					workflowRunId: ctx.input.workflowRunId,
 					triggerMessageId: ctx.input.messageId,
 					triggerVisibility: intakeResult.triggerMessage?.visibility,
-					selectedSkills,
+					usedCustomSkills,
 				});
 			} catch (error) {
 				console.warn(

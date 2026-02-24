@@ -26,7 +26,7 @@ export default async function Landing() {
 			<div className="flex flex-col gap-8 pt-32 md:flex-row lg:min-h-screen">
 				<div className="flex flex-1 flex-col gap-6">
 					<div className="flex flex-col items-start gap-4 px-4 pb-8">
-						<p className="font-mono text-primary/70 text-xs">
+						<p className="font-mono text-primary/70 text-sm">
 							[Programmatic Human + AI agent support your users love]
 						</p>
 						<h1 className="max-w-4xl text-balance text-left font-f37-stout text-[42px] leading-tight md:text-3xl xl:text-5xl">

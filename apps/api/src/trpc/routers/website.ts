@@ -10,6 +10,7 @@ import { createDefaultWebsiteViews } from "@api/db/queries/view";
 import {
 	createWebsite,
 	getWebsiteBySlugWithAccess,
+	permanentlyDeleteWebsite,
 	updateWebsite,
 } from "@api/db/queries/website";
 import {
@@ -23,10 +24,17 @@ import {
 import { env } from "@api/env";
 import {
 	ensureFreeSubscriptionForWebsite,
+	getCustomerByOrganizationId,
+	getCustomerState,
 	PolarCustomerInvariantViolationError,
+	partitionWebsiteSubscriptionsForDeletion,
 } from "@api/lib/plans/polar";
+import polarClient from "@api/lib/polar";
 import { generateTinybirdJWT } from "@api/lib/tinybird-jwt";
-import { isOrganizationAdminOrOwner } from "@api/utils/access-control";
+import {
+	isOrganizationAdminOrOwner,
+	isOrganizationOwner,
+} from "@api/utils/access-control";
 import { invalidateApiKeyCacheForWebsite } from "@api/utils/cache/api-key-cache";
 import { generateULID } from "@api/utils/db/ids";
 import { normalizeDomain } from "@api/utils/domain";
@@ -37,6 +45,8 @@ import {
 	createWebsiteApiKeyRequestSchema,
 	createWebsiteRequestSchema,
 	createWebsiteResponseSchema,
+	deleteWebsiteRequestSchema,
+	deleteWebsiteResponseSchema,
 	listByOrganizationRequestSchema,
 	revokeWebsiteApiKeyRequestSchema,
 	updateWebsiteRequestSchema,
@@ -573,6 +583,115 @@ export const websiteRouter = createTRPCRouter({
 				sentimentCount > 0 ? toNumberOrNull(sentimentResult[0]?.average) : null;
 
 			return { ratingScore, sentimentScore };
+		}),
+	delete: protectedProcedure
+		.input(deleteWebsiteRequestSchema)
+		.output(deleteWebsiteResponseSchema)
+		.mutation(async ({ ctx: { db, user }, input }) => {
+			const websiteData = await getWebsiteBySlugWithAccess(db, {
+				userId: user.id,
+				websiteSlug: input.websiteSlug,
+			});
+
+			if (!websiteData) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Website not found or access denied",
+				});
+			}
+
+			const hasOwnerAccess = await isOrganizationOwner(db, {
+				organizationId: websiteData.organizationId,
+				userId: user.id,
+			});
+
+			if (!hasOwnerAccess) {
+				throw new TRPCError({
+					code: "FORBIDDEN",
+					message: "Only organization owners can delete websites.",
+				});
+			}
+
+			const customer = await getCustomerByOrganizationId(
+				websiteData.organizationId
+			);
+			let freeSubscriptionsToRevoke: Array<{ id: string }> = [];
+
+			if (customer) {
+				const customerState = await getCustomerState(customer.id);
+
+				if (!customerState) {
+					throw new TRPCError({
+						code: "INTERNAL_SERVER_ERROR",
+						message:
+							"Unable to verify billing subscriptions. Please try again later.",
+					});
+				}
+
+				const subscriptionPartition = partitionWebsiteSubscriptionsForDeletion(
+					customerState,
+					websiteData.id
+				);
+
+				if (subscriptionPartition.blockingPaidOrUnknown.length > 0) {
+					throw new TRPCError({
+						code: "BAD_REQUEST",
+						message: `This website has an active paid subscription. Please unsubscribe first in /${input.websiteSlug}/billing.`,
+					});
+				}
+
+				freeSubscriptionsToRevoke = subscriptionPartition.freeToRevoke.map(
+					(subscription) => ({ id: subscription.id })
+				);
+			}
+
+			for (const subscription of freeSubscriptionsToRevoke) {
+				try {
+					await polarClient.subscriptions.revoke({
+						id: subscription.id,
+					});
+				} catch (error) {
+					console.error(
+						`[plans] Failed to revoke free subscription id=${subscription.id} for website=${websiteData.id}:`,
+						error
+					);
+					throw new TRPCError({
+						code: "INTERNAL_SERVER_ERROR",
+						message:
+							"Failed to revoke free subscription before deletion. Please try again.",
+					});
+				}
+			}
+
+			try {
+				await invalidateApiKeyCacheForWebsite(db, websiteData.id);
+			} catch (error) {
+				console.error(
+					"[api-key-cache] Failed to invalidate website API key cache before deletion",
+					{
+						websiteId: websiteData.id,
+						error,
+					}
+				);
+				throw new TRPCError({
+					code: "INTERNAL_SERVER_ERROR",
+					message: "Failed to invalidate API key cache. Please try again.",
+				});
+			}
+
+			const deletedWebsite = await permanentlyDeleteWebsite(db, {
+				orgId: websiteData.organizationId,
+				websiteId: websiteData.id,
+			});
+
+			if (!deletedWebsite) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Website not found",
+				});
+			}
+
+			return deletedWebsite;
 		}),
 
 	update: protectedProcedure

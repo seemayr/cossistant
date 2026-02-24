@@ -25,3 +25,23 @@ export async function isOrganizationAdminOrOwner(
 
 	return Boolean(result);
 }
+
+export async function isOrganizationOwner(
+	db: Database,
+	params: { userId: string; organizationId: string }
+): Promise<boolean> {
+	const [result] = await db
+		.select({ id: member.id })
+		.from(member)
+		.where(
+			and(
+				eq(member.userId, params.userId),
+				eq(member.organizationId, params.organizationId),
+				eq(member.role, "owner")
+			)
+		)
+		.limit(1)
+		.$withCache();
+
+	return Boolean(result);
+}

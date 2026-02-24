@@ -1,7 +1,13 @@
 import { DEFAULT_PAGE_LIMIT } from "@api/constants";
 import type { Database } from "@api/db";
 import type { WebsiteInsert } from "@api/db/schema";
-import { member, organization, teamMember, website } from "@api/db/schema";
+import {
+	member,
+	organization,
+	team,
+	teamMember,
+	website,
+} from "@api/db/schema";
 import { auth } from "@api/lib/auth";
 import { hasAnyRole } from "@cossistant/core";
 import type { WebsiteStatus } from "@cossistant/types/enums";
@@ -155,6 +161,65 @@ export async function deleteWebsite(
 		.returning();
 
 	return deletedWebsite;
+}
+
+// Permanently delete website and clean up orphaned team records.
+export async function permanentlyDeleteWebsite(
+	db: Database,
+	params: {
+		orgId: string;
+		websiteId: string;
+	}
+): Promise<{ id: string; slug: string } | null> {
+	return db.transaction(async (tx) => {
+		const [deletedWebsite] = await tx
+			.delete(website)
+			.where(
+				and(
+					eq(website.id, params.websiteId),
+					eq(website.organizationId, params.orgId)
+				)
+			)
+			.returning({
+				id: website.id,
+				slug: website.slug,
+				teamId: website.teamId,
+			});
+
+		if (!deletedWebsite) {
+			return null;
+		}
+
+		if (deletedWebsite.teamId) {
+			const [remainingActiveWebsite] = await tx
+				.select({ id: website.id })
+				.from(website)
+				.where(
+					and(
+						eq(website.organizationId, params.orgId),
+						eq(website.teamId, deletedWebsite.teamId),
+						isNull(website.deletedAt)
+					)
+				)
+				.limit(1);
+
+			if (!remainingActiveWebsite) {
+				await tx
+					.delete(team)
+					.where(
+						and(
+							eq(team.id, deletedWebsite.teamId),
+							eq(team.organizationId, params.orgId)
+						)
+					);
+			}
+		}
+
+		return {
+			id: deletedWebsite.id,
+			slug: deletedWebsite.slug,
+		};
+	});
 }
 
 // Restore website

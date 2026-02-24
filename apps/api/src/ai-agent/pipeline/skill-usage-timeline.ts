@@ -10,7 +10,7 @@ import {
 	TimelineItemVisibility,
 	TOOL_TIMELINE_LOG_TYPE,
 } from "@cossistant/types";
-import type { SelectedSkillUsage } from "./3-generation";
+import type { UsedCustomSkill } from "./3-generation";
 
 export const AI_SKILL_USAGE_TIMELINE_TOOL_NAME = "aiSkillUsage";
 
@@ -27,20 +27,13 @@ function isUniqueViolationError(error: unknown): boolean {
 	return false;
 }
 
-function toDisplayName(skill: SelectedSkillUsage): string {
-	if (
-		typeof skill.toolLabel === "string" &&
-		skill.toolLabel.trim().length > 0
-	) {
-		return skill.toolLabel.trim();
-	}
-
+function toDisplayName(skill: UsedCustomSkill): string {
 	return stripSkillMarkdownExtension(skill.name);
 }
 
-function buildSummaryText(selectedSkills: SelectedSkillUsage[]): string {
-	const displayNames = selectedSkills.map(toDisplayName);
-	return `AI loaded skills (${selectedSkills.length}): ${displayNames.join(", ")}`;
+function buildSummaryText(usedCustomSkills: UsedCustomSkill[]): string {
+	const displayNames = usedCustomSkills.map(toDisplayName);
+	return `AI used custom skills (${usedCustomSkills.length}): ${displayNames.join(", ")}`;
 }
 
 function buildProviderMetadata(params: {
@@ -67,7 +60,7 @@ function buildToolPart(params: {
 	workflowRunId: string;
 	triggerMessageId: string;
 	triggerVisibility?: "public" | "private";
-	selectedSkills: SelectedSkillUsage[];
+	usedCustomSkills: UsedCustomSkill[];
 }) {
 	const providerMetadata = buildProviderMetadata({
 		workflowRunId: params.workflowRunId,
@@ -75,28 +68,19 @@ function buildToolPart(params: {
 		triggerVisibility: params.triggerVisibility,
 	});
 
-	const toolSkills = params.selectedSkills.filter(
-		(skill) => skill.source === "tool"
-	).length;
-	const customSkills = params.selectedSkills.length - toolSkills;
-
 	return {
 		type: `tool-${AI_SKILL_USAGE_TIMELINE_TOOL_NAME}`,
 		toolCallId: "ai-skill-usage",
 		toolName: AI_SKILL_USAGE_TIMELINE_TOOL_NAME,
 		input: {
-			totalSkills: params.selectedSkills.length,
+			totalUsedCustomSkills: params.usedCustomSkills.length,
 		},
 		state: "result",
 		output: {
-			totalSkills: params.selectedSkills.length,
-			toolSkills,
-			customSkills,
-			skills: params.selectedSkills.map((skill) => ({
+			totalUsedCustomSkills: params.usedCustomSkills.length,
+			skills: params.usedCustomSkills.map((skill) => ({
 				name: skill.name,
-				source: skill.source,
-				toolId: skill.toolId,
-				toolLabel: skill.toolLabel,
+				description: skill.description,
 				displayName: toDisplayName(skill),
 			})),
 		},
@@ -119,19 +103,19 @@ export async function logAiSkillUsageTimeline(params: {
 	workflowRunId: string;
 	triggerMessageId: string;
 	triggerVisibility?: "public" | "private";
-	selectedSkills: SelectedSkillUsage[];
+	usedCustomSkills: UsedCustomSkill[];
 }): Promise<void> {
-	if (params.selectedSkills.length === 0) {
+	if (params.usedCustomSkills.length === 0) {
 		return;
 	}
 
 	const itemId = getAiSkillUsageTimelineItemId(params.workflowRunId);
-	const text = buildSummaryText(params.selectedSkills);
+	const text = buildSummaryText(params.usedCustomSkills);
 	const toolPart = buildToolPart({
 		workflowRunId: params.workflowRunId,
 		triggerMessageId: params.triggerMessageId,
 		triggerVisibility: params.triggerVisibility,
-		selectedSkills: params.selectedSkills,
+		usedCustomSkills: params.usedCustomSkills,
 	});
 
 	try {
