@@ -11,7 +11,6 @@ export const AI_CREDIT_PRICING_CONFIG = {
 		"resolve",
 		"markSpam",
 		"skip",
-		"wait",
 		"loadSkill",
 	],
 } as const;

@@ -134,7 +134,6 @@ const FINISH_TOOL_NAMES = [
 	"resolve",
 	"markSpam",
 	"skip",
-	"wait",
 ] as const;
 const FINISH_TOOL_NAME_SET = new Set<string>(FINISH_TOOL_NAMES);
 const TOOL_METADATA_BY_DEFAULT_SKILL_NAME = new Map(
@@ -1107,7 +1106,7 @@ export async function generate(
 			decision: {
 				action: "skip" as const,
 				reasoning:
-					"AI did not call an action tool (respond/escalate/resolve/skip/markSpam/wait). This may indicate a model compatibility issue.",
+					"AI did not call an action tool (respond/escalate/resolve/skip/markSpam). This may indicate a model compatibility issue.",
 				confidence: 0,
 			},
 			usage: result.usage

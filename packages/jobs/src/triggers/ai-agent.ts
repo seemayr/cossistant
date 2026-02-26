@@ -15,7 +15,7 @@ import {
 	generateAiAgentJobId,
 	QUEUE_NAMES,
 } from "../types";
-import { addUniqueJob } from "../utils/unique-job";
+import { addSingleActiveJob } from "../utils/single-active-job";
 
 /**
  * Result of enqueueing an AI agent job
@@ -114,8 +114,8 @@ export function createAiAgentTriggers({ connection, redisUrl }: TriggerConfig) {
 	 * the 5-step pipeline (intake, decision, generation, execution, followup).
 	 *
 	 * Wake job behavior:
-	 * - waiting/delayed/active jobs are kept (no duplicate wake jobs for same trigger)
-	 * - completed/failed jobs are removed and replaced
+	 * - waiting/delayed/completed/failed jobs are replaced with latest payload
+	 * - active jobs are kept to avoid concurrent same-conversation execution
 	 */
 	async function enqueueAiAgentJob(
 		data: AiAgentJobData
@@ -125,7 +125,7 @@ export function createAiAgentTriggers({ connection, redisUrl }: TriggerConfig) {
 			data.conversationId,
 			data.triggerMessageId
 		);
-		const result = await addUniqueJob({
+		const result = await addSingleActiveJob({
 			queue: q,
 			jobId,
 			jobName: "ai-agent",

@@ -16,6 +16,7 @@ import {
 	logEmailComplaint,
 	logEmailFailure,
 } from "@api/utils/notification-monitoring";
+import { triggerMessageNotificationWorkflow } from "@api/utils/send-message-with-notification";
 import { createMessageTimelineItem } from "@api/utils/timeline-item";
 import { resend } from "@cossistant/transactional";
 import { ConversationTimelineType } from "@cossistant/types";
@@ -312,7 +313,7 @@ async function handleEmailReceived(event: ResendWebhookEvent): Promise<void> {
 	}
 
 	// Create a new public message on the conversation as if sent by the visitor/contact
-	await createMessageTimelineItem({
+	const { item: createdTimelineItem, actor } = await createMessageTimelineItem({
 		db,
 		organizationId: conversation.organizationId,
 		websiteId: conversation.websiteId,
@@ -324,6 +325,23 @@ async function handleEmailReceived(event: ResendWebhookEvent): Promise<void> {
 		visitorId: timelineVisitorId,
 		aiAgentId: null,
 	});
+
+	if (actor) {
+		try {
+			await triggerMessageNotificationWorkflow({
+				conversationId: conversation.id,
+				messageId: createdTimelineItem.id,
+				websiteId: conversation.websiteId,
+				organizationId: conversation.organizationId,
+				actor,
+			});
+		} catch (error) {
+			console.error(
+				`[Resend Webhook] Failed to trigger workflow for inbound email message ${createdTimelineItem.id}`,
+				error
+			);
+		}
+	}
 
 	console.log(
 		`[Resend Webhook] Created timeline message from inbound email for conversation ${conversation.id}`

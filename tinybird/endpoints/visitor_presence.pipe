@@ -1,0 +1,28 @@
+DESCRIPTION >
+	Visitor presence entries (online + away) from latest heartbeats.
+
+NODE presence
+SQL >
+	%
+	SELECT
+		entity_id AS visitor_id,
+		if(
+			timestamp > now() - INTERVAL {{ Int32(online_minutes, 10) }} MINUTE,
+			'online',
+			'away'
+		) AS status,
+		formatDateTime(timestamp, '%Y-%m-%dT%H:%M:%SZ', 'UTC') AS last_seen_at,
+		nullIf(name, '') AS name,
+		nullIf(image, '') AS image,
+		nullIf(city, '') AS city,
+		nullIf(country_code, '') AS country_code,
+		if(latitude = 0, NULL, toFloat64(latitude)) AS latitude,
+		if(longitude = 0, NULL, toFloat64(longitude)) AS longitude
+	FROM presence_latest FINAL
+	WHERE website_id = {{ String(website_id) }}
+		AND entity_type = 'visitor'
+		AND timestamp > now() - INTERVAL {{ Int32(away_minutes, 30) }} MINUTE
+	ORDER BY timestamp DESC
+	LIMIT {{ Int32(limit, 100) }}
+
+TYPE endpoint

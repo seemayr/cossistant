@@ -29,7 +29,6 @@ export const AI_AGENT_TOOL_IDS = [
 	"resolve",
 	"markSpam",
 	"skip",
-	"wait",
 ] as const;
 
 export type AiAgentToolId = (typeof AI_AGENT_TOOL_IDS)[number];
@@ -340,27 +339,6 @@ const AI_AGENT_TOOL_CATALOG_RAW: readonly RawToolCatalogEntry[] = [
 - Use reasoning that explains why silence is intentional.`,
 		},
 	},
-	{
-		id: "wait",
-		label: "Finish: Wait",
-		description: "Defer briefly, then re-run with fresh context.",
-		category: "action",
-		group: "actions",
-		order: 6,
-		isSystem: true,
-		isRequired: true,
-		isToggleable: false,
-		behaviorSettingKey: null,
-		defaultSkill: {
-			name: "wait.md",
-			label: "Finish Wait",
-			description: "When to select the wait finish action.",
-			content: `## Finish Semantics
-
-- Choose this when near-term context is likely to change before acting.
-- Provide reasoning for why deferment is preferable now.`,
-		},
-	},
 ] as const;
 
 export const AI_AGENT_TOOL_CATALOG: readonly AiAgentToolCatalogEntry[] =
@@ -395,4 +373,5 @@ export const AI_AGENT_DROPPED_SKILL_TEMPLATE_NAMES = [
 	"handoff-notes.md",
 	"tone-and-voice.md",
 	"short-clear-replies.md",
+	"wait.md",
 ] as const;

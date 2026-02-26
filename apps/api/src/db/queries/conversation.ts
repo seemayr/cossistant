@@ -106,6 +106,20 @@ export function mapTimelineRowToTimelineItem(
 	};
 }
 
+export type UpsertConversationResult =
+	| {
+			status: "created";
+			conversation: typeof conversation.$inferSelect;
+	  }
+	| {
+			status: "existing";
+			conversation: typeof conversation.$inferSelect;
+	  }
+	| {
+			status: "conflict";
+			reason: "ownership_mismatch" | "conflict_not_resolvable";
+	  };
+
 export async function upsertConversation(
 	db: Database,
 	params: {
@@ -114,12 +128,12 @@ export async function upsertConversation(
 		visitorId: string;
 		conversationId?: string;
 	}
-) {
+): Promise<UpsertConversationResult> {
 	const newConversationId = params.conversationId ?? generateShortPrimaryId();
 	const now = new Date().toISOString();
 
 	// Upsert conversation
-	const [_conversation] = await db
+	const [insertedConversation] = await db
 		.insert(conversation)
 		.values({
 			id: newConversationId,
@@ -135,16 +149,49 @@ export async function upsertConversation(
 		.returning();
 
 	// Track conversation_started event in Tinybird for analytics (only if actually inserted)
-	if (_conversation) {
+	if (insertedConversation) {
 		trackConversationMetric({
 			website_id: params.websiteId,
 			visitor_id: params.visitorId,
 			conversation_id: newConversationId,
 			event_type: "conversation_started",
 		});
+
+		return {
+			status: "created",
+			conversation: insertedConversation,
+		};
 	}
 
-	return _conversation;
+	const [existingConversation] = await db
+		.select()
+		.from(conversation)
+		.where(eq(conversation.id, newConversationId))
+		.limit(1);
+
+	if (!existingConversation) {
+		return {
+			status: "conflict",
+			reason: "conflict_not_resolvable",
+		};
+	}
+
+	const sameOwner =
+		existingConversation.organizationId === params.organizationId &&
+		existingConversation.websiteId === params.websiteId &&
+		existingConversation.visitorId === params.visitorId;
+
+	if (!sameOwner) {
+		return {
+			status: "conflict",
+			reason: "ownership_mismatch",
+		};
+	}
+
+	return {
+		status: "existing",
+		conversation: existingConversation,
+	};
 }
 
 export async function listConversations(

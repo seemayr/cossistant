@@ -658,31 +658,36 @@ When adding/updating a tool:
 ### Response Timing
 
 Queue delay is disabled (0ms) so the AI responds as fast as possible.
-For visitor-trigger bursts, worker-side debounce (`AI_AGENT_VISITOR_DEBOUNCE_MS`, default 800ms) is applied before selecting an effective trigger.
+No visitor burst coalescing or debounce is applied.
 Natural typing delays between multi-part messages are still applied to keep the experience human.
 
 ### Queueing Model
 
 - Each conversation has a Redis sorted set queue ordered by `createdAt` (with `messageId` tiebreaker).
-- A BullMQ drain job processes messages sequentially and advances a DB cursor for recovery.
-- Visitor bursts are coalesced at queue head: contiguous visitor triggers are handled as one effective trigger (latest message in the burst).
+- Wake jobs are conversation-scoped (`ai-agent-{conversationId}`), with single-active semantics:
+  - `waiting`/`delayed`/`completed`/`failed` wake jobs are replaced
+  - `active` wake jobs are never replaced
+- A BullMQ drain job processes queued messages sequentially and advances a DB cursor for recovery.
 - BullMQ wake jobs remain signals only; Redis queue + DB cursor are authoritative state.
+- Conversations with queued items are tracked in Redis (`ai-agent:active-conversations`), and producer/worker recovery markers are tracked via `ai-agent:wake-needed:{conversationId}`.
+- A worker-side wake sweeper periodically repairs missing wakes for non-empty queues.
 
 ### Trigger-Level Reliability Rules
 
 1. **FIFO Trigger Processing**: Conversation triggers are processed in queue order using the Redis ZSET cursor model.
-2. **Burst Coalescing**: Contiguous visitor messages at queue head are coalesced and processed once using the latest coalesced trigger.
-3. **Continuation Gate**: If a queued visitor trigger already has a newer public AI reply, the pipeline runs `skip vs supplement` before generation.
-4. **Bias to Supplement on Uncertainty**: If continuation classification is uncertain (timeout/model error), fallback favors `supplement` (never silent miss).
-5. **No Full-Turn Retry After Visible Reply**: If a trigger already sent any public message, that trigger is marked `retryable=false` and dropped on subsequent pipeline error.
-6. **Retry Only Pre-Reply Failures**: If a trigger fails before any public send, it stays queued and is retried (with per-message failure threshold).
-7. **Typing Always Ends**: Typing is stopped before each visible send and force-stopped in final pipeline cleanup.
+2. **Strict Per-Conversation Serial Execution**: Redis lock (`ai-agent:lock:{conversationId}`) ensures only one worker processes a conversation at a time.
+3. **No Burst Coalescing**: Every queued message is processed in order; no contiguous visitor batching.
+4. **Reliable Producer Path**: Producer enqueues message (`ZADD NX`) then ensures wake with bounded retries; on exhaustion it marks `wake-needed` recovery.
+5. **Lock Miss/Loss Recovery**: Worker attempts continuation wake with jitter when lock cannot be acquired or is lost during processing.
+6. **End-of-Job Invariant**: If queue remains non-empty, worker must ensure a runnable wake exists or mark recovery.
+7. **Sweeper Reconciliation**: Periodic sweeper scans active + wake-needed conversations and recreates missing wakes.
+8. **Typing Always Ends**: Typing is stopped before each visible send and force-stopped in final pipeline cleanup.
 
 ### Failure Handling
 
-1. **`retryable=true` and below threshold**: Keep trigger message at queue head, schedule continuation drain.
-2. **`retryable=false`**: Advance cursor to effective trigger and remove processed/coalesced queue items immediately.
-3. **Threshold reached**: Drop trigger/coalesced batch, advance cursor, continue draining.
+1. **`retryable=true` and below threshold**: Keep trigger message at queue head for retry.
+2. **`retryable=false`**: Advance cursor and remove the failed message immediately.
+3. **Threshold reached**: Drop failed message, advance cursor, continue draining.
 4. **Stalled jobs**: BullMQ stalled-job recovery still applies at worker level.
 5. **Error events**: `aiAgentProcessingCompleted` with `status: "error"` is still emitted for dashboard observability.
 

@@ -49,7 +49,6 @@ export function validateDecisionForExecution(decision: AiDecision): {
 		case "resolve":
 		case "mark_spam":
 		case "skip":
-		case "wait":
 			// No special validation needed - messages are sent via tools
 			break;
 

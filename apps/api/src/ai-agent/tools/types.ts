@@ -17,7 +17,7 @@ export type MessageCounters = {
 };
 
 export type CapturedAction = {
-	action: "respond" | "escalate" | "resolve" | "mark_spam" | "skip" | "wait";
+	action: "respond" | "escalate" | "resolve" | "mark_spam" | "skip";
 	reasoning: string;
 	confidence: number;
 	escalation?: { reason: string; urgency?: "normal" | "high" | "urgent" };

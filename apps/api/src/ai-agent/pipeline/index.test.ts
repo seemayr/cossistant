@@ -49,6 +49,11 @@ const createTimelineItemMock = mock((async () => ({})) as (
 const updateTimelineItemMock = mock((async () => ({})) as (
 	...args: unknown[]
 ) => Promise<unknown>);
+const continuationGateMock = mock((async () => ({
+	decision: "none" as const,
+	reason: "default",
+	confidence: "high" as const,
+})) as (...args: unknown[]) => Promise<unknown>);
 const resolvePromptBundleMock = mock((async () => ({
 	coreDocuments: {
 		"decision.md": {
@@ -117,6 +122,10 @@ mock.module("./4-execution", () => ({
 
 mock.module("./5-followup", () => ({
 	followup: followupMock,
+}));
+
+mock.module("./1b-continuation-gate", () => ({
+	continuationGate: continuationGateMock,
 }));
 
 mock.module("../events", () => ({
@@ -225,6 +234,7 @@ describe("runAiAgentPipeline retryability and typing cleanup", () => {
 		logAiCreditUsageTimelineMock.mockReset();
 		createTimelineItemMock.mockReset();
 		updateTimelineItemMock.mockReset();
+		continuationGateMock.mockReset();
 		resolvePromptBundleMock.mockReset();
 		fallbackSendMessageMock.mockReset();
 
@@ -257,6 +267,11 @@ describe("runAiAgentPipeline retryability and typing cleanup", () => {
 		logAiCreditUsageTimelineMock.mockResolvedValue(undefined);
 		createTimelineItemMock.mockResolvedValue({});
 		updateTimelineItemMock.mockResolvedValue({});
+		continuationGateMock.mockResolvedValue({
+			decision: "none",
+			reason: "default",
+			confidence: "high",
+		});
 		fallbackSendMessageMock.mockResolvedValue({
 			messageId: "fallback-msg",
 			created: true,
@@ -736,5 +751,181 @@ describe("runAiAgentPipeline retryability and typing cleanup", () => {
 
 		expect(result.status).toBe("completed");
 		expect(createTimelineItemMock).toHaveBeenCalledTimes(1);
+	});
+
+	it("skips on continuation gate even when speculative decision policy prefetch fails", async () => {
+		const { runAiAgentPipeline } = await pipelineModulePromise;
+		resolvePromptBundleMock.mockRejectedValueOnce(
+			new Error("decision policy unavailable")
+		);
+		continuationGateMock.mockResolvedValueOnce({
+			decision: "skip",
+			reason: "already covered by newer AI reply",
+			confidence: "high",
+		});
+
+		const result = await runAiAgentPipeline({
+			db: {} as never,
+			input: {
+				conversationId: "conv-1",
+				messageId: "trigger-msg-1",
+				messageCreatedAt: new Date().toISOString(),
+				websiteId: "site-1",
+				organizationId: "org-1",
+				visitorId: "visitor-1",
+				aiAgentId: "ai-1",
+				workflowRunId: "workflow-continuation-skip",
+				jobId: "job-continuation-skip",
+			},
+		});
+
+		expect(result.status).toBe("skipped");
+		expect(result.reason).toContain("Continuation gate skipped trigger");
+		expect(resolvePromptBundleMock).toHaveBeenCalledTimes(1);
+		expect(decideMock).not.toHaveBeenCalled();
+	});
+
+	it("continues shouldAct=true path when decision event emit fails", async () => {
+		const { runAiAgentPipeline } = await pipelineModulePromise;
+		emitDecisionMadeMock.mockRejectedValueOnce(new Error("event unavailable"));
+		generateMock.mockResolvedValue({
+			decision: {
+				action: "skip",
+				reasoning: "nothing to send",
+				confidence: 0.8,
+			},
+			toolCalls: {
+				sendMessage: 0,
+				sendPrivateMessage: 0,
+			},
+		});
+
+		const result = await runAiAgentPipeline({
+			db: {} as never,
+			input: {
+				conversationId: "conv-1",
+				messageId: "trigger-msg-1",
+				messageCreatedAt: new Date().toISOString(),
+				websiteId: "site-1",
+				organizationId: "org-1",
+				visitorId: "visitor-1",
+				aiAgentId: "ai-1",
+				workflowRunId: "workflow-event-fail-open-should-act",
+				jobId: "job-event-fail-open-should-act",
+			},
+		});
+
+		expect(result.status).toBe("completed");
+		expect(emitDecisionMadeMock).toHaveBeenCalledTimes(1);
+		expect(guardAiCreditRunMock).toHaveBeenCalledTimes(1);
+	});
+
+	it("returns skipped when shouldAct=false even if decision event emit fails", async () => {
+		const { runAiAgentPipeline } = await pipelineModulePromise;
+		decideMock.mockResolvedValue({
+			shouldAct: false,
+			reason: "no action needed",
+			mode: "background_only",
+			humanCommand: null,
+			isEscalated: false,
+			escalationReason: null,
+			smartDecision: null,
+		});
+		emitDecisionMadeMock.mockRejectedValueOnce(new Error("event unavailable"));
+
+		const result = await runAiAgentPipeline({
+			db: {} as never,
+			input: {
+				conversationId: "conv-1",
+				messageId: "trigger-msg-1",
+				messageCreatedAt: new Date().toISOString(),
+				websiteId: "site-1",
+				organizationId: "org-1",
+				visitorId: "visitor-1",
+				aiAgentId: "ai-1",
+				workflowRunId: "workflow-event-fail-open-skip",
+				jobId: "job-event-fail-open-skip",
+			},
+		});
+
+		expect(result.status).toBe("skipped");
+		expect(result.reason).toBe("no action needed");
+		expect(emitDecisionMadeMock).toHaveBeenCalledTimes(1);
+		expect(emitWorkflowCompletedMock).toHaveBeenCalledTimes(1);
+		expect(generateMock).not.toHaveBeenCalled();
+	});
+
+	it("returns completed even when success completion event emit fails", async () => {
+		const { runAiAgentPipeline } = await pipelineModulePromise;
+		generateMock.mockResolvedValue({
+			decision: {
+				action: "skip",
+				reasoning: "nothing to send",
+				confidence: 0.8,
+			},
+			toolCalls: {
+				sendMessage: 0,
+				sendPrivateMessage: 0,
+			},
+		});
+		emitWorkflowCompletedMock.mockRejectedValueOnce(
+			new Error("workflow completed event unavailable")
+		);
+
+		const result = await runAiAgentPipeline({
+			db: {} as never,
+			input: {
+				conversationId: "conv-1",
+				messageId: "trigger-msg-1",
+				messageCreatedAt: new Date().toISOString(),
+				websiteId: "site-1",
+				organizationId: "org-1",
+				visitorId: "visitor-1",
+				aiAgentId: "ai-1",
+				workflowRunId: "workflow-completed-event-fail-open-success",
+				jobId: "job-completed-event-fail-open-success",
+			},
+		});
+
+		expect(result.status).toBe("completed");
+		expect(executeMock).toHaveBeenCalledTimes(1);
+		expect(emitWorkflowCompletedMock).toHaveBeenCalledTimes(1);
+	});
+
+	it("runs shouldAct decision event and credit guard exactly once each", async () => {
+		const { runAiAgentPipeline } = await pipelineModulePromise;
+		generateMock.mockResolvedValue({
+			decision: {
+				action: "skip",
+				reasoning: "nothing to send",
+				confidence: 0.8,
+			},
+			toolCalls: {
+				sendMessage: 0,
+				sendPrivateMessage: 0,
+			},
+		});
+
+		const result = await runAiAgentPipeline({
+			db: {} as never,
+			input: {
+				conversationId: "conv-1",
+				messageId: "trigger-msg-1",
+				messageCreatedAt: new Date().toISOString(),
+				websiteId: "site-1",
+				organizationId: "org-1",
+				visitorId: "visitor-1",
+				aiAgentId: "ai-1",
+				workflowRunId: "workflow-should-act-parallel",
+				jobId: "job-should-act-parallel",
+			},
+		});
+
+		expect(result.status).toBe("completed");
+		expect(emitDecisionMadeMock).toHaveBeenCalledTimes(1);
+		expect(emitDecisionMadeMock.mock.calls[0]?.[0]).toMatchObject({
+			shouldAct: true,
+		});
+		expect(guardAiCreditRunMock).toHaveBeenCalledTimes(1);
 	});
 });

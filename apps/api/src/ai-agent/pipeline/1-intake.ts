@@ -111,10 +111,16 @@ export async function intake(
 		}
 	}
 
-	// Load conversation
-	const conversation = await getConversationById(db, {
-		conversationId: input.conversationId,
-	});
+	// Load conversation and trigger metadata together (independent queries)
+	const [conversation, triggerMetadata] = await Promise.all([
+		getConversationById(db, {
+			conversationId: input.conversationId,
+		}),
+		getMessageMetadata(db, {
+			messageId: input.messageId,
+			organizationId: input.organizationId,
+		}),
+	]);
 
 	if (!conversation) {
 		return {
@@ -123,11 +129,6 @@ export async function intake(
 		};
 	}
 
-	const triggerMetadata = await getMessageMetadata(db, {
-		messageId: input.messageId,
-		organizationId: input.organizationId,
-	});
-
 	if (!triggerMetadata) {
 		return {
 			status: "skipped",
@@ -135,27 +136,26 @@ export async function intake(
 		};
 	}
 
-	// Load conversation history (up to trigger message) and visitor context in parallel
-	const [conversationHistory, visitorContext] = await Promise.all([
-		buildConversationHistory(db, {
-			conversationId: input.conversationId,
-			organizationId: input.organizationId,
-			websiteId: input.websiteId,
-			maxCreatedAt: triggerMetadata.createdAt,
-			maxId: triggerMetadata.id,
-		}),
-		getVisitorContext(db, input.visitorId),
-	]);
-
-	// Get conversation state (needs conversation object for escalation check)
-	const conversationState = await getConversationState(
-		db,
-		{
-			conversationId: input.conversationId,
-			organizationId: input.organizationId,
-		},
-		conversation
-	);
+	// Load remaining independent context in parallel
+	const [conversationHistory, visitorContext, conversationState] =
+		await Promise.all([
+			buildConversationHistory(db, {
+				conversationId: input.conversationId,
+				organizationId: input.organizationId,
+				websiteId: input.websiteId,
+				maxCreatedAt: triggerMetadata.createdAt,
+				maxId: triggerMetadata.id,
+			}),
+			getVisitorContext(db, input.visitorId),
+			getConversationState(
+				db,
+				{
+					conversationId: input.conversationId,
+					organizationId: input.organizationId,
+				},
+				conversation
+			),
+		]);
 
 	// Find the trigger message
 	const triggerMessage =

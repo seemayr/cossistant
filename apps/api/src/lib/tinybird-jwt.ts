@@ -5,6 +5,7 @@ const TINYBIRD_SIGNING_KEY = env.TINYBIRD_SIGNING_KEY || env.TINYBIRD_TOKEN;
 
 const PIPES = [
 	"online_now",
+	"visitor_presence",
 	"presence_locations",
 	"inbox_analytics",
 	"unique_visitors",

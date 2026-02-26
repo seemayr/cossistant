@@ -13,7 +13,6 @@
  */
 
 import { runAiAgentPipeline } from "@api/ai-agent";
-import { emitWorkflowStarted } from "@api/ai-agent/events";
 import {
 	isAiPausedForConversation,
 	isAiPausedInRedis,
@@ -22,28 +21,31 @@ import {
 	markConversationAsSeen,
 	updateConversationAiCursor,
 } from "@api/db/mutations/conversation";
+import { getActiveAiAgentForWebsite } from "@api/db/queries/ai-agent";
 import {
 	getConversationById,
 	getConversationMessagesAfterCursor,
 	getMessageMetadata,
-	getMessageMetadataBatch,
 } from "@api/db/queries/conversation";
 import { emitConversationSeenEvent } from "@api/utils/conversation-realtime";
 import {
 	AI_AGENT_JOB_OPTIONS,
 	type AiAgentJobData,
 	acquireAiAgentLock,
+	clearAiAgentWakeNeeded,
 	enqueueAiAgentMessage,
 	generateAiAgentJobId,
 	getAiAgentFailureKey,
-	getAiAgentQueueKey,
 	getAiAgentQueueSize,
+	isAiAgentWakeNeeded,
+	listAiAgentActiveConversations,
+	listAiAgentWakeNeededConversations,
+	markAiAgentWakeNeeded,
 	peekAiAgentQueue,
-	peekAiAgentQueueBatch,
 	QUEUE_NAMES,
 	releaseAiAgentLock,
+	removeAiAgentActiveConversation,
 	removeAiAgentQueueMessage,
-	removeAiAgentQueueMessages,
 	renewAiAgentLock,
 } from "@cossistant/jobs";
 import {
@@ -54,12 +56,9 @@ import {
 import { db } from "@workers/db";
 import { env } from "@workers/env";
 import { type Job, Queue, QueueEvents, Worker } from "bullmq";
-import {
-	isTriggerableMessage,
-	isVisitorTrigger,
-	resolveCoalescedVisitorBatch,
-} from "./coalescing";
+import { isTriggerableMessage } from "./coalescing";
 import { resolvePipelineFailureAction } from "./failure-policy";
+import { runWithWorkflowStartedEvent } from "./workflow-events";
 
 /**
  * Worker configuration for reliability
@@ -138,11 +137,88 @@ export function createAiAgentWorker({
 	let worker: Worker<AiAgentJobData> | null = null;
 	let events: QueueEvents | null = null;
 	let wakeQueue: Queue<AiAgentJobData> | null = null;
+	let wakeSweepTimer: ReturnType<typeof setInterval> | null = null;
 
 	const buildConnectionOptions = (): RedisOptions => ({
 		...connectionOptions,
 		tls: connectionOptions.tls ? { ...connectionOptions.tls } : undefined,
 	});
+
+	async function acquireSweepLease(redis: Redis): Promise<boolean> {
+		const result = await redis.set(
+			WAKE_SWEEP_LOCK_KEY,
+			String(Date.now()),
+			"PX",
+			WAKE_SWEEP_LOCK_TTL_MS,
+			"NX"
+		);
+		return result === "OK";
+	}
+
+	async function runWakeSweeper(redis: Redis): Promise<void> {
+		if (!(await acquireSweepLease(redis))) {
+			return;
+		}
+
+		const [wakeNeededConversations, activeConversations] = await Promise.all([
+			listAiAgentWakeNeededConversations(redis, 500),
+			listAiAgentActiveConversations(redis),
+		]);
+		const wakeNeededSet = new Set(wakeNeededConversations);
+		const activeOnlyConversations = activeConversations.filter(
+			(conversationId) => !wakeNeededSet.has(conversationId)
+		);
+		const orderedConversationIds = [
+			...wakeNeededConversations,
+			...activeOnlyConversations,
+		];
+
+		for (const conversationId of orderedConversationIds) {
+			const queueSize = await getAiAgentQueueSize(redis, conversationId);
+			if (queueSize === 0) {
+				await Promise.all([
+					removeAiAgentActiveConversation(redis, conversationId),
+					clearAiAgentWakeNeeded(redis, conversationId),
+				]);
+				continue;
+			}
+
+			const wakeMarked = await isAiAgentWakeNeeded(redis, conversationId);
+			if (wakeQueue) {
+				const existingJob = await wakeQueue.getJob(
+					generateAiAgentJobId(conversationId)
+				);
+				if (existingJob) {
+					const existingState = await existingJob.getState();
+					if (existingState === "waiting" || existingState === "delayed") {
+						if (wakeMarked) {
+							await clearAiAgentWakeNeeded(redis, conversationId);
+						}
+						continue;
+					}
+
+					if (existingState === "active") {
+						continue;
+					}
+				}
+			}
+
+			try {
+				await ensureConversationWake({
+					redis,
+					conversationId,
+					reason: "sweeper",
+					currentJobId: "__wake_sweeper__",
+				});
+			} catch (error) {
+				await markAiAgentWakeNeeded(redis, { conversationId });
+				console.error(
+					`[worker:ai-agent] conv=${conversationId} | Sweeper failed to recover wake`,
+					error
+				);
+			}
+		}
+	}
 
 	const controller = {
 		start: async () => {
@@ -211,8 +287,29 @@ export function createAiAgentWorker({
 			console.log(
 				`[worker:ai-agent] Worker started with concurrency=${WORKER_CONFIG.concurrency}`
 			);
+
+			wakeSweepTimer = setInterval(() => {
+				runWakeSweeper(stateRedis).catch((error) => {
+					console.error(
+						"[worker:ai-agent] Wake sweeper iteration failed",
+						error
+					);
+				});
+			}, WAKE_SWEEP_INTERVAL_MS);
+			wakeSweepTimer.unref?.();
+
+			await runWakeSweeper(stateRedis).catch((error) => {
+				console.error(
+					"[worker:ai-agent] Wake sweeper startup run failed",
+					error
+				);
+			});
 		},
 		stop: async () => {
+			if (wakeSweepTimer) {
+				clearInterval(wakeSweepTimer);
+				wakeSweepTimer = null;
+			}
 			await Promise.all([
 				(async () => {
 					if (worker) {
@@ -242,75 +339,16 @@ export function createAiAgentWorker({
 	const DRAIN_MAX_MESSAGES = env.AI_AGENT_DRAIN_MAX_MESSAGES;
 	const DRAIN_MAX_RUNTIME_MS = env.AI_AGENT_DRAIN_MAX_RUNTIME_MS;
 	const DRAIN_LOCK_TTL_MS = env.AI_AGENT_DRAIN_LOCK_TTL_MS;
-	const VISITOR_DEBOUNCE_MS = env.AI_AGENT_VISITOR_DEBOUNCE_MS;
-	const COALESCE_BATCH_LIMIT = 10;
+	const STRICT_FIFO = env.AI_AGENT_STRICT_FIFO;
+	const WAKE_SWEEP_INTERVAL_MS = env.AI_AGENT_WAKE_SWEEP_INTERVAL_MS;
+	const WAKE_RECOVERY_JITTER_MS = env.AI_AGENT_WAKE_RECOVERY_JITTER_MS;
+	const WAKE_SWEEP_LOCK_KEY = "ai-agent:wake-sweep-lock";
+	const WAKE_SWEEP_LOCK_TTL_MS = Math.max(
+		5000,
+		Math.floor(WAKE_SWEEP_INTERVAL_MS * 0.9)
+	);
 	const FAILURE_THRESHOLD = 3;
 	const FAILURE_TTL_SECONDS = 60 * 60;
-	const WAIT_DELAY_MS = 10_000;
-	const WAIT_DEFER_TTL_SECONDS = Math.ceil(WAIT_DELAY_MS / 1000);
-	const WAIT_CYCLE_TTL_SECONDS = 10 * 60;
-
-	function getWaitCycleKey(
-		conversationId: string,
-		triggerMessageId: string
-	): string {
-		return `ai-agent:wait:${conversationId}:${triggerMessageId}`;
-	}
-
-	function getWaitDeferKey(conversationId: string): string {
-		return `ai-agent:wait-defer:${conversationId}`;
-	}
-
-	async function acquireWaitCycle(params: {
-		redis: Redis;
-		conversationId: string;
-		triggerMessageId: string;
-	}): Promise<boolean> {
-		const key = getWaitCycleKey(params.conversationId, params.triggerMessageId);
-		const result = await params.redis.set(
-			key,
-			"1",
-			"EX",
-			WAIT_CYCLE_TTL_SECONDS,
-			"NX"
-		);
-		return result === "OK";
-	}
-
-	async function selectLatestTriggerableQueuedMessage(params: {
-		redis: Redis;
-		conversationId: string;
-		organizationId: string;
-	}): Promise<Awaited<ReturnType<typeof getMessageMetadata>> | null> {
-		const queueKey = getAiAgentQueueKey(params.conversationId);
-		const messageIds = await params.redis.zrange(queueKey, 0, -1);
-		if (messageIds.length === 0) {
-			return null;
-		}
-
-		const metadataRows = await getMessageMetadataBatch(db, {
-			organizationId: params.organizationId,
-			messageIds,
-		});
-		const metadataById = new Map(metadataRows.map((row) => [row.id, row]));
-
-		for (let index = messageIds.length - 1; index >= 0; index--) {
-			const messageId = messageIds[index];
-			if (!messageId) {
-				continue;
-			}
-			const metadata = metadataById.get(messageId);
-			if (!metadata) {
-				continue;
-			}
-			if (!isTriggerableMessage(metadata)) {
-				continue;
-			}
-			return metadata;
-		}
-
-		return null;
-	}
 
 	async function hydrateQueueFromCursor(
 		redis: Redis,
@@ -343,7 +381,6 @@ export function createAiAgentWorker({
 					conversationId: conversation.id,
 					messageId: row.id,
 					messageCreatedAt: row.createdAt,
-					setWake: false,
 				});
 			}
 
@@ -365,13 +402,9 @@ export function createAiAgentWorker({
 		triggerMessageId: string;
 		currentJobId: string;
 		delayMs?: number;
-		waitResumeForTriggerMessageId?: string;
-	}): Promise<void> {
+	}): Promise<"scheduled" | "already_waiting" | "already_active"> {
 		if (!wakeQueue) {
-			console.warn(
-				`[worker:ai-agent] conv=${params.jobData.conversationId} | Wake queue not ready, cannot schedule continuation drain`
-			);
-			return;
+			throw new Error("Wake queue not ready");
 		}
 
 		const wakeData: AiAgentJobData = {
@@ -380,53 +413,219 @@ export function createAiAgentWorker({
 			organizationId: params.jobData.organizationId,
 			aiAgentId: params.jobData.aiAgentId,
 			triggerMessageId: params.triggerMessageId,
-			waitResumeForTriggerMessageId: params.waitResumeForTriggerMessageId,
 		};
-		const baseJobId = generateAiAgentJobId(
+		const jobId = generateAiAgentJobId(
 			params.jobData.conversationId,
 			params.triggerMessageId
 		);
-		let jobId = baseJobId;
 
-		const existingJob = await wakeQueue.getJob(baseJobId);
+		const existingJob = await wakeQueue.getJob(jobId);
 		if (existingJob) {
 			const existingState = await existingJob.getState();
-			if (existingState === "completed" || existingState === "failed") {
+			if (
+				existingState === "completed" ||
+				existingState === "failed" ||
+				existingState === "delayed" ||
+				existingState === "waiting"
+			) {
 				await existingJob.remove();
-			} else if (existingState === "delayed" || existingState === "waiting") {
 				console.log(
-					`[worker:ai-agent] conv=${params.jobData.conversationId} | Continuation wake already queued for trigger ${params.triggerMessageId} (${existingState})`
+					`[worker:ai-agent] conv=${params.jobData.conversationId} | Replacing ${existingState} wake job`
 				);
-				return;
 			} else if (existingState === "active") {
-				if (String(existingJob.id) !== params.currentJobId) {
-					console.log(
-						`[worker:ai-agent] conv=${params.jobData.conversationId} | Continuation wake already active for trigger ${params.triggerMessageId}`
-					);
-					return;
-				}
-				jobId = `${baseJobId}-continue-${Date.now()}`;
+				console.log(
+					`[worker:ai-agent] conv=${params.jobData.conversationId} | Active wake present (job=${existingJob.id}, current=${params.currentJobId})`
+				);
+				return String(existingJob.id) === params.currentJobId
+					? "already_waiting"
+					: "already_active";
 			} else {
-				jobId = `${baseJobId}-continue-${Date.now()}`;
+				console.warn(
+					`[worker:ai-agent] conv=${params.jobData.conversationId} | Unexpected wake state ${existingState}; keeping existing wake`
+				);
+				return "already_waiting";
 			}
 		}
 
-		try {
-			const delayMs = params.delayMs ?? AI_AGENT_JOB_OPTIONS.delay ?? 0;
-			await wakeQueue.add("ai-agent", wakeData, {
-				...AI_AGENT_JOB_OPTIONS,
-				delay: delayMs,
-				jobId,
+		const delayMs = params.delayMs ?? AI_AGENT_JOB_OPTIONS.delay ?? 0;
+		await wakeQueue.add("ai-agent", wakeData, {
+			...AI_AGENT_JOB_OPTIONS,
+			delay: delayMs,
+			jobId,
+		});
+		await clearAiAgentWakeNeeded(stateRedis, params.jobData.conversationId);
+
+		console.log(
+			`[worker:ai-agent] conv=${params.jobData.conversationId} | Scheduled continuation drain for trigger ${params.triggerMessageId} | delayMs=${delayMs}`
+		);
+		return "scheduled";
+	}
+
+	function getRecoveryDelayMs(): number {
+		if (WAKE_RECOVERY_JITTER_MS <= 0) {
+			return 0;
+		}
+
+		return Math.floor(Math.random() * (WAKE_RECOVERY_JITTER_MS + 1));
+	}
+
+	async function buildRecoveryJobData(
+		conversationId: string
+	): Promise<AiAgentJobData | null> {
+		const conversation = await getConversationById(db, { conversationId });
+		if (!conversation) {
+			return null;
+		}
+
+		const activeAiAgent = await getActiveAiAgentForWebsite(db, {
+			websiteId: conversation.websiteId,
+			organizationId: conversation.organizationId,
+		});
+		if (!activeAiAgent) {
+			return null;
+		}
+
+		return {
+			conversationId: conversation.id,
+			websiteId: conversation.websiteId,
+			organizationId: conversation.organizationId,
+			aiAgentId: activeAiAgent.id,
+		};
+	}
+
+	async function ensureConversationWake(params: {
+		redis: Redis;
+		conversationId: string;
+		reason: "lock_miss" | "lock_lost" | "end_invariant" | "sweeper";
+		currentJobId: string;
+	}): Promise<"scheduled" | "already_running" | "skipped"> {
+		const nextTriggerMessageId = await peekAiAgentQueue(
+			params.redis,
+			params.conversationId
+		);
+		if (!nextTriggerMessageId) {
+			await Promise.all([
+				removeAiAgentActiveConversation(params.redis, params.conversationId),
+				clearAiAgentWakeNeeded(params.redis, params.conversationId),
+			]);
+			return "skipped";
+		}
+
+		const jobData = await buildRecoveryJobData(params.conversationId);
+		if (!jobData) {
+			await markAiAgentWakeNeeded(params.redis, {
+				conversationId: params.conversationId,
 			});
-			console.log(
-				`[worker:ai-agent] conv=${params.jobData.conversationId} | Scheduled continuation drain for trigger ${params.triggerMessageId} | delayMs=${delayMs} | waitResume=${params.waitResumeForTriggerMessageId ?? "none"}`
+			console.warn(
+				`[worker:ai-agent] conv=${params.conversationId} | Unable to build recovery wake payload (${params.reason})`
 			);
+			return "skipped";
+		}
+
+		let result: Awaited<ReturnType<typeof requeueDrainJob>>;
+		try {
+			result = await requeueDrainJob({
+				jobData,
+				triggerMessageId: nextTriggerMessageId,
+				currentJobId: params.currentJobId,
+				delayMs: getRecoveryDelayMs(),
+			});
 		} catch (error) {
-			console.error(
-				`[worker:ai-agent] conv=${params.jobData.conversationId} | Failed to schedule continuation drain`,
-				error
+			await markAiAgentWakeNeeded(params.redis, {
+				conversationId: params.conversationId,
+			});
+			throw error;
+		}
+
+		if (result === "already_active" || result === "already_waiting") {
+			return "already_running";
+		}
+
+		return "scheduled";
+	}
+
+	async function hasRunnableWake(params: {
+		conversationId: string;
+		currentJobId?: string;
+	}): Promise<boolean> {
+		if (!wakeQueue) {
+			return false;
+		}
+
+		const existingJob = await wakeQueue.getJob(
+			generateAiAgentJobId(params.conversationId)
+		);
+		if (!existingJob) {
+			return false;
+		}
+
+		const state = await existingJob.getState();
+		if (state === "waiting" || state === "delayed") {
+			return true;
+		}
+
+		if (state === "active") {
+			return !(
+				params.currentJobId && String(existingJob.id) === params.currentJobId
 			);
 		}
+
+		return false;
+	}
+
+	async function dropQueuedBacklogWhilePaused(params: {
+		redis: Redis;
+		conversation: NonNullable<Awaited<ReturnType<typeof getConversationById>>>;
+		cursor: AiCursor;
+	}): Promise<number> {
+		let droppedCount = 0;
+		let cursor = params.cursor;
+
+		while (true) {
+			const nextMessageId = await peekAiAgentQueue(
+				params.redis,
+				params.conversation.id
+			);
+			if (!nextMessageId) {
+				break;
+			}
+
+			const metadata = await getMessageMetadata(db, {
+				messageId: nextMessageId,
+				organizationId: params.conversation.organizationId,
+			});
+
+			const removableMessageId = metadata?.id ?? nextMessageId;
+			await removeAiAgentQueueMessage(
+				params.redis,
+				params.conversation.id,
+				removableMessageId
+			);
+			droppedCount++;
+
+			if (!(metadata && isTriggerableMessage(metadata))) {
+				continue;
+			}
+
+			if (isMessageAtOrBeforeCursor(metadata, cursor)) {
+				continue;
+			}
+
+			await updateConversationAiCursor(db, {
+				conversationId: params.conversation.id,
+				organizationId: params.conversation.organizationId,
+				messageId: metadata.id,
+				messageCreatedAt: metadata.createdAt,
+			});
+			cursor = advanceCursor(cursor, metadata);
+		}
+
+		await Promise.all([
+			removeAiAgentActiveConversation(params.redis, params.conversation.id),
+			clearAiAgentWakeNeeded(params.redis, params.conversation.id),
+		]);
+
+		return droppedCount;
 	}
 
 	async function recordMessageFailure(
@@ -459,6 +658,12 @@ export function createAiAgentWorker({
 		);
 
 		if (!lockAcquired) {
+			await ensureConversationWake({
+				redis,
+				conversationId,
+				reason: "lock_miss",
+				currentJobId: String(job.id ?? "__lock_miss__"),
+			});
 			return;
 		}
 
@@ -506,6 +711,8 @@ export function createAiAgentWorker({
 
 			if (!conversation) {
 				console.error(`[worker:ai-agent] conv=${conversationId} | Not found`);
+				await removeAiAgentActiveConversation(redis, conversationId);
+				await clearAiAgentWakeNeeded(redis, conversationId);
 				return;
 			}
 
@@ -517,23 +724,19 @@ export function createAiAgentWorker({
 				skipDbLookup: true,
 			});
 			if (pausedAtStart) {
+				const dropped = await dropQueuedBacklogWhilePaused({
+					redis,
+					conversation,
+					cursor: {
+						createdAt:
+							conversation.aiAgentLastProcessedMessageCreatedAt ?? null,
+						messageId: conversation.aiAgentLastProcessedMessageId ?? null,
+					},
+				});
 				console.log(
-					`[worker:ai-agent] conv=${conversationId} | AI paused, skipping drain`
+					`[worker:ai-agent] conv=${conversationId} | AI paused, dropped queued backlog count=${dropped}`
 				);
 				return;
-			}
-
-			const waitDeferKey = getWaitDeferKey(conversationId);
-			if (job.data.waitResumeForTriggerMessageId) {
-				await redis.del(waitDeferKey);
-			} else {
-				const waitDeferred = await redis.get(waitDeferKey);
-				if (waitDeferred) {
-					console.log(
-						`[worker:ai-agent] conv=${conversationId} | Active wait defer window, skipping non-resume drain`
-					);
-					return;
-				}
 			}
 
 			// Emit seen event once per drain run
@@ -557,17 +760,23 @@ export function createAiAgentWorker({
 
 			const drainStart = Date.now();
 			let processed = 0;
-			let shouldRequeue = true;
-			let continuationTriggerMessageId: string | null = null;
-			let waitResumeForTriggerMessageId =
-				job.data.waitResumeForTriggerMessageId ?? null;
+			if (!STRICT_FIFO) {
+				console.warn(
+					"[worker:ai-agent] STRICT_FIFO=false is deprecated. Worker still enforces strict FIFO."
+				);
+			}
 
 			while (true) {
 				if (lockLost) {
 					console.error(
 						`[worker:ai-agent] conv=${conversationId} | Lock lease lost, stopping drain loop before next trigger`
 					);
-					shouldRequeue = false;
+					await ensureConversationWake({
+						redis,
+						conversationId,
+						reason: "lock_lost",
+						currentJobId: String(job.id ?? "__lock_lost__"),
+					});
 					break;
 				}
 				if (processed >= DRAIN_MAX_MESSAGES) {
@@ -577,51 +786,27 @@ export function createAiAgentWorker({
 					break;
 				}
 				if (await isAiPausedInRedis(redis, conversationId)) {
-					console.log(
-						`[worker:ai-agent] conv=${conversationId} | AI paused during drain, exiting`
-					);
-					shouldRequeue = false;
-					break;
-				}
-
-				let nextMessageId: string | null = null;
-				let messageMetadata: Awaited<
-					ReturnType<typeof getMessageMetadata>
-				> | null = null;
-				let skipVisitorCoalescing = false;
-
-				if (waitResumeForTriggerMessageId) {
-					const latestQueuedMessage =
-						await selectLatestTriggerableQueuedMessage({
-							redis,
-							conversationId,
-							organizationId: conversation.organizationId,
-						});
-					waitResumeForTriggerMessageId = null;
-					if (latestQueuedMessage) {
-						nextMessageId = latestQueuedMessage.id;
-						messageMetadata = latestQueuedMessage;
-						skipVisitorCoalescing = true;
-						console.log(
-							`[worker:ai-agent] conv=${conversationId} | Wait resume selected latest trigger ${nextMessageId}`
-						);
-					}
-				}
-
-				if (!nextMessageId) {
-					nextMessageId = await peekAiAgentQueue(redis, conversationId);
-				}
-
-				if (!nextMessageId) {
-					break;
-				}
-
-				if (!messageMetadata) {
-					messageMetadata = await getMessageMetadata(db, {
-						messageId: nextMessageId,
-						organizationId: conversation.organizationId,
+					const dropped = await dropQueuedBacklogWhilePaused({
+						redis,
+						conversation,
+						cursor,
 					});
+					console.log(
+						`[worker:ai-agent] conv=${conversationId} | AI paused during drain, dropped queued backlog count=${dropped}`
+					);
+					return;
 				}
+
+				const nextMessageId = await peekAiAgentQueue(redis, conversationId);
+
+				if (!nextMessageId) {
+					break;
+				}
+
+				const messageMetadata = await getMessageMetadata(db, {
+					messageId: nextMessageId,
+					organizationId: conversation.organizationId,
+				});
 
 				if (!messageMetadata) {
 					console.warn(
@@ -657,77 +842,36 @@ export function createAiAgentWorker({
 					continue;
 				}
 
-				let effectiveMessageMetadata = messageMetadata;
-				let coalescedMessageIds = [messageMetadata.id];
-
-				if (!skipVisitorCoalescing && isVisitorTrigger(messageMetadata)) {
-					if (VISITOR_DEBOUNCE_MS > 0) {
-						await sleep(VISITOR_DEBOUNCE_MS);
-						if (lockLost) {
-							shouldRequeue = false;
-							break;
-						}
-					}
-
-					const queueBatchIds = await peekAiAgentQueueBatch(
-						redis,
-						conversationId,
-						COALESCE_BATCH_LIMIT
-					);
-					if (queueBatchIds.length > 1) {
-						const metadataRows = await getMessageMetadataBatch(db, {
-							organizationId: conversation.organizationId,
-							messageIds: queueBatchIds,
-						});
-						const metadataById = new Map(
-							metadataRows.map((row) => [row.id, row])
-						);
-
-						const coalesced = resolveCoalescedVisitorBatch({
-							headMessage: messageMetadata,
-							orderedMessageIds: queueBatchIds,
-							metadataById,
-						});
-						effectiveMessageMetadata = coalesced.effectiveMessage;
-						coalescedMessageIds = coalesced.coalescedMessageIds;
-
-						if (coalescedMessageIds.length > 1) {
-							console.log(
-								`[worker:ai-agent] conv=${conversationId} | coalescedCount=${coalescedMessageIds.length} | effectiveTriggerMessageId=${effectiveMessageMetadata.id}`
-							);
-						}
-					}
-				}
-
-				const workflowRunId = `ai-msg-${effectiveMessageMetadata.id}`;
-
-				// Emit workflow started event (dashboard only)
-				await emitWorkflowStarted({
-					conversation,
-					aiAgentId,
-					workflowRunId,
-					triggerMessageId: effectiveMessageMetadata.id,
-				});
+				const workflowRunId = `ai-msg-${messageMetadata.id}`;
 
 				let result: Awaited<ReturnType<typeof runAiAgentPipeline>>;
 				try {
-					result = await runAiAgentPipeline({
-						db,
-						input: {
-							conversationId,
-							messageId: effectiveMessageMetadata.id,
-							messageCreatedAt: effectiveMessageMetadata.createdAt,
-							websiteId: conversation.websiteId,
-							organizationId: conversation.organizationId,
-							visitorId: conversation.visitorId,
+					result = await runWithWorkflowStartedEvent({
+						event: {
+							conversation,
 							aiAgentId,
 							workflowRunId,
-							jobId: String(job.id ?? `job-${Date.now()}`),
+							triggerMessageId: messageMetadata.id,
 						},
+						run: () =>
+							runAiAgentPipeline({
+								db,
+								input: {
+									conversationId,
+									messageId: messageMetadata.id,
+									messageCreatedAt: messageMetadata.createdAt,
+									websiteId: conversation.websiteId,
+									organizationId: conversation.organizationId,
+									visitorId: conversation.visitorId,
+									aiAgentId,
+									workflowRunId,
+									jobId: String(job.id ?? `job-${Date.now()}`),
+								},
+							}),
 					});
 				} catch (error) {
 					console.error(
-						`[worker:ai-agent] conv=${conversationId} | Pipeline threw unexpectedly for message ${effectiveMessageMetadata.id}`,
+						`[worker:ai-agent] conv=${conversationId} | Pipeline threw unexpectedly for message ${messageMetadata.id}`,
 						error
 					);
 					result = {
@@ -750,7 +894,12 @@ export function createAiAgentWorker({
 					console.error(
 						`[worker:ai-agent] conv=${conversationId} | Lock lease lost after pipeline run, skipping queue mutation`
 					);
-					shouldRequeue = false;
+					await ensureConversationWake({
+						redis,
+						conversationId,
+						reason: "lock_lost",
+						currentJobId: String(job.id ?? "__lock_lost_after_pipeline__"),
+					});
 					break;
 				}
 
@@ -758,7 +907,7 @@ export function createAiAgentWorker({
 					const failureCount = await recordMessageFailure(
 						redis,
 						conversationId,
-						effectiveMessageMetadata.id
+						messageMetadata.id
 					);
 					const failureAction = resolvePipelineFailureAction({
 						retryable: result.retryable,
@@ -768,92 +917,70 @@ export function createAiAgentWorker({
 
 					if (failureAction === "drop") {
 						console.error(
-							`[worker:ai-agent] conv=${conversationId} | Message ${effectiveMessageMetadata.id} failed ${failureCount} times (retryable=${result.retryable}, publicMessagesSent=${result.publicMessagesSent}), dropping`
+							`[worker:ai-agent] conv=${conversationId} | Message ${messageMetadata.id} failed ${failureCount} times (retryable=${result.retryable}, publicMessagesSent=${result.publicMessagesSent}), dropping`
 						);
-						await removeAiAgentQueueMessages(
+						await removeAiAgentQueueMessage(
 							redis,
 							conversationId,
-							coalescedMessageIds
+							messageMetadata.id
 						);
 						await updateConversationAiCursor(db, {
 							conversationId,
 							organizationId: conversation.organizationId,
-							messageId: effectiveMessageMetadata.id,
-							messageCreatedAt: effectiveMessageMetadata.createdAt,
+							messageId: messageMetadata.id,
+							messageCreatedAt: messageMetadata.createdAt,
 						});
-						cursor = advanceCursor(cursor, effectiveMessageMetadata);
-						processed += coalescedMessageIds.length;
+						cursor = advanceCursor(cursor, messageMetadata);
+						processed++;
 						continue;
 					}
 
 					console.warn(
-						`[worker:ai-agent] conv=${conversationId} | Message ${effectiveMessageMetadata.id} failed (${failureCount}/${FAILURE_THRESHOLD}), keeping queued for retry`
+						`[worker:ai-agent] conv=${conversationId} | Message ${messageMetadata.id} failed (${failureCount}/${FAILURE_THRESHOLD}), keeping queued for retry`
 					);
-					// Keep the message at the queue head and requeue drain.
-					continuationTriggerMessageId = effectiveMessageMetadata.id;
 					break;
-				}
-
-				if (result.action === "wait") {
-					const waitCycleAcquired = await acquireWaitCycle({
-						redis,
-						conversationId,
-						triggerMessageId: effectiveMessageMetadata.id,
-					});
-
-					if (waitCycleAcquired) {
-						await redis.set(
-							getWaitDeferKey(conversationId),
-							"1",
-							"EX",
-							WAIT_DEFER_TTL_SECONDS
-						);
-						await requeueDrainJob({
-							jobData: job.data,
-							triggerMessageId: effectiveMessageMetadata.id,
-							currentJobId: String(job.id ?? ""),
-							delayMs: WAIT_DELAY_MS,
-							waitResumeForTriggerMessageId: effectiveMessageMetadata.id,
-						});
-						console.log(
-							`[worker:ai-agent] conv=${conversationId} | Wait action accepted for trigger ${effectiveMessageMetadata.id}; deferred ${WAIT_DELAY_MS}ms`
-						);
-						shouldRequeue = false;
-						break;
-					}
-
-					console.warn(
-						`[worker:ai-agent] conv=${conversationId} | Wait action rejected for trigger ${effectiveMessageMetadata.id} (already used), processing as no-op completion`
-					);
 				}
 
 				await updateConversationAiCursor(db, {
 					conversationId,
 					organizationId: conversation.organizationId,
-					messageId: effectiveMessageMetadata.id,
-					messageCreatedAt: effectiveMessageMetadata.createdAt,
+					messageId: messageMetadata.id,
+					messageCreatedAt: messageMetadata.createdAt,
 				});
-				cursor = advanceCursor(cursor, effectiveMessageMetadata);
-				await removeAiAgentQueueMessages(
+				cursor = advanceCursor(cursor, messageMetadata);
+				await removeAiAgentQueueMessage(
 					redis,
 					conversationId,
-					coalescedMessageIds
+					messageMetadata.id
 				);
-				processed += coalescedMessageIds.length;
+				processed++;
 			}
 
 			const remaining = await getAiAgentQueueSize(redis, conversationId);
-			if (shouldRequeue && remaining > 0) {
-				const nextTriggerMessageId =
-					continuationTriggerMessageId ??
-					(await peekAiAgentQueue(redis, conversationId));
-				if (nextTriggerMessageId) {
-					await requeueDrainJob({
-						jobData: job.data,
-						triggerMessageId: nextTriggerMessageId,
+			if (remaining > 0) {
+				const wakeState = await ensureConversationWake({
+					redis,
+					conversationId,
+					reason: "end_invariant",
+					currentJobId: String(job.id ?? "__end_invariant__"),
+				});
+				if (wakeState !== "scheduled") {
+					const runnable = await hasRunnableWake({
+						conversationId,
 						currentJobId: String(job.id ?? ""),
 					});
+					if (!runnable) {
+						await markAiAgentWakeNeeded(redis, {
+							conversationId,
+						});
+						console.warn(
+							`[worker:ai-agent] conv=${conversationId} | Queue non-empty without runnable wake, marked wake-needed`
+						);
+					}
 				}
+			} else {
+				await removeAiAgentActiveConversation(redis, conversationId);
+				await clearAiAgentWakeNeeded(redis, conversationId);
 			}
 		} finally {
 			stopLockWatchdog = true;

@@ -493,7 +493,7 @@ Acme helps teams manage invoices, recurring billing, and account operations with
 		  - sendPrivateMessage(message) -> internal only
 
 		  Finish with exactly ONE action:
-		  - respond, escalate, resolve, markSpam, skip, wait
+		  - respond, escalate, resolve, markSpam, skip
 
 		  Optional side-effects:
 		  - updateConversationTitle, updateSentiment, setPriority
@@ -548,7 +548,7 @@ Acme helps teams manage invoices, recurring billing, and account operations with
 		  - sendPrivateMessage(message) -> internal only
 
 		  Finish with exactly ONE action:
-		  - respond, escalate, resolve, markSpam, skip, wait
+		  - respond, escalate, resolve, markSpam, skip
 
 		  Optional side-effects:
 		  - updateConversationTitle, updateSentiment, setPriority

@@ -7,8 +7,6 @@ const realtimeEmitMock = mock((async () => {}) as (
 const getConversationByIdMock = mock(
 	(async () => null) as (...args: unknown[]) => Promise<unknown>
 );
-const triggerMessageNotificationWorkflowMock = mock((() =>
-	Promise.resolve()) as (...args: unknown[]) => Promise<void>);
 
 mock.module("@api/realtime/emitter", () => ({
 	realtime: {
@@ -18,10 +16,6 @@ mock.module("@api/realtime/emitter", () => ({
 
 mock.module("@api/db/queries/conversation", () => ({
 	getConversationById: getConversationByIdMock,
-}));
-
-mock.module("./send-message-with-notification", () => ({
-	triggerMessageNotificationWorkflow: triggerMessageNotificationWorkflowMock,
 }));
 
 const timelineItemModulePromise = import("./timeline-item");
@@ -84,9 +78,7 @@ describe("timeline-item utils", () => {
 	beforeEach(() => {
 		realtimeEmitMock.mockReset();
 		getConversationByIdMock.mockReset();
-		triggerMessageNotificationWorkflowMock.mockReset();
 		getConversationByIdMock.mockResolvedValue(null);
-		triggerMessageNotificationWorkflowMock.mockResolvedValue(undefined);
 	});
 
 	it("createTimelineItem emits timelineItemCreated with normalized payload", async () => {
@@ -247,7 +239,6 @@ describe("timeline-item utils", () => {
 			text: "See https://acme.dev/pricing",
 			aiAgentId: "ai-1",
 			id: "msg-1",
-			triggerNotificationWorkflow: false,
 		});
 
 		const insertedValues = harness.insertValuesMock.mock
@@ -262,7 +253,6 @@ describe("timeline-item utils", () => {
 		});
 		expect(realtimeEmitMock).toHaveBeenCalledTimes(1);
 		expect(realtimeEmitMock.mock.calls[0]?.[0]).toBe("timelineItemCreated");
-		expect(triggerMessageNotificationWorkflowMock).toHaveBeenCalledTimes(0);
 		expect(harness.updateSetMock).toHaveBeenCalledTimes(1);
 	});
 });

@@ -109,7 +109,7 @@ describe("getToolsForGeneration", () => {
 		expect(tools.sendPrivateMessage).toBeDefined();
 		expect(tools.respond).toBeDefined();
 		expect(tools.skip).toBeDefined();
-		expect(tools.wait).toBeDefined();
+		expect(tools.wait).toBeUndefined();
 	});
 
 	it("keeps sendMessage available even when public messaging is disabled", async () => {

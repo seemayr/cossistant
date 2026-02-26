@@ -41,6 +41,7 @@ import {
 	addConversationParticipant,
 	isUserParticipant,
 } from "@api/utils/participant-helpers";
+import { triggerMessageNotificationWorkflow } from "@api/utils/send-message-with-notification";
 import { createMessageTimelineItem } from "@api/utils/timeline-item";
 import {
 	type ContactMetadata,
@@ -356,37 +357,56 @@ export const conversationRouter = createTRPCRouter({
 					lastSeenAt,
 				});
 
-				return { item: createdTimelineItem };
+				return {
+					item: createdTimelineItem,
+					actor: { type: "user", userId: user.id } as const,
+				};
 			};
 
-			if (!hardLimitPolicy.enforced || hardLimitPolicy.messageLimit === null) {
-				return sendMessageWithDb(db);
-			}
+			const sendResult =
+				!hardLimitPolicy.enforced || hardLimitPolicy.messageLimit === null
+					? await sendMessageWithDb(db)
+					: await db.transaction(async (tx) => {
+							const lockKey = buildMessageLimitLockKey(websiteData.id);
+							const txDb = tx as unknown as typeof db;
 
-			return db.transaction(async (tx) => {
-				const lockKey = buildMessageLimitLockKey(websiteData.id);
-				const txDb = tx as unknown as typeof db;
+							await txDb.execute(
+								sql`select pg_advisory_xact_lock(hashtext(${lockKey}))`
+							);
 
-				await txDb.execute(
-					sql`select pg_advisory_xact_lock(hashtext(${lockKey}))`
-				);
+							const reached = await isDashboardMessageLimitReached(txDb, {
+								websiteId: websiteData.id,
+								organizationId: websiteData.organizationId,
+								policy: hardLimitPolicy,
+							});
 
-				const reached = await isDashboardMessageLimitReached(txDb, {
+							if (reached) {
+								throw new TRPCError({
+									code: "FORBIDDEN",
+									message:
+										"Message hard limit reached for your rolling 30-day window.",
+								});
+							}
+
+							return sendMessageWithDb(txDb);
+						});
+
+			try {
+				await triggerMessageNotificationWorkflow({
+					conversationId: input.conversationId,
+					messageId: sendResult.item.id,
 					websiteId: websiteData.id,
 					organizationId: websiteData.organizationId,
-					policy: hardLimitPolicy,
+					actor: sendResult.actor,
 				});
+			} catch (error) {
+				console.error(
+					"[notification] Failed to trigger workflow for trpc conversation message",
+					error
+				);
+			}
 
-				if (reached) {
-					throw new TRPCError({
-						code: "FORBIDDEN",
-						message:
-							"Message hard limit reached for your rolling 30-day window.",
-					});
-				}
-
-				return sendMessageWithDb(txDb);
-			});
+			return { item: sendResult.item };
 		}),
 
 	markResolved: protectedProcedure

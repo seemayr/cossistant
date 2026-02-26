@@ -1,4 +1,5 @@
 import type { RealtimeEvent } from "@cossistant/types/realtime-events";
+import { getVisitorPresenceQueryKeyPrefix } from "@/data/use-visitor-presence";
 import type { DashboardRealtimeContext } from "../types";
 
 type VisitorIdentifiedEvent = RealtimeEvent<"visitorIdentified">;
@@ -141,32 +142,11 @@ export const handleVisitorIdentified = ({
 			});
 	}
 
-	const visitorPresenceQueries = context.queryClient.getQueryCache().findAll({
-		predicate: (query) => {
-			const queryKey = query.queryKey as readonly unknown[];
-			const procedurePath = extractProcedurePath(queryKey);
-			if (!procedurePath) {
-				return false;
-			}
-
-			const [namespace, procedure] = procedurePath;
-			if (namespace !== "visitor" || procedure !== "listOnline") {
-				return false;
-			}
-
-			return matchesWebsiteScope(queryKey, context.website.slug);
-		},
-	});
-
-	for (const query of visitorPresenceQueries) {
-		const queryKey = query.queryKey as readonly unknown[];
-		context.queryClient
-			.invalidateQueries({
-				queryKey,
-				exact: true,
-			})
-			.catch((error) => {
-				console.error("Failed to invalidate visitor presence queries:", error);
-			});
-	}
+	context.queryClient
+		.invalidateQueries({
+			queryKey: getVisitorPresenceQueryKeyPrefix(context.website.slug),
+		})
+		.catch((error) => {
+			console.error("Failed to invalidate visitor presence queries:", error);
+		});
 };

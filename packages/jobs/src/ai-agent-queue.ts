@@ -1,7 +1,9 @@
 import type { Redis } from "@cossistant/redis";
 
 const DEFAULT_QUEUE_TTL_SECONDS = 86_400; // 24h
-const DEFAULT_WAKE_TTL_SECONDS = 30; // 30s
+const DEFAULT_WAKE_NEEDED_TTL_SECONDS = 300; // 5m
+const ACTIVE_CONVERSATIONS_KEY = "ai-agent:active-conversations";
+const WAKE_NEEDED_PREFIX = "ai-agent:wake-needed:";
 
 const LOCK_RENEW_SCRIPT = `
 if redis.call("get", KEYS[1]) == ARGV[1] then
@@ -32,8 +34,12 @@ export function getAiAgentQueueKey(conversationId: string): string {
 	return `ai-agent:queue:${conversationId}`;
 }
 
-export function getAiAgentWakeKey(conversationId: string): string {
-	return `ai-agent:wake:${conversationId}`;
+export function getAiAgentWakeNeededKey(conversationId: string): string {
+	return `${WAKE_NEEDED_PREFIX}${conversationId}`;
+}
+
+export function getAiAgentActiveConversationsKey(): string {
+	return ACTIVE_CONVERSATIONS_KEY;
 }
 
 export function getAiAgentLockKey(conversationId: string): string {
@@ -58,22 +64,16 @@ export async function enqueueAiAgentMessage(
 		messageId: string;
 		messageCreatedAt: string | Date | number;
 		queueTtlSeconds?: number;
-		wakeTtlSeconds?: number;
-		setWake?: boolean;
 	}
 ): Promise<{ added: boolean }> {
 	const queueKey = getAiAgentQueueKey(params.conversationId);
-	const wakeKey = getAiAgentWakeKey(params.conversationId);
 	const queueTtl = params.queueTtlSeconds ?? DEFAULT_QUEUE_TTL_SECONDS;
-	const wakeTtl = params.wakeTtlSeconds ?? DEFAULT_WAKE_TTL_SECONDS;
 	const score = toScore(params.messageCreatedAt);
 
 	const pipeline = redis.multi();
 	pipeline.zadd(queueKey, "NX", score.toString(), params.messageId);
 	pipeline.expire(queueKey, queueTtl);
-	if (params.setWake !== false) {
-		pipeline.set(wakeKey, "1", "EX", wakeTtl);
-	}
+	pipeline.sadd(ACTIVE_CONVERSATIONS_KEY, params.conversationId);
 
 	const results = await pipeline.exec();
 	const zaddResult = results?.[0]?.[1];
@@ -89,26 +89,15 @@ export async function peekAiAgentQueue(
 	return entries?.[0] ?? null;
 }
 
-export async function peekAiAgentQueueBatch(
-	redis: Redis,
-	conversationId: string,
-	limit: number
-): Promise<string[]> {
-	if (limit <= 0) {
-		return [];
-	}
-
-	const queueKey = getAiAgentQueueKey(conversationId);
-	return redis.zrange(queueKey, 0, limit - 1);
-}
-
 export async function removeAiAgentQueueMessage(
 	redis: Redis,
 	conversationId: string,
 	messageId: string
 ): Promise<number> {
 	const queueKey = getAiAgentQueueKey(conversationId);
-	return redis.zrem(queueKey, messageId);
+	const removed = await redis.zrem(queueKey, messageId);
+	await pruneConversationTracking(redis, conversationId);
+	return removed;
 }
 
 export async function removeAiAgentQueueMessages(
@@ -121,7 +110,9 @@ export async function removeAiAgentQueueMessages(
 	}
 
 	const queueKey = getAiAgentQueueKey(conversationId);
-	return redis.zrem(queueKey, ...messageIds);
+	const removed = await redis.zrem(queueKey, ...messageIds);
+	await pruneConversationTracking(redis, conversationId);
+	return removed;
 }
 
 export async function getAiAgentQueueSize(
@@ -137,8 +128,10 @@ export async function clearAiAgentConversationQueue(
 	conversationId: string
 ): Promise<number> {
 	const queueKey = getAiAgentQueueKey(conversationId);
-	const wakeKey = getAiAgentWakeKey(conversationId);
-	return redis.del(queueKey, wakeKey);
+	const wakeNeededKey = getAiAgentWakeNeededKey(conversationId);
+	const removed = await redis.del(queueKey, wakeNeededKey);
+	await redis.srem(ACTIVE_CONVERSATIONS_KEY, conversationId);
+	return removed;
 }
 
 export async function clearAiAgentConversationFailures(
@@ -168,13 +161,97 @@ export async function clearAiAgentConversationFailures(
 	return removed;
 }
 
-export async function consumeAiAgentWakeFlag(
+export async function isAiAgentWakeNeeded(
 	redis: Redis,
 	conversationId: string
 ): Promise<boolean> {
-	const wakeKey = getAiAgentWakeKey(conversationId);
-	const cleared = await redis.del(wakeKey);
-	return cleared === 1;
+	const wakeKey = getAiAgentWakeNeededKey(conversationId);
+	return (await redis.get(wakeKey)) !== null;
+}
+
+export async function markAiAgentWakeNeeded(
+	redis: Redis,
+	params: {
+		conversationId: string;
+		ttlSeconds?: number;
+	}
+): Promise<void> {
+	const wakeKey = getAiAgentWakeNeededKey(params.conversationId);
+	const ttlSeconds = params.ttlSeconds ?? DEFAULT_WAKE_NEEDED_TTL_SECONDS;
+	await redis
+		.multi()
+		.set(wakeKey, "1", "EX", ttlSeconds)
+		.sadd(ACTIVE_CONVERSATIONS_KEY, params.conversationId)
+		.exec();
+}
+
+export async function clearAiAgentWakeNeeded(
+	redis: Redis,
+	conversationId: string
+): Promise<void> {
+	await redis.del(getAiAgentWakeNeededKey(conversationId));
+}
+
+export async function listAiAgentWakeNeededConversations(
+	redis: Redis,
+	limit = 100
+): Promise<string[]> {
+	if (limit <= 0) {
+		return [];
+	}
+
+	const results: string[] = [];
+	let cursor = "0";
+	const pattern = `${WAKE_NEEDED_PREFIX}*`;
+
+	do {
+		const [nextCursor, keys] = (await redis.scan(
+			cursor,
+			"MATCH",
+			pattern,
+			"COUNT",
+			"100"
+		)) as [string, string[]];
+		cursor = nextCursor;
+
+		for (const key of keys) {
+			results.push(key.slice(WAKE_NEEDED_PREFIX.length));
+			if (results.length >= limit) {
+				return results;
+			}
+		}
+	} while (cursor !== "0");
+
+	return results;
+}
+
+export async function listAiAgentActiveConversations(
+	redis: Redis
+): Promise<string[]> {
+	return redis.smembers(ACTIVE_CONVERSATIONS_KEY);
+}
+
+export async function removeAiAgentActiveConversation(
+	redis: Redis,
+	conversationId: string
+): Promise<void> {
+	await redis.srem(ACTIVE_CONVERSATIONS_KEY, conversationId);
+}
+
+async function pruneConversationTracking(
+	redis: Redis,
+	conversationId: string
+): Promise<void> {
+	const queueSize = await getAiAgentQueueSize(redis, conversationId);
+	if (queueSize > 0) {
+		return;
+	}
+
+	await redis
+		.multi()
+		.srem(ACTIVE_CONVERSATIONS_KEY, conversationId)
+		.del(getAiAgentWakeNeededKey(conversationId))
+		.exec();
 }
 
 export async function acquireAiAgentLock(
@@ -217,5 +294,5 @@ export async function releaseAiAgentLock(
 
 export const AI_AGENT_QUEUE_DEFAULTS = {
 	queueTtlSeconds: DEFAULT_QUEUE_TTL_SECONDS,
-	wakeTtlSeconds: DEFAULT_WAKE_TTL_SECONDS,
+	wakeNeededTtlSeconds: DEFAULT_WAKE_NEEDED_TTL_SECONDS,
 };

@@ -45,6 +45,9 @@
     "tinybird"
   ],
   "dependencies": {
+    "@polar-sh/better-auth": "^1.8.1",
+    "@polar-sh/hono": "^0.5.3",
+    "@polar-sh/nextjs": "^0.9.3",
     "@polar-sh/sdk": "^0.44.0",
     "better-auth": "^1.4.17",
     "rolldown": "^1.0.0-rc.1"
@@ -55,6 +58,7 @@
     ]
   },
   "overrides": {
-    "@ai-sdk/provider": "3.0.4"
+    "@ai-sdk/provider": "3.0.4",
+    "@polar-sh/sdk": "^0.44.0"
   }
 }

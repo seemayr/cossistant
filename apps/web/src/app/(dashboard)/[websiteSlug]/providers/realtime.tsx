@@ -9,6 +9,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { UpgradeModal } from "@/components/plan/upgrade-modal";
 import { useUserSession, useWebsite } from "@/contexts/website";
+import { getVisitorPresenceQueryKeyPrefix } from "@/data/use-visitor-presence";
 import { useTRPC } from "@/lib/trpc/client";
 import { handleConversationCreated } from "./events/handlers/conversation-created";
 import { handleConversationSeen } from "./events/handlers/conversation-seen";
@@ -90,12 +91,9 @@ export function Realtime({ children }: { children: ReactNode }) {
 		});
 	}, [agent?.id, readiness?.canTrainAt, startTrainingMutation, website.slug]);
 
-	const presenceQueryOptions = useMemo(
-		() =>
-			trpc.visitor.listOnline.queryOptions({
-				websiteSlug: website.slug,
-			}),
-		[trpc, website.slug]
+	const presenceQueryKeyPrefix = useMemo(
+		() => getVisitorPresenceQueryKeyPrefix(website.slug),
+		[website.slug]
 	);
 
 	const realtimeContext = useMemo<DashboardRealtimeContext>(
@@ -180,14 +178,14 @@ export function Realtime({ children }: { children: ReactNode }) {
 			visitorConnected: [
 				(_data, meta) => {
 					void meta.context.queryClient.invalidateQueries({
-						queryKey: presenceQueryOptions.queryKey,
+						queryKey: presenceQueryKeyPrefix,
 					});
 				},
 			],
 			visitorDisconnected: [
 				(_data, meta) => {
 					void meta.context.queryClient.invalidateQueries({
-						queryKey: presenceQueryOptions.queryKey,
+						queryKey: presenceQueryKeyPrefix,
 					});
 				},
 			],
@@ -282,7 +280,7 @@ export function Realtime({ children }: { children: ReactNode }) {
 				},
 			],
 		}),
-		[presenceQueryOptions.queryKey]
+		[presenceQueryKeyPrefix]
 	);
 
 	useRealtime<DashboardRealtimeContext>({

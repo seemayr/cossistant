@@ -65,7 +65,6 @@ describe("generation tool call accounting", () => {
 			sendMessage: 2,
 			sendPrivateMessage: 1,
 			respond: 1,
-			wait: 1,
 		});
 
 		expect(nonFinishTotal).toBe(5);

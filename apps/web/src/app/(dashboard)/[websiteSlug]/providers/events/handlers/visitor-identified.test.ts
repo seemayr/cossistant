@@ -42,18 +42,6 @@ describe("handleVisitorIdentified", () => {
 				queryKey: [["contact", "list"], { input: {} }],
 			},
 			{
-				queryKey: [
-					["visitor", "listOnline"],
-					{ input: { websiteSlug: "acme" } },
-				],
-			},
-			{
-				queryKey: [
-					["visitor", "listOnline"],
-					{ input: { websiteSlug: "other" } },
-				],
-			},
-			{
 				queryKey: [["conversation", "listConversationsHeaders"], { input: {} }],
 			},
 		] as const;
@@ -105,7 +93,7 @@ describe("handleVisitorIdentified", () => {
 			} as never,
 		});
 
-		expect(findAllMock).toHaveBeenCalledTimes(3);
+		expect(findAllMock).toHaveBeenCalledTimes(2);
 		expect(setNormalizedDataMock).toHaveBeenCalledTimes(1);
 		expect(setQueryDataMock).toHaveBeenCalledTimes(1);
 		expect(setQueryDataMock.mock.calls[0]?.[0]).toEqual([
@@ -138,8 +126,7 @@ describe("handleVisitorIdentified", () => {
 			exact: true,
 		});
 		expect(invalidateQueriesMock.mock.calls[3]?.[0]).toEqual({
-			queryKey: [["visitor", "listOnline"], { input: { websiteSlug: "acme" } }],
-			exact: true,
+			queryKey: ["tinybird", "visitor-presence", "acme"],
 		});
 	});
 

@@ -132,16 +132,16 @@ describe("continuationGate", () => {
 
 		expect(result.decision).toBe("supplement");
 		expect(result.deltaHint).toBe("Address the second sentence only.");
+		expect(generateTextMock).toHaveBeenCalledTimes(1);
 	});
 
-	it("falls back to skip for greeting/ack when newer AI asked follow-up", async () => {
+	it("uses conservative fast-path skip for greeting/ack when newer AI asked follow-up", async () => {
 		const { continuationGate } = await modulePromise;
 		getLatestPublicAiMessageAfterCursorMock.mockResolvedValue({
 			id: "ai-msg-2",
 			text: "How can I help you today?",
 			createdAt: new Date().toISOString(),
 		});
-		generateTextMock.mockRejectedValue(new Error("model unavailable"));
 
 		const result = await continuationGate({
 			db: {} as never,
@@ -162,7 +162,8 @@ describe("continuationGate", () => {
 		});
 
 		expect(result.decision).toBe("skip");
-		expect(result.reason.startsWith("fallback_skip")).toBe(true);
+		expect(result.reason).toBe("heuristic_skip_ack_followup");
+		expect(generateTextMock).toHaveBeenCalledTimes(0);
 	});
 
 	it("falls back to neutral for ambiguous trigger when classifier fails", async () => {
@@ -194,5 +195,6 @@ describe("continuationGate", () => {
 
 		expect(result.decision).toBe("none");
 		expect(result.reason.startsWith("fallback_none")).toBe(true);
+		expect(generateTextMock).toHaveBeenCalledTimes(1);
 	});
 });

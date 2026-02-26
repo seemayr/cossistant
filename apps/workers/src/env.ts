@@ -55,11 +55,16 @@ export const env = {
 		"AI_AGENT_DRAIN_LOCK_TTL_MS",
 		"120000"
 	),
-	AI_AGENT_VISITOR_DEBOUNCE_MS: +getEnvVariable(
-		"AI_AGENT_VISITOR_DEBOUNCE_MS",
-		"800"
+	AI_AGENT_WAKE_SWEEP_INTERVAL_MS: +getEnvVariable(
+		"AI_AGENT_WAKE_SWEEP_INTERVAL_MS",
+		"5000"
 	),
-	AI_AGENT_WAKE_TTL_SECONDS: +getEnvVariable("AI_AGENT_WAKE_TTL_SECONDS", "30"),
+	AI_AGENT_WAKE_RECOVERY_JITTER_MS: +getEnvVariable(
+		"AI_AGENT_WAKE_RECOVERY_JITTER_MS",
+		"1500"
+	),
+	AI_AGENT_STRICT_FIFO:
+		getEnvVariable("AI_AGENT_STRICT_FIFO", "true") === "true",
 	// Database (needed for notification queries)
 	DATABASE_HOST: getEnvVariable("DATABASE_HOST"),
 	DATABASE_PORT: +getEnvVariable("DATABASE_PORT"),

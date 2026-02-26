@@ -37,29 +37,28 @@ export async function getConversationState(
 	params: GetStateParams,
 	conversation: ConversationSelect
 ): Promise<ConversationState> {
-	// Get active assignees
-	const assignees = await db
-		.select({ userId: conversationAssignee.userId })
-		.from(conversationAssignee)
-		.where(
-			and(
-				eq(conversationAssignee.conversationId, params.conversationId),
-				eq(conversationAssignee.organizationId, params.organizationId),
-				isNull(conversationAssignee.unassignedAt)
-			)
-		);
-
-	// Get active participants
-	const participants = await db
-		.select({ userId: conversationParticipant.userId })
-		.from(conversationParticipant)
-		.where(
-			and(
-				eq(conversationParticipant.conversationId, params.conversationId),
-				eq(conversationParticipant.organizationId, params.organizationId),
-				isNull(conversationParticipant.leftAt)
-			)
-		);
+	const [assignees, participants] = await Promise.all([
+		db
+			.select({ userId: conversationAssignee.userId })
+			.from(conversationAssignee)
+			.where(
+				and(
+					eq(conversationAssignee.conversationId, params.conversationId),
+					eq(conversationAssignee.organizationId, params.organizationId),
+					isNull(conversationAssignee.unassignedAt)
+				)
+			),
+		db
+			.select({ userId: conversationParticipant.userId })
+			.from(conversationParticipant)
+			.where(
+				and(
+					eq(conversationParticipant.conversationId, params.conversationId),
+					eq(conversationParticipant.organizationId, params.organizationId),
+					isNull(conversationParticipant.leftAt)
+				)
+			),
+	]);
 
 	const assigneeIds = assignees.map((a) => a.userId);
 	const participantIds = participants.map((p) => p.userId);

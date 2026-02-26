@@ -53,26 +53,15 @@ export type AiAgentJobData = {
 	aiAgentId: string;
 	/**
 	 * Optional trigger message ID that woke this drain job.
-	 * Keeps wake jobs idempotent per trigger while preserving compatibility
-	 * with older producers that only enqueue by conversation.
+	 * Used for observability and debugging only.
 	 */
 	triggerMessageId?: string;
-	/**
-	 * Optional wait-resume marker.
-	 * When present, worker selects the latest queued trigger on first pass
-	 * after a deferred wait cycle.
-	 */
-	waitResumeForTriggerMessageId?: string;
 };
 
 export function generateAiAgentJobId(
 	conversationId: string,
-	triggerMessageId?: string
+	_triggerMessageId?: string
 ): string {
-	if (triggerMessageId) {
-		return `ai-agent-${conversationId}-${triggerMessageId}`;
-	}
-
 	return `ai-agent-${conversationId}`;
 }
 

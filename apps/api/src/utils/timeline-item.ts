@@ -12,7 +12,6 @@ import { timelineItemSchema } from "@cossistant/types/api/timeline-item";
 import type { RealtimeEventData } from "@cossistant/types/realtime-events";
 import { and, eq, isNull } from "drizzle-orm";
 import * as linkify from "linkifyjs";
-import { triggerMessageNotificationWorkflow } from "./send-message-with-notification";
 
 /**
  * Parses raw text and converts URLs to markdown link format
@@ -141,6 +140,12 @@ export type MessageTimelineActor =
 	| { type: "visitor"; visitorId: string }
 	| { type: "ai_agent"; aiAgentId: string };
 
+export type MessageTimelineActorInput = {
+	userId?: string | null;
+	visitorId?: string | null;
+	aiAgentId?: string | null;
+};
+
 export type CreateMessageTimelineItemOptions = {
 	db: Database;
 	organizationId: string;
@@ -158,7 +163,6 @@ export type CreateMessageTimelineItemOptions = {
 		| typeof TimelineItemVisibility.PRIVATE;
 	createdAt?: Date;
 	tool?: string | null;
-	triggerNotificationWorkflow?: boolean;
 };
 
 export type UpdateTimelineItemOptions = {
@@ -260,8 +264,8 @@ function serializeTimelineItemForRealtimeUpdated(
 	};
 }
 
-function resolveMessageActor(
-	item: TimelineItem,
+export function resolveMessageTimelineActor(
+	item: MessageTimelineActorInput,
 	fallbackVisitorId?: string | null
 ): MessageTimelineActor | null {
 	if (item.userId) {
@@ -287,7 +291,6 @@ export async function createMessageTimelineItem(
 	options: CreateMessageTimelineItemOptions
 ): Promise<{ item: TimelineItem; actor: MessageTimelineActor | null }> {
 	const {
-		triggerNotificationWorkflow = true,
 		conversationOwnerVisitorId,
 		text,
 		extraParts = [],
@@ -374,7 +377,7 @@ export async function createMessageTimelineItem(
 		}
 	}
 
-	const actor = resolveMessageActor(
+	const actor = resolveMessageTimelineActor(
 		createdTimelineItem,
 		conversationOwnerVisitorId ?? null
 	);
@@ -382,18 +385,6 @@ export async function createMessageTimelineItem(
 	// If a human agent is sending a message, handle any pending escalation
 	if (userId) {
 		await handleEscalationIfNeeded(db, conversationId, userId);
-	}
-
-	if (triggerNotificationWorkflow && actor) {
-		triggerMessageNotificationWorkflow({
-			conversationId,
-			messageId: createdTimelineItem.id,
-			websiteId,
-			organizationId,
-			actor,
-		}).catch((error) => {
-			console.error("[dev] Failed to trigger notification workflow:", error);
-		});
 	}
 
 	return { item: createdTimelineItem, actor };

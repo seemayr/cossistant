@@ -1,9 +1,8 @@
 "use client";
 
 import type { VisitorPresenceEntry } from "@cossistant/types";
-import { useQuery } from "@tanstack/react-query";
 import { createContext, useContext, useMemo } from "react";
-import { useTRPC } from "@/lib/trpc/client";
+import { useVisitorPresenceData } from "@/data/use-visitor-presence";
 
 type VisitorPresenceContextValue = {
 	visitors: VisitorPresenceEntry[];
@@ -25,17 +24,7 @@ export function VisitorPresenceProvider({
 	children: React.ReactNode;
 	websiteSlug: string;
 }) {
-	const trpc = useTRPC();
-
-	const query = useQuery({
-		...trpc.visitor.listOnline.queryOptions({
-			websiteSlug,
-		}),
-		staleTime: 5000,
-		refetchInterval: 15_000,
-		refetchOnReconnect: true,
-		refetchOnWindowFocus: true,
-	});
+	const query = useVisitorPresenceData({ websiteSlug });
 
 	const visitors = query.data?.visitors ?? [];
 

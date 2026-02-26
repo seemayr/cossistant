@@ -105,7 +105,6 @@ export async function sendMessage(
 		userId: null,
 		visitorId: null,
 		createdAt,
-		triggerNotificationWorkflow: false,
 	});
 
 	try {

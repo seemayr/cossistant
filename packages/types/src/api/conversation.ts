@@ -10,7 +10,7 @@ export const createConversationRequestSchema = z
 		}),
 		conversationId: z.string().optional().openapi({
 			description:
-				"Default conversation ID, if not provided the ID will be automatically generated.",
+				"Optional idempotency key for conversation creation. If provided, it is scoped to one organization+website+visitor owner tuple; retries with the same tuple reuse the existing conversation.",
 		}),
 		defaultTimelineItems: z.array(timelineItemSchema).openapi({
 			description: "Default timeline items to initiate the conversation with",
@@ -39,6 +39,29 @@ export const createConversationResponseSchema = z
 
 export type CreateConversationResponseBody = z.infer<
 	typeof createConversationResponseSchema
+>;
+
+export const createConversationConflictCodeSchema = z.enum([
+	"CONVERSATION_ID_CONFLICT",
+	"TIMELINE_ITEM_ID_CONFLICT",
+]);
+
+export type CreateConversationConflictCode = z.infer<
+	typeof createConversationConflictCodeSchema
+>;
+
+export const createConversationConflictResponseSchema = z
+	.object({
+		code: createConversationConflictCodeSchema,
+		error: z.string(),
+	})
+	.openapi({
+		description:
+			"Conflict response when conversationId is already claimed by a different visitor or tenant.",
+	});
+
+export type CreateConversationConflictResponseBody = z.infer<
+	typeof createConversationConflictResponseSchema
 >;
 
 export const listConversationsRequestSchema = z

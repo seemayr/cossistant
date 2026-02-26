@@ -41,7 +41,6 @@ export const aiDecisionSchema = z.object({
 			"resolve", // Mark conversation as resolved
 			"mark_spam", // Mark as spam
 			"skip", // No action needed
-			"wait", // Defer briefly, then re-evaluate from decision stage
 		])
 		.describe("The action to take after sending messages"),
 

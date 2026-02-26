@@ -68,6 +68,10 @@ function createDocument(
 }
 
 describe("buildCapabilitiesStudioResponse", () => {
+	it("keeps wait.md in dropped skill template names", () => {
+		expect(AI_AGENT_DROPPED_SKILL_TEMPLATE_NAMES).toContain("wait.md");
+	});
+
 	it("maps behavior settings to runtime tool enabled state", () => {
 		const response = buildCapabilitiesStudioResponse({
 			aiAgent: createAgent({

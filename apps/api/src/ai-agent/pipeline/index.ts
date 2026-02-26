@@ -119,6 +119,11 @@ export async function runAiAgentPipeline(
 	let continuationHint: ContinuationHint | undefined;
 	let aiCreditGuardResult: AiCreditGuardResult | null = null;
 	const publicMessageIds = new Set<string>();
+	type DecisionPolicyResolution = {
+		policy: string;
+		fallback: "none" | "missing" | "error";
+		error?: unknown;
+	};
 
 	const markPublicMessageSent = (params: {
 		messageId: string;
@@ -133,6 +138,32 @@ export async function runAiAgentPipeline(
 		}
 		publicMessageIds.add(params.messageId);
 		publicMessagesSent++;
+	};
+
+	const safeEmitDecisionMade = async (
+		params: Parameters<typeof emitDecisionMade>[0]
+	): Promise<void> => {
+		try {
+			await emitDecisionMade(params);
+		} catch (error) {
+			console.warn(
+				`[ai-agent] conv=${convId} | Failed to emit decision event`,
+				error
+			);
+		}
+	};
+
+	const safeEmitWorkflowCompleted = async (
+		params: Parameters<typeof emitWorkflowCompleted>[0]
+	): Promise<void> => {
+		try {
+			await emitWorkflowCompleted(params);
+		} catch (error) {
+			console.warn(
+				`[ai-agent] conv=${convId} | Failed to emit workflow completed event`,
+				error
+			);
+		}
 	};
 
 	try {
@@ -158,6 +189,27 @@ export async function runAiAgentPipeline(
 		const modelIdOriginal = readyIntake.modelResolution.modelIdOriginal;
 		const modelMigrationApplied =
 			readyIntake.modelResolution.modelMigrationApplied;
+		const decisionPolicyPromise: Promise<DecisionPolicyResolution> =
+			resolvePromptBundle({
+				db: ctx.db,
+				aiAgent: readyIntake.aiAgent,
+				mode: "background_only",
+			})
+				.then((bundle) => {
+					const policy = bundle.coreDocuments["decision.md"]?.content?.trim();
+					if (!policy) {
+						return {
+							policy: PROMPT_TEMPLATES.DECISION_POLICY,
+							fallback: "missing",
+						} as const;
+					}
+					return { policy, fallback: "none" } as const;
+				})
+				.catch((error) => ({
+					policy: PROMPT_TEMPLATES.DECISION_POLICY,
+					fallback: "error" as const,
+					error,
+				}));
 
 		const continuationResult = await continuationGate({
 			db: ctx.db,
@@ -175,7 +227,7 @@ export async function runAiAgentPipeline(
 		if (continuationResult.decision === "skip") {
 			const skipReason = `Continuation gate skipped trigger: ${continuationResult.reason}`;
 
-			await emitDecisionMade({
+			await safeEmitDecisionMade({
 				conversation: intakeResult.conversation,
 				aiAgentId: intakeResult.aiAgent.id,
 				workflowRunId: ctx.input.workflowRunId,
@@ -184,7 +236,7 @@ export async function runAiAgentPipeline(
 				mode: "background_only",
 			});
 
-			await emitWorkflowCompleted({
+			await safeEmitWorkflowCompleted({
 				conversation: intakeResult.conversation,
 				aiAgentId: intakeResult.aiAgent.id,
 				workflowRunId: ctx.input.workflowRunId,
@@ -233,22 +285,14 @@ export async function runAiAgentPipeline(
 		});
 
 		try {
-			let decisionPolicy: string = PROMPT_TEMPLATES.DECISION_POLICY;
-			try {
-				const decisionPromptBundle = await resolvePromptBundle({
-					db: ctx.db,
-					aiAgent: intakeResult.aiAgent,
-					mode: "background_only",
-				});
-				decisionPolicy =
-					decisionPromptBundle.coreDocuments["decision.md"]?.content?.trim() ||
-					PROMPT_TEMPLATES.DECISION_POLICY;
-			} catch (error) {
+			const decisionPolicyResolution = await decisionPolicyPromise;
+			if (decisionPolicyResolution.fallback === "error") {
 				console.warn(
 					`[ai-agent] conv=${convId} | Failed to resolve decision.md, using fallback policy`,
-					error
+					decisionPolicyResolution.error
 				);
 			}
+			const decisionPolicy = decisionPolicyResolution.policy;
 
 			decisionResult = await decide({
 				aiAgent: intakeResult.aiAgent,
@@ -280,22 +324,22 @@ export async function runAiAgentPipeline(
 		metrics.decisionMs = Date.now() - decisionStart;
 
 		// Emit decision event
-		await emitDecisionMade({
-			conversation: intakeResult.conversation,
-			aiAgentId: intakeResult.aiAgent.id,
-			workflowRunId: ctx.input.workflowRunId,
-			shouldAct: decisionResult.shouldAct,
-			reason: decisionResult.reason,
-			mode: decisionResult.mode,
-		});
-
 		if (!decisionResult.shouldAct) {
+			await safeEmitDecisionMade({
+				conversation: intakeResult.conversation,
+				aiAgentId: intakeResult.aiAgent.id,
+				workflowRunId: ctx.input.workflowRunId,
+				shouldAct: false,
+				reason: decisionResult.reason,
+				mode: decisionResult.mode,
+			});
+
 			console.log(
 				`[ai-agent] conv=${convId} | Skipped at decision | reason="${decisionResult.reason}"`
 			);
 
 			// Emit completion event (dashboard only since shouldAct=false)
-			await emitWorkflowCompleted({
+			await safeEmitWorkflowCompleted({
 				conversation: intakeResult.conversation,
 				aiAgentId: intakeResult.aiAgent.id,
 				workflowRunId: ctx.input.workflowRunId,
@@ -312,10 +356,21 @@ export async function runAiAgentPipeline(
 			};
 		}
 
-		aiCreditGuardResult = await guardAiCreditRun({
-			organizationId: ctx.input.organizationId,
-			modelId: resolvedModelId,
-		});
+		const [, guardResult] = await Promise.all([
+			safeEmitDecisionMade({
+				conversation: intakeResult.conversation,
+				aiAgentId: intakeResult.aiAgent.id,
+				workflowRunId: ctx.input.workflowRunId,
+				shouldAct: true,
+				reason: decisionResult.reason,
+				mode: decisionResult.mode,
+			}),
+			guardAiCreditRun({
+				organizationId: ctx.input.organizationId,
+				modelId: resolvedModelId,
+			}),
+		]);
+		aiCreditGuardResult = guardResult;
 
 		if (!aiCreditGuardResult.allowed) {
 			const blockedReason = `AI credit guard blocked run: ${aiCreditGuardResult.reason}`;
@@ -363,7 +418,7 @@ export async function runAiAgentPipeline(
 				);
 			}
 
-			await emitWorkflowCompleted({
+			await safeEmitWorkflowCompleted({
 				conversation: intakeResult.conversation,
 				aiAgentId: intakeResult.aiAgent.id,
 				workflowRunId: ctx.input.workflowRunId,
@@ -703,7 +758,7 @@ export async function runAiAgentPipeline(
 		metrics.followupMs = Date.now() - followupStart;
 
 		// Emit completion event (success - notify widget)
-		await emitWorkflowCompleted({
+		await safeEmitWorkflowCompleted({
 			conversation: intakeResult.conversation,
 			aiAgentId: intakeResult.aiAgent.id,
 			workflowRunId: ctx.input.workflowRunId,
@@ -745,17 +800,13 @@ export async function runAiAgentPipeline(
 
 		// Emit error completion event (dashboard only)
 		if (intakeResult?.status === "ready") {
-			try {
-				await emitWorkflowCompleted({
-					conversation: intakeResult.conversation,
-					aiAgentId: intakeResult.aiAgent.id,
-					workflowRunId: ctx.input.workflowRunId,
-					status: "error",
-					reason: errorMessage,
-				});
-			} catch {
-				// Ignore event emission errors during error handling
-			}
+			await safeEmitWorkflowCompleted({
+				conversation: intakeResult.conversation,
+				aiAgentId: intakeResult.aiAgent.id,
+				workflowRunId: ctx.input.workflowRunId,
+				status: "error",
+				reason: errorMessage,
+			});
 		}
 
 		return {

@@ -11,7 +11,7 @@ import {
 import { createFeedback } from "@api/db/queries/feedback";
 import {
 	conversation,
-	type conversationTimelineItem,
+	conversationTimelineItem,
 } from "@api/db/schema/conversation";
 import {
 	applyDashboardConversationHardLimit,
@@ -26,6 +26,7 @@ import {
 	emitConversationSeenEvent,
 	emitConversationTypingEvent,
 } from "@api/utils/conversation-realtime";
+import { generateIdempotentULID } from "@api/utils/db/ids";
 import { extractGeoFromVisitor } from "@api/utils/geo-helpers";
 import {
 	addConversationParticipants,
@@ -35,6 +36,8 @@ import { triggerMessageNotificationWorkflow } from "@api/utils/send-message-with
 import {
 	createMessageTimelineItem,
 	createTimelineItem,
+	type MessageTimelineActor,
+	resolveMessageTimelineActor,
 } from "@api/utils/timeline-item";
 import {
 	safelyExtractRequestData,
@@ -43,6 +46,8 @@ import {
 } from "@api/utils/validate";
 import { APIKeyType, TimelineItemVisibility } from "@cossistant/types";
 import {
+	type CreateConversationConflictCode,
+	createConversationConflictResponseSchema,
 	createConversationRequestSchema,
 	createConversationResponseSchema,
 	getConversationRequestSchema,
@@ -67,7 +72,7 @@ import {
 	conversationSeenSchema,
 } from "@cossistant/types/schemas";
 import { OpenAPIHono, z } from "@hono/zod-openapi";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { protectedPublicApiKeyMiddleware } from "../middleware";
 import type { RestContext } from "../types";
 import { mapDefaultTimelineItemForCreation } from "./conversation-default-timeline-item";
@@ -124,6 +129,64 @@ const serializeConversationForResponse = (
 	};
 };
 
+function createConversationConflictResponse(params: {
+	code: CreateConversationConflictCode;
+	error: string;
+}) {
+	return validateResponse(params, createConversationConflictResponseSchema);
+}
+
+function isUniqueViolationError(error: unknown): boolean {
+	if (!error || typeof error !== "object") {
+		return false;
+	}
+
+	const code = "code" in error ? String(error.code) : null;
+	const message = "message" in error ? String(error.message) : "";
+
+	return code === "23505" || message.includes("duplicate key");
+}
+
+function canonicalizeForStableStringify(value: unknown): unknown {
+	if (Array.isArray(value)) {
+		return value.map(canonicalizeForStableStringify);
+	}
+
+	if (value && typeof value === "object") {
+		const normalizedEntries = Object.entries(value as Record<string, unknown>)
+			.sort(([left], [right]) => left.localeCompare(right))
+			.map(([key, nestedValue]) => [
+				key,
+				canonicalizeForStableStringify(nestedValue),
+			]);
+
+		return Object.fromEntries(normalizedEntries);
+	}
+
+	return value;
+}
+
+function buildDefaultTimelineItemId(params: {
+	conversationId: string;
+	index: number;
+	item: TimelineItem;
+}): string {
+	const normalizedShape = {
+		type: params.item.type ?? "message",
+		text: params.item.text ?? null,
+		parts: params.item.parts ?? [],
+		visibility: params.item.visibility ?? null,
+		userId: params.item.userId ?? null,
+		aiAgentId: params.item.aiAgentId ?? null,
+		visitorId: params.item.visitorId ?? null,
+		tool: params.item.tool ?? null,
+	};
+
+	return generateIdempotentULID(
+		`conversation-default:${params.conversationId}:${params.index}:${JSON.stringify(canonicalizeForStableStringify(normalizedShape))}`
+	);
+}
+
 export const conversationRouter = new OpenAPIHono<RestContext>();
 
 // Apply middleware to all routes in this router
@@ -153,6 +216,15 @@ conversationRouter.openapi(
 				content: {
 					"application/json": {
 						schema: createConversationResponseSchema,
+					},
+				},
+			},
+			409: {
+				description:
+					"Conversation ID conflict (already exists for a different visitor or tenant)",
+				content: {
+					"application/json": {
+						schema: createConversationConflictResponseSchema,
 					},
 				},
 			},
@@ -228,12 +300,22 @@ conversationRouter.openapi(
 			);
 		}
 
-		const conversationRecord = await upsertConversation(db, {
+		const upsertResult = await upsertConversation(db, {
 			organizationId: organization.id,
 			websiteId: website.id,
 			visitorId: visitor.id,
 			conversationId: body.conversationId,
 		});
+		if (upsertResult.status === "conflict") {
+			return c.json(
+				createConversationConflictResponse({
+					code: "CONVERSATION_ID_CONFLICT",
+					error: "Conversation ID already exists for another visitor",
+				}),
+				409
+			);
+		}
+		const conversationRecord = upsertResult.conversation;
 
 		// Add default participants if configured
 		const defaultParticipantIds = await getDefaultParticipants(db, website);
@@ -247,72 +329,134 @@ conversationRouter.openapi(
 		}
 
 		const defaults = body.defaultTimelineItems ?? [];
-		const createdItemsWithActors =
-			defaults.length > 0
-				? await Promise.all(
-						defaults.map(async (item) => {
-							const preparedItem = mapDefaultTimelineItemForCreation(item);
+		const createdItemsWithActors: Array<{
+			item: (ConversationTimelineItemRow & { parts: unknown }) | TimelineItem;
+			actor: MessageTimelineActor | null;
+			isNew: boolean;
+		}> = [];
 
-							if (preparedItem.kind === "message") {
-								return createMessageTimelineItem({
-									db,
-									organizationId: organization.id,
-									websiteId: website.id,
-									conversationId: conversationRecord.id,
-									conversationOwnerVisitorId: conversationRecord.visitorId,
-									triggerNotificationWorkflow: false,
-									id: preparedItem.input.id,
-									text: preparedItem.input.text,
-									extraParts: preparedItem.input.extraParts,
-									visibility: preparedItem.input.visibility,
-									userId: preparedItem.input.userId,
-									aiAgentId: preparedItem.input.aiAgentId,
-									visitorId: preparedItem.input.visitorId,
-									createdAt: preparedItem.input.createdAt,
-									tool: preparedItem.input.tool,
-								});
-							}
+		for (const [index, item] of defaults.entries()) {
+			const timelineItemId =
+				item.id ??
+				buildDefaultTimelineItemId({
+					conversationId: conversationRecord.id,
+					index,
+					item,
+				});
 
-							const createdItem = await createTimelineItem({
-								db,
-								organizationId: organization.id,
-								websiteId: website.id,
-								conversationId: conversationRecord.id,
-								conversationOwnerVisitorId: conversationRecord.visitorId,
-								item: preparedItem.input,
-							});
+			const preparedItem = mapDefaultTimelineItemForCreation({
+				...item,
+				id: timelineItemId,
+			});
 
-							return { item: createdItem, actor: null };
-						})
+			try {
+				if (preparedItem.kind === "message") {
+					const created = await createMessageTimelineItem({
+						db,
+						organizationId: organization.id,
+						websiteId: website.id,
+						conversationId: conversationRecord.id,
+						conversationOwnerVisitorId: conversationRecord.visitorId,
+						id: preparedItem.input.id,
+						text: preparedItem.input.text,
+						extraParts: preparedItem.input.extraParts,
+						visibility: preparedItem.input.visibility,
+						userId: preparedItem.input.userId,
+						aiAgentId: preparedItem.input.aiAgentId,
+						visitorId: preparedItem.input.visitorId,
+						createdAt: preparedItem.input.createdAt,
+						tool: preparedItem.input.tool,
+					});
+					createdItemsWithActors.push({
+						item: created.item,
+						actor: created.actor,
+						isNew: true,
+					});
+					continue;
+				}
+
+				const createdItem = await createTimelineItem({
+					db,
+					organizationId: organization.id,
+					websiteId: website.id,
+					conversationId: conversationRecord.id,
+					conversationOwnerVisitorId: conversationRecord.visitorId,
+					item: preparedItem.input,
+				});
+				createdItemsWithActors.push({
+					item: createdItem,
+					actor: null,
+					isNew: true,
+				});
+			} catch (error) {
+				if (!isUniqueViolationError(error)) {
+					throw error;
+				}
+
+				const [existingTimelineItem] = await db
+					.select()
+					.from(conversationTimelineItem)
+					.where(
+						and(
+							eq(conversationTimelineItem.id, timelineItemId),
+							eq(conversationTimelineItem.organizationId, organization.id)
+						)
 					)
-				: [];
+					.limit(1);
+
+				if (!existingTimelineItem) {
+					throw new Error(
+						`Unable to resolve timeline item conflict for id ${timelineItemId}`
+					);
+				}
+
+				if (existingTimelineItem.conversationId !== conversationRecord.id) {
+					return c.json(
+						createConversationConflictResponse({
+							code: "TIMELINE_ITEM_ID_CONFLICT",
+							error: "Timeline item ID collision detected",
+						}),
+						409
+					);
+				}
+
+				const actor = resolveMessageTimelineActor(
+					existingTimelineItem,
+					conversationRecord.visitorId
+				);
+
+				createdItemsWithActors.push({
+					item: existingTimelineItem,
+					actor: existingTimelineItem.type === "message" ? actor : null,
+					isNew: false,
+				});
+			}
+		}
 
 		const createdItems = createdItemsWithActors.map(({ item }) => item);
 
-		// Get the last timeline item if any were sent
-		const lastTimelineItem =
-			createdItems.length > 0 ? createdItems.at(-1) : undefined;
+		// Trigger notification workflow for initial message items explicitly.
+		for (const { item, actor, isNew } of createdItemsWithActors) {
+			if (!isNew || item.type !== "message" || !actor || !item.id) {
+				continue;
+			}
 
-		// Trigger notification workflow for any initial messages
-		// This handles the case where a conversation is created with initial messages
-		if (lastTimelineItem?.type === "message") {
-			const lastItemActor = createdItemsWithActors.at(-1)?.actor;
-
-			if (lastItemActor) {
-				console.log(
-					`[dev] Triggering notification for new conversation ${conversationRecord.id} with initial message ${lastTimelineItem.id} from ${lastItemActor.type}`
-				);
-				triggerMessageNotificationWorkflow({
+			try {
+				await triggerMessageNotificationWorkflow({
 					conversationId: conversationRecord.id,
-					messageId: lastTimelineItem.id,
+					messageId: item.id,
 					websiteId: website.id,
 					organizationId: organization.id,
-					actor: lastItemActor,
-				}).catch((error) => {
-					console.error(
-						"[dev] Failed to trigger notification workflow for new conversation:",
-						error
-					);
+					actor,
+				});
+			} catch (error) {
+				console.error("[conversation.create] Notification trigger failed", {
+					stage: "trigger_notification_workflow",
+					conversationId: conversationRecord.id,
+					messageId: item.id,
+					organizationId: organization.id,
+					websiteId: website.id,
+					error,
 				});
 			}
 		}
@@ -324,7 +468,7 @@ conversationRouter.openapi(
 			userId: null,
 		});
 
-		if (header) {
+		if (header && upsertResult.status === "created") {
 			const planInfo = await getPlanForWebsite(website);
 			const hardLimitPolicy = resolveDashboardHardLimitPolicy(planInfo);
 			const lockCutoff = await getDashboardConversationLockCutoff(db, {
@@ -343,6 +487,9 @@ conversationRouter.openapi(
 				header: eventHeader,
 			});
 		}
+
+		const lastTimelineItem =
+			createdItems.at(-1) ?? header?.lastTimelineItem ?? undefined;
 
 		const response = {
 			initialTimelineItems: createdItems.map(serializeTimelineItemForResponse),

@@ -11,9 +11,9 @@ import {
 	anonymous,
 	organization as organizationPlugin,
 } from "better-auth/plugins";
-import type { BetterAuthPlugin } from "better-auth/types";
 import React from "react";
 import { syncUserToDefaultResendAudience } from "./auth-user-audience";
+
 import polarClient from "./polar";
 
 // Needed for email templates
@@ -137,10 +137,11 @@ export const auth = betterAuth({
 		admin(),
 		// Type assertion needed due to version mismatch between @polar-sh/better-auth and better-auth
 		polar({
+			// @ts-expect-error
 			client: polarClient,
 			createCustomerOnSignUp: false,
 			use: [portal(), usage()],
-		}) as unknown as BetterAuthPlugin,
+		}),
 	],
 	// Allow requests from the frontend development server and production domains
 	trustedOrigins: [

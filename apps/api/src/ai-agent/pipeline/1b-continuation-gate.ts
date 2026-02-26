@@ -195,6 +195,19 @@ export async function continuationGate(
 		};
 	}
 
+	if (
+		isPureGreetingOrAck(triggerMessage.content) &&
+		looksLikeFollowupQuestion(latestAiText)
+	) {
+		return {
+			decision: "skip",
+			reason: "heuristic_skip_ack_followup",
+			confidence: "medium",
+			latestAiMessageId: latestAiMessage.id,
+			latestAiMessageText: latestAiText,
+		};
+	}
+
 	const abortController = new AbortController();
 	const timeout = setTimeout(() => {
 		abortController.abort();

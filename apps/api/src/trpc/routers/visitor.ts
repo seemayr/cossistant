@@ -1,13 +1,15 @@
 import { blockVisitor, unblockVisitor } from "@api/db/mutations/visitor";
-import { getCompleteVisitorWithContact } from "@api/db/queries/visitor";
+import {
+	getCompleteVisitorWithContact,
+	getVisitorPresenceProfiles,
+} from "@api/db/queries/visitor";
 import { getWebsiteBySlugWithAccess } from "@api/db/queries/website";
-import { listOnlineVisitors } from "@api/services/presence";
 import { createConversationEvent } from "@api/utils/conversation-event";
 import {
 	blockVisitorResponseSchema,
 	type ContactMetadata,
 	ConversationEventType,
-	listVisitorPresenceResponseSchema,
+	listVisitorPresenceProfilesResponseSchema,
 	TimelineItemVisibility,
 } from "@cossistant/types";
 import { TRPCError } from "@trpc/server";
@@ -16,14 +18,14 @@ import { createTRPCRouter, protectedProcedure } from "../init";
 import { loadConversationContext } from "../utils/conversation";
 
 export const visitorRouter = createTRPCRouter({
-	listOnline: protectedProcedure
+	listPresenceProfiles: protectedProcedure
 		.input(
 			z.object({
 				websiteSlug: z.string(),
-				limit: z.number().min(1).max(500).optional(),
+				visitorIds: z.array(z.ulid()).max(500),
 			})
 		)
-		.output(listVisitorPresenceResponseSchema)
+		.output(listVisitorPresenceProfilesResponseSchema)
 		.query(async ({ ctx: { db, user }, input }) => {
 			const websiteData = await getWebsiteBySlugWithAccess(db, {
 				userId: user.id,
@@ -37,10 +39,31 @@ export const visitorRouter = createTRPCRouter({
 				});
 			}
 
-			return await listOnlineVisitors(db, {
+			const rows = await getVisitorPresenceProfiles(db, {
 				websiteId: websiteData.id,
-				limit: input.limit,
+				visitorIds: input.visitorIds,
 			});
+
+			const profilesByVisitorId = Object.fromEntries(
+				rows.map((row) => [
+					row.id,
+					{
+						id: row.id,
+						lastSeenAt: row.lastSeenAt,
+						city: row.city,
+						region: row.region,
+						country: row.country,
+						latitude: row.latitude,
+						longitude: row.longitude,
+						contactId: row.contactId,
+						contactName: row.contactName,
+						contactEmail: row.contactEmail,
+						contactImage: row.contactImage,
+					},
+				])
+			);
+
+			return { profilesByVisitorId };
 		}),
 
 	block: protectedProcedure

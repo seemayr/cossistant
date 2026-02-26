@@ -10,6 +10,7 @@ import {
 	addConversationParticipant,
 	isUserParticipant,
 } from "@api/utils/participant-helpers";
+import { triggerMessageNotificationWorkflow } from "@api/utils/send-message-with-notification";
 import {
 	createMessageTimelineItem,
 	createTimelineItem,
@@ -302,6 +303,26 @@ messagesRouter.openapi(
 			aiAgentId: resolvedAiAgentId,
 			visitorId: visitorId ?? null,
 		});
+
+		if (
+			timelineItemType === ConversationTimelineType.MESSAGE &&
+			resolvedActor !== null
+		) {
+			try {
+				await triggerMessageNotificationWorkflow({
+					conversationId: body.conversationId,
+					messageId: createdTimelineItem.id,
+					websiteId: website.id,
+					organizationId: organization.id,
+					actor: resolvedActor,
+				});
+			} catch (error) {
+				console.error(
+					"[notification] Failed to trigger workflow for rest message route",
+					error
+				);
+			}
+		}
 
 		// Build promises for realtime events and presence tracking
 		const promises: Promise<unknown>[] = [];

@@ -1,23 +1,18 @@
-import { isAiPausedForConversation } from "@api/ai-agent/kill-switch";
 import { db } from "@api/db";
-import { updateConversationAiCursor } from "@api/db/mutations/conversation";
-import { getActiveAiAgentForWebsite } from "@api/db/queries/ai-agent";
 import {
 	getConversationById,
 	getMessageMetadata,
 } from "@api/db/queries/conversation";
-import { getRedis } from "@api/redis";
+import { enqueueAiAgentTrigger } from "@api/services/ai-trigger-service";
 import {
 	getLatestMessageForPush,
 	getNotificationData,
 } from "@api/utils/notification-helpers";
 import {
-	getAiAgentQueueTriggers,
 	triggerMemberMessageNotification,
 	triggerVisitorMessageNotification,
 } from "@api/utils/queue-triggers";
 import { sendMemberPushNotification } from "@api/workflows/message/member-push-notifier";
-import { enqueueAiAgentMessage } from "@cossistant/jobs";
 
 /**
  * Trigger notification workflow when a member sends a message
@@ -70,18 +65,11 @@ export async function triggerMemberSentMessageWorkflow(params: {
 		});
 
 		if (conversation?.visitorId) {
-			// Fire and forget - don't block the notification workflow
-			triggerAiAgentResponseWorkflow({
+			await triggerAiAgentResponseWorkflow({
 				conversationId: params.conversationId,
 				messageId: params.messageId,
 				websiteId: params.websiteId,
 				organizationId: params.organizationId,
-				visitorId: conversation.visitorId,
-			}).catch((error) => {
-				console.error(
-					"[ai-agent] Background AI agent workflow failed for member message:",
-					error
-				);
 			});
 		}
 	} catch (error) {
@@ -241,22 +229,8 @@ export async function triggerAiAgentResponseWorkflow(params: {
 	messageId: string;
 	websiteId: string;
 	organizationId: string;
-	visitorId: string;
 }): Promise<void> {
 	try {
-		const redis = getRedis();
-
-		// Check if there's an active AI agent for this website
-		const aiAgent = await getActiveAiAgentForWebsite(db, {
-			websiteId: params.websiteId,
-			organizationId: params.organizationId,
-		});
-
-		if (!aiAgent) {
-			// No active AI agent configured, skip
-			return;
-		}
-
 		const messageMetadata = await getMessageMetadata(db, {
 			messageId: params.messageId,
 			organizationId: params.organizationId,
@@ -268,53 +242,16 @@ export async function triggerAiAgentResponseWorkflow(params: {
 			);
 			return;
 		}
-
-		const isPaused = await isAiPausedForConversation({
-			db,
-			redis,
-			conversationId: params.conversationId,
-		});
-		if (isPaused) {
-			await updateConversationAiCursor(db, {
-				conversationId: params.conversationId,
-				organizationId: params.organizationId,
-				messageId: messageMetadata.id,
-				messageCreatedAt: messageMetadata.createdAt,
-			});
-			console.log(
-				`[ai-agent] Conversation ${params.conversationId} is paused, skipping AI enqueue and advancing cursor`
-			);
-			return;
-		}
-
-		console.log(
-			`[ai-agent] Queuing AI agent response job for conversation ${params.conversationId}`
-		);
-
-		await enqueueAiAgentMessage(redis, {
-			conversationId: params.conversationId,
-			messageId: params.messageId,
-			messageCreatedAt: messageMetadata.createdAt,
-		});
-
-		const jobData = {
+		const result = await enqueueAiAgentTrigger({
 			conversationId: params.conversationId,
 			websiteId: params.websiteId,
 			organizationId: params.organizationId,
-			aiAgentId: aiAgent.id,
-			triggerMessageId: messageMetadata.id,
-		};
-
-		const result = await getAiAgentQueueTriggers().enqueueAiAgentJob(jobData);
-		if (result.status === "created") {
-			console.log(
-				`[ai-agent] AI agent drain job created for conversation ${params.conversationId}`
-			);
-		} else {
-			console.log(
-				`[ai-agent] AI agent drain job already queued for conversation ${params.conversationId} (state: ${result.existingState})`
-			);
-		}
+			messageId: messageMetadata.id,
+			messageCreatedAt: messageMetadata.createdAt,
+		});
+		console.log(
+			`[ai-agent] enqueue trigger result for conversation ${params.conversationId}: status=${result.status} recoveryMarked=${result.recoveryMarked}`
+		);
 	} catch (error) {
 		// Log errors but don't throw - we don't want to block message creation
 		console.error(
@@ -361,16 +298,11 @@ export async function triggerMessageNotificationWorkflow(params: {
 			visitorId: params.actor.visitorId,
 		});
 
-		// Also trigger AI agent response workflow (if configured)
-		// This runs in parallel with notifications - fire and forget
-		triggerAiAgentResponseWorkflow({
+		await triggerAiAgentResponseWorkflow({
 			conversationId: params.conversationId,
 			messageId: params.messageId,
 			websiteId: params.websiteId,
 			organizationId: params.organizationId,
-			visitorId: params.actor.visitorId,
-		}).catch((error) => {
-			console.error("[ai-agent] Background AI agent workflow failed:", error);
 		});
 	} else if (params.actor.type === "ai_agent") {
 		// AI agent sent a message -> treat as member message (notify visitor and participants)

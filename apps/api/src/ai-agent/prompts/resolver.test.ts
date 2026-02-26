@@ -100,6 +100,10 @@ describe("resolvePromptBundle", () => {
 		listAiAgentPromptDocumentsMock.mockClear();
 	});
 
+	it("keeps wait.md in dropped skill template names", () => {
+		expect(AI_AGENT_DROPPED_SKILL_TEMPLATE_NAMES).toContain("wait.md");
+	});
+
 	it("includes tool-attached skills for runtime-enabled tools", async () => {
 		const { resolvePromptBundle } = await resolverModulePromise;
 		const bundle = await resolvePromptBundle({

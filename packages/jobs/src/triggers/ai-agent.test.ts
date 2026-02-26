@@ -1,13 +1,7 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import type { AiAgentJobData } from "../types";
 
-const addUniqueJobMock = mock(async () => ({
-	status: "created" as const,
-	job: {
-		id: "wake-job-1",
-		getState: async () => "waiting",
-	},
-}));
+type MockJobState = "active" | "waiting" | "delayed" | "completed" | "failed";
 
 const waitUntilReadyMock = mock(async () => {});
 const getJobCountsMock = mock(async () => ({
@@ -16,19 +10,50 @@ const getJobCountsMock = mock(async () => ({
 	active: 0,
 }));
 const closeMock = mock(async () => {});
+const addMock = mock(
+	async (name: string, data: AiAgentJobData, opts: { jobId: string }) => {
+		lastAddedJobId = opts.jobId;
+		lastAddedData = data;
+		existingJobState = "waiting";
+		existingJobData = data;
+		return {
+			id: "wake-job-1",
+			data,
+			getState: async () => "waiting",
+		};
+	}
+);
 
-class MockQueue<T> {
+let existingJobState: MockJobState | null = null;
+let existingJobData: AiAgentJobData | null = null;
+let lastAddedJobId: string | null = null;
+let lastAddedData: AiAgentJobData | null = null;
+
+class MockQueue<T extends AiAgentJobData> {
 	waitUntilReady = waitUntilReadyMock;
 	getJobCounts = getJobCountsMock;
 	close = closeMock;
+	add = addMock;
+
+	async getJob(jobId: string) {
+		if (!existingJobState) {
+			return null;
+		}
+
+		return {
+			id: jobId,
+			data: existingJobData as T,
+			getState: async () => existingJobState,
+			remove: async () => {
+				existingJobState = null;
+				existingJobData = null;
+			},
+		};
+	}
 }
 
 mock.module("bullmq", () => ({
 	Queue: MockQueue,
-}));
-
-mock.module("../utils/unique-job", () => ({
-	addUniqueJob: addUniqueJobMock,
 }));
 
 const triggerModulePromise = import("./ai-agent");
@@ -45,24 +70,35 @@ function buildJobData(overrides: Partial<AiAgentJobData> = {}): AiAgentJobData {
 
 describe("createAiAgentTriggers", () => {
 	beforeEach(() => {
-		addUniqueJobMock.mockReset();
 		waitUntilReadyMock.mockReset();
 		getJobCountsMock.mockReset();
 		closeMock.mockReset();
+		addMock.mockReset();
 
-		addUniqueJobMock.mockResolvedValue({
-			status: "created",
-			job: {
-				id: "wake-job-1",
-				getState: async () => "waiting",
-			},
-		});
 		waitUntilReadyMock.mockResolvedValue(undefined);
 		getJobCountsMock.mockResolvedValue({ delayed: 0, waiting: 0, active: 0 });
 		closeMock.mockResolvedValue(undefined);
+		addMock.mockImplementation(
+			async (name: string, data: AiAgentJobData, opts: { jobId: string }) => {
+				lastAddedJobId = opts.jobId;
+				lastAddedData = data;
+				existingJobState = "waiting";
+				existingJobData = data;
+				return {
+					id: "wake-job-1",
+					data,
+					getState: async () => "waiting",
+				};
+			}
+		);
+
+		existingJobState = null;
+		existingJobData = null;
+		lastAddedJobId = null;
+		lastAddedData = null;
 	});
 
-	it("builds wake job IDs with triggerMessageId", async () => {
+	it("builds conversation-scoped wake job IDs", async () => {
 		const { createAiAgentTriggers } = await triggerModulePromise;
 		const triggers = createAiAgentTriggers({
 			connection: {} as never,
@@ -74,24 +110,16 @@ describe("createAiAgentTriggers", () => {
 		);
 
 		expect(result.status).toBe("created");
-		expect(addUniqueJobMock).toHaveBeenCalledTimes(1);
-		expect(addUniqueJobMock.mock.calls[0]?.[0]).toMatchObject({
-			jobId: "ai-agent-conv-1-msg-42",
-			jobName: "ai-agent",
-		});
+		expect(addMock).toHaveBeenCalledTimes(1);
+		expect(lastAddedJobId).toBe("ai-agent-conv-1");
+		expect(lastAddedData?.triggerMessageId).toBe("msg-42");
 
 		await triggers.close();
 	});
 
-	it("returns skipped when an equivalent wake job already exists", async () => {
-		addUniqueJobMock.mockResolvedValue({
-			status: "skipped",
-			reason: "debouncing",
-			existingState: "waiting",
-			existingJob: { id: "wake-job-1" },
-			existingJobData: buildJobData({ triggerMessageId: "msg-42" }),
-		});
-
+	it("returns skipped when an active wake already exists for the conversation", async () => {
+		existingJobState = "active";
+		existingJobData = buildJobData({ triggerMessageId: "msg-42" });
 		const { createAiAgentTriggers } = await triggerModulePromise;
 		const triggers = createAiAgentTriggers({
 			connection: {} as never,
@@ -104,11 +132,9 @@ describe("createAiAgentTriggers", () => {
 
 		expect(result).toEqual({
 			status: "skipped",
-			existingState: "waiting",
+			existingState: "active",
 		});
-		expect(addUniqueJobMock.mock.calls[0]?.[0]).toMatchObject({
-			jobId: "ai-agent-conv-1-msg-42",
-		});
+		expect(addMock).not.toHaveBeenCalled();
 
 		await triggers.close();
 	});
