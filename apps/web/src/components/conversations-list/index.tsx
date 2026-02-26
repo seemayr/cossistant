@@ -61,8 +61,7 @@ export function ConversationsList({
 	const isOnboarding = totalConversations === 0;
 
 	const showWaitingForReplyPill = selectedConversationStatus === null;
-	const showAnalytics =
-		selectedConversationStatus === null && websiteSlug === "cossistant";
+	const showAnalytics = selectedConversationStatus === null;
 	const analyticsItems =
 		showAnalytics && smartItems
 			? [{ type: "analytics" as const }, ...smartItems]
