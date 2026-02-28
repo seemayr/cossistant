@@ -132,11 +132,11 @@ export function createIdentifyVisitorTool(ctx: ToolContext) {
 						contactChanged = true;
 					}
 				} else {
-					if (!(trimmedName && trimmedEmail)) {
+					if (!trimmedEmail) {
 						cachedResult = {
 							success: false,
 							error:
-								"For first-time identification, provide both name and email in a single call",
+								"For first-time identification, provide email in the call. Name is optional.",
 						};
 						return cachedResult;
 					}

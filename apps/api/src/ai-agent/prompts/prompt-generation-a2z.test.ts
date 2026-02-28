@@ -508,8 +508,8 @@ Acme helps teams manage invoices, recurring billing, and account operations with
 
 		  The visitor is not identified yet. Ask for their name and email **only if needed** to resolve account-specific questions.
 
-		  - Ask for name + email when necessary (don't badger).
-		  - After receiving details, call identifyVisitor({ name, email }).
+		  - Ask for email when necessary (don't badger). Ask for name when helpful.
+		  - After receiving details, call identifyVisitor with email. Include name when available.
 		  - Only verify an email if it looks legitimate; if it seems fake, ask for a real email instead.
 		  - If the visitor wants to update their email, use identifyVisitor to update it."
 		  ,
@@ -601,8 +601,8 @@ Acme helps teams manage invoices, recurring billing, and account operations with
 
 		  The visitor is not identified yet. Ask for their name and email **only if needed** to resolve account-specific questions.
 
-		  - Ask for name + email when necessary (don't badger).
-		  - After receiving details, call identifyVisitor({ name, email }).
+		  - Ask for email when necessary (don't badger). Ask for name when helpful.
+		  - After receiving details, call identifyVisitor with email. Include name when available.
 		  - Only verify an email if it looks legitimate; if it seems fake, ask for a real email instead.
 		  - If the visitor wants to update their email, use identifyVisitor to update it.
 

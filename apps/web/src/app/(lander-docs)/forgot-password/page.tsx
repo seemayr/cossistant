@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { BaseSubmitButton } from "@/components/ui/base-submit-button";
 import { Input } from "@/components/ui/input";
+import { getAbsoluteAuthCallbackUrl } from "@/lib/auth/callback-url";
 import { forgetPassword } from "@/lib/auth/client";
 import {
 	buildInviteAwarePath,
@@ -29,13 +30,16 @@ export default function ForgotPasswordPage() {
 				inviteTarget,
 			})
 		: "/login";
-	const resetPasswordRedirectTo = isInviteFlow
+	const resetPasswordRedirectPath = isInviteFlow
 		? buildInviteAwarePath("/reset-password", {
 				callbackPath: inviteState.callbackPath,
 				inviteEmail,
 				inviteTarget,
 			})
 		: "/reset-password";
+	const resetPasswordRedirectTo = getAbsoluteAuthCallbackUrl(
+		resetPasswordRedirectPath
+	);
 
 	useEffect(() => {
 		if (isInviteFlow) {

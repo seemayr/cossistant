@@ -4,7 +4,9 @@ const redisMock = {} as never;
 const dbMock = {} as never;
 
 const getRedisMock = mock(() => redisMock);
-const getActiveAiAgentForWebsiteMock = mock(async () => ({ id: "ai-1" }));
+const getActiveAiAgentForWebsiteMock = mock(
+	async () => ({ id: "ai-1" }) as { id: string } | null
+);
 const isAiPausedForConversationMock = mock(async () => false);
 const updateConversationAiCursorMock = mock(async () => {});
 const enqueueAiAgentMessageMock = mock(async () => ({ added: true }));

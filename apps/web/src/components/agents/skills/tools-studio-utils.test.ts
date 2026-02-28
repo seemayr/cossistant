@@ -241,7 +241,6 @@ describe("tools-studio-utils", () => {
 			"sendPrivateMessage",
 			"respond",
 			"skip",
-			"wait",
 		]);
 	});
 });

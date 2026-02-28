@@ -137,7 +137,6 @@ export const auth = betterAuth({
 		admin(),
 		// Type assertion needed due to version mismatch between @polar-sh/better-auth and better-auth
 		polar({
-			// @ts-expect-error
 			client: polarClient,
 			createCustomerOnSignUp: false,
 			use: [portal(), usage()],

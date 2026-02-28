@@ -513,10 +513,12 @@ export async function runAiAgentPipeline(
 				return;
 			}
 
-			const charge = result?.toolCallsByName
+			const toolCallsForCredits =
+				result?.chargeableToolCallsByName ?? result?.toolCallsByName;
+			const charge = toolCallsForCredits
 				? calculateAiCreditCharge({
 						modelId: resolvedModelId,
-						toolCallsByName: result.toolCallsByName,
+						toolCallsByName: toolCallsForCredits,
 					})
 				: getMinimumAiCreditCharge(resolvedModelId);
 

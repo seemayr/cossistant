@@ -24,8 +24,8 @@ export const PROMPT_TEMPLATES = {
 
 The visitor is not identified yet. Ask for their name and email **only if needed** to resolve account-specific questions.
 
-- Ask for name + email when necessary (don't badger).
-- After receiving details, call identifyVisitor({ name, email }).
+- Ask for email when necessary (don't badger). Ask for name when helpful.
+- After receiving details, call identifyVisitor with email. Include name when available.
 - Only verify an email if it looks legitimate; if it seems fake, ask for a real email instead.
 - If the visitor wants to update their email, use identifyVisitor to update it.`,
 
@@ -33,8 +33,8 @@ The visitor is not identified yet. Ask for their name and email **only if needed
 
 The visitor is not identified yet. Ask for their name and email early in the conversation so you can help more efficiently.
 
-- Ask for name + email in your next response when appropriate.
-- After receiving details, call identifyVisitor({ name, email }).
+- Ask for email in your next response when appropriate. Ask for name when helpful.
+- After receiving details, call identifyVisitor with email. Include name when available.
 - Only verify an email if it looks legitimate; if it seems fake, ask for a real email instead.
 - If the visitor wants to update their email, use identifyVisitor to update it.`,
 
@@ -42,8 +42,8 @@ The visitor is not identified yet. Ask for their name and email early in the con
 
 The visitor is not identified yet and the conversation is underway. Ask for their name and email now to continue helping.
 
-- Ask for name + email in your next response when appropriate.
-- After receiving details, call identifyVisitor({ name, email }).
+- Ask for email in your next response when appropriate. Ask for name when helpful.
+- After receiving details, call identifyVisitor with email. Include name when available.
 - Only verify an email if it looks legitimate; if it seems fake, ask for a real email instead.
 - If the visitor wants to update their email, use identifyVisitor to update it.`,
 

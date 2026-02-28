@@ -72,6 +72,8 @@ export type GenerationResult = {
 	};
 	/** Full per-tool call counts from this generation */
 	toolCallsByName?: Record<string, number>;
+	/** Per-tool call counts that should be used for credit charging */
+	chargeableToolCallsByName?: Record<string, number>;
 	/** Total number of tool calls from this generation */
 	totalToolCalls?: number;
 	/** Custom skills explicitly read via loadSkill() in this run */
@@ -140,6 +142,10 @@ const TOOL_METADATA_BY_DEFAULT_SKILL_NAME = new Map(
 	AI_AGENT_TOOL_CATALOG.map((entry) => [entry.defaultSkill.name, entry])
 );
 const LOAD_SKILL_TOOL_NAME = "loadSkill";
+const BUILT_IN_TOOL_NAME_SET = new Set<string>([
+	...AI_AGENT_TOOL_CATALOG.map((t) => t.id),
+	LOAD_SKILL_TOOL_NAME,
+]);
 
 export type RuntimeCustomSkillCatalogEntry = {
 	fileName: string;
@@ -153,8 +159,21 @@ type ToolCallLike = {
 	toolName?: string;
 };
 
+type ToolResultLike = {
+	toolName?: string;
+	output?: unknown;
+};
+
+type ToolContentPartLike = {
+	type?: string;
+	toolName?: string;
+	output?: unknown;
+};
+
 type ToolStepLike = {
-	toolCalls?: ToolCallLike[];
+	toolCalls?: readonly ToolCallLike[];
+	toolResults?: readonly ToolResultLike[];
+	content?: readonly ToolContentPartLike[];
 };
 
 function clampToolInvocationBudget(
@@ -191,7 +210,7 @@ export function getNonFinishToolCallCount(
 }
 
 function countNonFinishToolCallsFromSteps(
-	steps: ToolStepLike[] | undefined
+	steps: readonly ToolStepLike[] | undefined
 ): number {
 	if (!steps || steps.length === 0) {
 		return 0;
@@ -213,6 +232,128 @@ function countNonFinishToolCallsFromSteps(
 	return total;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isBuiltInToolName(toolName: string): boolean {
+	return BUILT_IN_TOOL_NAME_SET.has(toolName);
+}
+
+function incrementToolCount(
+	counts: Record<string, number>,
+	toolName: string
+): void {
+	counts[toolName] = (counts[toolName] ?? 0) + 1;
+}
+
+function outputIndicatesToolFailure(output: unknown): boolean {
+	if (!isRecord(output)) {
+		return false;
+	}
+
+	if ("success" in output && output.success === false) {
+		return true;
+	}
+
+	return (
+		"success" in output &&
+		output.success !== true &&
+		typeof output.error === "string" &&
+		output.error.length > 0
+	);
+}
+
+export function buildFailedBuiltInToolCallsByName(
+	steps: readonly ToolStepLike[] | undefined
+): Record<string, number> {
+	if (!steps || steps.length === 0) {
+		return {};
+	}
+
+	const failedByName: Record<string, number> = {};
+
+	for (const step of steps) {
+		const contentParts = Array.isArray(step.content) ? step.content : [];
+
+		if (contentParts.length > 0) {
+			for (const part of contentParts) {
+				const partType = part?.type;
+				const toolName = part?.toolName;
+
+				if (!(toolName && typeof toolName === "string")) {
+					continue;
+				}
+				if (!isBuiltInToolName(toolName)) {
+					continue;
+				}
+
+				if (partType === "tool-error") {
+					incrementToolCount(failedByName, toolName);
+					continue;
+				}
+
+				if (
+					partType === "tool-result" &&
+					outputIndicatesToolFailure(part.output)
+				) {
+					incrementToolCount(failedByName, toolName);
+				}
+			}
+
+			continue;
+		}
+
+		for (const toolResult of step.toolResults ?? []) {
+			const toolName = toolResult?.toolName;
+			if (!(toolName && typeof toolName === "string")) {
+				continue;
+			}
+			if (!isBuiltInToolName(toolName)) {
+				continue;
+			}
+			if (outputIndicatesToolFailure(toolResult.output)) {
+				incrementToolCount(failedByName, toolName);
+			}
+		}
+	}
+
+	return failedByName;
+}
+
+export function getChargeableToolCallsByName(params: {
+	toolCallsByName: Record<string, number>;
+	failedBuiltInToolCallsByName?: Record<string, number>;
+}): Record<string, number> {
+	const failedByName = params.failedBuiltInToolCallsByName ?? {};
+	const chargeableByName: Record<string, number> = {};
+
+	for (const [toolName, rawCount] of Object.entries(params.toolCallsByName)) {
+		if (!Number.isFinite(rawCount) || rawCount <= 0) {
+			continue;
+		}
+
+		const attemptedCount = Math.floor(rawCount);
+		const failedCount = isBuiltInToolName(toolName)
+			? Math.max(
+					0,
+					Math.floor(
+						Number.isFinite(failedByName[toolName])
+							? (failedByName[toolName] as number)
+							: 0
+					)
+				)
+			: 0;
+		const chargeableCount = Math.max(0, attemptedCount - failedCount);
+
+		if (chargeableCount > 0) {
+			chargeableByName[toolName] = chargeableCount;
+		}
+	}
+
+	return chargeableByName;
+}
+
 function buildStopConditions(params: {
 	toolBudgetCap: number;
 	usedNonFinishCallsOffset?: number;
@@ -223,7 +364,7 @@ function buildStopConditions(params: {
 
 	return [
 		...finishToolNames.map((toolName) => hasToolCall(toolName)),
-		({ steps }: { steps: ToolStepLike[] }) =>
+		({ steps }: { steps: readonly ToolStepLike[] }) =>
 			usedNonFinishCallsOffset + countNonFinishToolCallsFromSteps(steps) >=
 			params.toolBudgetCap,
 		stepCountIs(params.toolBudgetCap + 2),
@@ -499,7 +640,7 @@ async function generateWithToolLoopAgent(input: {
 	stopWhen: Array<
 		| ReturnType<typeof hasToolCall>
 		| ReturnType<typeof stepCountIs>
-		| ((params: { steps: ToolStepLike[] }) => boolean)
+		| ((params: { steps: readonly ToolStepLike[] }) => boolean)
 	>;
 	abortSignal?: AbortSignal;
 }): Promise<Awaited<ReturnType<ToolLoopAgent["generate"]>>> {
@@ -618,6 +759,7 @@ export async function generate(
 				sendPrivateMessage: 0,
 			},
 			toolCallsByName,
+			chargeableToolCallsByName: toolCallsByName,
 			totalToolCalls: getTotalToolCalls(toolCallsByName),
 		};
 	}
@@ -717,7 +859,7 @@ export async function generate(
 	const systemPrompt = buildRuntimeSystemPrompt();
 	const prepareStep: PrepareStepFunction<ToolSet> = ({ steps }) => {
 		const nonFinishCallsUsed = countNonFinishToolCallsFromSteps(
-			(steps as ToolStepLike[] | undefined) ?? []
+			(steps as readonly ToolStepLike[] | undefined) ?? []
 		);
 		const budgetExhausted = nonFinishCallsUsed >= maxToolInvocationsPerRun;
 
@@ -818,6 +960,7 @@ export async function generate(
 					sendPrivateMessage: toolContext.counters?.sendPrivateMessage ?? 0,
 				},
 				toolCallsByName,
+				chargeableToolCallsByName: toolCallsByName,
 				totalToolCalls: getTotalToolCalls(toolCallsByName),
 				usedCustomSkills: buildUsedCustomSkills(),
 			};
@@ -839,6 +982,13 @@ export async function generate(
 		sdkToolCallsByName,
 		counterToolCallsByName
 	);
+	const failedBuiltInToolCallsByName = buildFailedBuiltInToolCallsByName(
+		result.steps as readonly ToolStepLike[] | undefined
+	);
+	const chargeableToolCallsByName = getChargeableToolCallsByName({
+		toolCallsByName,
+		failedBuiltInToolCallsByName,
+	});
 	const totalToolCalls = getTotalToolCalls(toolCallsByName);
 	const nonFinishToolCalls = getNonFinishToolCallCount(toolCallsByName);
 	const remainingNonFinishBudget = Math.max(
@@ -893,6 +1043,7 @@ export async function generate(
 						sendPrivateMessage: sendPrivateMessageCallCount,
 					},
 					toolCallsByName,
+					chargeableToolCallsByName,
 					totalToolCalls,
 					usedCustomSkills: buildUsedCustomSkills(),
 				};
@@ -920,6 +1071,7 @@ export async function generate(
 					sendPrivateMessage: sendPrivateMessageCallCount,
 				},
 				toolCallsByName,
+				chargeableToolCallsByName,
 				totalToolCalls,
 				usedCustomSkills: buildUsedCustomSkills(),
 			};
@@ -965,7 +1117,7 @@ export async function generate(
 					tools: repairTools,
 					prepareStep: ({ steps }) => {
 						const repairCallsUsed = countNonFinishToolCallsFromSteps(
-							(steps as ToolStepLike[] | undefined) ?? []
+							(steps as readonly ToolStepLike[] | undefined) ?? []
 						);
 						const totalUsed = nonFinishToolCalls + repairCallsUsed;
 						const budgetExhausted = totalUsed >= maxToolInvocationsPerRun;
@@ -998,6 +1150,11 @@ export async function generate(
 						toolCallsByName,
 						repairAbortToolCallsByName
 					);
+					const combinedRepairAbortChargeableToolCallsByName =
+						getChargeableToolCallsByName({
+							toolCallsByName: combinedRepairAbortToolCallsByName,
+							failedBuiltInToolCallsByName,
+						});
 					return {
 						decision: {
 							action: "skip" as const,
@@ -1011,6 +1168,8 @@ export async function generate(
 								combinedRepairAbortToolCallsByName.sendPrivateMessage ?? 0,
 						},
 						toolCallsByName: combinedRepairAbortToolCallsByName,
+						chargeableToolCallsByName:
+							combinedRepairAbortChargeableToolCallsByName,
 						totalToolCalls: getTotalToolCalls(
 							combinedRepairAbortToolCallsByName
 						),
@@ -1031,6 +1190,18 @@ export async function generate(
 				repairToolCallsByName,
 				repairCounterToolCallsByName
 			);
+			const repairFailedBuiltInToolCallsByName =
+				buildFailedBuiltInToolCallsByName(
+					repairResult.steps as readonly ToolStepLike[] | undefined
+				);
+			const combinedFailedBuiltInToolCallsByName = mergeToolCallsByName(
+				failedBuiltInToolCallsByName,
+				repairFailedBuiltInToolCallsByName
+			);
+			const repairChargeableToolCallsByName = getChargeableToolCallsByName({
+				toolCallsByName: combinedRepairToolCallsByName,
+				failedBuiltInToolCallsByName: combinedFailedBuiltInToolCallsByName,
+			});
 			const repairTotalToolCalls = getTotalToolCalls(
 				combinedRepairToolCallsByName
 			);
@@ -1062,6 +1233,7 @@ export async function generate(
 						sendPrivateMessage: repairSendPrivateMessageCalls,
 					},
 					toolCallsByName: combinedRepairToolCallsByName,
+					chargeableToolCallsByName: repairChargeableToolCallsByName,
 					totalToolCalls: repairTotalToolCalls,
 					usedCustomSkills: buildUsedCustomSkills(),
 				};
@@ -1089,6 +1261,7 @@ export async function generate(
 					sendPrivateMessage: repairSendPrivateMessageCalls,
 				},
 				toolCallsByName: combinedRepairToolCallsByName,
+				chargeableToolCallsByName: repairChargeableToolCallsByName,
 				totalToolCalls: repairTotalToolCalls,
 				usedCustomSkills: buildUsedCustomSkills(),
 			};
@@ -1121,6 +1294,7 @@ export async function generate(
 				sendPrivateMessage: sendPrivateMessageCallCount,
 			},
 			toolCallsByName,
+			chargeableToolCallsByName,
 			totalToolCalls,
 			usedCustomSkills: buildUsedCustomSkills(),
 		};
@@ -1159,6 +1333,7 @@ export async function generate(
 			sendPrivateMessage: sendPrivateMessageCallCount,
 		},
 		toolCallsByName,
+		chargeableToolCallsByName,
 		totalToolCalls,
 		usedCustomSkills: buildUsedCustomSkills(),
 	};

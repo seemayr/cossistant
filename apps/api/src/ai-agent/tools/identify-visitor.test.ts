@@ -89,7 +89,7 @@ describe("createIdentifyVisitorTool", () => {
 		createConversationEventMock.mockResolvedValue(undefined);
 	});
 
-	it("requires name and email together for first-time identification", async () => {
+	it("requires email for first-time identification", async () => {
 		const { createIdentifyVisitorTool } = await identifyVisitorModulePromise;
 		getCompleteVisitorWithContactMock.mockResolvedValue({
 			id: "visitor-1",
@@ -108,9 +108,55 @@ describe("createIdentifyVisitorTool", () => {
 		const result = await tool.execute({ name: "Jack" });
 
 		expect(result.success).toBe(false);
-		expect(result.error).toContain("provide both name and email");
+		expect(result.error).toContain("provide email");
 		expect(identifyContactMock).toHaveBeenCalledTimes(0);
 		expect(linkVisitorToContactMock).toHaveBeenCalledTimes(0);
+	});
+
+	it("allows email-only first-time identification", async () => {
+		const { createIdentifyVisitorTool } = await identifyVisitorModulePromise;
+		getCompleteVisitorWithContactMock
+			.mockResolvedValueOnce({
+				id: "visitor-1",
+				contact: null,
+			})
+			.mockResolvedValueOnce({
+				id: "visitor-1",
+				websiteId: "site-1",
+				organizationId: "org-1",
+				contact: {
+					id: "contact-1",
+					name: null,
+					email: "jack@example.com",
+					image: null,
+				},
+			});
+
+		const tool = createIdentifyVisitorTool(
+			createToolContext() as never
+		) as unknown as {
+			execute: (input: { email?: string; name?: string }) => Promise<{
+				success: boolean;
+				data?: {
+					visitorId: string;
+					contactId: string;
+					eventEmitted: boolean;
+				};
+			}>;
+		};
+
+		const result = await tool.execute({ email: "jack@example.com" });
+
+		expect(result.success).toBe(true);
+		expect(result.data?.eventEmitted).toBe(true);
+		expect(identifyContactMock).toHaveBeenCalledTimes(1);
+		const identifyArg = identifyContactMock.mock.calls[0]?.[1] as {
+			email?: string;
+			name?: string;
+		};
+		expect(identifyArg.email).toBe("jack@example.com");
+		expect(identifyArg.name).toBeUndefined();
+		expect(linkVisitorToContactMock).toHaveBeenCalledTimes(1);
 	});
 
 	it("returns cached result on second call in the same run", async () => {
