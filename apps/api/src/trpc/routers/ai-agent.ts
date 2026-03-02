@@ -427,6 +427,25 @@ export function getModelSelectionError(params: {
 	return null;
 }
 
+const GENERATE_BASE_PROMPT_FIRECRAWL_SCRAPE_MAX_AGE_MS = 3_600_000;
+
+export function getGenerateBasePromptFirecrawlOptions(): {
+	scrapeOptions: NonNullable<
+		Parameters<typeof firecrawlService.extractBrandInfo>[1]
+	>;
+	mapOptions: Parameters<typeof firecrawlService.mapSite>[1];
+} {
+	return {
+		scrapeOptions: {
+			maxAge: GENERATE_BASE_PROMPT_FIRECRAWL_SCRAPE_MAX_AGE_MS,
+		},
+		mapOptions: {
+			limit: 100,
+			ignoreCache: false,
+		},
+	};
+}
+
 async function resolveAiAgentModelForRead(params: {
 	db: Parameters<typeof updateAiAgentModel>[0];
 	agent: Awaited<ReturnType<typeof getAiAgentForWebsite>>;
@@ -715,15 +734,18 @@ export const aiAgentRouter = createTRPCRouter({
 			if (input.sourceUrl) {
 				// Run brand extraction (which scrapes internally) and site mapping in parallel
 				// extractBrandInfo returns company name, description, logo, favicon, AND markdown content
-				// Use maxAge of 1 hour (in ms) to enable Firecrawl caching - avoids re-paying
+				// Use scrape maxAge of 1 hour (in ms) to enable Firecrawl caching - avoids re-paying
 				// for API calls when user refreshes the page during onboarding
-				const cacheOptions = { maxAge: 3_600_000 };
+				const firecrawlOptions = getGenerateBasePromptFirecrawlOptions();
 				[brandInfo, mapResult] = await Promise.all([
-					firecrawlService.extractBrandInfo(input.sourceUrl, cacheOptions),
-					firecrawlService.mapSite(input.sourceUrl, {
-						limit: 100,
-						ignoreCache: false,
-					}),
+					firecrawlService.extractBrandInfo(
+						input.sourceUrl,
+						firecrawlOptions.scrapeOptions
+					),
+					firecrawlService.mapSite(
+						input.sourceUrl,
+						firecrawlOptions.mapOptions
+					),
 				]);
 
 				// Log what Firecrawl returned for debugging

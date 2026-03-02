@@ -1,5 +1,8 @@
 import { describe, expect, it } from "bun:test";
-import { getModelSelectionError } from "./ai-agent";
+import {
+	getGenerateBasePromptFirecrawlOptions,
+	getModelSelectionError,
+} from "./ai-agent";
 
 describe("ai-agent router model validation", () => {
 	it("rejects unknown models", () => {
@@ -27,5 +30,22 @@ describe("ai-agent router model validation", () => {
 		});
 
 		expect(result).toBeNull();
+	});
+});
+
+describe("generateBasePrompt Firecrawl options", () => {
+	it("uses scrape maxAge and map ignoreCache without maxAge", () => {
+		const firecrawlOptions = getGenerateBasePromptFirecrawlOptions();
+
+		expect(firecrawlOptions.scrapeOptions).toEqual({
+			maxAge: 3_600_000,
+		});
+		expect(firecrawlOptions.mapOptions).toEqual({
+			limit: 100,
+			ignoreCache: false,
+		});
+		expect(
+			"maxAge" in (firecrawlOptions.mapOptions as Record<string, unknown>)
+		).toBe(false);
 	});
 });

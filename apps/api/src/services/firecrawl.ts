@@ -256,13 +256,60 @@ export type MapOptions = {
 	limit?: number;
 	/** Firecrawl v2 map option for bypassing cache */
 	ignoreCache?: boolean;
-	/**
-	 * Deprecated compatibility field.
-	 * Firecrawl map endpoint does not support maxAge.
-	 * When set to 0 or less, it forces ignoreCache=true.
-	 */
-	maxAge?: number;
 };
+
+const FIRECRAWL_MAP_OPTION_KEYS = new Set<keyof MapOptions>([
+	"search",
+	"ignoreSitemap",
+	"sitemapOnly",
+	"includeSubdomains",
+	"limit",
+	"ignoreCache",
+]);
+
+type SanitizedMapOptions = {
+	search?: string;
+	ignoreSitemap?: boolean;
+	sitemapOnly?: boolean;
+	includeSubdomains: boolean;
+	limit: number;
+	ignoreCache?: boolean;
+};
+
+function sanitizeMapOptions(options: MapOptions): {
+	sanitized: SanitizedMapOptions;
+	unknownKeys: string[];
+} {
+	const unknownKeys = Object.keys(options as Record<string, unknown>).filter(
+		(key) => !FIRECRAWL_MAP_OPTION_KEYS.has(key as keyof MapOptions)
+	);
+
+	const sanitized: SanitizedMapOptions = {
+		includeSubdomains: options.includeSubdomains ?? false,
+		limit: options.limit ?? 100,
+	};
+
+	if (options.search) {
+		sanitized.search = options.search;
+	}
+
+	if (options.ignoreSitemap) {
+		sanitized.ignoreSitemap = true;
+	}
+
+	if (options.sitemapOnly) {
+		sanitized.sitemapOnly = true;
+	}
+
+	if (options.ignoreCache !== undefined) {
+		sanitized.ignoreCache = options.ignoreCache;
+	}
+
+	return {
+		sanitized,
+		unknownKeys,
+	};
+}
 
 function sleep(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
@@ -1153,26 +1200,32 @@ export class FirecrawlService {
 		console.log("[firecrawl] mapSite called for:", url, "options:", options);
 
 		try {
-			const requestBody: Record<string, unknown> = {
-				url,
-				includeSubdomains: options.includeSubdomains ?? false,
-				limit: options.limit ?? 100,
-			};
-
-			if (options.search) {
-				requestBody.search = options.search;
+			const { sanitized: sanitizedOptions, unknownKeys } =
+				sanitizeMapOptions(options);
+			if (unknownKeys.length > 0) {
+				console.warn("[firecrawl] mapSite dropping unsupported options", {
+					unknownKeys,
+				});
 			}
 
-			if (options.sitemapOnly) {
+			const requestBody: Record<string, unknown> = {
+				url,
+				includeSubdomains: sanitizedOptions.includeSubdomains,
+				limit: sanitizedOptions.limit,
+			};
+
+			if (sanitizedOptions.search) {
+				requestBody.search = sanitizedOptions.search;
+			}
+
+			if (sanitizedOptions.sitemapOnly) {
 				requestBody.sitemap = "only";
-			} else if (options.ignoreSitemap) {
+			} else if (sanitizedOptions.ignoreSitemap) {
 				requestBody.sitemap = "skip";
 			}
 
-			if (options.ignoreCache !== undefined) {
-				requestBody.ignoreCache = options.ignoreCache;
-			} else if (options.maxAge !== undefined && options.maxAge <= 0) {
-				requestBody.ignoreCache = true;
+			if (sanitizedOptions.ignoreCache !== undefined) {
+				requestBody.ignoreCache = sanitizedOptions.ignoreCache;
 			}
 
 			const response = await this.requestWithRetry("/map", {
