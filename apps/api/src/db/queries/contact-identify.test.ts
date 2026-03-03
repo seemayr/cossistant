@@ -1,18 +1,18 @@
 import { describe, expect, it, mock } from "bun:test";
 import { contact } from "../schema";
-import { identifyContact } from "./contact";
+import { identifyContact, upsertContactByExternalId } from "./contact";
 
-describe("identifyContact", () => {
-	it("upserts by externalId using conflict target, reactivates, and merges metadata", async () => {
-		const returnedContact = {
-			id: "contact-1",
+describe("upsertContactByExternalId", () => {
+	it("returns created when insert succeeds", async () => {
+		const createdContact = {
+			id: "contact-created",
 			websiteId: "site-1",
 			organizationId: "org-1",
 			externalId: "user-123",
 			email: "user@example.com",
 			name: "User",
 			image: null,
-			metadata: { plan: "pro", role: "admin" },
+			metadata: null,
 			contactOrganizationId: null,
 			userId: null,
 			createdAt: "2026-02-24T01:00:00.000Z",
@@ -21,16 +21,16 @@ describe("identifyContact", () => {
 			notificationSettings: null,
 		};
 
-		const returningMock = mock((async () => [returnedContact]) as () => Promise<
+		const returningMock = mock((async () => [createdContact]) as () => Promise<
 			unknown[]
 		>);
-		const onConflictDoUpdateMock = mock((() => ({
+		const onConflictDoNothingMock = mock((() => ({
 			returning: returningMock,
 		})) as (args: unknown) => { returning: () => Promise<unknown[]> });
 		const valuesMock = mock((() => ({
-			onConflictDoUpdate: onConflictDoUpdateMock,
+			onConflictDoNothing: onConflictDoNothingMock,
 		})) as (values: unknown) => {
-			onConflictDoUpdate: (args: unknown) => {
+			onConflictDoNothing: (args: unknown) => {
 				returning: () => Promise<unknown[]>;
 			};
 		});
@@ -38,46 +38,134 @@ describe("identifyContact", () => {
 			values: valuesMock,
 		})) as (table: unknown) => {
 			values: (values: unknown) => {
-				onConflictDoUpdate: (args: unknown) => {
+				onConflictDoNothing: (args: unknown) => {
 					returning: () => Promise<unknown[]>;
 				};
 			};
 		});
+		const updateMock = mock(() => {
+			throw new Error("update should not be called");
+		});
 
 		const db = {
 			insert: insertMock,
+			update: updateMock,
 		};
 
-		const result = await identifyContact(db as never, {
+		const result = await upsertContactByExternalId(db as never, {
 			websiteId: "site-1",
 			organizationId: "org-1",
 			externalId: "user-123",
 			email: "user@example.com",
 			name: "User",
+		});
+
+		expect(result).toEqual({
+			status: "created",
+			contact: createdContact,
+		});
+		expect(onConflictDoNothingMock).toHaveBeenCalledTimes(1);
+		const conflictArg = onConflictDoNothingMock.mock.calls[0]?.[0] as {
+			target: unknown[];
+		};
+		expect(conflictArg.target).toEqual([contact.externalId, contact.websiteId]);
+		expect(updateMock).toHaveBeenCalledTimes(0);
+	});
+
+	it("falls back to update when insert conflicts and merges metadata", async () => {
+		const updatedContact = {
+			id: "contact-existing",
+			websiteId: "site-1",
+			organizationId: "org-1",
+			externalId: "user-123",
+			email: "new@example.com",
+			name: "Updated Name",
+			image: null,
+			metadata: { plan: "pro", role: "admin" },
+			contactOrganizationId: null,
+			userId: null,
+			createdAt: "2026-02-23T01:00:00.000Z",
+			updatedAt: "2026-02-24T01:00:00.000Z",
+			deletedAt: null,
+			notificationSettings: null,
+		};
+
+		const insertReturningMock = mock((async () => []) as () => Promise<
+			unknown[]
+		>);
+		const onConflictDoNothingMock = mock((() => ({
+			returning: insertReturningMock,
+		})) as (args: unknown) => { returning: () => Promise<unknown[]> });
+		const valuesMock = mock((() => ({
+			onConflictDoNothing: onConflictDoNothingMock,
+		})) as (values: unknown) => {
+			onConflictDoNothing: (args: unknown) => {
+				returning: () => Promise<unknown[]>;
+			};
+		});
+		const insertMock = mock((() => ({
+			values: valuesMock,
+		})) as (table: unknown) => {
+			values: (values: unknown) => {
+				onConflictDoNothing: (args: unknown) => {
+					returning: () => Promise<unknown[]>;
+				};
+			};
+		});
+
+		const updateReturningMock = mock((async () => [
+			updatedContact,
+		]) as () => Promise<unknown[]>);
+		const updateWhereMock = mock((() => ({
+			returning: updateReturningMock,
+		})) as (where: unknown) => { returning: () => Promise<unknown[]> });
+		const updateSetMock = mock((() => ({
+			where: updateWhereMock,
+		})) as (set: unknown) => {
+			where: (where: unknown) => { returning: () => Promise<unknown[]> };
+		});
+		const updateMock = mock((() => ({
+			set: updateSetMock,
+		})) as (table: unknown) => {
+			set: (set: unknown) => {
+				where: (where: unknown) => { returning: () => Promise<unknown[]> };
+			};
+		});
+
+		const db = {
+			insert: insertMock,
+			update: updateMock,
+		};
+
+		const result = await upsertContactByExternalId(db as never, {
+			websiteId: "site-1",
+			organizationId: "org-1",
+			externalId: "user-123",
+			email: "new@example.com",
+			name: "Updated Name",
 			metadata: { plan: "pro", role: "admin" },
 		});
 
-		expect(result).toEqual(returnedContact);
-		expect(insertMock).toHaveBeenCalledTimes(1);
-		expect(valuesMock).toHaveBeenCalledTimes(1);
-		expect(onConflictDoUpdateMock).toHaveBeenCalledTimes(1);
+		expect(result).toEqual({
+			status: "updated",
+			contact: updatedContact,
+		});
+		expect(updateSetMock).toHaveBeenCalledTimes(1);
 
-		const conflictArg = onConflictDoUpdateMock.mock.calls[0]?.[0] as {
-			target: unknown[];
-			set: Record<string, unknown>;
+		const updateArg = updateSetMock.mock.calls[0]?.[0] as {
+			updatedAt: string;
+			deletedAt: null;
+			metadata: { queryChunks?: unknown[] };
 		};
 
-		expect(conflictArg.target).toEqual([contact.externalId, contact.websiteId]);
-		expect(conflictArg.set.deletedAt).toBeNull();
-		expect(conflictArg.set.updatedAt).toEqual(expect.any(String));
-
-		const metadataSql = conflictArg.set.metadata as {
-			queryChunks?: unknown[];
-		};
-		expect(Array.isArray(metadataSql.queryChunks)).toBe(true);
-		expect((metadataSql.queryChunks ?? []).length).toBeGreaterThan(0);
+		expect(updateArg.updatedAt).toEqual(expect.any(String));
+		expect(updateArg.deletedAt).toBeNull();
+		expect(Array.isArray(updateArg.metadata.queryChunks)).toBe(true);
+		expect((updateArg.metadata.queryChunks ?? []).length).toBeGreaterThan(0);
 	});
+});
 
+describe("identifyContact", () => {
 	it("keeps email-only update path and merges metadata in-memory", async () => {
 		const existingContact = {
 			id: "contact-existing",
@@ -125,8 +213,12 @@ describe("identifyContact", () => {
 				where: (where: unknown) => { returning: () => Promise<unknown[]> };
 			};
 		});
+		const insertMock = mock(() => {
+			throw new Error("insert should not be called for email-only update path");
+		});
 
 		const db = {
+			insert: insertMock,
 			select: selectMock,
 			update: updateMock,
 		};

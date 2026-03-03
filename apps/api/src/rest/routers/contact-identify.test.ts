@@ -5,6 +5,25 @@ const safelyExtractRequestDataMock = mock((async () => ({})) as (
 ) => Promise<unknown>);
 const validateResponseMock = mock(<T>(value: T) => value);
 
+const createContactMock = mock((async () => ({
+	id: "contact-created",
+	externalId: null,
+	websiteId: "site-1",
+	organizationId: "org-1",
+	createdAt: "2026-02-24T01:00:00.000Z",
+	updatedAt: "2026-02-24T01:00:00.000Z",
+})) as (...args: unknown[]) => Promise<unknown>);
+const upsertContactByExternalIdMock = mock((async () => ({
+	status: "created",
+	contact: {
+		id: "contact-upserted",
+		externalId: "user-123",
+		websiteId: "site-1",
+		organizationId: "org-1",
+		createdAt: "2026-02-24T01:00:00.000Z",
+		updatedAt: "2026-02-24T01:00:00.000Z",
+	},
+})) as (...args: unknown[]) => Promise<unknown>);
 const identifyContactMock = mock((async () => ({
 	id: "contact-1",
 	externalId: "user-123",
@@ -34,9 +53,7 @@ mock.module("@api/utils/validate", () => ({
 }));
 
 mock.module("@api/db/queries/contact", () => ({
-	createContact: mock(
-		(async () => null) as (...args: unknown[]) => Promise<null>
-	),
+	createContact: createContactMock,
 	createContactOrganization: mock(
 		(async () => null) as (...args: unknown[]) => Promise<null>
 	),
@@ -57,6 +74,7 @@ mock.module("@api/db/queries/contact", () => ({
 	mergeContactMetadata: mock(
 		(async () => null) as (...args: unknown[]) => Promise<null>
 	),
+	upsertContactByExternalId: upsertContactByExternalIdMock,
 	updateContact: mock(
 		(async () => null) as (...args: unknown[]) => Promise<null>
 	),
@@ -91,6 +109,8 @@ describe("contact identify route", () => {
 	beforeEach(() => {
 		safelyExtractRequestDataMock.mockReset();
 		validateResponseMock.mockReset();
+		createContactMock.mockReset();
+		upsertContactByExternalIdMock.mockReset();
 		identifyContactMock.mockReset();
 		linkVisitorToContactMock.mockReset();
 		findVisitorForWebsiteMock.mockReset();
@@ -100,6 +120,25 @@ describe("contact identify route", () => {
 		realtimeEmitMock.mockReset();
 
 		validateResponseMock.mockImplementation((value) => value);
+		createContactMock.mockResolvedValue({
+			id: "contact-created",
+			externalId: null,
+			websiteId: "site-1",
+			organizationId: "org-1",
+			createdAt: "2026-02-24T01:00:00.000Z",
+			updatedAt: "2026-02-24T01:00:00.000Z",
+		});
+		upsertContactByExternalIdMock.mockResolvedValue({
+			status: "created",
+			contact: {
+				id: "contact-upserted",
+				externalId: "user-123",
+				websiteId: "site-1",
+				organizationId: "org-1",
+				createdAt: "2026-02-24T01:00:00.000Z",
+				updatedAt: "2026-02-24T01:00:00.000Z",
+			},
+		});
 		identifyContactMock.mockResolvedValue({
 			id: "contact-1",
 			externalId: "user-123",
@@ -185,5 +224,108 @@ describe("contact identify route", () => {
 		};
 		expect(identifyArg.externalId).toBe("user-123");
 		expect(identifyArg.email).toBeUndefined();
+	});
+
+	it("POST /contacts returns 201 when externalId upsert creates a new contact", async () => {
+		safelyExtractRequestDataMock.mockResolvedValue({
+			db: {},
+			website: {
+				id: "site-1",
+				organizationId: "org-1",
+			},
+			body: {
+				externalId: "  user-123  ",
+				email: "user@example.com",
+				name: "User",
+				image: undefined,
+				metadata: undefined,
+				contactOrganizationId: undefined,
+			},
+		});
+		upsertContactByExternalIdMock.mockResolvedValue({
+			status: "created",
+			contact: {
+				id: "contact-created",
+				externalId: "user-123",
+				websiteId: "site-1",
+				organizationId: "org-1",
+			},
+		});
+
+		const { contactRouter } = await contactRouterModulePromise;
+		const response = await contactRouter.request(
+			new Request("http://localhost/", {
+				method: "POST",
+			})
+		);
+
+		expect(response.status).toBe(201);
+		expect(upsertContactByExternalIdMock).toHaveBeenCalledTimes(1);
+		expect(createContactMock).toHaveBeenCalledTimes(0);
+
+		const upsertArg = upsertContactByExternalIdMock.mock.calls[0]?.[1] as {
+			externalId: string;
+		};
+		expect(upsertArg.externalId).toBe("user-123");
+	});
+
+	it("POST /contacts returns 200 when externalId upsert updates an existing contact", async () => {
+		safelyExtractRequestDataMock.mockResolvedValue({
+			db: {},
+			website: {
+				id: "site-1",
+				organizationId: "org-1",
+			},
+			body: {
+				externalId: "user-123",
+				email: "updated@example.com",
+				name: "Updated User",
+			},
+		});
+		upsertContactByExternalIdMock.mockResolvedValue({
+			status: "updated",
+			contact: {
+				id: "contact-existing",
+				externalId: "user-123",
+				websiteId: "site-1",
+				organizationId: "org-1",
+			},
+		});
+
+		const { contactRouter } = await contactRouterModulePromise;
+		const response = await contactRouter.request(
+			new Request("http://localhost/", {
+				method: "POST",
+			})
+		);
+
+		expect(response.status).toBe(200);
+		expect(upsertContactByExternalIdMock).toHaveBeenCalledTimes(1);
+		expect(createContactMock).toHaveBeenCalledTimes(0);
+	});
+
+	it("POST /contacts keeps create-only behavior when externalId is not provided", async () => {
+		safelyExtractRequestDataMock.mockResolvedValue({
+			db: {},
+			website: {
+				id: "site-1",
+				organizationId: "org-1",
+			},
+			body: {
+				email: "no-external-id@example.com",
+				name: "No External ID",
+			},
+		});
+
+		const { contactRouter } = await contactRouterModulePromise;
+		const response = await contactRouter.request(
+			new Request("http://localhost/", {
+				method: "POST",
+			})
+		);
+
+		expect(response.status).toBe(201);
+		expect(upsertContactByExternalIdMock).toHaveBeenCalledTimes(0);
+		expect(createContactMock).toHaveBeenCalledTimes(1);
 	});
 });

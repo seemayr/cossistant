@@ -26,6 +26,7 @@ import { protectedPublicApiKeyMiddleware } from "../middleware";
 import type { RestContext } from "../types";
 
 export const visitorRouter = new OpenAPIHono<RestContext>();
+const COUNTRY_CODE_REGEX = /^[A-Z]{2}$/;
 
 function formatVisitorResponse(record: VisitorRecord): VisitorResponse {
 	return {
@@ -75,6 +76,18 @@ function parsePreferredLocale(headerValue: string | null): string | null {
 		return null;
 	}
 	return headerValue.split(",").at(0) ?? null;
+}
+
+function normalizeCountryCode(code?: string | null): string | null {
+	if (!code) {
+		return null;
+	}
+	const trimmed = code.trim();
+	if (trimmed.length !== 2) {
+		return null;
+	}
+	const normalizedCode = trimmed.toUpperCase();
+	return COUNTRY_CODE_REGEX.test(normalizedCode) ? normalizedCode : null;
 }
 
 // RFC 7239 Forwarded header can contain multiple comma-separated entries. Each entry can
@@ -219,18 +232,19 @@ function extractNetworkContext(request: Context<RestContext>["req"]): {
 	setIfPresent(networkContext, "region", region);
 	setIfPresent(networkContext, "timezone", timezoneHeader);
 
-	if (countryCode) {
-		networkContext.countryCode = countryCode.toUpperCase();
+	const normalizedEdgeCountryCode = normalizeCountryCode(countryCode);
+	if (normalizedEdgeCountryCode) {
+		networkContext.countryCode = normalizedEdgeCountryCode;
 	}
 	// Country name is only reliable when provided by edge headers.
 	// Attempt a display name when a code exists to enrich analytics, but avoid guesses otherwise.
-	if (countryCode && typeof Intl.DisplayNames !== "undefined") {
+	if (normalizedEdgeCountryCode && typeof Intl.DisplayNames !== "undefined") {
 		try {
 			const display = new Intl.DisplayNames([preferredLocale || "en"], {
 				type: "region",
 			});
 			networkContext.country =
-				display.of(countryCode.toUpperCase()) ?? networkContext.country;
+				display.of(normalizedEdgeCountryCode) ?? networkContext.country;
 		} catch (_error) {
 			// Ignore failures silently
 		}
@@ -369,8 +383,28 @@ visitorRouter.openapi(
 				);
 			}
 
-			const now = new Date();
+			const normalizedBodyCountryCode = normalizeCountryCode(body.countryCode);
+			if (
+				typeof body.countryCode === "string" &&
+				normalizedBodyCountryCode === null
+			) {
+				return c.json(
+					{
+						error: "BAD_REQUEST",
+						message: "countryCode must be a valid ISO 3166-1 alpha-2 code",
+					},
+					400
+				);
+			}
 
+			const normalizedBody: UpdateVisitorRequest = {
+				...body,
+				...(normalizedBodyCountryCode
+					? { countryCode: normalizedBodyCountryCode }
+					: {}),
+			};
+
+			const now = new Date();
 			const {
 				context: networkContext,
 				preferredLocale,
@@ -381,25 +415,27 @@ visitorRouter.openapi(
 			const hasCountryInBody =
 				isCountryStringInBody && body.country && body.country.trim().length > 0;
 
-			const isCountryCodeStringInBody = typeof body.countryCode === "string";
-			const hasCountryCodeInBody =
-				isCountryCodeStringInBody &&
-				body.countryCode &&
-				body.countryCode.trim().length > 0;
+			const hasCountryCodeInBody = normalizedBodyCountryCode !== null;
 
 			const localeCandidate =
-				body.language ?? networkContext.language ?? preferredLocale;
+				normalizedBody.language ?? networkContext.language ?? preferredLocale;
 			const timezoneCandidate =
-				body.timezone ?? networkContext.timezone ?? timezoneFromHeaders;
-			const cityCandidate = body.city ?? networkContext.city ?? null;
+				normalizedBody.timezone ??
+				networkContext.timezone ??
+				timezoneFromHeaders;
+			const cityCandidate = normalizedBody.city ?? networkContext.city ?? null;
 
 			const countryDetails = resolveCountryDetails({
-				country: body.country ?? networkContext.country ?? null,
-				countryCode: body.countryCode ?? networkContext.countryCode ?? null,
+				country: normalizedBody.country ?? networkContext.country ?? null,
+				countryCode:
+					normalizedBodyCountryCode ?? networkContext.countryCode ?? null,
 				locale: localeCandidate ?? null,
 				timezone: timezoneCandidate ?? null,
 				city: cityCandidate,
 			});
+			const normalizedDerivedCountryCode = normalizeCountryCode(
+				countryDetails.code
+			);
 
 			const derivedCountryUpdate: Partial<UpdateVisitorRequest> = {};
 
@@ -407,8 +443,8 @@ visitorRouter.openapi(
 				// Country code already provided in request body
 			} else if (networkContext.countryCode) {
 				// Country code already available from network context
-			} else if (countryDetails.code) {
-				derivedCountryUpdate.countryCode = countryDetails.code;
+			} else if (normalizedDerivedCountryCode) {
+				derivedCountryUpdate.countryCode = normalizedDerivedCountryCode;
 			}
 
 			if (hasCountryInBody) {
@@ -424,7 +460,7 @@ visitorRouter.openapi(
 				websiteId: website.id,
 				data: {
 					...networkContext,
-					...body,
+					...normalizedBody,
 					...derivedCountryUpdate,
 					lastSeenAt: now.toISOString(),
 					updatedAt: now.toISOString(),

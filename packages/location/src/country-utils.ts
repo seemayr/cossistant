@@ -23,6 +23,9 @@ type CountryDetails = {
 };
 
 const COUNTRY_DATA = countriesIntl as CountryRecord[];
+const UPPERCASE_TWO_LETTER_REGEX = /^[A-Z]{2}$/;
+const LOWERCASE_TWO_LETTER_REGEX = /^[a-z]{2}$/;
+const LOCALE_SEPARATOR_REGEX = /[-_]/;
 
 function normalizeKey(value: string): string {
 	return value
@@ -58,7 +61,11 @@ function normalizeCountryCode(code?: string | null): string | null {
 	if (trimmed.length !== 2) {
 		return null;
 	}
-	return trimmed.toUpperCase();
+	const normalizedCode = trimmed.toUpperCase();
+	if (!UPPERCASE_TWO_LETTER_REGEX.test(normalizedCode)) {
+		return null;
+	}
+	return normalizedCode;
 }
 
 export function getFlagEmoji(code?: string | null): string | null {
@@ -77,10 +84,6 @@ export function getFlagEmoji(code?: string | null): string | null {
 	return country?.emoji ?? null;
 }
 
-const UPPERCASE_TWO_LETTER_REGEX = /^[A-Z]{2}$/;
-const LOWERCASE_TWO_LETTER_REGEX = /^[a-z]{2}$/;
-const LOCALE_SEPARATOR_REGEX = /[-_]/;
-
 export function inferCountryCodeFromLocale(
 	locale?: string | null
 ): string | null {
@@ -91,7 +94,7 @@ export function inferCountryCodeFromLocale(
 	try {
 		const intlLocale = new Intl.Locale(locale);
 		if (intlLocale.region) {
-			return intlLocale.region.toUpperCase();
+			return normalizeCountryCode(intlLocale.region);
 		}
 	} catch (_error) {
 		// Ignore parsing failures and fall back to manual parsing

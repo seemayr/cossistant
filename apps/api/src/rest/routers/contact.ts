@@ -11,6 +11,7 @@ import {
 	mergeContactMetadata,
 	updateContact,
 	updateContactOrganization,
+	upsertContactByExternalId,
 } from "@api/db/queries/contact";
 import {
 	findVisitorForWebsite,
@@ -272,7 +273,8 @@ contactRouter.openapi(
 		method: "post",
 		path: "/",
 		summary: "Create a contact",
-		description: "Creates a new contact for the website",
+		description:
+			"Creates a new contact for the website. If externalId is provided and already exists for the website, the contact is updated and returned.",
 		request: {
 			body: {
 				content: {
@@ -283,6 +285,14 @@ contactRouter.openapi(
 			},
 		},
 		responses: {
+			200: {
+				content: {
+					"application/json": {
+						schema: contactResponseSchema,
+					},
+				},
+				description: "Contact updated successfully via externalId upsert",
+			},
 			201: {
 				content: {
 					"application/json": {
@@ -352,10 +362,38 @@ contactRouter.openapi(
 				);
 			}
 
+			const { externalId } = normalizeIdentifyContactIdentifiers({
+				externalId: body.externalId,
+			});
+
+			if (externalId) {
+				const upsertResult = await upsertContactByExternalId(db, {
+					websiteId: website.id,
+					organizationId: website.organizationId,
+					externalId,
+					email: body.email,
+					name: body.name,
+					image: body.image,
+					metadata: body.metadata,
+					contactOrganizationId: body.contactOrganizationId,
+				});
+
+				const response = formatContactResponse(upsertResult.contact);
+				const statusCode = upsertResult.status === "created" ? 201 : 200;
+
+				return c.json(
+					validateResponse(response, contactResponseSchema),
+					statusCode
+				);
+			}
+
 			const newContact = await createContact(db, {
 				websiteId: website.id,
 				organizationId: website.organizationId,
-				data: body,
+				data: {
+					...body,
+					externalId,
+				},
 			});
 
 			const response = formatContactResponse(newContact);

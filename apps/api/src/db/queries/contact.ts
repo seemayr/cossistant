@@ -176,6 +176,101 @@ export async function createContact(
 	return newContact;
 }
 
+export type UpsertContactByExternalIdResult = {
+	status: "created" | "updated";
+	contact: ContactRecord;
+};
+
+/**
+ * Idempotently create or update a contact keyed by externalId + websiteId.
+ */
+export async function upsertContactByExternalId(
+	db: Database,
+	params: {
+		websiteId: string;
+		organizationId: string;
+		externalId: string;
+		email?: string;
+		name?: string;
+		image?: string;
+		metadata?: Record<string, unknown>;
+		contactOrganizationId?: string;
+	}
+): Promise<UpsertContactByExternalIdResult> {
+	const now = new Date().toISOString();
+
+	const [created] = await db
+		.insert(contact)
+		.values({
+			websiteId: params.websiteId,
+			organizationId: params.organizationId,
+			externalId: params.externalId,
+			email: params.email,
+			name: params.name,
+			image: params.image,
+			metadata: params.metadata,
+			contactOrganizationId: params.contactOrganizationId,
+			createdAt: now,
+			updatedAt: now,
+		})
+		.onConflictDoNothing({
+			target: [contact.externalId, contact.websiteId],
+		})
+		.returning();
+
+	if (created) {
+		return {
+			status: "created",
+			contact: created,
+		};
+	}
+
+	const updateData: Partial<ContactInsert> = {
+		updatedAt: now,
+		deletedAt: null,
+	};
+
+	if (params.externalId !== undefined) {
+		updateData.externalId = params.externalId;
+	}
+	if (params.email !== undefined) {
+		updateData.email = params.email;
+	}
+	if (params.name !== undefined) {
+		updateData.name = params.name;
+	}
+	if (params.image !== undefined) {
+		updateData.image = params.image;
+	}
+	if (params.contactOrganizationId !== undefined) {
+		updateData.contactOrganizationId = params.contactOrganizationId;
+	}
+	if (params.metadata !== undefined) {
+		updateData.metadata =
+			sql`coalesce(${contact.metadata}, '{}'::jsonb) || ${JSON.stringify(params.metadata)}::jsonb` as ContactInsert["metadata"];
+	}
+
+	const [updated] = await db
+		.update(contact)
+		.set(updateData)
+		.where(
+			and(
+				eq(contact.externalId, params.externalId),
+				eq(contact.websiteId, params.websiteId)
+			)
+		)
+		.returning();
+
+	if (!updated) {
+		throw new Error("Failed to upsert contact by externalId");
+	}
+
+	return {
+		status: "updated",
+		contact: updated,
+	};
+}
+
 /**
  * Update an existing contact
  */
@@ -324,56 +419,18 @@ export async function identifyContact(
 	const now = new Date().toISOString();
 
 	if (params.externalId) {
-		const upsertSet: Partial<ContactInsert> = {
-			updatedAt: now,
-			deletedAt: null,
-		};
+		const result = await upsertContactByExternalId(db, {
+			websiteId: params.websiteId,
+			organizationId: params.organizationId,
+			externalId: params.externalId,
+			email: params.email,
+			name: params.name,
+			image: params.image,
+			metadata: params.metadata,
+			contactOrganizationId: params.contactOrganizationId,
+		});
 
-		if (params.externalId) {
-			upsertSet.externalId = params.externalId;
-		}
-		if (params.email) {
-			upsertSet.email = params.email;
-		}
-		if (params.name) {
-			upsertSet.name = params.name;
-		}
-		if (params.image) {
-			upsertSet.image = params.image;
-		}
-		if (params.contactOrganizationId) {
-			upsertSet.contactOrganizationId = params.contactOrganizationId;
-		}
-		if (params.metadata) {
-			upsertSet.metadata =
-				sql`coalesce(${contact.metadata}, '{}'::jsonb) || ${JSON.stringify(params.metadata)}::jsonb` as ContactInsert["metadata"];
-		}
-
-		const [upserted] = await db
-			.insert(contact)
-			.values({
-				websiteId: params.websiteId,
-				organizationId: params.organizationId,
-				externalId: params.externalId,
-				email: params.email,
-				name: params.name,
-				image: params.image,
-				metadata: params.metadata,
-				contactOrganizationId: params.contactOrganizationId,
-				createdAt: now,
-				updatedAt: now,
-			})
-			.onConflictDoUpdate({
-				target: [contact.externalId, contact.websiteId],
-				set: upsertSet,
-			})
-			.returning();
-
-		if (!upserted) {
-			throw new Error("Failed to upsert contact");
-		}
-
-		return upserted;
+		return result.contact;
 	}
 
 	// Try to find existing contact by email
