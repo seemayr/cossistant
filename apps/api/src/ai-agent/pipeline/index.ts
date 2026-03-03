@@ -13,6 +13,7 @@
  */
 
 import type { Database } from "@api/db";
+import { env } from "@api/env";
 import {
 	calculateAiCreditCharge,
 	getMinimumAiCreditCharge,
@@ -30,6 +31,7 @@ import { generateVisitorName } from "@cossistant/core";
 import { sendMessage } from "../actions/send-message";
 import {
 	emitDecisionMade,
+	emitSeen,
 	emitTypingStop,
 	emitWorkflowCompleted,
 	TypingHeartbeat,
@@ -46,7 +48,16 @@ import { type DecisionResult, decide } from "./2-decision";
 import { type GenerationResult, generate } from "./3-generation";
 import { type ExecutionResult, execute } from "./4-execution";
 import { followup } from "./5-followup";
+import { createDevConversationLog } from "./dev-conversation-log";
 import { logAiSkillUsageTimeline } from "./skill-usage-timeline";
+import {
+	createToolTraceDiagnostics,
+	formatToolTraceDiagnostics,
+	getToolTracePayloadMode,
+	isDeepTraceEnabled,
+	setToolTraceAbortReason,
+	setToolTracePhase,
+} from "./trace";
 
 export type AiAgentPipelineInput = {
 	conversationId: string;
@@ -95,6 +106,7 @@ export async function runAiAgentPipeline(
 ): Promise<AiAgentPipelineResult> {
 	const startTime = Date.now();
 	const convId = ctx.input.conversationId;
+	const conversationLog = createDevConversationLog(convId);
 	const metrics = {
 		intakeMs: 0,
 		decisionMs: 0,
@@ -104,7 +116,7 @@ export async function runAiAgentPipeline(
 		totalMs: 0,
 	};
 
-	console.log(
+	conversationLog.log(
 		`[ai-agent] conv=${convId} | Starting pipeline | trigger=${ctx.input.messageId}`
 	);
 
@@ -119,6 +131,14 @@ export async function runAiAgentPipeline(
 	let continuationHint: ContinuationHint | undefined;
 	let aiCreditGuardResult: AiCreditGuardResult | null = null;
 	const publicMessageIds = new Set<string>();
+	const traceContext = `conv=${convId} | workflowRunId=${ctx.input.workflowRunId} | jobId=${ctx.input.jobId} | triggerMessageId=${ctx.input.messageId}`;
+	const deepTraceEnabled = isDeepTraceEnabled(env.AI_AGENT_DEEP_TRACE_ENABLED);
+	const generationTraceDiagnostics =
+		createToolTraceDiagnostics("pipeline_ready");
+	const tracePayloadMode = getToolTracePayloadMode(
+		env.AI_AGENT_TRACE_PAYLOAD_MODE
+	);
+	const heartbeatIntervalMs = Math.max(250, env.AI_AGENT_TRACE_HEARTBEAT_MS);
 	type DecisionPolicyResolution = {
 		policy: string;
 		fallback: "none" | "missing" | "error";
@@ -140,13 +160,70 @@ export async function runAiAgentPipeline(
 		publicMessagesSent++;
 	};
 
+	const traceLog = (
+		level: "log" | "warn" | "error",
+		event: string,
+		fields?: string,
+		payload?: unknown
+	): void => {
+		if (!deepTraceEnabled) {
+			return;
+		}
+		const message = `[ai-agent:trace] ${traceContext} | ${event}${fields ? ` | ${fields}` : ""}`;
+		const args = payload === undefined ? [message] : [message, payload];
+		if (level === "warn") {
+			conversationLog.warn(...args);
+			return;
+		}
+		if (level === "error") {
+			conversationLog.error(...args);
+			return;
+		}
+		conversationLog.log(...args);
+	};
+
+	const traceLogger = deepTraceEnabled
+		? {
+				log: (...args: unknown[]) => conversationLog.log(...args),
+				warn: (...args: unknown[]) => conversationLog.warn(...args),
+				error: (...args: unknown[]) => conversationLog.error(...args),
+			}
+		: undefined;
+
+	const runTracedStage = async <T>(
+		stageName: string,
+		run: () => Promise<T>
+	): Promise<T> => {
+		const stageStart = Date.now();
+		traceLog("log", "stage.start", `stage=${stageName}`);
+		try {
+			const result = await run();
+			traceLog(
+				"log",
+				"stage.end",
+				`stage=${stageName} | durationMs=${Date.now() - stageStart}`
+			);
+			return result;
+		} catch (error) {
+			traceLog(
+				"error",
+				"stage.error",
+				`stage=${stageName} | durationMs=${Date.now() - stageStart}`,
+				error
+			);
+			throw error;
+		}
+	};
+
 	const safeEmitDecisionMade = async (
 		params: Parameters<typeof emitDecisionMade>[0]
 	): Promise<void> => {
 		try {
-			await emitDecisionMade(params);
+			await runTracedStage("emit_decision_made", async () =>
+				emitDecisionMade(params)
+			);
 		} catch (error) {
-			console.warn(
+			conversationLog.warn(
 				`[ai-agent] conv=${convId} | Failed to emit decision event`,
 				error
 			);
@@ -157,23 +234,42 @@ export async function runAiAgentPipeline(
 		params: Parameters<typeof emitWorkflowCompleted>[0]
 	): Promise<void> => {
 		try {
-			await emitWorkflowCompleted(params);
+			await runTracedStage("emit_workflow_completed", async () =>
+				emitWorkflowCompleted(params)
+			);
 		} catch (error) {
-			console.warn(
+			conversationLog.warn(
 				`[ai-agent] conv=${convId} | Failed to emit workflow completed event`,
 				error
 			);
 		}
 	};
 
+	const safeEmitSeen = async (
+		params: Parameters<typeof emitSeen>[0]
+	): Promise<void> => {
+		try {
+			await runTracedStage("emit_seen", async () => emitSeen(params));
+		} catch (error) {
+			conversationLog.warn(
+				`[ai-agent] conv=${convId} | Failed to emit seen event`,
+				error
+			);
+		}
+	};
+
+	traceLog("log", "pipeline.start");
+
 	try {
 		// Step 1: Intake - Gather context and validate
 		const intakeStart = Date.now();
-		intakeResult = await intake(ctx.db, ctx.input);
+		intakeResult = await runTracedStage("intake", async () =>
+			intake(ctx.db, ctx.input)
+		);
 		metrics.intakeMs = Date.now() - intakeStart;
 
 		if (intakeResult.status !== "ready") {
-			console.log(
+			conversationLog.log(
 				`[ai-agent] conv=${convId} | Skipped at intake | reason="${intakeResult.reason}"`
 			);
 			return {
@@ -185,10 +281,22 @@ export async function runAiAgentPipeline(
 			};
 		}
 		const readyIntake = intakeResult;
+		const shouldEmitAiSeen =
+			readyIntake.triggerMessage?.senderType === "visitor" &&
+			readyIntake.triggerMessage.visibility === "public";
+		if (shouldEmitAiSeen) {
+			await safeEmitSeen({
+				db: ctx.db,
+				conversation: readyIntake.conversation,
+				aiAgentId: readyIntake.aiAgent.id,
+			});
+		}
 		const resolvedModelId = readyIntake.modelResolution.modelIdResolved;
 		const modelIdOriginal = readyIntake.modelResolution.modelIdOriginal;
 		const modelMigrationApplied =
 			readyIntake.modelResolution.modelMigrationApplied;
+		const decisionPolicyStart = Date.now();
+		traceLog("log", "stage.start", "stage=decision_policy_resolution");
 		const decisionPolicyPromise: Promise<DecisionPolicyResolution> =
 			resolvePromptBundle({
 				db: ctx.db,
@@ -198,29 +306,51 @@ export async function runAiAgentPipeline(
 				.then((bundle) => {
 					const policy = bundle.coreDocuments["decision.md"]?.content?.trim();
 					if (!policy) {
+						traceLog(
+							"warn",
+							"stage.end",
+							`stage=decision_policy_resolution | durationMs=${Date.now() - decisionPolicyStart} | fallback=missing`
+						);
 						return {
 							policy: PROMPT_TEMPLATES.DECISION_POLICY,
 							fallback: "missing",
 						} as const;
 					}
+					traceLog(
+						"log",
+						"stage.end",
+						`stage=decision_policy_resolution | durationMs=${Date.now() - decisionPolicyStart} | fallback=none`
+					);
 					return { policy, fallback: "none" } as const;
 				})
-				.catch((error) => ({
-					policy: PROMPT_TEMPLATES.DECISION_POLICY,
-					fallback: "error" as const,
-					error,
-				}));
+				.catch((error) => {
+					traceLog(
+						"warn",
+						"stage.error",
+						`stage=decision_policy_resolution | durationMs=${Date.now() - decisionPolicyStart} | fallback=error`,
+						error
+					);
+					return {
+						policy: PROMPT_TEMPLATES.DECISION_POLICY,
+						fallback: "error" as const,
+						error,
+					};
+				});
 
-		const continuationResult = await continuationGate({
-			db: ctx.db,
-			conversationId: ctx.input.conversationId,
-			organizationId: ctx.input.organizationId,
-			triggerMessageId: ctx.input.messageId,
-			triggerMessageCreatedAt: ctx.input.messageCreatedAt,
-			triggerMessage: intakeResult.triggerMessage,
-			conversationHistory: intakeResult.conversationHistory,
-		});
-		console.log(
+		const continuationResult = await runTracedStage(
+			"continuation_gate",
+			async () =>
+				continuationGate({
+					db: ctx.db,
+					conversationId: ctx.input.conversationId,
+					organizationId: ctx.input.organizationId,
+					triggerMessageId: ctx.input.messageId,
+					triggerMessageCreatedAt: ctx.input.messageCreatedAt,
+					triggerMessage: readyIntake.triggerMessage,
+					conversationHistory: readyIntake.conversationHistory,
+				})
+		);
+		conversationLog.log(
 			`[ai-agent] conv=${convId} | continuationDecision=${continuationResult.decision} | continuationConfidence=${continuationResult.confidence} | continuationReason=${continuationResult.reason}`
 		);
 
@@ -228,8 +358,8 @@ export async function runAiAgentPipeline(
 			const skipReason = `Continuation gate skipped trigger: ${continuationResult.reason}`;
 
 			await safeEmitDecisionMade({
-				conversation: intakeResult.conversation,
-				aiAgentId: intakeResult.aiAgent.id,
+				conversation: readyIntake.conversation,
+				aiAgentId: readyIntake.aiAgent.id,
 				workflowRunId: ctx.input.workflowRunId,
 				shouldAct: false,
 				reason: skipReason,
@@ -237,8 +367,8 @@ export async function runAiAgentPipeline(
 			});
 
 			await safeEmitWorkflowCompleted({
-				conversation: intakeResult.conversation,
-				aiAgentId: intakeResult.aiAgent.id,
+				conversation: readyIntake.conversation,
+				aiAgentId: readyIntake.aiAgent.id,
 				workflowRunId: ctx.input.workflowRunId,
 				status: "skipped",
 				reason: skipReason,
@@ -273,10 +403,10 @@ export async function runAiAgentPipeline(
 			organizationId: ctx.input.organizationId,
 			websiteId: ctx.input.websiteId,
 			visitorId: ctx.input.visitorId,
-			aiAgentId: intakeResult.aiAgent.id,
+			aiAgentId: readyIntake.aiAgent.id,
 			triggerMessageId: ctx.input.messageId,
 			workflowRunId: ctx.input.workflowRunId,
-			triggerVisibility: intakeResult.triggerMessage?.visibility,
+			triggerVisibility: readyIntake.triggerMessage?.visibility,
 		} as const;
 
 		await logDecisionTimelineState({
@@ -284,92 +414,98 @@ export async function runAiAgentPipeline(
 			state: "partial",
 		});
 
-		try {
-			const decisionPolicyResolution = await decisionPolicyPromise;
-			if (decisionPolicyResolution.fallback === "error") {
-				console.warn(
-					`[ai-agent] conv=${convId} | Failed to resolve decision.md, using fallback policy`,
-					decisionPolicyResolution.error
-				);
+		const readyDecision = await runTracedStage("decision", async () => {
+			try {
+				const decisionPolicyResolution = await decisionPolicyPromise;
+				if (decisionPolicyResolution.fallback === "error") {
+					conversationLog.warn(
+						`[ai-agent] conv=${convId} | Failed to resolve decision.md, using fallback policy`,
+						decisionPolicyResolution.error
+					);
+				}
+				const decisionPolicy = decisionPolicyResolution.policy;
+
+				const resolvedDecision = await decide({
+					aiAgent: readyIntake.aiAgent,
+					conversation: readyIntake.conversation,
+					conversationHistory: readyIntake.conversationHistory,
+					conversationState: readyIntake.conversationState,
+					triggerMessage: readyIntake.triggerMessage,
+					decisionPolicy,
+				});
+
+				await logDecisionTimelineState({
+					toolContext: decisionToolContext,
+					state: "result",
+					result: {
+						shouldAct: resolvedDecision.shouldAct,
+						mode: resolvedDecision.mode,
+						reason: resolvedDecision.reason,
+					},
+				});
+				return resolvedDecision;
+			} catch (error) {
+				await logDecisionTimelineState({
+					toolContext: decisionToolContext,
+					state: "error",
+					error,
+				});
+				throw error;
 			}
-			const decisionPolicy = decisionPolicyResolution.policy;
-
-			decisionResult = await decide({
-				aiAgent: intakeResult.aiAgent,
-				conversation: intakeResult.conversation,
-				conversationHistory: intakeResult.conversationHistory,
-				conversationState: intakeResult.conversationState,
-				triggerMessage: intakeResult.triggerMessage,
-				decisionPolicy,
-			});
-
-			await logDecisionTimelineState({
-				toolContext: decisionToolContext,
-				state: "result",
-				result: {
-					shouldAct: decisionResult.shouldAct,
-					mode: decisionResult.mode,
-					reason: decisionResult.reason,
-				},
-			});
-		} catch (error) {
-			await logDecisionTimelineState({
-				toolContext: decisionToolContext,
-				state: "error",
-				error,
-			});
-			throw error;
-		}
+		});
+		decisionResult = readyDecision;
 
 		metrics.decisionMs = Date.now() - decisionStart;
 
 		// Emit decision event
-		if (!decisionResult.shouldAct) {
+		if (!readyDecision.shouldAct) {
 			await safeEmitDecisionMade({
-				conversation: intakeResult.conversation,
-				aiAgentId: intakeResult.aiAgent.id,
+				conversation: readyIntake.conversation,
+				aiAgentId: readyIntake.aiAgent.id,
 				workflowRunId: ctx.input.workflowRunId,
 				shouldAct: false,
-				reason: decisionResult.reason,
-				mode: decisionResult.mode,
+				reason: readyDecision.reason,
+				mode: readyDecision.mode,
 			});
 
-			console.log(
-				`[ai-agent] conv=${convId} | Skipped at decision | reason="${decisionResult.reason}"`
+			conversationLog.log(
+				`[ai-agent] conv=${convId} | Skipped at decision | reason="${readyDecision.reason}"`
 			);
 
 			// Emit completion event (dashboard only since shouldAct=false)
 			await safeEmitWorkflowCompleted({
-				conversation: intakeResult.conversation,
-				aiAgentId: intakeResult.aiAgent.id,
+				conversation: readyIntake.conversation,
+				aiAgentId: readyIntake.aiAgent.id,
 				workflowRunId: ctx.input.workflowRunId,
 				status: "skipped",
-				reason: decisionResult.reason,
+				reason: readyDecision.reason,
 			});
 
 			return {
 				status: "skipped",
-				reason: decisionResult.reason,
+				reason: readyDecision.reason,
 				publicMessagesSent,
 				retryable: false,
 				metrics: finalizeMetrics(metrics, startTime),
 			};
 		}
 
-		const [, guardResult] = await Promise.all([
-			safeEmitDecisionMade({
-				conversation: intakeResult.conversation,
-				aiAgentId: intakeResult.aiAgent.id,
-				workflowRunId: ctx.input.workflowRunId,
-				shouldAct: true,
-				reason: decisionResult.reason,
-				mode: decisionResult.mode,
-			}),
-			guardAiCreditRun({
-				organizationId: ctx.input.organizationId,
-				modelId: resolvedModelId,
-			}),
-		]);
+		const [, guardResult] = await runTracedStage("credit_guard", async () =>
+			Promise.all([
+				safeEmitDecisionMade({
+					conversation: readyIntake.conversation,
+					aiAgentId: readyIntake.aiAgent.id,
+					workflowRunId: ctx.input.workflowRunId,
+					shouldAct: true,
+					reason: readyDecision.reason,
+					mode: readyDecision.mode,
+				}),
+				guardAiCreditRun({
+					organizationId: ctx.input.organizationId,
+					modelId: resolvedModelId,
+				}),
+			])
+		);
 		aiCreditGuardResult = guardResult;
 
 		if (!aiCreditGuardResult.allowed) {
@@ -412,15 +548,15 @@ export async function runAiAgentPipeline(
 					},
 				});
 			} catch (error) {
-				console.warn(
+				conversationLog.warn(
 					`[ai-agent] conv=${convId} | Failed to log blocked AI credit timeline`,
 					error
 				);
 			}
 
 			await safeEmitWorkflowCompleted({
-				conversation: intakeResult.conversation,
-				aiAgentId: intakeResult.aiAgent.id,
+				conversation: readyIntake.conversation,
+				aiAgentId: readyIntake.aiAgent.id,
 				workflowRunId: ctx.input.workflowRunId,
 				status: "skipped",
 				reason: blockedReason,
@@ -440,16 +576,16 @@ export async function runAiAgentPipeline(
 		// respond_to_command may still send visitor messages even for private team triggers.
 		// This prevents "phantom typing" when AI observes but doesn't respond.
 		const allowPublicMessages =
-			decisionResult.mode !== "background_only" &&
-			(intakeResult.triggerMessage?.visibility === "public" ||
-				decisionResult.mode === "respond_to_command");
+			readyDecision.mode !== "background_only" &&
+			(readyIntake.triggerMessage?.visibility === "public" ||
+				readyDecision.mode === "respond_to_command");
 		willSendVisibleMessages = allowPublicMessages;
 
 		// Callback to stop typing - passed to tools
 		// Stops the typing indicator just before a message is sent
 		const stopTyping = async (): Promise<void> => {
 			if (typingHeartbeat?.running) {
-				console.log(
+				conversationLog.log(
 					`[ai-agent] conv=${convId} | Stopping typing via tool callback`
 				);
 				await typingHeartbeat.stop();
@@ -458,8 +594,8 @@ export async function runAiAgentPipeline(
 
 		// Capture conversation and aiAgent for use in closures
 		// (TypeScript doesn't narrow inside async callbacks)
-		const conversation = intakeResult.conversation;
-		const aiAgent = intakeResult.aiAgent;
+		const conversation = readyIntake.conversation;
+		const aiAgent = readyIntake.aiAgent;
 
 		// Callback to start/restart typing - passed to tools
 		// Used to show typing indicator during inter-message delays
@@ -472,7 +608,7 @@ export async function runAiAgentPipeline(
 
 			// If heartbeat was stopped, restart it
 			if (typingHeartbeat && !typingHeartbeat.running) {
-				console.log(
+				conversationLog.log(
 					`[ai-agent] conv=${convId} | Restarting typing via tool callback`
 				);
 				await typingHeartbeat.start();
@@ -482,7 +618,7 @@ export async function runAiAgentPipeline(
 					conversation,
 					aiAgentId: aiAgent.id,
 				});
-				console.log(
+				conversationLog.log(
 					`[ai-agent] conv=${convId} | Creating new typing heartbeat via tool callback`
 				);
 				await typingHeartbeat.start();
@@ -491,17 +627,17 @@ export async function runAiAgentPipeline(
 
 		if (willSendVisibleMessages) {
 			typingHeartbeat = new TypingHeartbeat({
-				conversation: intakeResult.conversation,
-				aiAgentId: intakeResult.aiAgent.id,
+				conversation: readyIntake.conversation,
+				aiAgentId: readyIntake.aiAgent.id,
 			});
 
-			console.log(
+			conversationLog.log(
 				`[ai-agent] conv=${convId} | Starting typing indicator (AI will respond)`
 			);
 			await typingHeartbeat.start();
 			typingSessionStarted = true;
 		} else {
-			console.log(
+			conversationLog.log(
 				`[ai-agent] conv=${convId} | Skipping typing indicator (background_only mode)`
 			);
 		}
@@ -547,13 +683,13 @@ export async function runAiAgentPipeline(
 				});
 				ingestStatus = ingestResult.status;
 				if (ingestStatus === "failed") {
-					console.error(
+					conversationLog.error(
 						`[ai-agent] conv=${convId} | Failed to ingest AI credit usage`
 					);
 				}
 			} catch (error) {
 				ingestStatus = "failed";
-				console.error(
+				conversationLog.error(
 					`[ai-agent] conv=${convId} | Failed to ingest AI credit usage`,
 					error
 				);
@@ -587,7 +723,7 @@ export async function runAiAgentPipeline(
 					},
 				});
 			} catch (error) {
-				console.warn(
+				conversationLog.warn(
 					`[ai-agent] conv=${convId} | Failed to log AI credit timeline`,
 					error
 				);
@@ -597,46 +733,102 @@ export async function runAiAgentPipeline(
 		// Step 3: Generation - Call LLM with tools
 		const generationStart = Date.now();
 		const generationAbortController = new AbortController();
+		let generationHeartbeat: ReturnType<typeof setInterval> | null = null;
+		setToolTracePhase(generationTraceDiagnostics, "generation_waiting_model");
+		if (deepTraceEnabled) {
+			traceLog(
+				"log",
+				"generation.timeout.armed",
+				`timeoutMs=${GENERATION_TIMEOUT_MS} | payloadMode=${tracePayloadMode}`
+			);
+			traceLog(
+				"log",
+				"generation.heartbeat.armed",
+				`intervalMs=${heartbeatIntervalMs}`
+			);
+		}
 		const generationTimeout = setTimeout(() => {
-			console.warn(
-				`[ai-agent] conv=${convId} | Generation timeout after ${GENERATION_TIMEOUT_MS}ms`
+			setToolTraceAbortReason(generationTraceDiagnostics, "generation_timeout");
+			traceLog(
+				"warn",
+				"generation.timeout.fired",
+				`timeoutMs=${GENERATION_TIMEOUT_MS} | ${formatToolTraceDiagnostics(generationTraceDiagnostics)}`
+			);
+			conversationLog.warn(
+				`[ai-agent] conv=${convId} | Generation timeout after ${GENERATION_TIMEOUT_MS}ms | abortReason=generation_timeout`
 			);
 			generationAbortController.abort();
 		}, GENERATION_TIMEOUT_MS);
+		if (deepTraceEnabled) {
+			generationHeartbeat = setInterval(() => {
+				traceLog(
+					"log",
+					"generation.heartbeat",
+					`elapsedMs=${Date.now() - generationStart} | ${formatToolTraceDiagnostics(generationTraceDiagnostics)}`
+				);
+			}, heartbeatIntervalMs);
+			generationHeartbeat.unref?.();
+		}
 		try {
-			generationResult = await generate({
-				db: ctx.db,
-				aiAgent: intakeResult.aiAgent,
-				conversation: intakeResult.conversation,
-				conversationHistory: intakeResult.conversationHistory,
-				visitorContext: intakeResult.visitorContext,
-				mode: decisionResult.mode,
-				humanCommand: decisionResult.humanCommand,
-				organizationId: ctx.input.organizationId,
-				websiteId: ctx.input.websiteId,
-				visitorId: ctx.input.visitorId,
-				triggerMessageId: ctx.input.messageId,
-				triggerMessageCreatedAt: ctx.input.messageCreatedAt,
-				triggerSenderType: intakeResult.triggerMessage?.senderType,
-				triggerVisibility: intakeResult.triggerMessage?.visibility,
-				abortSignal: generationAbortController.signal,
-				stopTyping, // Stop typing just before message is sent
-				startTyping, // Start typing for inter-message delays
-				onPublicMessageSent: markPublicMessageSent,
-				allowPublicMessages,
-				isEscalated: decisionResult.isEscalated, // Pass escalation context
-				escalationReason: decisionResult.escalationReason,
-				smartDecision: decisionResult.smartDecision, // Pass smart decision for prompt context
-				continuationHint,
-				workflowRunId: ctx.input.workflowRunId, // For progress events in tools
-			});
+			const readyGeneration = await runTracedStage("generation", async () =>
+				generate({
+					db: ctx.db,
+					aiAgent: readyIntake.aiAgent,
+					conversation: readyIntake.conversation,
+					conversationHistory: readyIntake.conversationHistory,
+					visitorContext: readyIntake.visitorContext,
+					mode: readyDecision.mode,
+					humanCommand: readyDecision.humanCommand,
+					organizationId: ctx.input.organizationId,
+					websiteId: ctx.input.websiteId,
+					visitorId: ctx.input.visitorId,
+					triggerMessageId: ctx.input.messageId,
+					triggerMessageCreatedAt: ctx.input.messageCreatedAt,
+					triggerSenderType: readyIntake.triggerMessage?.senderType,
+					triggerVisibility: readyIntake.triggerMessage?.visibility,
+					abortSignal: generationAbortController.signal,
+					stopTyping, // Stop typing just before message is sent
+					startTyping, // Start typing for inter-message delays
+					onPublicMessageSent: markPublicMessageSent,
+					allowPublicMessages,
+					isEscalated: readyDecision.isEscalated, // Pass escalation context
+					escalationReason: readyDecision.escalationReason,
+					smartDecision: readyDecision.smartDecision, // Pass smart decision for prompt context
+					continuationHint,
+					workflowRunId: ctx.input.workflowRunId, // For progress events in tools
+					traceDiagnostics: generationTraceDiagnostics,
+					traceLogger,
+					deepTraceEnabled,
+					tracePayloadMode,
+				})
+			);
+			generationResult = readyGeneration;
+			if (readyGeneration.aborted) {
+				traceLog(
+					"warn",
+					"generation.aborted",
+					`abortReason=${generationTraceDiagnostics.abortReason ?? "abort_signal"} | ${formatToolTraceDiagnostics(generationTraceDiagnostics)}`
+				);
+			}
 		} finally {
 			clearTimeout(generationTimeout);
+			if (generationHeartbeat) {
+				clearInterval(generationHeartbeat);
+			}
 			metrics.generationMs = Date.now() - generationStart;
+			traceLog(
+				"log",
+				"generation.complete",
+				`durationMs=${metrics.generationMs} | ${formatToolTraceDiagnostics(generationTraceDiagnostics)}`
+			);
 			await finalizeAiCreditUsage(generationResult);
 		}
+		if (!generationResult) {
+			throw new Error("Generation result missing after generation stage");
+		}
+		const readyGeneration = generationResult;
 
-		const usedCustomSkills = generationResult.usedCustomSkills;
+		const usedCustomSkills = readyGeneration.usedCustomSkills;
 		if (usedCustomSkills && usedCustomSkills.length > 0) {
 			try {
 				await logAiSkillUsageTimeline({
@@ -645,14 +837,14 @@ export async function runAiAgentPipeline(
 					websiteId: ctx.input.websiteId,
 					conversationId: ctx.input.conversationId,
 					visitorId: ctx.input.visitorId,
-					aiAgentId: intakeResult.aiAgent.id,
+					aiAgentId: readyIntake.aiAgent.id,
 					workflowRunId: ctx.input.workflowRunId,
 					triggerMessageId: ctx.input.messageId,
-					triggerVisibility: intakeResult.triggerMessage?.visibility,
+					triggerVisibility: readyIntake.triggerMessage?.visibility,
 					usedCustomSkills,
 				});
 			} catch (error) {
-				console.warn(
+				conversationLog.warn(
 					`[ai-agent] conv=${convId} | Failed to log AI skill usage timeline`,
 					error
 				);
@@ -662,27 +854,27 @@ export async function runAiAgentPipeline(
 		// FALLBACK: If AI returned respond/escalate/resolve but didn't call sendMessage,
 		// send a fallback message so the visitor isn't left without a response
 		const requiresMessage = ["respond", "escalate", "resolve"].includes(
-			generationResult.decision.action
+			readyGeneration.decision.action
 		);
 		const sentMessages = publicMessagesSent;
 		const missingAuthoritativeSend = sentMessages === 0;
 		const needsFallbackMessage =
 			missingAuthoritativeSend &&
-			(generationResult.needsFallbackMessage || requiresMessage);
+			(readyGeneration.needsFallbackMessage || requiresMessage);
 
 		if (needsFallbackMessage && allowPublicMessages) {
-			if (generationResult.needsFallbackMessage) {
-				console.warn(
+			if (readyGeneration.needsFallbackMessage) {
+				conversationLog.warn(
 					`[ai-agent] conv=${convId} | Repair failed, sending fallback message`
 				);
 			}
-			console.warn(
+			conversationLog.warn(
 				`[ai-agent] conv=${convId} | AI forgot to call sendMessage! Sending fallback...`
 			);
 
 			// Construct a fallback message based on the action
 			let fallbackMessage: string;
-			switch (generationResult.decision.action) {
+			switch (readyGeneration.decision.action) {
 				case "escalate":
 					fallbackMessage =
 						"Let me connect you with a team member who can help.";
@@ -704,7 +896,7 @@ export async function runAiAgentPipeline(
 					organizationId: ctx.input.organizationId,
 					websiteId: ctx.input.websiteId,
 					visitorId: ctx.input.visitorId,
-					aiAgentId: intakeResult.aiAgent.id,
+					aiAgentId: readyIntake.aiAgent.id,
 					text: fallbackMessage,
 					idempotencyKey: `public:${ctx.input.messageId}:fallback`,
 				});
@@ -714,11 +906,11 @@ export async function runAiAgentPipeline(
 						created: fallbackSend.created,
 					});
 				}
-				console.log(
+				conversationLog.log(
 					`[ai-agent] conv=${convId} | Fallback message sent successfully`
 				);
 			} catch (fallbackError) {
-				console.error(
+				conversationLog.error(
 					`[ai-agent] conv=${convId} | Failed to send fallback:`,
 					fallbackError
 				);
@@ -730,52 +922,61 @@ export async function runAiAgentPipeline(
 
 		// Get visitor display name (from contact or generate a friendly name)
 		const visitorName =
-			intakeResult.visitorContext?.name ??
+			readyIntake.visitorContext?.name ??
 			generateVisitorName(ctx.input.visitorId);
 
-		executionResult = await execute({
-			db: ctx.db,
-			aiAgent: intakeResult.aiAgent,
-			conversation: intakeResult.conversation,
-			decision: generationResult.decision,
-			jobId: ctx.input.jobId,
-			messageId: ctx.input.messageId,
-			organizationId: ctx.input.organizationId,
-			websiteId: ctx.input.websiteId,
-			visitorId: ctx.input.visitorId,
-			visitorName,
-		});
+		executionResult = await runTracedStage("execution", async () =>
+			execute({
+				db: ctx.db,
+				aiAgent: readyIntake.aiAgent,
+				conversation: readyIntake.conversation,
+				decision: readyGeneration.decision,
+				jobId: ctx.input.jobId,
+				messageId: ctx.input.messageId,
+				organizationId: ctx.input.organizationId,
+				websiteId: ctx.input.websiteId,
+				visitorId: ctx.input.visitorId,
+				visitorName,
+			})
+		);
 		metrics.executionMs = Date.now() - executionStart;
 		// Typing already stopped after generation
 
 		// Step 5: Followup - Cleanup and emit events
 		const followupStart = Date.now();
-		await followup({
-			db: ctx.db,
-			aiAgent: intakeResult.aiAgent,
-			conversation: intakeResult.conversation,
-			decision: generationResult.decision,
-			executionResult,
-		});
+		await runTracedStage("followup", async () =>
+			followup({
+				db: ctx.db,
+				aiAgent: readyIntake.aiAgent,
+				conversation: readyIntake.conversation,
+				decision: readyGeneration.decision,
+				executionResult,
+			})
+		);
 		metrics.followupMs = Date.now() - followupStart;
 
 		// Emit completion event (success - notify widget)
 		await safeEmitWorkflowCompleted({
-			conversation: intakeResult.conversation,
-			aiAgentId: intakeResult.aiAgent.id,
+			conversation: readyIntake.conversation,
+			aiAgentId: readyIntake.aiAgent.id,
 			workflowRunId: ctx.input.workflowRunId,
 			status: "success",
-			action: generationResult.decision.action,
+			action: readyGeneration.decision.action,
 		});
 
 		const finalMetrics = finalizeMetrics(metrics, startTime);
-		console.log(
-			`[ai-agent] conv=${convId} | Completed | action=${generationResult.decision.action} | total=${finalMetrics.totalMs}ms`
+		conversationLog.log(
+			`[ai-agent] conv=${convId} | Completed | action=${readyGeneration.decision.action} | total=${finalMetrics.totalMs}ms`
+		);
+		traceLog(
+			"log",
+			"pipeline.end",
+			`status=completed | action=${readyGeneration.decision.action} | totalMs=${finalMetrics.totalMs}`
 		);
 
 		return {
 			status: "completed",
-			action: generationResult.decision.action,
+			action: readyGeneration.decision.action,
 			publicMessagesSent,
 			retryable: false,
 			metrics: finalMetrics,
@@ -783,14 +984,17 @@ export async function runAiAgentPipeline(
 	} catch (error) {
 		// Run followup for cleanup (workflow state, etc.)
 		if (intakeResult?.status === "ready") {
+			const readyIntakeOnError = intakeResult;
 			try {
-				await followup({
-					db: ctx.db,
-					aiAgent: intakeResult.aiAgent,
-					conversation: intakeResult.conversation,
-					decision: null,
-					executionResult: null,
-				});
+				await runTracedStage("followup_error_cleanup", async () =>
+					followup({
+						db: ctx.db,
+						aiAgent: readyIntakeOnError.aiAgent,
+						conversation: readyIntakeOnError.conversation,
+						decision: null,
+						executionResult: null,
+					})
+				);
 			} catch {
 				// Ignore cleanup errors
 			}
@@ -798,13 +1002,22 @@ export async function runAiAgentPipeline(
 
 		const errorMessage =
 			error instanceof Error ? error.message : "Unknown error";
-		console.error(`[ai-agent] conv=${convId} | Error | ${errorMessage}`);
+		conversationLog.error(
+			`[ai-agent] conv=${convId} | Error | ${errorMessage}`
+		);
+		traceLog(
+			"error",
+			"pipeline.end",
+			`status=error | error=${errorMessage} | retryable=${publicMessagesSent === 0}`,
+			error
+		);
 
 		// Emit error completion event (dashboard only)
 		if (intakeResult?.status === "ready") {
+			const readyIntakeOnError = intakeResult;
 			await safeEmitWorkflowCompleted({
-				conversation: intakeResult.conversation,
-				aiAgentId: intakeResult.aiAgent.id,
+				conversation: readyIntakeOnError.conversation,
+				aiAgentId: readyIntakeOnError.aiAgent.id,
 				workflowRunId: ctx.input.workflowRunId,
 				status: "error",
 				reason: errorMessage,
@@ -824,7 +1037,7 @@ export async function runAiAgentPipeline(
 			try {
 				await typingHeartbeat.stop();
 			} catch (error) {
-				console.warn(
+				conversationLog.warn(
 					`[ai-agent] conv=${convId} | Failed to stop typing heartbeat in cleanup:`,
 					error
 				);
@@ -836,17 +1049,27 @@ export async function runAiAgentPipeline(
 			willSendVisibleMessages &&
 			intakeResult?.status === "ready"
 		) {
+			const readyIntakeForTypingStop = intakeResult;
 			try {
 				await emitTypingStop({
-					conversation: intakeResult.conversation,
-					aiAgentId: intakeResult.aiAgent.id,
+					conversation: readyIntakeForTypingStop.conversation,
+					aiAgentId: readyIntakeForTypingStop.aiAgent.id,
 				});
 			} catch (error) {
-				console.warn(
+				conversationLog.warn(
 					`[ai-agent] conv=${convId} | Final typing stop emit failed:`,
 					error
 				);
 			}
+		}
+
+		try {
+			await conversationLog.flush();
+		} catch (error) {
+			console.warn(
+				`[ai-agent] conv=${convId} | Failed to flush dev conversation logs`,
+				error
+			);
 		}
 	}
 }

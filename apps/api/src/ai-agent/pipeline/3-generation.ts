@@ -53,6 +53,12 @@ import {
 import type { ContinuationHint } from "./1b-continuation-gate";
 import type { ResponseMode } from "./2-decision";
 import type { SmartDecisionResult } from "./2a-smart-decision";
+import {
+	formatToolTraceDiagnostics,
+	isDeepTraceEnabled,
+	setToolTraceAbortReason,
+	setToolTracePhase,
+} from "./trace";
 
 export type GenerationResult = {
 	decision: AiDecision;
@@ -124,6 +130,14 @@ type GenerationInput = {
 	continuationHint?: ContinuationHint;
 	/** Workflow run ID for progress events */
 	workflowRunId?: string;
+	/** Shared diagnostics object used by pipeline heartbeat logging */
+	traceDiagnostics?: ToolContext["traceDiagnostics"];
+	/** Optional logger sink for deep trace events */
+	traceLogger?: ToolContext["traceLogger"];
+	/** Enables high-volume deep trace emission for generation/tool wrapper logs */
+	deepTraceEnabled?: ToolContext["deepTraceEnabled"];
+	/** Payload logging mode for deep trace logs */
+	tracePayloadMode?: ToolContext["tracePayloadMode"];
 };
 
 const MIN_TOOL_INVOCATIONS_PER_RUN = 10;
@@ -697,8 +711,52 @@ export async function generate(
 		smartDecision,
 		continuationHint,
 		workflowRunId,
+		traceDiagnostics,
+		traceLogger,
+		deepTraceEnabled,
+		tracePayloadMode,
 	} = input;
 	const convId = conversation.id;
+	const deepTraceActive = isDeepTraceEnabled(
+		deepTraceEnabled ?? env.AI_AGENT_DEEP_TRACE_ENABLED
+	);
+	const trace = (
+		level: "log" | "warn" | "error",
+		message: string,
+		payload?: unknown
+	) => {
+		const args = payload === undefined ? [message] : [message, payload];
+		if (traceLogger) {
+			if (level === "warn") {
+				traceLogger.warn(...args);
+				return;
+			}
+			if (level === "error") {
+				traceLogger.error(...args);
+				return;
+			}
+			traceLogger.log(...args);
+			return;
+		}
+
+		if (level === "warn") {
+			console.warn(...args);
+			return;
+		}
+		if (level === "error") {
+			console.error(...args);
+			return;
+		}
+		console.log(...args);
+	};
+
+	setToolTracePhase(traceDiagnostics, "generation_init");
+	if (deepTraceActive) {
+		trace(
+			"log",
+			`[ai-agent:trace] conv=${convId} | generation.enter | payloadMode=${tracePayloadMode ?? "inherit"} | ${traceDiagnostics ? formatToolTraceDiagnostics(traceDiagnostics) : "traceDiagnostics=none"}`
+		);
+	}
 
 	const actionCapture = createActionCapture();
 
@@ -733,6 +791,11 @@ export async function generate(
 		workflowRunId,
 		// Per-generation captured action store (concurrency-safe)
 		actionCapture,
+		// Shared diagnostics and logger for deep tracing
+		traceDiagnostics,
+		traceLogger,
+		deepTraceEnabled: deepTraceActive,
+		tracePayloadMode,
 	};
 
 	// Reset captured action before generation
@@ -745,6 +808,7 @@ export async function generate(
 	// Get tools for this agent based on settings (with bound context)
 	const tools = getToolsForGeneration(aiAgent, toolContext);
 	if (!tools) {
+		setToolTracePhase(traceDiagnostics, "generation_no_tools");
 		const toolCallsByName = buildToolCallsByNameFromCounters(
 			toolContext.counters
 		);
@@ -764,6 +828,13 @@ export async function generate(
 		};
 	}
 
+	setToolTracePhase(traceDiagnostics, "generation_resolve_prompt_bundle");
+	if (deepTraceActive) {
+		trace(
+			"log",
+			`[ai-agent:trace] conv=${convId} | generation.phase | phase=generation_resolve_prompt_bundle`
+		);
+	}
 	const promptBundle = await resolvePromptBundle({
 		db,
 		aiAgent,
@@ -857,6 +928,13 @@ export async function generate(
 
 	// Build dynamic system prompt with real-time context and tool instructions
 	const systemPrompt = buildRuntimeSystemPrompt();
+	setToolTracePhase(traceDiagnostics, "generation_model_prepare");
+	if (deepTraceActive) {
+		trace(
+			"log",
+			`[ai-agent:trace] conv=${convId} | generation.phase | phase=generation_model_prepare`
+		);
+	}
 	const prepareStep: PrepareStepFunction<ToolSet> = ({ steps }) => {
 		const nonFinishCallsUsed = countNonFinishToolCallsFromSteps(
 			(steps as readonly ToolStepLike[] | undefined) ?? []
@@ -877,6 +955,13 @@ export async function generate(
 	const mainStopConditions = buildStopConditions({
 		toolBudgetCap: maxToolInvocationsPerRun,
 	});
+	setToolTracePhase(traceDiagnostics, "generation_model_call");
+	if (deepTraceActive) {
+		trace(
+			"log",
+			`[ai-agent:trace] conv=${convId} | generation.phase | phase=generation_model_call`
+		);
+	}
 
 	// Format conversation history for LLM with multi-party prefixes
 	const visitorName = visitorContext?.name ?? null;
@@ -940,10 +1025,16 @@ export async function generate(
 			abortSignal,
 		});
 	} catch (error) {
-		// Handle abort gracefully - this means a new message arrived
+		// Handle abort gracefully (timeout or external cancellation)
 		if (error instanceof Error && error.name === "AbortError") {
-			console.log(
-				`[ai-agent:generate] conv=${convId} | Generation aborted - new message arrived`
+			const abortReason = traceDiagnostics?.abortReason ?? "abort_signal";
+			if (!traceDiagnostics?.abortReason) {
+				setToolTraceAbortReason(traceDiagnostics, abortReason);
+			}
+			setToolTracePhase(traceDiagnostics, "generation_aborted");
+			trace(
+				"warn",
+				`[ai-agent:generate] conv=${convId} | Generation aborted | abortReason=${abortReason} | ${traceDiagnostics ? formatToolTraceDiagnostics(traceDiagnostics) : "traceDiagnostics=none"}`
 			);
 			const toolCallsByName = buildToolCallsByNameFromCounters(
 				toolContext.counters
@@ -951,7 +1042,10 @@ export async function generate(
 			return {
 				decision: {
 					action: "skip" as const,
-					reasoning: "Generation aborted due to new message arriving",
+					reasoning:
+						abortReason === "generation_timeout"
+							? "Generation aborted due to timeout"
+							: "Generation aborted due to cancellation signal",
 					confidence: 1,
 				},
 				aborted: true,
@@ -972,6 +1066,11 @@ export async function generate(
 	// Log tool call information for debugging.
 	// Merge SDK-reported tool calls with authoritative local counters to avoid
 	// fallback loops when SDK step accounting is incomplete.
+	setToolTracePhase(traceDiagnostics, "generation_model_response");
+	trace(
+		"log",
+		`[ai-agent:trace] conv=${convId} | generation.phase | phase=generation_model_response`
+	);
 	const allToolCalls =
 		result.steps?.flatMap((step) => step.toolCalls ?? []) ?? [];
 	const sdkToolCallsByName = buildToolCallsByName(allToolCalls);
@@ -1140,8 +1239,14 @@ export async function generate(
 				});
 			} catch (error) {
 				if (error instanceof Error && error.name === "AbortError") {
-					console.log(
-						`[ai-agent:generate] conv=${convId} | Repair aborted - new message arrived`
+					const abortReason = traceDiagnostics?.abortReason ?? "abort_signal";
+					if (!traceDiagnostics?.abortReason) {
+						setToolTraceAbortReason(traceDiagnostics, abortReason);
+					}
+					setToolTracePhase(traceDiagnostics, "generation_repair_aborted");
+					trace(
+						"warn",
+						`[ai-agent:generate] conv=${convId} | Repair aborted | abortReason=${abortReason} | ${traceDiagnostics ? formatToolTraceDiagnostics(traceDiagnostics) : "traceDiagnostics=none"}`
 					);
 					const repairAbortToolCallsByName = buildToolCallsByNameFromCounters(
 						toolContext.counters
@@ -1158,7 +1263,10 @@ export async function generate(
 					return {
 						decision: {
 							action: "skip" as const,
-							reasoning: "Repair aborted due to new message arriving",
+							reasoning:
+								abortReason === "generation_timeout"
+									? "Repair aborted due to timeout"
+									: "Repair aborted due to cancellation signal",
 							confidence: 1,
 						},
 						aborted: true,
@@ -1316,6 +1424,14 @@ export async function generate(
 	if (usage) {
 		console.log(
 			`[ai-agent:generate] conv=${convId} | Tokens: input=${usage.inputTokens ?? 0} output=${usage.outputTokens ?? 0} total=${usage.totalTokens ?? 0}`
+		);
+	}
+
+	setToolTracePhase(traceDiagnostics, "generation_done");
+	if (deepTraceActive) {
+		trace(
+			"log",
+			`[ai-agent:trace] conv=${convId} | generation.exit | ${traceDiagnostics ? formatToolTraceDiagnostics(traceDiagnostics) : "traceDiagnostics=none"}`
 		);
 	}
 

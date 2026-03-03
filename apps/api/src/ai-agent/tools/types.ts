@@ -47,6 +47,23 @@ export type PublicMessageSentCallback = (params: {
 	duplicateSuppressed?: boolean;
 }) => void;
 
+export type ToolTracePayloadMode = "raw" | "sanitized" | "metadata";
+
+export type ToolTraceDiagnostics = {
+	phase: string;
+	toolCallsStarted: number;
+	toolCallsFinished: number;
+	lastToolName: string | null;
+	lastActivityAtMs: number;
+	abortReason: string | null;
+};
+
+export type ToolTraceLogger = {
+	log: (...args: unknown[]) => void;
+	warn: (...args: unknown[]) => void;
+	error: (...args: unknown[]) => void;
+};
+
 /**
  * Context passed to all tools via experimental_context
  */
@@ -95,6 +112,14 @@ export type ToolContext = {
 	isEscalated?: boolean;
 	/** Per-generation captured action store */
 	actionCapture?: ActionCapture;
+	/** Shared generation diagnostics used by pipeline heartbeats and timeout snapshots */
+	traceDiagnostics?: ToolTraceDiagnostics;
+	/** Structured logger sink for detailed trace lines */
+	traceLogger?: ToolTraceLogger;
+	/** Enables high-volume deep trace emission for tool call start/end payload logs */
+	deepTraceEnabled?: boolean;
+	/** Payload logging mode for tool I/O traces */
+	tracePayloadMode?: ToolTracePayloadMode;
 };
 
 /**

@@ -7,12 +7,34 @@ const routeEventCalls: [AnyRealtimeEvent, EventContext][] = [];
 
 mock.module("@api/db", () => ({ db: {} }));
 mock.module("@api/db/queries/api-keys", () => ({}));
+mock.module("@api/db/queries/conversation", () => ({
+	getConversationById: async () => ({
+		id: "conv-1",
+		websiteId: "website-1",
+		visitorId: "visitor-1",
+	}),
+}));
 mock.module("@api/db/queries/session", () => ({
 	normalizeSessionToken: (token: string | null | undefined) =>
 		token?.trim() || undefined,
 	resolveSession: async () => null,
 }));
-mock.module("@api/db/schema", () => ({ website: {} }));
+mock.module("@api/db/queries/website", () => ({
+	getWebsiteByIdWithAccess: async () => null,
+}));
+mock.module("@api/db/schema", () => ({
+	website: {},
+	organization: {},
+	user: {},
+	member: {},
+	visitor: {},
+	view: {},
+	conversation: {},
+	conversationView: {},
+	conversationSeen: {},
+	conversationTimelineItem: {},
+	aiAgent: {},
+}));
 mock.module("@api/lib/auth", () => ({
 	auth: {
 		api: {
@@ -22,6 +44,21 @@ mock.module("@api/lib/auth", () => ({
 }));
 mock.module("drizzle-orm", () => ({
 	eq: () => ({}),
+	count: () => ({}),
+	and: () => ({}),
+	or: () => ({}),
+	isNull: () => ({}),
+	isNotNull: () => ({}),
+	gt: () => ({}),
+	gte: () => ({}),
+	lt: () => ({}),
+	lte: () => ({}),
+	ne: () => ({}),
+	inArray: () => ({}),
+	notInArray: () => ({}),
+	asc: () => ({}),
+	desc: () => ({}),
+	sql: () => ({}),
 }));
 mock.module("hono/bun", () => ({
 	createBunWebSocket: () => ({
@@ -158,5 +195,71 @@ describe("handleConnectionClose", () => {
 		await handleConnectionClose("missing-conn");
 
 		expect(routeEventCalls).toHaveLength(0);
+	});
+});
+
+describe("enrichClientEventPayload", () => {
+	it("forces user actor identity for conversationSeen from authenticated user context", async () => {
+		const { enrichClientEventPayload } = await socketModulePromise;
+
+		const enriched = enrichClientEventPayload(
+			"conversationSeen",
+			{
+				conversationId: "conv-1",
+				actorType: "ai_agent",
+				actorId: "ai-spoof",
+				userId: "user-spoof",
+				visitorId: "visitor-spoof",
+				aiAgentId: "ai-spoof",
+				lastSeenAt: "2000-01-01T00:00:00.000Z",
+			},
+			{
+				organizationId: "org-1",
+				websiteId: "site-1",
+				userId: "user-auth",
+				visitorId: "visitor-route",
+			}
+		) as Record<string, unknown>;
+
+		expect(enriched.organizationId).toBe("org-1");
+		expect(enriched.websiteId).toBe("site-1");
+		expect(enriched.userId).toBe("user-auth");
+		expect(enriched.visitorId).toBe("visitor-route");
+		expect(enriched.aiAgentId).toBeNull();
+		expect(enriched.actorType).toBe("user");
+		expect(enriched.actorId).toBe("user-auth");
+		expect(typeof enriched.lastSeenAt).toBe("string");
+	});
+
+	it("forces visitor actor identity for conversationSeen from authenticated visitor context", async () => {
+		const { enrichClientEventPayload } = await socketModulePromise;
+
+		const enriched = enrichClientEventPayload(
+			"conversationSeen",
+			{
+				conversationId: "conv-2",
+				actorType: "user",
+				actorId: "user-spoof",
+				userId: "user-spoof",
+				visitorId: "visitor-spoof",
+				aiAgentId: "ai-spoof",
+				lastSeenAt: "2000-01-01T00:00:00.000Z",
+			},
+			{
+				organizationId: "org-2",
+				websiteId: "site-2",
+				userId: undefined,
+				visitorId: "visitor-auth",
+			}
+		) as Record<string, unknown>;
+
+		expect(enriched.organizationId).toBe("org-2");
+		expect(enriched.websiteId).toBe("site-2");
+		expect(enriched.userId).toBeNull();
+		expect(enriched.visitorId).toBe("visitor-auth");
+		expect(enriched.aiAgentId).toBeNull();
+		expect(enriched.actorType).toBe("visitor");
+		expect(enriched.actorId).toBe("visitor-auth");
+		expect(typeof enriched.lastSeenAt).toBe("string");
 	});
 });

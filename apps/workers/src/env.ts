@@ -25,6 +25,8 @@ const getEnvVariable = (name: string, defaultValue?: string): string => {
 
 const defaultBullBoardEnabled =
 	process.env.NODE_ENV === "production" ? "false" : "true";
+const defaultConversationLogCaptureEnabled =
+	process.env.NODE_ENV === "development" ? "true" : "false";
 
 export const env = {
 	NODE_ENV: getEnvVariable("NODE_ENV"),
@@ -55,6 +57,14 @@ export const env = {
 		"AI_AGENT_DRAIN_LOCK_TTL_MS",
 		"120000"
 	),
+	AI_AGENT_TRIGGER_RUN_LOCK_TTL_MS: +getEnvVariable(
+		"AI_AGENT_TRIGGER_RUN_LOCK_TTL_MS",
+		"600000"
+	),
+	AI_AGENT_TRIGGER_PROCESSED_TTL_SECONDS: +getEnvVariable(
+		"AI_AGENT_TRIGGER_PROCESSED_TTL_SECONDS",
+		"86400"
+	),
 	AI_AGENT_WAKE_SWEEP_INTERVAL_MS: +getEnvVariable(
 		"AI_AGENT_WAKE_SWEEP_INTERVAL_MS",
 		"5000"
@@ -63,6 +73,17 @@ export const env = {
 		"AI_AGENT_WAKE_RECOVERY_JITTER_MS",
 		"1500"
 	),
+	AI_AGENT_CONVERSATION_LOG_CAPTURE_ENABLED:
+		getEnvVariable(
+			"AI_AGENT_CONVERSATION_LOG_CAPTURE_ENABLED",
+			defaultConversationLogCaptureEnabled
+		) === "true",
+	AI_AGENT_CONVERSATION_LOG_FLUSH_INTERVAL_MS: +getEnvVariable(
+		"AI_AGENT_CONVERSATION_LOG_FLUSH_INTERVAL_MS",
+		"200"
+	),
+	AI_AGENT_WORKER_DEEP_TRACE_ENABLED:
+		getEnvVariable("AI_AGENT_WORKER_DEEP_TRACE_ENABLED", "false") === "true",
 	AI_AGENT_STRICT_FIFO:
 		getEnvVariable("AI_AGENT_STRICT_FIFO", "true") === "true",
 	// Database (needed for notification queries)

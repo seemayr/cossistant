@@ -31,6 +31,21 @@ type TestToolContext = {
 	triggerMessageId: string;
 	workflowRunId: string;
 	triggerVisibility?: "public" | "private";
+	traceDiagnostics?: {
+		phase: string;
+		toolCallsStarted: number;
+		toolCallsFinished: number;
+		lastToolName: string | null;
+		lastActivityAtMs: number;
+		abortReason: string | null;
+	};
+	traceLogger?: {
+		log: (...args: unknown[]) => void;
+		warn: (...args: unknown[]) => void;
+		error: (...args: unknown[]) => void;
+	};
+	deepTraceEnabled?: boolean;
+	tracePayloadMode?: "raw" | "sanitized" | "metadata";
 };
 
 function createToolContext(
@@ -558,5 +573,102 @@ describe("tool-call-logger", () => {
 		expect(updatedPart?.state).toBe("result");
 		const snippet = updatedPart?.output?.data?.articles?.[0]?.snippet ?? "";
 		expect(snippet.length).toBeLessThanOrEqual(260);
+	});
+
+	it("emits deep trace logs for tool start/end with configured payload mode", async () => {
+		const { wrapToolsWithTimelineLogging } = await toolCallLoggerModulePromise;
+		const traceLog = mock((() => {}) as (...args: unknown[]) => void);
+		const traceWarn = mock((() => {}) as (...args: unknown[]) => void);
+		const traceError = mock((() => {}) as (...args: unknown[]) => void);
+		const diagnostics: NonNullable<TestToolContext["traceDiagnostics"]> = {
+			phase: "generation_waiting_model",
+			toolCallsStarted: 0,
+			toolCallsFinished: 0,
+			lastToolName: null,
+			lastActivityAtMs: Date.now(),
+			abortReason: null,
+		};
+
+		const wrappedTools = wrapToolsWithTimelineLogging(
+			{
+				searchKnowledgeBase: {
+					execute: async () => ({
+						success: true,
+						data: {
+							totalFound: 2,
+							articles: [{ title: "A" }, { title: "B" }],
+						},
+					}),
+				},
+			} as never,
+			createToolContext({
+				traceDiagnostics: diagnostics,
+				traceLogger: {
+					log: traceLog,
+					warn: traceWarn,
+					error: traceError,
+				},
+				deepTraceEnabled: true,
+				tracePayloadMode: "metadata",
+			}) as never
+		);
+
+		await executeWrappedTool(
+			wrappedTools as never,
+			"searchKnowledgeBase",
+			{ query: "refund policy" },
+			{ toolCallId: "call-trace-1" }
+		);
+
+		expect(traceWarn).toHaveBeenCalledTimes(0);
+		expect(traceError).toHaveBeenCalledTimes(0);
+		expect(traceLog).toHaveBeenCalledTimes(2);
+		expect(String(traceLog.mock.calls[0]?.[0])).toContain("tool.call.start");
+		expect(String(traceLog.mock.calls[1]?.[0])).toContain("tool.call.end");
+		expect(String(traceLog.mock.calls[1]?.[0])).toContain(
+			"payloadMode=metadata"
+		);
+		expect(diagnostics.toolCallsStarted).toBe(1);
+		expect(diagnostics.toolCallsFinished).toBe(1);
+		expect(diagnostics.lastToolName).toBe("searchKnowledgeBase");
+	});
+
+	it("does not emit deep trace logs when deep trace is disabled", async () => {
+		const { wrapToolsWithTimelineLogging } = await toolCallLoggerModulePromise;
+		const traceLog = mock((() => {}) as (...args: unknown[]) => void);
+		const traceWarn = mock((() => {}) as (...args: unknown[]) => void);
+		const traceError = mock((() => {}) as (...args: unknown[]) => void);
+
+		const wrappedTools = wrapToolsWithTimelineLogging(
+			{
+				searchKnowledgeBase: {
+					execute: async () => ({
+						success: true,
+						data: { totalFound: 1 },
+					}),
+				},
+			} as never,
+			createToolContext({
+				traceLogger: {
+					log: traceLog,
+					warn: traceWarn,
+					error: traceError,
+				},
+				deepTraceEnabled: false,
+			}) as never
+		);
+
+		await executeWrappedTool(
+			wrappedTools as never,
+			"searchKnowledgeBase",
+			{ query: "refund policy" },
+			{ toolCallId: "call-trace-off-1" }
+		);
+
+		expect(traceLog).toHaveBeenCalledTimes(0);
+		expect(traceWarn).toHaveBeenCalledTimes(0);
+		expect(traceError).toHaveBeenCalledTimes(0);
+		expect(createTimelineItemMock).toHaveBeenCalledTimes(1);
+		expect(updateTimelineItemMock).toHaveBeenCalledTimes(1);
 	});
 });

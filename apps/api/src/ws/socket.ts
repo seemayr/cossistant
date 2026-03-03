@@ -411,7 +411,7 @@ async function validateClientEvent(
  * This ensures server-side data integrity by using the authenticated
  * connection's context rather than trusting client-provided values.
  */
-function enrichClientEventPayload(
+export function enrichClientEventPayload(
 	eventType: string,
 	payload: unknown,
 	connectionContext: ConnectionContextDetails
@@ -434,13 +434,45 @@ function enrichClientEventPayload(
 				aiAgentId: null, // Clients can't impersonate AI agents
 			};
 		case "conversationSeen":
+			// Force actor identity from the authenticated connection context.
+			// Never trust client-supplied actorType/actorId for seen events.
+			if (userId) {
+				return {
+					...basePayload,
+					organizationId,
+					websiteId,
+					userId,
+					visitorId: visitorId ?? null,
+					aiAgentId: null,
+					actorType: "user",
+					actorId: userId,
+					lastSeenAt: new Date().toISOString(),
+				};
+			}
+
+			if (visitorId) {
+				return {
+					...basePayload,
+					organizationId,
+					websiteId,
+					userId: null,
+					visitorId,
+					aiAgentId: null,
+					actorType: "visitor",
+					actorId: visitorId,
+					lastSeenAt: new Date().toISOString(),
+				};
+			}
+
 			return {
 				...basePayload,
 				organizationId,
 				websiteId,
-				userId: userId ?? null,
-				visitorId: visitorId ?? null,
+				userId: null,
+				visitorId: null,
 				aiAgentId: null,
+				actorType: "visitor",
+				actorId: "",
 				lastSeenAt: new Date().toISOString(),
 			};
 		default:

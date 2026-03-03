@@ -4,6 +4,8 @@ const DEFAULT_QUEUE_TTL_SECONDS = 86_400; // 24h
 const DEFAULT_WAKE_NEEDED_TTL_SECONDS = 300; // 5m
 const ACTIVE_CONVERSATIONS_KEY = "ai-agent:active-conversations";
 const WAKE_NEEDED_PREFIX = "ai-agent:wake-needed:";
+const TRIGGER_RUN_LOCK_PREFIX = "ai-agent:trigger-processing:";
+const TRIGGER_PROCESSED_PREFIX = "ai-agent:trigger-processed:";
 
 const LOCK_RENEW_SCRIPT = `
 if redis.call("get", KEYS[1]) == ARGV[1] then
@@ -13,6 +15,13 @@ return 0
 `;
 
 const LOCK_RELEASE_SCRIPT = `
+if redis.call("get", KEYS[1]) == ARGV[1] then
+  return redis.call("del", KEYS[1])
+end
+return 0
+`;
+
+const TRIGGER_RUN_LOCK_RELEASE_SCRIPT = `
 if redis.call("get", KEYS[1]) == ARGV[1] then
   return redis.call("del", KEYS[1])
 end
@@ -51,6 +60,20 @@ export function getAiAgentFailureKey(
 	messageId: string
 ): string {
 	return `ai-agent:fail:${conversationId}:${messageId}`;
+}
+
+export function getAiAgentTriggerRunLockKey(
+	conversationId: string,
+	messageId: string
+): string {
+	return `${TRIGGER_RUN_LOCK_PREFIX}${conversationId}:${messageId}`;
+}
+
+export function getAiAgentTriggerProcessedKey(
+	conversationId: string,
+	messageId: string
+): string {
+	return `${TRIGGER_PROCESSED_PREFIX}${conversationId}:${messageId}`;
 }
 
 function getAiAgentFailurePrefix(conversationId: string): string {
@@ -289,6 +312,74 @@ export async function releaseAiAgentLock(
 ): Promise<boolean> {
 	const lockKey = getAiAgentLockKey(conversationId);
 	const result = await redis.eval(LOCK_RELEASE_SCRIPT, 1, lockKey, lockValue);
+	return result === 1;
+}
+
+export async function isAiAgentTriggerProcessed(
+	redis: Redis,
+	conversationId: string,
+	messageId: string
+): Promise<boolean> {
+	const processedKey = getAiAgentTriggerProcessedKey(conversationId, messageId);
+	return (await redis.get(processedKey)) !== null;
+}
+
+export async function markAiAgentTriggerProcessed(
+	redis: Redis,
+	params: {
+		conversationId: string;
+		messageId: string;
+		ttlSeconds: number;
+	}
+): Promise<void> {
+	const processedKey = getAiAgentTriggerProcessedKey(
+		params.conversationId,
+		params.messageId
+	);
+	await redis.set(processedKey, "1", "EX", params.ttlSeconds);
+}
+
+export async function acquireAiAgentTriggerRunLock(
+	redis: Redis,
+	params: {
+		conversationId: string;
+		messageId: string;
+		lockValue: string;
+		ttlMs: number;
+	}
+): Promise<boolean> {
+	const lockKey = getAiAgentTriggerRunLockKey(
+		params.conversationId,
+		params.messageId
+	);
+	const result = await redis.set(
+		lockKey,
+		params.lockValue,
+		"PX",
+		params.ttlMs,
+		"NX"
+	);
+	return result === "OK";
+}
+
+export async function releaseAiAgentTriggerRunLock(
+	redis: Redis,
+	params: {
+		conversationId: string;
+		messageId: string;
+		lockValue: string;
+	}
+): Promise<boolean> {
+	const lockKey = getAiAgentTriggerRunLockKey(
+		params.conversationId,
+		params.messageId
+	);
+	const result = await redis.eval(
+		TRIGGER_RUN_LOCK_RELEASE_SCRIPT,
+		1,
+		lockKey,
+		params.lockValue
+	);
 	return result === 1;
 }
 

@@ -1,3 +1,4 @@
+import { env } from "@api/env";
 import { generateIdempotentULID, generateULID } from "@api/utils/db/ids";
 import {
 	createTimelineItem,
@@ -11,7 +12,14 @@ import {
 	type ToolTimelineLogType,
 } from "@cossistant/types";
 import type { ToolExecutionOptions, ToolSet } from "ai";
-import type { ToolContext } from "./types";
+import {
+	buildTracePayloadByMode,
+	getToolTracePayloadMode,
+	isDeepTraceEnabled,
+	markToolTraceCallFinished,
+	markToolTraceCallStarted,
+} from "../pipeline/trace";
+import type { ToolContext, ToolTracePayloadMode } from "./types";
 
 const MAX_SANITIZE_DEPTH = 4;
 const MAX_OBJECT_KEYS = 30;
@@ -435,6 +443,52 @@ function toErrorText(error: unknown): string {
 	return "Tool execution failed";
 }
 
+function getTracePayloadModeForContext(
+	toolContext: ToolContext
+): ToolTracePayloadMode {
+	return (
+		toolContext.tracePayloadMode ??
+		getToolTracePayloadMode(env.AI_AGENT_TRACE_PAYLOAD_MODE)
+	);
+}
+
+function shouldEmitDeepToolTrace(toolContext: ToolContext): boolean {
+	if (toolContext.deepTraceEnabled != null) {
+		return isDeepTraceEnabled(toolContext.deepTraceEnabled);
+	}
+	return isDeepTraceEnabled(env.AI_AGENT_DEEP_TRACE_ENABLED);
+}
+
+function emitToolTraceLog(
+	toolContext: ToolContext,
+	level: "log" | "warn" | "error",
+	...args: unknown[]
+): void {
+	const logger = toolContext.traceLogger;
+	if (logger) {
+		if (level === "warn") {
+			logger.warn(...args);
+			return;
+		}
+		if (level === "error") {
+			logger.error(...args);
+			return;
+		}
+		logger.log(...args);
+		return;
+	}
+
+	if (level === "warn") {
+		console.warn(...args);
+		return;
+	}
+	if (level === "error") {
+		console.error(...args);
+		return;
+	}
+	console.log(...args);
+}
+
 function getFailureTextFromResult(result: unknown): string | null {
 	if (!isRecord(result)) {
 		return null;
@@ -755,6 +809,7 @@ export function wrapToolsWithTimelineLogging(
 		wrappedTools[toolName] = {
 			...toolDefinition,
 			execute: async (input: unknown, options?: ToolExecutionOptions) => {
+				const startedAt = Date.now();
 				const toolCallId =
 					typeof options?.toolCallId === "string" &&
 					options.toolCallId.length > 0
@@ -767,6 +822,23 @@ export function wrapToolsWithTimelineLogging(
 					toolCallId,
 				});
 				const sanitizedInput = sanitizeToolInput(input);
+				const tracePayloadMode = getTracePayloadModeForContext(toolContext);
+				const deepToolTraceEnabled = shouldEmitDeepToolTrace(toolContext);
+				markToolTraceCallStarted(toolContext.traceDiagnostics, toolName);
+				if (deepToolTraceEnabled) {
+					emitToolTraceLog(
+						toolContext,
+						"log",
+						`[ai-agent:trace] conv=${toolContext.conversationId} | tool.call.start | tool=${toolName} | toolCallId=${toolCallId} | payloadMode=${tracePayloadMode}`,
+						{
+							input: buildTracePayloadByMode({
+								mode: tracePayloadMode,
+								rawPayload: input,
+								sanitizedPayload: sanitizedInput,
+							}),
+						}
+					);
+				}
 
 				await safeCreatePartialToolTimelineItem({
 					toolContext,
@@ -782,8 +854,26 @@ export function wrapToolsWithTimelineLogging(
 						options as never
 					);
 					const failureText = getFailureTextFromResult(result);
+					const sanitizedOutput = sanitizeToolOutput(toolName, result);
+					const durationMs = Date.now() - startedAt;
+					markToolTraceCallFinished(toolContext.traceDiagnostics, toolName);
 
 					if (failureText) {
+						if (deepToolTraceEnabled) {
+							emitToolTraceLog(
+								toolContext,
+								"warn",
+								`[ai-agent:trace] conv=${toolContext.conversationId} | tool.call.end | tool=${toolName} | toolCallId=${toolCallId} | state=error | durationMs=${durationMs} | payloadMode=${tracePayloadMode}`,
+								{
+									error: failureText,
+									output: buildTracePayloadByMode({
+										mode: tracePayloadMode,
+										rawPayload: result,
+										sanitizedPayload: sanitizedOutput,
+									}),
+								}
+							);
+						}
 						await safeUpdateToolTimelineItem({
 							toolContext,
 							timelineItemId,
@@ -791,10 +881,24 @@ export function wrapToolsWithTimelineLogging(
 							toolCallId,
 							state: "error",
 							sanitizedInput,
-							sanitizedOutput: sanitizeToolOutput(toolName, result),
+							sanitizedOutput,
 							errorText: failureText,
 						});
 					} else {
+						if (deepToolTraceEnabled) {
+							emitToolTraceLog(
+								toolContext,
+								"log",
+								`[ai-agent:trace] conv=${toolContext.conversationId} | tool.call.end | tool=${toolName} | toolCallId=${toolCallId} | state=result | durationMs=${durationMs} | payloadMode=${tracePayloadMode}`,
+								{
+									output: buildTracePayloadByMode({
+										mode: tracePayloadMode,
+										rawPayload: result,
+										sanitizedPayload: sanitizedOutput,
+									}),
+								}
+							);
+						}
 						await safeUpdateToolTimelineItem({
 							toolContext,
 							timelineItemId,
@@ -802,12 +906,28 @@ export function wrapToolsWithTimelineLogging(
 							toolCallId,
 							state: "result",
 							sanitizedInput,
-							sanitizedOutput: sanitizeToolOutput(toolName, result),
+							sanitizedOutput,
 						});
 					}
 
 					return result;
 				} catch (error) {
+					const durationMs = Date.now() - startedAt;
+					markToolTraceCallFinished(toolContext.traceDiagnostics, toolName);
+					if (deepToolTraceEnabled) {
+						emitToolTraceLog(
+							toolContext,
+							"error",
+							`[ai-agent:trace] conv=${toolContext.conversationId} | tool.call.end | tool=${toolName} | toolCallId=${toolCallId} | state=threw | durationMs=${durationMs} | payloadMode=${tracePayloadMode}`,
+							{
+								error: toErrorText(error),
+								output: buildTracePayloadByMode({
+									mode: tracePayloadMode,
+									rawPayload: error,
+								}),
+							}
+						);
+					}
 					await safeUpdateToolTimelineItem({
 						toolContext,
 						timelineItemId,

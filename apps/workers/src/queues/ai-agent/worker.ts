@@ -32,18 +32,22 @@ import {
 	AI_AGENT_JOB_OPTIONS,
 	type AiAgentJobData,
 	acquireAiAgentLock,
+	acquireAiAgentTriggerRunLock,
 	clearAiAgentWakeNeeded,
 	enqueueAiAgentMessage,
 	generateAiAgentJobId,
 	getAiAgentFailureKey,
 	getAiAgentQueueSize,
+	isAiAgentTriggerProcessed,
 	isAiAgentWakeNeeded,
 	listAiAgentActiveConversations,
 	listAiAgentWakeNeededConversations,
+	markAiAgentTriggerProcessed,
 	markAiAgentWakeNeeded,
 	peekAiAgentQueue,
 	QUEUE_NAMES,
 	releaseAiAgentLock,
+	releaseAiAgentTriggerRunLock,
 	removeAiAgentActiveConversation,
 	removeAiAgentQueueMessage,
 	renewAiAgentLock,
@@ -339,6 +343,9 @@ export function createAiAgentWorker({
 	const DRAIN_MAX_MESSAGES = env.AI_AGENT_DRAIN_MAX_MESSAGES;
 	const DRAIN_MAX_RUNTIME_MS = env.AI_AGENT_DRAIN_MAX_RUNTIME_MS;
 	const DRAIN_LOCK_TTL_MS = env.AI_AGENT_DRAIN_LOCK_TTL_MS;
+	const TRIGGER_RUN_LOCK_TTL_MS = env.AI_AGENT_TRIGGER_RUN_LOCK_TTL_MS;
+	const TRIGGER_PROCESSED_TTL_SECONDS =
+		env.AI_AGENT_TRIGGER_PROCESSED_TTL_SECONDS;
 	const STRICT_FIFO = env.AI_AGENT_STRICT_FIFO;
 	const WAKE_SWEEP_INTERVAL_MS = env.AI_AGENT_WAKE_SWEEP_INTERVAL_MS;
 	const WAKE_RECOVERY_JITTER_MS = env.AI_AGENT_WAKE_RECOVERY_JITTER_MS;
@@ -536,6 +543,11 @@ export function createAiAgentWorker({
 			});
 			throw error;
 		}
+		logWorkerTrace({
+			conversationId: params.conversationId,
+			event: "worker.wake.ensure.result",
+			fields: `reason=${params.reason} | result=${result}`,
+		});
 
 		if (result === "already_active" || result === "already_waiting") {
 			return "already_running";
@@ -641,6 +653,33 @@ export function createAiAgentWorker({
 		return count;
 	}
 
+	function logTriggerState(params: {
+		conversationId: string;
+		triggerMessageId: string;
+		jobId: string;
+		attempt: number;
+		state: "processing" | "processed" | "skipped_due_lock" | "pipeline_run";
+		notes?: string;
+	}): void {
+		const suffix = params.notes ? ` | ${params.notes}` : "";
+		console.log(
+			`[worker:ai-agent] conv=${params.conversationId} | trigger=${params.triggerMessageId} | jobId=${params.jobId} | attempt=${params.attempt} | state=${params.state}${suffix}`
+		);
+	}
+
+	function logWorkerTrace(params: {
+		conversationId: string;
+		event: string;
+		fields?: string;
+	}): void {
+		if (!env.AI_AGENT_WORKER_DEEP_TRACE_ENABLED) {
+			return;
+		}
+		console.log(
+			`[worker:ai-agent:trace] conv=${params.conversationId} | ${params.event}${params.fields ? ` | ${params.fields}` : ""}`
+		);
+	}
+
 	/**
 	 * Process an AI agent job through the pipeline
 	 */
@@ -650,12 +689,23 @@ export function createAiAgentWorker({
 	): Promise<void> {
 		const { conversationId, aiAgentId } = job.data;
 		const lockValue = String(job.id ?? `job-${Date.now()}`);
+		const lockAcquireStart = Date.now();
+		logWorkerTrace({
+			conversationId,
+			event: "worker.lock.acquire.start",
+			fields: `jobId=${job.id ?? "unknown"} | ttlMs=${DRAIN_LOCK_TTL_MS}`,
+		});
 		const lockAcquired = await acquireAiAgentLock(
 			redis,
 			conversationId,
 			lockValue,
 			DRAIN_LOCK_TTL_MS
 		);
+		logWorkerTrace({
+			conversationId,
+			event: "worker.lock.acquire.end",
+			fields: `jobId=${job.id ?? "unknown"} | acquired=${lockAcquired} | durationMs=${Date.now() - lockAcquireStart}`,
+		});
 
 		if (!lockAcquired) {
 			await ensureConversationWake({
@@ -681,12 +731,18 @@ export function createAiAgentWorker({
 				}
 
 				try {
+					const renewStart = Date.now();
 					const renewed = await renewAiAgentLock(
 						redis,
 						conversationId,
 						lockValue,
 						DRAIN_LOCK_TTL_MS
 					);
+					logWorkerTrace({
+						conversationId,
+						event: "worker.lock.renew",
+						fields: `renewed=${renewed} | durationMs=${Date.now() - renewStart}`,
+					});
 					if (!renewed) {
 						lockLost = true;
 						console.error(
@@ -707,7 +763,13 @@ export function createAiAgentWorker({
 
 		try {
 			// Get conversation for emitting events and cursor state
+			const conversationLookupStart = Date.now();
 			const conversation = await getConversationById(db, { conversationId });
+			logWorkerTrace({
+				conversationId,
+				event: "worker.conversation.lookup",
+				fields: `found=${Boolean(conversation)} | durationMs=${Date.now() - conversationLookupStart}`,
+			});
 
 			if (!conversation) {
 				console.error(`[worker:ai-agent] conv=${conversationId} | Not found`);
@@ -716,12 +778,18 @@ export function createAiAgentWorker({
 				return;
 			}
 
+			const pausedCheckStart = Date.now();
 			const pausedAtStart = await isAiPausedForConversation({
 				db,
 				redis,
 				conversationId,
 				fallbackPausedUntil: conversation.aiPausedUntil,
 				skipDbLookup: true,
+			});
+			logWorkerTrace({
+				conversationId,
+				event: "worker.pause.check.start",
+				fields: `paused=${pausedAtStart} | durationMs=${Date.now() - pausedCheckStart}`,
 			});
 			if (pausedAtStart) {
 				const dropped = await dropQueuedBacklogWhilePaused({
@@ -752,7 +820,13 @@ export function createAiAgentWorker({
 				lastSeenAt,
 			});
 
+			const hydrateStart = Date.now();
 			await hydrateQueueFromCursor(redis, conversation);
+			logWorkerTrace({
+				conversationId,
+				event: "worker.queue.hydrate_from_cursor",
+				fields: `durationMs=${Date.now() - hydrateStart}`,
+			});
 			let cursor: AiCursor = {
 				createdAt: conversation.aiAgentLastProcessedMessageCreatedAt ?? null,
 				messageId: conversation.aiAgentLastProcessedMessageId ?? null,
@@ -760,6 +834,7 @@ export function createAiAgentWorker({
 
 			const drainStart = Date.now();
 			let processed = 0;
+			let iteration = 0;
 			if (!STRICT_FIFO) {
 				console.warn(
 					"[worker:ai-agent] STRICT_FIFO=false is deprecated. Worker still enforces strict FIFO."
@@ -767,6 +842,12 @@ export function createAiAgentWorker({
 			}
 
 			while (true) {
+				iteration += 1;
+				logWorkerTrace({
+					conversationId,
+					event: "worker.loop.iteration.start",
+					fields: `iteration=${iteration} | processed=${processed} | elapsedMs=${Date.now() - drainStart}`,
+				});
 				if (lockLost) {
 					console.error(
 						`[worker:ai-agent] conv=${conversationId} | Lock lease lost, stopping drain loop before next trigger`
@@ -777,12 +858,27 @@ export function createAiAgentWorker({
 						reason: "lock_lost",
 						currentJobId: String(job.id ?? "__lock_lost__"),
 					});
+					logWorkerTrace({
+						conversationId,
+						event: "worker.loop.breakReason",
+						fields: "reason=lock_lost",
+					});
 					break;
 				}
 				if (processed >= DRAIN_MAX_MESSAGES) {
+					logWorkerTrace({
+						conversationId,
+						event: "worker.loop.breakReason",
+						fields: `reason=drain_max_messages | processed=${processed}`,
+					});
 					break;
 				}
 				if (Date.now() - drainStart >= DRAIN_MAX_RUNTIME_MS) {
+					logWorkerTrace({
+						conversationId,
+						event: "worker.loop.breakReason",
+						fields: `reason=drain_max_runtime | elapsedMs=${Date.now() - drainStart}`,
+					});
 					break;
 				}
 				if (await isAiPausedInRedis(redis, conversationId)) {
@@ -797,15 +893,32 @@ export function createAiAgentWorker({
 					return;
 				}
 
+				const queuePeekStart = Date.now();
 				const nextMessageId = await peekAiAgentQueue(redis, conversationId);
+				logWorkerTrace({
+					conversationId,
+					event: "worker.queue.peek",
+					fields: `nextMessageId=${nextMessageId ?? "none"} | durationMs=${Date.now() - queuePeekStart}`,
+				});
 
 				if (!nextMessageId) {
+					logWorkerTrace({
+						conversationId,
+						event: "worker.loop.breakReason",
+						fields: "reason=queue_empty",
+					});
 					break;
 				}
 
+				const metadataLookupStart = Date.now();
 				const messageMetadata = await getMessageMetadata(db, {
 					messageId: nextMessageId,
 					organizationId: conversation.organizationId,
+				});
+				logWorkerTrace({
+					conversationId,
+					event: "worker.message_metadata.lookup",
+					fields: `messageId=${nextMessageId} | found=${Boolean(messageMetadata)} | durationMs=${Date.now() - metadataLookupStart}`,
 				});
 
 				if (!messageMetadata) {
@@ -842,127 +955,301 @@ export function createAiAgentWorker({
 					continue;
 				}
 
-				const workflowRunId = `ai-msg-${messageMetadata.id}`;
+				const triggerMessageId = messageMetadata.id;
+				const workerJobId = String(job.id ?? `job-${Date.now()}`);
+				const attempt = job.attemptsMade + 1;
 
-				let result: Awaited<ReturnType<typeof runAiAgentPipeline>>;
-				try {
-					result = await runWithWorkflowStartedEvent({
-						event: {
-							conversation,
-							aiAgentId,
-							workflowRunId,
-							triggerMessageId: messageMetadata.id,
-						},
-						run: () =>
-							runAiAgentPipeline({
-								db,
-								input: {
-									conversationId,
-									messageId: messageMetadata.id,
-									messageCreatedAt: messageMetadata.createdAt,
-									websiteId: conversation.websiteId,
-									organizationId: conversation.organizationId,
-									visitorId: conversation.visitorId,
-									aiAgentId,
-									workflowRunId,
-									jobId: String(job.id ?? `job-${Date.now()}`),
-								},
-							}),
-					});
-				} catch (error) {
-					console.error(
-						`[worker:ai-agent] conv=${conversationId} | Pipeline threw unexpectedly for message ${messageMetadata.id}`,
-						error
-					);
-					result = {
-						status: "error",
-						error: error instanceof Error ? error.message : "Pipeline threw",
-						publicMessagesSent: 0,
-						retryable: true,
-						metrics: {
-							intakeMs: 0,
-							decisionMs: 0,
-							generationMs: 0,
-							executionMs: 0,
-							followupMs: 0,
-							totalMs: 0,
-						},
-					};
-				}
-
-				if (lockLost) {
-					console.error(
-						`[worker:ai-agent] conv=${conversationId} | Lock lease lost after pipeline run, skipping queue mutation`
-					);
-					await ensureConversationWake({
-						redis,
-						conversationId,
-						reason: "lock_lost",
-						currentJobId: String(job.id ?? "__lock_lost_after_pipeline__"),
-					});
-					break;
-				}
-
-				if (result.status === "error") {
-					const failureCount = await recordMessageFailure(
-						redis,
-						conversationId,
-						messageMetadata.id
-					);
-					const failureAction = resolvePipelineFailureAction({
-						retryable: result.retryable,
-						failureCount,
-						failureThreshold: FAILURE_THRESHOLD,
-					});
-
-					if (failureAction === "drop") {
-						console.error(
-							`[worker:ai-agent] conv=${conversationId} | Message ${messageMetadata.id} failed ${failureCount} times (retryable=${result.retryable}, publicMessagesSent=${result.publicMessagesSent}), dropping`
-						);
-						await removeAiAgentQueueMessage(
-							redis,
-							conversationId,
-							messageMetadata.id
-						);
-						await updateConversationAiCursor(db, {
-							conversationId,
-							organizationId: conversation.organizationId,
-							messageId: messageMetadata.id,
-							messageCreatedAt: messageMetadata.createdAt,
-						});
-						cursor = advanceCursor(cursor, messageMetadata);
-						processed++;
-						continue;
-					}
-
-					console.warn(
-						`[worker:ai-agent] conv=${conversationId} | Message ${messageMetadata.id} failed (${failureCount}/${FAILURE_THRESHOLD}), keeping queued for retry`
-					);
-					break;
-				}
-
-				await updateConversationAiCursor(db, {
-					conversationId,
-					organizationId: conversation.organizationId,
-					messageId: messageMetadata.id,
-					messageCreatedAt: messageMetadata.createdAt,
-				});
-				cursor = advanceCursor(cursor, messageMetadata);
-				await removeAiAgentQueueMessage(
+				const triggerAlreadyProcessed = await isAiAgentTriggerProcessed(
 					redis,
 					conversationId,
-					messageMetadata.id
+					triggerMessageId
 				);
-				processed++;
+				if (triggerAlreadyProcessed) {
+					logTriggerState({
+						conversationId,
+						triggerMessageId,
+						jobId: workerJobId,
+						attempt,
+						state: "processed",
+						notes: "housekeeping_only",
+					});
+					const housekeepingStart = Date.now();
+					await updateConversationAiCursor(db, {
+						conversationId,
+						organizationId: conversation.organizationId,
+						messageId: triggerMessageId,
+						messageCreatedAt: messageMetadata.createdAt,
+					});
+					cursor = advanceCursor(cursor, messageMetadata);
+					await removeAiAgentQueueMessage(
+						redis,
+						conversationId,
+						triggerMessageId
+					);
+					logWorkerTrace({
+						conversationId,
+						event: "worker.housekeeping_only",
+						fields: `triggerMessageId=${triggerMessageId} | jobId=${workerJobId} | attempt=${attempt} | durationMs=${Date.now() - housekeepingStart}`,
+					});
+					processed++;
+					continue;
+				}
+
+				const triggerLockValue = `${workerJobId}:${triggerMessageId}:${Date.now()}`;
+				const triggerLockStart = Date.now();
+				const triggerLockAcquired = await acquireAiAgentTriggerRunLock(redis, {
+					conversationId,
+					messageId: triggerMessageId,
+					lockValue: triggerLockValue,
+					ttlMs: TRIGGER_RUN_LOCK_TTL_MS,
+				});
+				logWorkerTrace({
+					conversationId,
+					event: "worker.trigger_lock.acquire",
+					fields: `triggerMessageId=${triggerMessageId} | jobId=${workerJobId} | attempt=${attempt} | acquired=${triggerLockAcquired} | ttlMs=${TRIGGER_RUN_LOCK_TTL_MS} | durationMs=${Date.now() - triggerLockStart}`,
+				});
+
+				if (!triggerLockAcquired) {
+					logTriggerState({
+						conversationId,
+						triggerMessageId,
+						jobId: workerJobId,
+						attempt,
+						state: "skipped_due_lock",
+					});
+					break;
+				}
+
+				logTriggerState({
+					conversationId,
+					triggerMessageId,
+					jobId: workerJobId,
+					attempt,
+					state: "processing",
+				});
+
+				try {
+					const workflowRunId = `ai-msg-${triggerMessageId}`;
+					const pipelineStart = Date.now();
+
+					let result: Awaited<ReturnType<typeof runAiAgentPipeline>>;
+					try {
+						logTriggerState({
+							conversationId,
+							triggerMessageId,
+							jobId: workerJobId,
+							attempt,
+							state: "pipeline_run",
+						});
+						logWorkerTrace({
+							conversationId,
+							event: "worker.pipeline.start",
+							fields: `triggerMessageId=${triggerMessageId} | jobId=${workerJobId} | attempt=${attempt}`,
+						});
+						result = await runWithWorkflowStartedEvent({
+							event: {
+								conversation,
+								aiAgentId,
+								workflowRunId,
+								triggerMessageId,
+							},
+							run: () =>
+								runAiAgentPipeline({
+									db,
+									input: {
+										conversationId,
+										messageId: triggerMessageId,
+										messageCreatedAt: messageMetadata.createdAt,
+										websiteId: conversation.websiteId,
+										organizationId: conversation.organizationId,
+										visitorId: conversation.visitorId,
+										aiAgentId,
+										workflowRunId,
+										jobId: workerJobId,
+									},
+								}),
+						});
+						logWorkerTrace({
+							conversationId,
+							event: "worker.pipeline.end",
+							fields: `triggerMessageId=${triggerMessageId} | jobId=${workerJobId} | attempt=${attempt} | status=${result.status} | retryable=${result.retryable} | publicMessagesSent=${result.publicMessagesSent} | durationMs=${Date.now() - pipelineStart}`,
+						});
+					} catch (error) {
+						console.error(
+							`[worker:ai-agent] conv=${conversationId} | Pipeline threw unexpectedly for message ${triggerMessageId}`,
+							error
+						);
+						result = {
+							status: "error",
+							error: error instanceof Error ? error.message : "Pipeline threw",
+							publicMessagesSent: 0,
+							retryable: true,
+							metrics: {
+								intakeMs: 0,
+								decisionMs: 0,
+								generationMs: 0,
+								executionMs: 0,
+								followupMs: 0,
+								totalMs: 0,
+							},
+						};
+						logWorkerTrace({
+							conversationId,
+							event: "worker.pipeline.end",
+							fields: `triggerMessageId=${triggerMessageId} | jobId=${workerJobId} | attempt=${attempt} | status=error_thrown | durationMs=${Date.now() - pipelineStart}`,
+						});
+					}
+
+					if (lockLost) {
+						console.error(
+							`[worker:ai-agent] conv=${conversationId} | Lock lease lost after pipeline run, skipping queue mutation`
+						);
+						await ensureConversationWake({
+							redis,
+							conversationId,
+							reason: "lock_lost",
+							currentJobId: String(job.id ?? "__lock_lost_after_pipeline__"),
+						});
+						break;
+					}
+
+					if (result.status === "error") {
+						const failureCount = await recordMessageFailure(
+							redis,
+							conversationId,
+							triggerMessageId
+						);
+						const failureAction = resolvePipelineFailureAction({
+							retryable: result.retryable,
+							failureCount,
+							failureThreshold: FAILURE_THRESHOLD,
+						});
+
+						if (failureAction === "drop") {
+							const processedMarkerStart = Date.now();
+							await markAiAgentTriggerProcessed(redis, {
+								conversationId,
+								messageId: triggerMessageId,
+								ttlSeconds: TRIGGER_PROCESSED_TTL_SECONDS,
+							});
+							logWorkerTrace({
+								conversationId,
+								event: "worker.trigger_processed.write",
+								fields: `triggerMessageId=${triggerMessageId} | jobId=${workerJobId} | attempt=${attempt} | mode=non_retryable_drop | durationMs=${Date.now() - processedMarkerStart}`,
+							});
+							logTriggerState({
+								conversationId,
+								triggerMessageId,
+								jobId: workerJobId,
+								attempt,
+								state: "processed",
+								notes: "dropped_after_non_retryable_error",
+							});
+							console.error(
+								`[worker:ai-agent] conv=${conversationId} | Message ${triggerMessageId} failed ${failureCount} times (retryable=${result.retryable}, publicMessagesSent=${result.publicMessagesSent}), dropping`
+							);
+							const cursorAndQueueStart = Date.now();
+							await updateConversationAiCursor(db, {
+								conversationId,
+								organizationId: conversation.organizationId,
+								messageId: triggerMessageId,
+								messageCreatedAt: messageMetadata.createdAt,
+							});
+							cursor = advanceCursor(cursor, messageMetadata);
+							await removeAiAgentQueueMessage(
+								redis,
+								conversationId,
+								triggerMessageId
+							);
+							logWorkerTrace({
+								conversationId,
+								event: "worker.cursor_and_queue_update",
+								fields: `triggerMessageId=${triggerMessageId} | jobId=${workerJobId} | attempt=${attempt} | mode=non_retryable_drop | durationMs=${Date.now() - cursorAndQueueStart}`,
+							});
+							processed++;
+							continue;
+						}
+
+						console.warn(
+							`[worker:ai-agent] conv=${conversationId} | Message ${triggerMessageId} failed (${failureCount}/${FAILURE_THRESHOLD}), keeping queued for retry`
+						);
+						break;
+					}
+
+					const processedMarkerStart = Date.now();
+					await markAiAgentTriggerProcessed(redis, {
+						conversationId,
+						messageId: triggerMessageId,
+						ttlSeconds: TRIGGER_PROCESSED_TTL_SECONDS,
+					});
+					logWorkerTrace({
+						conversationId,
+						event: "worker.trigger_processed.write",
+						fields: `triggerMessageId=${triggerMessageId} | jobId=${workerJobId} | attempt=${attempt} | mode=success | durationMs=${Date.now() - processedMarkerStart}`,
+					});
+					logTriggerState({
+						conversationId,
+						triggerMessageId,
+						jobId: workerJobId,
+						attempt,
+						state: "processed",
+					});
+					const cursorAndQueueStart = Date.now();
+					await updateConversationAiCursor(db, {
+						conversationId,
+						organizationId: conversation.organizationId,
+						messageId: triggerMessageId,
+						messageCreatedAt: messageMetadata.createdAt,
+					});
+					cursor = advanceCursor(cursor, messageMetadata);
+					await removeAiAgentQueueMessage(
+						redis,
+						conversationId,
+						triggerMessageId
+					);
+					logWorkerTrace({
+						conversationId,
+						event: "worker.cursor_and_queue_update",
+						fields: `triggerMessageId=${triggerMessageId} | jobId=${workerJobId} | attempt=${attempt} | mode=success | durationMs=${Date.now() - cursorAndQueueStart}`,
+					});
+					processed++;
+				} finally {
+					const releaseStart = Date.now();
+					const released = await releaseAiAgentTriggerRunLock(redis, {
+						conversationId,
+						messageId: triggerMessageId,
+						lockValue: triggerLockValue,
+					});
+					logWorkerTrace({
+						conversationId,
+						event: "worker.trigger_lock.release",
+						fields: `triggerMessageId=${triggerMessageId} | jobId=${workerJobId} | attempt=${attempt} | released=${released} | durationMs=${Date.now() - releaseStart}`,
+					});
+					if (!released) {
+						console.warn(
+							`[worker:ai-agent] conv=${conversationId} | Failed to release trigger run lock for message ${triggerMessageId}`
+						);
+					}
+				}
 			}
 
 			const remaining = await getAiAgentQueueSize(redis, conversationId);
+			logWorkerTrace({
+				conversationId,
+				event: "worker.queue.remaining",
+				fields: `remaining=${remaining} | processed=${processed}`,
+			});
 			if (remaining > 0) {
 				const wakeState = await ensureConversationWake({
 					redis,
 					conversationId,
 					reason: "end_invariant",
 					currentJobId: String(job.id ?? "__end_invariant__"),
+				});
+				logWorkerTrace({
+					conversationId,
+					event: "worker.wake.ensure.end_invariant",
+					fields: `wakeState=${wakeState}`,
 				});
 				if (wakeState !== "scheduled") {
 					const runnable = await hasRunnableWake({
@@ -985,7 +1272,17 @@ export function createAiAgentWorker({
 		} finally {
 			stopLockWatchdog = true;
 			await lockWatchdog.catch(() => {});
-			await releaseAiAgentLock(redis, conversationId, lockValue);
+			const releaseStart = Date.now();
+			const released = await releaseAiAgentLock(
+				redis,
+				conversationId,
+				lockValue
+			);
+			logWorkerTrace({
+				conversationId,
+				event: "worker.lock.release",
+				fields: `released=${released} | durationMs=${Date.now() - releaseStart}`,
+			});
 		}
 	}
 

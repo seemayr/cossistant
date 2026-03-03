@@ -18,19 +18,53 @@ import { Queue } from "bullmq";
 import { Hono } from "hono";
 
 import { env } from "./env";
+import { installAiAgentConversationLogRouter } from "./logging/ai-agent-conversation-log-router";
 import { startAllWorkers, stopAllWorkers } from "./queues";
+
+if (
+	env.AI_AGENT_CONVERSATION_LOG_CAPTURE_ENABLED &&
+	process.env.AI_AGENT_CONVERSATION_LOG_CAPTURE_ENABLED == null
+) {
+	process.env.AI_AGENT_CONVERSATION_LOG_CAPTURE_ENABLED = "true";
+}
+
+const conversationLogRouter = installAiAgentConversationLogRouter({
+	enabled: env.AI_AGENT_CONVERSATION_LOG_CAPTURE_ENABLED,
+	flushIntervalMs: env.AI_AGENT_CONVERSATION_LOG_FLUSH_INTERVAL_MS,
+});
 
 // Create Redis connection
 const redis = createRedisConnection(env.REDIS_URL);
+let workersStarted = false;
+let workersStartPromise: Promise<void> | null = null;
+
+async function ensureWorkersStarted(): Promise<void> {
+	if (workersStarted) {
+		return;
+	}
+
+	if (workersStartPromise) {
+		await workersStartPromise;
+		return;
+	}
+
+	workersStartPromise = (async () => {
+		console.log("[workers] Redis connected, starting workers...");
+		await startAllWorkers({ redisUrl: env.REDIS_URL, stateRedis: redis });
+		workersStarted = true;
+	})().catch((error) => {
+		workersStartPromise = null;
+		throw error;
+	});
+
+	await workersStartPromise;
+}
 
 redis.on("ready", () => {
-	console.log("[workers] Redis connected, starting workers...");
-	startAllWorkers({ redisUrl: env.REDIS_URL, stateRedis: redis }).catch(
-		(error) => {
-			console.error("[workers] Failed to start workers", error);
-			process.exit(1);
-		}
-	);
+	void ensureWorkersStarted().catch((error) => {
+		console.error("[workers] Failed to start workers", error);
+		process.exit(1);
+	});
 });
 
 // Create Hono app for health checks
@@ -110,6 +144,7 @@ const shutdown = async () => {
 	console.log("[workers] Shutting down...");
 	await stopAllWorkers();
 	await Promise.all(bullBoardQueues.map((queue) => queue.close()));
+	await conversationLogRouter.stop();
 	await redis.quit();
 	server.close();
 	process.exit(0);

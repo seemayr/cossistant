@@ -1,0 +1,102 @@
+import { afterAll, beforeEach, describe, expect, it, mock } from "bun:test";
+
+const getBullConnectionOptionsMock = mock(() => ({}));
+
+function createWorkerFactoryMock() {
+	const start = mock(async () => {});
+	const stop = mock(async () => {});
+	const factory = mock(() => ({ start, stop }));
+	return { factory, start, stop };
+}
+
+const messageNotification = createWorkerFactoryMock();
+const aiAgent = createWorkerFactoryMock();
+const webCrawl = createWorkerFactoryMock();
+const aiTraining = createWorkerFactoryMock();
+
+mock.module("@cossistant/redis", () => ({
+	getBullConnectionOptions: getBullConnectionOptionsMock,
+}));
+
+mock.module("./message-notification/worker", () => ({
+	createMessageNotificationWorker: messageNotification.factory,
+}));
+
+mock.module("./ai-agent/worker", () => ({
+	createAiAgentWorker: aiAgent.factory,
+}));
+
+mock.module("./web-crawl/worker", () => ({
+	createWebCrawlWorker: webCrawl.factory,
+}));
+
+mock.module("./ai-training/worker", () => ({
+	createAiTrainingWorker: aiTraining.factory,
+}));
+
+const modulePromise = import("./index");
+
+describe("workers bootstrap idempotency", () => {
+	afterAll(() => {
+		mock.restore();
+	});
+
+	beforeEach(async () => {
+		getBullConnectionOptionsMock.mockReset();
+		messageNotification.factory.mockReset();
+		messageNotification.start.mockReset();
+		messageNotification.stop.mockReset();
+		aiAgent.factory.mockReset();
+		aiAgent.start.mockReset();
+		aiAgent.stop.mockReset();
+		webCrawl.factory.mockReset();
+		webCrawl.start.mockReset();
+		webCrawl.stop.mockReset();
+		aiTraining.factory.mockReset();
+		aiTraining.start.mockReset();
+		aiTraining.stop.mockReset();
+
+		getBullConnectionOptionsMock.mockReturnValue({});
+		messageNotification.factory.mockImplementation(() => ({
+			start: messageNotification.start,
+			stop: messageNotification.stop,
+		}));
+		aiAgent.factory.mockImplementation(() => ({
+			start: aiAgent.start,
+			stop: aiAgent.stop,
+		}));
+		webCrawl.factory.mockImplementation(() => ({
+			start: webCrawl.start,
+			stop: webCrawl.stop,
+		}));
+		aiTraining.factory.mockImplementation(() => ({
+			start: aiTraining.start,
+			stop: aiTraining.stop,
+		}));
+
+		const { stopAllWorkers } = await modulePromise;
+		await stopAllWorkers();
+	});
+
+	it("starts workers only once when startAllWorkers is called repeatedly", async () => {
+		const { startAllWorkers, stopAllWorkers } = await modulePromise;
+		const params = {
+			redisUrl: "redis://localhost:6379",
+			stateRedis: {} as never,
+		};
+
+		await Promise.all([startAllWorkers(params), startAllWorkers(params)]);
+
+		expect(messageNotification.factory).toHaveBeenCalledTimes(1);
+		expect(aiAgent.factory).toHaveBeenCalledTimes(1);
+		expect(webCrawl.factory).toHaveBeenCalledTimes(1);
+		expect(aiTraining.factory).toHaveBeenCalledTimes(1);
+
+		expect(messageNotification.start).toHaveBeenCalledTimes(1);
+		expect(aiAgent.start).toHaveBeenCalledTimes(1);
+		expect(webCrawl.start).toHaveBeenCalledTimes(1);
+		expect(aiTraining.start).toHaveBeenCalledTimes(1);
+
+		await stopAllWorkers();
+	});
+});

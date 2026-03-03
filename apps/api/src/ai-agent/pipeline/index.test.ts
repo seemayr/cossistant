@@ -54,6 +54,24 @@ const continuationGateMock = mock((async () => ({
 	reason: "default",
 	confidence: "high" as const,
 })) as (...args: unknown[]) => Promise<unknown>);
+const devConversationLogLogMock = mock((() => {}) as (
+	...args: unknown[]
+) => void);
+const devConversationLogWarnMock = mock((() => {}) as (
+	...args: unknown[]
+) => void);
+const devConversationLogErrorMock = mock((() => {}) as (
+	...args: unknown[]
+) => void);
+const devConversationLogFlushMock = mock(
+	(async () => {}) as () => Promise<void>
+);
+const createDevConversationLogMock = mock((() => ({
+	log: devConversationLogLogMock,
+	warn: devConversationLogWarnMock,
+	error: devConversationLogErrorMock,
+	flush: devConversationLogFlushMock,
+})) as (...args: unknown[]) => unknown);
 const resolvePromptBundleMock = mock((async () => ({
 	coreDocuments: {
 		"decision.md": {
@@ -72,6 +90,9 @@ const fallbackSendMessageMock = mock(async () => ({
 }));
 
 const emitDecisionMadeMock = mock((async () => {}) as (
+	...args: unknown[]
+) => Promise<void>);
+const emitSeenMock = mock((async () => {}) as (
 	...args: unknown[]
 ) => Promise<void>);
 const emitWorkflowCompletedMock = mock((async () => {}) as (
@@ -130,6 +151,7 @@ mock.module("./1b-continuation-gate", () => ({
 
 mock.module("../events", () => ({
 	emitDecisionMade: emitDecisionMadeMock,
+	emitSeen: emitSeenMock,
 	emitTypingStop: emitTypingStopMock,
 	emitWorkflowCompleted: emitWorkflowCompletedMock,
 	TypingHeartbeat: MockTypingHeartbeat,
@@ -164,6 +186,12 @@ mock.module("@api/utils/timeline-item", () => ({
 mock.module("../prompts/resolver", () => ({
 	resolvePromptBundle: resolvePromptBundleMock,
 }));
+
+mock.module("./dev-conversation-log", () => ({
+	createDevConversationLog: createDevConversationLogMock,
+}));
+
+process.env.AI_AGENT_DEEP_TRACE_ENABLED = "true";
 
 const pipelineModulePromise = import("./index");
 
@@ -224,6 +252,7 @@ describe("runAiAgentPipeline retryability and typing cleanup", () => {
 		executeMock.mockReset();
 		followupMock.mockReset();
 		emitDecisionMadeMock.mockReset();
+		emitSeenMock.mockReset();
 		emitWorkflowCompletedMock.mockReset();
 		emitTypingStopMock.mockReset();
 		typingHeartbeatStartMock.mockReset();
@@ -235,6 +264,11 @@ describe("runAiAgentPipeline retryability and typing cleanup", () => {
 		createTimelineItemMock.mockReset();
 		updateTimelineItemMock.mockReset();
 		continuationGateMock.mockReset();
+		devConversationLogLogMock.mockReset();
+		devConversationLogWarnMock.mockReset();
+		devConversationLogErrorMock.mockReset();
+		devConversationLogFlushMock.mockReset();
+		createDevConversationLogMock.mockReset();
 		resolvePromptBundleMock.mockReset();
 		fallbackSendMessageMock.mockReset();
 
@@ -242,6 +276,7 @@ describe("runAiAgentPipeline retryability and typing cleanup", () => {
 		decideMock.mockResolvedValue(buildDecisionResult());
 		executeMock.mockResolvedValue({});
 		followupMock.mockResolvedValue(undefined);
+		emitSeenMock.mockResolvedValue(undefined);
 		guardAiCreditRunMock.mockResolvedValue({
 			allowed: true,
 			mode: "normal",
@@ -272,6 +307,13 @@ describe("runAiAgentPipeline retryability and typing cleanup", () => {
 			reason: "default",
 			confidence: "high",
 		});
+		devConversationLogFlushMock.mockResolvedValue(undefined);
+		createDevConversationLogMock.mockImplementation(() => ({
+			log: devConversationLogLogMock,
+			warn: devConversationLogWarnMock,
+			error: devConversationLogErrorMock,
+			flush: devConversationLogFlushMock,
+		}));
 		fallbackSendMessageMock.mockResolvedValue({
 			messageId: "fallback-msg",
 			created: true,
@@ -324,6 +366,7 @@ describe("runAiAgentPipeline retryability and typing cleanup", () => {
 		});
 		expect(typingHeartbeatStopMock).toHaveBeenCalledTimes(1);
 		expect(emitTypingStopMock).toHaveBeenCalledTimes(1);
+		expect(devConversationLogFlushMock).toHaveBeenCalledTimes(1);
 	});
 
 	it("logs decision stage error when decisioning throws", async () => {
@@ -460,6 +503,103 @@ describe("runAiAgentPipeline retryability and typing cleanup", () => {
 		});
 		expect(typingHeartbeatStopMock).toHaveBeenCalledTimes(1);
 		expect(emitTypingStopMock).toHaveBeenCalledTimes(1);
+		expect(devConversationLogFlushMock).toHaveBeenCalledTimes(1);
+	});
+
+	it("emits AI seen when processing a public visitor trigger", async () => {
+		const { runAiAgentPipeline } = await pipelineModulePromise;
+		intakeMock.mockResolvedValue({
+			...buildReadyIntakeResult(),
+			triggerMessage: {
+				messageId: "trigger-msg-1",
+				content: "visitor hello",
+				senderType: "visitor",
+				senderId: "visitor-1",
+				senderName: null,
+				timestamp: new Date().toISOString(),
+				visibility: "public",
+			},
+		});
+		generateMock.mockResolvedValue({
+			decision: {
+				action: "skip",
+				reasoning: "nothing to send",
+				confidence: 0.8,
+			},
+			toolCalls: {
+				sendMessage: 0,
+				sendPrivateMessage: 0,
+			},
+		});
+
+		const result = await runAiAgentPipeline({
+			db: {} as never,
+			input: {
+				conversationId: "conv-1",
+				messageId: "trigger-msg-1",
+				messageCreatedAt: new Date().toISOString(),
+				websiteId: "site-1",
+				organizationId: "org-1",
+				visitorId: "visitor-1",
+				aiAgentId: "ai-1",
+				workflowRunId: "workflow-seen-visitor-trigger",
+				jobId: "job-seen-visitor-trigger",
+			},
+		});
+
+		expect(result.status).toBe("completed");
+		expect(emitSeenMock).toHaveBeenCalledTimes(1);
+		expect(emitSeenMock.mock.calls[0]?.[0]).toMatchObject({
+			aiAgentId: "ai-1",
+			conversation: { id: "conv-1" },
+		});
+	});
+
+	it("fails open when seen emission fails", async () => {
+		const { runAiAgentPipeline } = await pipelineModulePromise;
+		intakeMock.mockResolvedValue({
+			...buildReadyIntakeResult(),
+			triggerMessage: {
+				messageId: "trigger-msg-1",
+				content: "visitor hello",
+				senderType: "visitor",
+				senderId: "visitor-1",
+				senderName: null,
+				timestamp: new Date().toISOString(),
+				visibility: "public",
+			},
+		});
+		emitSeenMock.mockRejectedValueOnce(new Error("seen event unavailable"));
+		generateMock.mockResolvedValue({
+			decision: {
+				action: "skip",
+				reasoning: "nothing to send",
+				confidence: 0.8,
+			},
+			toolCalls: {
+				sendMessage: 0,
+				sendPrivateMessage: 0,
+			},
+		});
+
+		const result = await runAiAgentPipeline({
+			db: {} as never,
+			input: {
+				conversationId: "conv-1",
+				messageId: "trigger-msg-1",
+				messageCreatedAt: new Date().toISOString(),
+				websiteId: "site-1",
+				organizationId: "org-1",
+				visitorId: "visitor-1",
+				aiAgentId: "ai-1",
+				workflowRunId: "workflow-seen-fail-open",
+				jobId: "job-seen-fail-open",
+			},
+		});
+
+		expect(result.status).toBe("completed");
+		expect(emitSeenMock).toHaveBeenCalledTimes(1);
+		expect(executeMock).toHaveBeenCalledTimes(1);
 	});
 
 	it("does not log skill usage when decision skips before generation", async () => {
@@ -492,6 +632,43 @@ describe("runAiAgentPipeline retryability and typing cleanup", () => {
 		expect(result.status).toBe("skipped");
 		expect(generateMock).not.toHaveBeenCalled();
 		expect(createTimelineItemMock).not.toHaveBeenCalled();
+		expect(devConversationLogFlushMock).toHaveBeenCalledTimes(1);
+	});
+
+	it("returns completed when dev log flush throws", async () => {
+		const { runAiAgentPipeline } = await pipelineModulePromise;
+		devConversationLogFlushMock.mockRejectedValueOnce(
+			new Error("disk failure")
+		);
+		generateMock.mockResolvedValue({
+			decision: {
+				action: "skip",
+				reasoning: "nothing to send",
+				confidence: 0.8,
+			},
+			toolCalls: {
+				sendMessage: 0,
+				sendPrivateMessage: 0,
+			},
+		});
+
+		const result = await runAiAgentPipeline({
+			db: {} as never,
+			input: {
+				conversationId: "conv-1",
+				messageId: "trigger-msg-1",
+				messageCreatedAt: new Date().toISOString(),
+				websiteId: "site-1",
+				organizationId: "org-1",
+				visitorId: "visitor-1",
+				aiAgentId: "ai-1",
+				workflowRunId: "workflow-flush-fail-open",
+				jobId: "job-flush-fail-open",
+			},
+		});
+
+		expect(result.status).toBe("completed");
+		expect(devConversationLogFlushMock).toHaveBeenCalledTimes(1);
 	});
 
 	it("does not log skill usage when generation uses no custom skills", async () => {
@@ -927,5 +1104,153 @@ describe("runAiAgentPipeline retryability and typing cleanup", () => {
 			shouldAct: true,
 		});
 		expect(guardAiCreditRunMock).toHaveBeenCalledTimes(1);
+	});
+
+	it("logs generation heartbeat and timeout snapshot with explicit timeout abort reason", async () => {
+		const { runAiAgentPipeline } = await pipelineModulePromise;
+		const originalSetTimeout = globalThis.setTimeout;
+		const originalClearTimeout = globalThis.clearTimeout;
+		const originalSetInterval = globalThis.setInterval;
+		const originalClearInterval = globalThis.clearInterval;
+
+		const setTimeoutMock = mock(((handler: (...args: unknown[]) => void) => {
+			handler();
+			return 1;
+		}) as typeof globalThis.setTimeout);
+		const clearTimeoutMock = mock((() => {}) as typeof globalThis.clearTimeout);
+		const setIntervalMock = mock(((handler: (...args: unknown[]) => void) => {
+			handler();
+			return 2;
+		}) as typeof globalThis.setInterval);
+		const clearIntervalMock = mock(
+			(() => {}) as typeof globalThis.clearInterval
+		);
+
+		(globalThis as Record<string, unknown>).setTimeout =
+			setTimeoutMock as unknown;
+		(globalThis as Record<string, unknown>).clearTimeout =
+			clearTimeoutMock as unknown;
+		(globalThis as Record<string, unknown>).setInterval =
+			setIntervalMock as unknown;
+		(globalThis as Record<string, unknown>).clearInterval =
+			clearIntervalMock as unknown;
+
+		try {
+			generateMock.mockResolvedValue({
+				decision: {
+					action: "skip",
+					reasoning: "aborted due to timeout",
+					confidence: 1,
+				},
+				aborted: true,
+				toolCalls: {
+					sendMessage: 0,
+					sendPrivateMessage: 0,
+				},
+			});
+
+			const result = await runAiAgentPipeline({
+				db: {} as never,
+				input: {
+					conversationId: "conv-1",
+					messageId: "trigger-msg-1",
+					messageCreatedAt: new Date().toISOString(),
+					websiteId: "site-1",
+					organizationId: "org-1",
+					visitorId: "visitor-1",
+					aiAgentId: "ai-1",
+					workflowRunId: "workflow-timeout-heartbeat",
+					jobId: "job-timeout-heartbeat",
+				},
+			});
+
+			expect(result.status).toBe("completed");
+			const warnLines = devConversationLogWarnMock.mock.calls.map((call) =>
+				String(call[0])
+			);
+			const logLines = devConversationLogLogMock.mock.calls.map((call) =>
+				String(call[0])
+			);
+
+			expect(
+				warnLines.some((line) => line.includes("generation.timeout.fired"))
+			).toBe(true);
+			expect(
+				warnLines.some(
+					(line) =>
+						line.includes("generation.aborted") &&
+						line.includes("abortReason=generation_timeout")
+				)
+			).toBe(true);
+			expect(
+				logLines.some((line) => line.includes("generation.heartbeat"))
+			).toBe(true);
+		} finally {
+			(globalThis as Record<string, unknown>).setTimeout =
+				originalSetTimeout as unknown;
+			(globalThis as Record<string, unknown>).clearTimeout =
+				originalClearTimeout as unknown;
+			(globalThis as Record<string, unknown>).setInterval =
+				originalSetInterval as unknown;
+			(globalThis as Record<string, unknown>).clearInterval =
+				originalClearInterval as unknown;
+		}
+	});
+
+	it("does not emit deep trace lines when deep trace is disabled", async () => {
+		const { runAiAgentPipeline } = await pipelineModulePromise;
+		const { env } = await import("@api/env");
+		const previousDeepTrace = env.AI_AGENT_DEEP_TRACE_ENABLED;
+		(
+			env as { AI_AGENT_DEEP_TRACE_ENABLED: boolean }
+		).AI_AGENT_DEEP_TRACE_ENABLED = false;
+
+		try {
+			generateMock.mockResolvedValue({
+				decision: {
+					action: "skip",
+					reasoning: "no response needed",
+					confidence: 0.9,
+				},
+				toolCalls: {
+					sendMessage: 0,
+					sendPrivateMessage: 0,
+				},
+			});
+
+			const result = await runAiAgentPipeline({
+				db: {} as never,
+				input: {
+					conversationId: "conv-1",
+					messageId: "trigger-msg-1",
+					messageCreatedAt: new Date().toISOString(),
+					websiteId: "site-1",
+					organizationId: "org-1",
+					visitorId: "visitor-1",
+					aiAgentId: "ai-1",
+					workflowRunId: "workflow-no-deep-trace",
+					jobId: "job-no-deep-trace",
+				},
+			});
+
+			expect(result.status).toBe("completed");
+			const allLines = [
+				...devConversationLogLogMock.mock.calls.map((call) => String(call[0])),
+				...devConversationLogWarnMock.mock.calls.map((call) => String(call[0])),
+				...devConversationLogErrorMock.mock.calls.map((call) =>
+					String(call[0])
+				),
+			];
+			expect(allLines.some((line) => line.includes("[ai-agent:trace]"))).toBe(
+				false
+			);
+			expect(
+				allLines.some((line) => line.includes("generation.heartbeat"))
+			).toBe(false);
+		} finally {
+			(
+				env as { AI_AGENT_DEEP_TRACE_ENABLED: boolean }
+			).AI_AGENT_DEEP_TRACE_ENABLED = previousDeepTrace;
+		}
 	});
 });

@@ -39,6 +39,7 @@ yarn-error.log*
 apps/api/server
 .devtools
 tinybird.log
+apps/workers/.logs/
 
 # Terraform
 terraform.tfvars

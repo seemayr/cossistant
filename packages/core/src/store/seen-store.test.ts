@@ -209,6 +209,51 @@ describe("seen store", () => {
 		expect(entries["conv-1:user:user-9"]?.actorType).toBe("user");
 	});
 
+	it("resolves AI actor before visitor when actorType is missing", () => {
+		const event: RealtimeEvent<"conversationSeen"> = {
+			type: "conversationSeen",
+			payload: {
+				websiteId: "site-1",
+				organizationId: "org-1",
+				conversationId: "conv-1",
+				// Legacy payload path: routing visitorId present, actorType/actorId absent.
+				visitorId: "visitor-1",
+				userId: null,
+				aiAgentId: "ai-1",
+				lastSeenAt: new Date("2024-01-01T03:30:00.000Z").toISOString(),
+			},
+		};
+
+		applyConversationSeenEvent(store, event, {
+			ignoreVisitorId: "visitor-1",
+		});
+
+		const entries = getEntries("conv-1");
+		expect(Object.keys(entries)).toHaveLength(1);
+		expect(entries["conv-1:ai_agent:ai-1"]?.actorType).toBe("ai_agent");
+	});
+
+	it("still resolves visitor actor when only visitor identity is present", () => {
+		const event: RealtimeEvent<"conversationSeen"> = {
+			type: "conversationSeen",
+			payload: {
+				websiteId: "site-1",
+				organizationId: "org-1",
+				conversationId: "conv-1",
+				visitorId: "visitor-only",
+				userId: null,
+				aiAgentId: null,
+				lastSeenAt: new Date("2024-01-01T03:40:00.000Z").toISOString(),
+			},
+		};
+
+		applyConversationSeenEvent(store, event);
+
+		const entries = getEntries("conv-1");
+		expect(Object.keys(entries)).toHaveLength(1);
+		expect(entries["conv-1:visitor:visitor-only"]?.actorType).toBe("visitor");
+	});
+
 	it("does not ignore non-visitor actors when ignoreVisitorId is set", () => {
 		const event: RealtimeEvent<"conversationSeen"> = {
 			type: "conversationSeen",

@@ -107,17 +107,17 @@ function resolveActorIdentity(entry: SeenEntryInput): ActorIdentity | null {
 		return { actorType: "user", actorId: entry.userId } satisfies ActorIdentity;
 	}
 
-	if (entry.visitorId) {
-		return {
-			actorType: "visitor",
-			actorId: entry.visitorId,
-		} satisfies ActorIdentity;
-	}
-
 	if (entry.aiAgentId) {
 		return {
 			actorType: "ai_agent",
 			actorId: entry.aiAgentId,
+		} satisfies ActorIdentity;
+	}
+
+	if (entry.visitorId) {
+		return {
+			actorType: "visitor",
+			actorId: entry.visitorId,
 		} satisfies ActorIdentity;
 	}
 

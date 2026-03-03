@@ -24,6 +24,9 @@ const getEnvVariable = (name: string, defaultValue?: string): string => {
 	return value;
 };
 
+const defaultTracePayloadMode =
+	process.env.NODE_ENV === "development" ? "raw" : "sanitized";
+
 export const env = {
 	NODE_ENV: getEnvVariable("NODE_ENV"),
 	TINYBIRD_HOST: getEnvVariable("TINYBIRD_HOST", "http://localhost:7181"),
@@ -125,6 +128,16 @@ export const env = {
 	AI_AGENT_ROGUE_PAUSE_MINUTES: +getEnvVariable(
 		"AI_AGENT_ROGUE_PAUSE_MINUTES",
 		"15"
+	),
+	AI_AGENT_DEEP_TRACE_ENABLED:
+		getEnvVariable("AI_AGENT_DEEP_TRACE_ENABLED", "false") === "true",
+	AI_AGENT_TRACE_HEARTBEAT_MS: +getEnvVariable(
+		"AI_AGENT_TRACE_HEARTBEAT_MS",
+		"2000"
+	),
+	AI_AGENT_TRACE_PAYLOAD_MODE: getEnvVariable(
+		"AI_AGENT_TRACE_PAYLOAD_MODE",
+		defaultTracePayloadMode
 	),
 	// OpenRouter embedding model (default: text-embedding-3-small)
 	OPENROUTER_EMBEDDING_MODEL: getEnvVariable(

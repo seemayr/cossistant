@@ -11,6 +11,8 @@ type WorkerInstance = {
 };
 
 const workers: WorkerInstance[] = [];
+let workersStarted = false;
+let startPromise: Promise<void> | null = null;
 
 /**
  * Start all queue workers
@@ -19,50 +21,81 @@ export async function startAllWorkers(params: {
 	redisUrl: string;
 	stateRedis: Redis;
 }): Promise<void> {
-	console.log("[workers] Starting all workers...");
-	const connectionOptions: RedisOptions = getBullConnectionOptions(
-		params.redisUrl
-	);
+	if (workersStarted) {
+		console.warn("[workers] startAllWorkers called after startup, skipping");
+		return;
+	}
 
-	const messageNotificationWorker = createMessageNotificationWorker({
-		connectionOptions,
-		redisUrl: params.redisUrl,
-	});
-	await messageNotificationWorker.start();
-	workers.push(messageNotificationWorker);
+	if (startPromise) {
+		await startPromise;
+		return;
+	}
 
-	const aiAgentWorker = createAiAgentWorker({
-		connectionOptions,
-		redisUrl: params.redisUrl,
-		stateRedis: params.stateRedis,
-	});
-	await aiAgentWorker.start();
-	workers.push(aiAgentWorker);
+	startPromise = (async () => {
+		console.log("[workers] Starting all workers...");
+		const connectionOptions: RedisOptions = getBullConnectionOptions(
+			params.redisUrl
+		);
 
-	const webCrawlWorker = createWebCrawlWorker({
-		connectionOptions,
-		redisUrl: params.redisUrl,
-	});
-	await webCrawlWorker.start();
-	workers.push(webCrawlWorker);
+		const messageNotificationWorker = createMessageNotificationWorker({
+			connectionOptions,
+			redisUrl: params.redisUrl,
+		});
+		await messageNotificationWorker.start();
+		workers.push(messageNotificationWorker);
 
-	const aiTrainingWorker = createAiTrainingWorker({
-		connectionOptions,
-		redisUrl: params.redisUrl,
-	});
-	await aiTrainingWorker.start();
-	workers.push(aiTrainingWorker);
+		const aiAgentWorker = createAiAgentWorker({
+			connectionOptions,
+			redisUrl: params.redisUrl,
+			stateRedis: params.stateRedis,
+		});
+		await aiAgentWorker.start();
+		workers.push(aiAgentWorker);
 
-	console.log("[workers] All workers started");
+		const webCrawlWorker = createWebCrawlWorker({
+			connectionOptions,
+			redisUrl: params.redisUrl,
+		});
+		await webCrawlWorker.start();
+		workers.push(webCrawlWorker);
+
+		const aiTrainingWorker = createAiTrainingWorker({
+			connectionOptions,
+			redisUrl: params.redisUrl,
+		});
+		await aiTrainingWorker.start();
+		workers.push(aiTrainingWorker);
+
+		console.log("[workers] All workers started");
+		workersStarted = true;
+	})();
+
+	try {
+		await startPromise;
+	} catch (error) {
+		await Promise.allSettled(workers.map((worker) => worker.stop()));
+		workersStarted = false;
+		workers.splice(0, workers.length);
+		throw error;
+	} finally {
+		startPromise = null;
+	}
 }
 
 /**
  * Stop all queue workers gracefully
  */
 export async function stopAllWorkers(): Promise<void> {
+	if (workers.length === 0) {
+		workersStarted = false;
+		return;
+	}
+
 	console.log("[workers] Stopping all workers...");
 
 	await Promise.all(workers.map((w) => w.stop()));
+	workers.splice(0, workers.length);
+	workersStarted = false;
 
 	console.log("[workers] All workers stopped");
 }
