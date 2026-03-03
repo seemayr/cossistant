@@ -19,7 +19,6 @@ import {
 } from "./polar-sync-logic";
 
 export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
 export const maxDuration = 800;
 
 type RouteFailure =
