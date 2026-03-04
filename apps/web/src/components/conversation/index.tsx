@@ -43,7 +43,7 @@ export function Conversation({
 	limitAction,
 }: ConversationProps) {
 	// Track input/escalation height for dynamic timeline padding
-	const [inputHeight, setInputHeight] = useState(80); // Default ~80px for initial render
+	const [inputHeight, setInputHeight] = useState(140); // Default ~140px for initial render
 
 	return (
 		<>

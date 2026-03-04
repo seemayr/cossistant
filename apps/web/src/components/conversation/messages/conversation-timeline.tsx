@@ -100,7 +100,7 @@ function ConversationTimelineListComponent({
 	className,
 	onFetchMoreIfNeeded,
 	visitor,
-	inputHeight = 80,
+	inputHeight = 140,
 }: ConversationTimelineListProps) {
 	const fallbackRef = useRef<HTMLDivElement | null>(null);
 	const messageListRef =
@@ -215,10 +215,10 @@ function ConversationTimelineListComponent({
 			onScrollStart={onFetchMoreIfNeeded}
 			ref={ref ?? messageListRef}
 			style={{
-				paddingBottom: `${inputHeight + 40}px`,
+				paddingBottom: `${inputHeight + 100}px`,
 			}}
 		>
-			<div className="mx-auto pr-4 pl-6 xl:max-w-xl 2xl:max-w-2xl">
+			<div className="mx-auto pr-4 pl-4 xl:max-w-xl 2xl:max-w-2xl">
 				<ConversationTimelineContainer className="flex min-h-full w-full flex-col gap-5">
 					<AnimatePresence initial={false} mode="popLayout">
 						{items.map((item, index) => {

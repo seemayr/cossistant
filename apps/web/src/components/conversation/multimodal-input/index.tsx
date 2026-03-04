@@ -470,9 +470,9 @@ export const MultimodalInput: React.FC<MultimodalInputProps> = ({
 									>
 										<button
 											className={cn(
-												"rounded-xs px-3 py-1.5 font-medium text-xs transition-colors",
+												"rounded-xs px-2 py-1.5 font-medium text-xs transition-colors",
 												isPrivate
-													? "text-muted-foreground hover:text-foreground"
+													? "text-primary/60 hover:text-foreground"
 													: "bg-background-200 text-foreground dark:bg-background-400"
 											)}
 											onClick={() => onVisibilityChange("public")}
@@ -487,7 +487,7 @@ export const MultimodalInput: React.FC<MultimodalInputProps> = ({
 									>
 										<button
 											className={cn(
-												"rounded-xs px-3 py-1.5 font-medium text-xs transition-colors",
+												"rounded-xs px-2 py-1.5 font-medium text-xs transition-colors",
 												isPrivate
 													? "bg-cossistant-yellow-100 text-cossistant-yellow-600 dark:bg-cossistant-yellow-100/25"
 													: "text-muted-foreground hover:text-foreground"
