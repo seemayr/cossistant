@@ -5,10 +5,13 @@
  */
 
 export {
-	AI_AGENT_JOB_OPTIONS,
 	createAiAgentTriggers,
 	type EnqueueAiAgentResult,
 } from "./ai-agent";
+export {
+	createAiAgentBackgroundTriggers,
+	type EnqueueAiAgentBackgroundResult,
+} from "./ai-agent-background";
 export { createAiTrainingTriggers } from "./ai-training";
 export { createMessageNotificationTriggers } from "./message-notification";
 export { createWebCrawlTriggers } from "./web-crawl";

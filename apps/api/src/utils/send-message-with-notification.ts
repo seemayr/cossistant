@@ -250,7 +250,7 @@ export async function triggerAiAgentResponseWorkflow(params: {
 			messageCreatedAt: messageMetadata.createdAt,
 		});
 		console.log(
-			`[ai-agent] enqueue trigger result for conversation ${params.conversationId}: status=${result.status} recoveryMarked=${result.recoveryMarked}`
+			`[ai-agent] enqueue trigger result for conversation ${params.conversationId}: status=${result.status}`
 		);
 	} catch (error) {
 		// Log errors but don't throw - we don't want to block message creation

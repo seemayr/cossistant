@@ -7,7 +7,9 @@
 
 import { env } from "@api/env";
 import {
+	type AiAgentBackgroundJobData,
 	type AiTrainingJobData,
+	createAiAgentBackgroundTriggers,
 	createAiAgentTriggers,
 	createAiTrainingTriggers,
 	createMessageNotificationTriggers,
@@ -21,6 +23,9 @@ let messageNotificationTriggers: ReturnType<
 	typeof createMessageNotificationTriggers
 > | null = null;
 let aiAgentTriggers: ReturnType<typeof createAiAgentTriggers> | null = null;
+let aiAgentBackgroundTriggers: ReturnType<
+	typeof createAiAgentBackgroundTriggers
+> | null = null;
 let aiTrainingTriggers: ReturnType<typeof createAiTrainingTriggers> | null =
 	null;
 let webCrawlTriggers: ReturnType<typeof createWebCrawlTriggers> | null = null;
@@ -67,6 +72,17 @@ export function getAiAgentQueueTriggers() {
 		});
 	}
 	return aiAgentTriggers;
+}
+
+export function getAiAgentBackgroundQueueTriggers() {
+	if (!aiAgentBackgroundTriggers) {
+		const redisUrl = getRedisUrlOrThrow();
+		aiAgentBackgroundTriggers = createAiAgentBackgroundTriggers({
+			connection: getBullOptions(),
+			redisUrl,
+		});
+	}
+	return aiAgentBackgroundTriggers;
 }
 
 function getAiTrainingTriggers() {
@@ -204,6 +220,32 @@ export async function triggerAiTraining(
 	}
 }
 
+export async function triggerAiAgentBackgroundJob(
+	data: AiAgentBackgroundJobData,
+	overrides?: { delayMs?: number }
+) {
+	console.log(
+		`[queue-triggers] triggerAiAgentBackgroundJob called for conversation ${data.conversationId}`
+	);
+	try {
+		const result =
+			await getAiAgentBackgroundQueueTriggers().enqueueAiAgentBackgroundJob(
+				data,
+				overrides
+			);
+		console.log(
+			`[queue-triggers] triggerAiAgentBackgroundJob completed for conversation ${data.conversationId}, status=${result.status}`
+		);
+		return result;
+	} catch (error) {
+		console.error(
+			`[queue-triggers] triggerAiAgentBackgroundJob FAILED for conversation ${data.conversationId}:`,
+			error
+		);
+		throw error;
+	}
+}
+
 export async function cancelAiTraining(aiAgentId: string): Promise<boolean> {
 	console.log(
 		`[queue-triggers] cancelAiTraining called for AI agent ${aiAgentId}`
@@ -235,6 +277,12 @@ export async function closeQueueProducers(): Promise<void> {
 			if (aiAgentTriggers) {
 				await aiAgentTriggers.close();
 				aiAgentTriggers = null;
+			}
+		})(),
+		(async () => {
+			if (aiAgentBackgroundTriggers) {
+				await aiAgentBackgroundTriggers.close();
+				aiAgentBackgroundTriggers = null;
 			}
 		})(),
 		(async () => {

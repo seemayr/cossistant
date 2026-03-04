@@ -2,6 +2,7 @@
 export const QUEUE_NAMES = {
 	MESSAGE_NOTIFICATION: "message-notification",
 	AI_AGENT: "ai-agent",
+	AI_AGENT_BACKGROUND: "ai-agent-background",
 	WEB_CRAWL: "web-crawl",
 	AI_TRAINING: "ai-training",
 } as const;
@@ -51,18 +52,30 @@ export type AiAgentJobData = {
 	websiteId: string;
 	organizationId: string;
 	aiAgentId: string;
-	/**
-	 * Optional trigger message ID that woke this drain job.
-	 * Used for observability and debugging only.
-	 */
-	triggerMessageId?: string;
+	runAttempt?: number;
 };
 
-export function generateAiAgentJobId(
-	conversationId: string,
-	_triggerMessageId?: string
-): string {
+export function generateAiAgentJobId(conversationId: string): string {
 	return `ai-agent-${conversationId}`;
+}
+
+/**
+ * Job data for AI Agent background queue
+ *
+ * Runs delayed non-public conversation maintenance tasks such as:
+ * - triage and metadata updates
+ * - title/priority/sentiment adjustments
+ * - categorization
+ */
+export type AiAgentBackgroundJobData = {
+	conversationId: string;
+	websiteId: string;
+	organizationId: string;
+	aiAgentId: string;
+};
+
+export function generateAiAgentBackgroundJobId(conversationId: string): string {
+	return `ai-agent-background-${conversationId}`;
 }
 
 /**

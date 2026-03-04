@@ -9,10 +9,7 @@ import {
 } from "@api/db/queries/conversation";
 import type { ConversationSelect } from "@api/db/schema/conversation";
 import { env } from "@api/env";
-import {
-	clearAiAgentConversationFailures,
-	clearAiAgentConversationQueue,
-} from "@cossistant/jobs";
+import { clearAiAgentRunCursor } from "@cossistant/jobs";
 import type { Redis } from "@cossistant/redis";
 
 const DEFAULT_MANUAL_PAUSE_MINUTES = 15;
@@ -164,8 +161,7 @@ export async function pauseAiForConversation(params: {
 
 	await Promise.all([
 		setPauseKey(params.redis, conversation.id, pauseUntil),
-		clearAiAgentConversationQueue(params.redis, conversation.id),
-		clearAiAgentConversationFailures(params.redis, conversation.id),
+		clearAiAgentRunCursor(params.redis, conversation.id),
 		params.redis.del(getAiAgentOutboundPublicKey(conversation.id)),
 	]);
 

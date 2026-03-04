@@ -4,20 +4,16 @@ import type { AiAgentJobData } from "../types";
 type MockJobState = "active" | "waiting" | "delayed" | "completed" | "failed";
 
 const waitUntilReadyMock = mock(async () => {});
-const getJobCountsMock = mock(async () => ({
-	delayed: 0,
-	waiting: 0,
-	active: 0,
-}));
 const closeMock = mock(async () => {});
 const addMock = mock(
-	async (name: string, data: AiAgentJobData, opts: { jobId: string }) => {
-		lastAddedJobId = opts.jobId;
+	async (name: string, data: AiAgentJobData, opts: Record<string, unknown>) => {
+		lastAddedJobId = String(opts.jobId ?? "");
 		lastAddedData = data;
+		lastAddedOptions = opts;
 		existingJobState = "waiting";
 		existingJobData = data;
 		return {
-			id: "wake-job-1",
+			id: "job-1",
 			data,
 			getState: async () => "waiting",
 		};
@@ -28,10 +24,11 @@ let existingJobState: MockJobState | null = null;
 let existingJobData: AiAgentJobData | null = null;
 let lastAddedJobId: string | null = null;
 let lastAddedData: AiAgentJobData | null = null;
+let lastAddedOptions: Record<string, unknown> | null = null;
+let removedExistingJobCount = 0;
 
 class MockQueue<T extends AiAgentJobData> {
 	waitUntilReady = waitUntilReadyMock;
-	getJobCounts = getJobCountsMock;
 	close = closeMock;
 	add = addMock;
 
@@ -45,6 +42,7 @@ class MockQueue<T extends AiAgentJobData> {
 			data: existingJobData as T,
 			getState: async () => existingJobState,
 			remove: async () => {
+				removedExistingJobCount += 1;
 				existingJobState = null;
 				existingJobData = null;
 			},
@@ -71,21 +69,24 @@ function buildJobData(overrides: Partial<AiAgentJobData> = {}): AiAgentJobData {
 describe("createAiAgentTriggers", () => {
 	beforeEach(() => {
 		waitUntilReadyMock.mockReset();
-		getJobCountsMock.mockReset();
 		closeMock.mockReset();
 		addMock.mockReset();
 
 		waitUntilReadyMock.mockResolvedValue(undefined);
-		getJobCountsMock.mockResolvedValue({ delayed: 0, waiting: 0, active: 0 });
 		closeMock.mockResolvedValue(undefined);
 		addMock.mockImplementation(
-			async (name: string, data: AiAgentJobData, opts: { jobId: string }) => {
-				lastAddedJobId = opts.jobId;
+			async (
+				_name: string,
+				data: AiAgentJobData,
+				opts: Record<string, unknown>
+			) => {
+				lastAddedJobId = String(opts.jobId ?? "");
 				lastAddedData = data;
+				lastAddedOptions = opts;
 				existingJobState = "waiting";
 				existingJobData = data;
 				return {
-					id: "wake-job-1",
+					id: "job-1",
 					data,
 					getState: async () => "waiting",
 				};
@@ -96,45 +97,75 @@ describe("createAiAgentTriggers", () => {
 		existingJobData = null;
 		lastAddedJobId = null;
 		lastAddedData = null;
+		lastAddedOptions = null;
+		removedExistingJobCount = 0;
 	});
 
-	it("builds conversation-scoped wake job IDs", async () => {
+	it("enqueues with conversation-scoped id and default queue options", async () => {
 		const { createAiAgentTriggers } = await triggerModulePromise;
 		const triggers = createAiAgentTriggers({
 			connection: {} as never,
 			redisUrl: "redis://localhost:6379",
 		});
 
-		const result = await triggers.enqueueAiAgentJob(
-			buildJobData({ triggerMessageId: "msg-42" })
-		);
+		const result = await triggers.enqueueAiAgentJob(buildJobData());
 
-		expect(result.status).toBe("created");
-		expect(addMock).toHaveBeenCalledTimes(1);
+		expect(result).toEqual({ status: "created" });
 		expect(lastAddedJobId).toBe("ai-agent-conv-1");
-		expect(lastAddedData?.triggerMessageId).toBe("msg-42");
+		expect(lastAddedData?.conversationId).toBe("conv-1");
+		expect(lastAddedOptions?.delay).toBe(5000);
+		expect(lastAddedOptions?.removeOnComplete).toBe(true);
+		expect(lastAddedOptions?.removeOnFail).toBe(true);
 
 		await triggers.close();
 	});
 
-	it("returns skipped when an active wake already exists for the conversation", async () => {
+	it("skips enqueue when active/waiting/delayed job exists", async () => {
 		existingJobState = "active";
-		existingJobData = buildJobData({ triggerMessageId: "msg-42" });
+		existingJobData = buildJobData();
 		const { createAiAgentTriggers } = await triggerModulePromise;
 		const triggers = createAiAgentTriggers({
 			connection: {} as never,
 			redisUrl: "redis://localhost:6379",
 		});
 
-		const result = await triggers.enqueueAiAgentJob(
-			buildJobData({ triggerMessageId: "msg-42" })
-		);
+		const result = await triggers.enqueueAiAgentJob(buildJobData());
 
-		expect(result).toEqual({
-			status: "skipped",
-			existingState: "active",
-		});
+		expect(result).toEqual({ status: "skipped", existingState: "active" });
 		expect(addMock).not.toHaveBeenCalled();
+		expect(removedExistingJobCount).toBe(0);
+
+		await triggers.close();
+	});
+
+	it("replaces failed/completed jobs before enqueue", async () => {
+		existingJobState = "failed";
+		existingJobData = buildJobData();
+		const { createAiAgentTriggers } = await triggerModulePromise;
+		const triggers = createAiAgentTriggers({
+			connection: {} as never,
+			redisUrl: "redis://localhost:6379",
+		});
+
+		const result = await triggers.enqueueAiAgentJob(buildJobData());
+
+		expect(result).toEqual({ status: "created" });
+		expect(removedExistingJobCount).toBe(1);
+		expect(addMock).toHaveBeenCalledTimes(1);
+
+		await triggers.close();
+	});
+
+	it("supports delay override for follow-up scheduling", async () => {
+		const { createAiAgentTriggers } = await triggerModulePromise;
+		const triggers = createAiAgentTriggers({
+			connection: {} as never,
+			redisUrl: "redis://localhost:6379",
+		});
+
+		await triggers.enqueueAiAgentJob(buildJobData(), { delayMs: 0 });
+
+		expect(lastAddedOptions?.delay).toBe(0);
 
 		await triggers.close();
 	});

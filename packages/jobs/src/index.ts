@@ -1,48 +1,44 @@
 // Triggers
 
-// AI agent queue helpers
+// AI agent run cursor helpers
 export {
-	AI_AGENT_QUEUE_DEFAULTS,
-	acquireAiAgentLock,
-	acquireAiAgentTriggerRunLock,
-	clearAiAgentConversationFailures,
-	clearAiAgentConversationQueue,
-	clearAiAgentWakeNeeded,
-	enqueueAiAgentMessage,
-	getAiAgentActiveConversationsKey,
-	getAiAgentFailureKey,
-	getAiAgentLockKey,
-	getAiAgentQueueKey,
-	getAiAgentQueueSize,
-	getAiAgentTriggerProcessedKey,
-	getAiAgentTriggerRunLockKey,
-	getAiAgentWakeNeededKey,
-	isAiAgentTriggerProcessed,
-	isAiAgentWakeNeeded,
-	listAiAgentActiveConversations,
-	listAiAgentWakeNeededConversations,
-	markAiAgentTriggerProcessed,
-	markAiAgentWakeNeeded,
-	peekAiAgentQueue,
-	releaseAiAgentLock,
-	releaseAiAgentTriggerRunLock,
-	removeAiAgentActiveConversation,
-	removeAiAgentQueueMessage,
-	removeAiAgentQueueMessages,
-	renewAiAgentLock,
-} from "./ai-agent-queue";
+	AI_AGENT_BACKGROUND_DELAY_MS,
+	AI_AGENT_BACKGROUND_JOB_OPTIONS,
+	type EnqueueConversationScopedAiBackgroundJobResult,
+	enqueueConversationScopedAiBackgroundJob,
+} from "./ai-agent-background-job-scheduler";
 export {
+	AI_AGENT_INITIAL_DELAY_MS,
 	AI_AGENT_JOB_OPTIONS,
+	AI_AGENT_MAX_RUN_ATTEMPTS,
+	AI_AGENT_RETRY_DELAY_MS,
+	type EnqueueConversationScopedAiJobResult,
+	enqueueConversationScopedAiJob,
+} from "./ai-agent-job-scheduler";
+export {
+	type AiAgentRunCursor,
+	clearAiAgentRunCursor,
+	clearAiAgentRunCursorIfMatches,
+	getAiAgentRunCursor,
+	getAiAgentRunCursorKey,
+	setAiAgentRunCursor,
+	setAiAgentRunCursorIfAbsent,
+} from "./ai-agent-run-cursor";
+export {
+	createAiAgentBackgroundTriggers,
 	createAiAgentTriggers,
 	createAiTrainingTriggers,
 	createMessageNotificationTriggers,
 	createWebCrawlTriggers,
+	type EnqueueAiAgentBackgroundResult,
 	type EnqueueAiAgentResult,
 } from "./triggers";
 // Types
 export {
+	type AiAgentBackgroundJobData,
 	type AiAgentJobData,
 	type AiTrainingJobData,
+	generateAiAgentBackgroundJobId,
 	generateAiAgentJobId,
 	generateAiTrainingJobId,
 	generateMessageNotificationJobId,

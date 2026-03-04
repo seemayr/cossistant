@@ -11,6 +11,7 @@ function createWorkerFactoryMock() {
 
 const messageNotification = createWorkerFactoryMock();
 const aiAgent = createWorkerFactoryMock();
+const aiAgentBackground = createWorkerFactoryMock();
 const webCrawl = createWorkerFactoryMock();
 const aiTraining = createWorkerFactoryMock();
 
@@ -24,6 +25,10 @@ mock.module("./message-notification/worker", () => ({
 
 mock.module("./ai-agent/worker", () => ({
 	createAiAgentWorker: aiAgent.factory,
+}));
+
+mock.module("./ai-agent-background/worker", () => ({
+	createAiAgentBackgroundWorker: aiAgentBackground.factory,
 }));
 
 mock.module("./web-crawl/worker", () => ({
@@ -49,6 +54,9 @@ describe("workers bootstrap idempotency", () => {
 		aiAgent.factory.mockReset();
 		aiAgent.start.mockReset();
 		aiAgent.stop.mockReset();
+		aiAgentBackground.factory.mockReset();
+		aiAgentBackground.start.mockReset();
+		aiAgentBackground.stop.mockReset();
 		webCrawl.factory.mockReset();
 		webCrawl.start.mockReset();
 		webCrawl.stop.mockReset();
@@ -64,6 +72,10 @@ describe("workers bootstrap idempotency", () => {
 		aiAgent.factory.mockImplementation(() => ({
 			start: aiAgent.start,
 			stop: aiAgent.stop,
+		}));
+		aiAgentBackground.factory.mockImplementation(() => ({
+			start: aiAgentBackground.start,
+			stop: aiAgentBackground.stop,
 		}));
 		webCrawl.factory.mockImplementation(() => ({
 			start: webCrawl.start,
@@ -89,11 +101,13 @@ describe("workers bootstrap idempotency", () => {
 
 		expect(messageNotification.factory).toHaveBeenCalledTimes(1);
 		expect(aiAgent.factory).toHaveBeenCalledTimes(1);
+		expect(aiAgentBackground.factory).toHaveBeenCalledTimes(1);
 		expect(webCrawl.factory).toHaveBeenCalledTimes(1);
 		expect(aiTraining.factory).toHaveBeenCalledTimes(1);
 
 		expect(messageNotification.start).toHaveBeenCalledTimes(1);
 		expect(aiAgent.start).toHaveBeenCalledTimes(1);
+		expect(aiAgentBackground.start).toHaveBeenCalledTimes(1);
 		expect(webCrawl.start).toHaveBeenCalledTimes(1);
 		expect(aiTraining.start).toHaveBeenCalledTimes(1);
 
