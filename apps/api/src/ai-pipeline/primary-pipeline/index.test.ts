@@ -48,6 +48,10 @@ const runPrimaryGenerationStepMock = mock((async () => ({
 })) as (...args: unknown[]) => Promise<any>);
 const trackGenerationUsageMock = mock(async () => {});
 const emitPipelineSeenMock = mock(async () => {});
+const emitPipelineGenerationProgressMock = mock(async () => {});
+const emitPipelineToolProgressMock = mock(async () => {});
+const emitPipelineTypingStartMock = mock(async () => {});
+const emitPipelineTypingStopMock = mock(async () => {});
 
 class PipelineTypingHeartbeatMock {
 	private isRunning = false;
@@ -87,6 +91,10 @@ mock.module("../shared/usage", () => ({
 
 mock.module("../shared/events", () => ({
 	emitPipelineSeen: emitPipelineSeenMock,
+	emitPipelineGenerationProgress: emitPipelineGenerationProgressMock,
+	emitPipelineToolProgress: emitPipelineToolProgressMock,
+	emitPipelineTypingStart: emitPipelineTypingStartMock,
+	emitPipelineTypingStop: emitPipelineTypingStopMock,
 	PipelineTypingHeartbeat: PipelineTypingHeartbeatMock,
 }));
 
@@ -112,6 +120,10 @@ describe("runPrimaryPipeline generation error/skip behavior", () => {
 		runPrimaryGenerationStepMock.mockClear();
 		trackGenerationUsageMock.mockClear();
 		emitPipelineSeenMock.mockClear();
+		emitPipelineGenerationProgressMock.mockClear();
+		emitPipelineToolProgressMock.mockClear();
+		emitPipelineTypingStartMock.mockClear();
+		emitPipelineTypingStopMock.mockClear();
 
 		runIntakeStepMock.mockResolvedValue({
 			status: "ready",

@@ -284,47 +284,11 @@ export async function runAiAgentPipeline(
 		const modelIdOriginal = readyIntake.modelResolution.modelIdOriginal;
 		const modelMigrationApplied =
 			readyIntake.modelResolution.modelMigrationApplied;
-		const decisionPolicyStart = Date.now();
-		traceLog("log", "stage.start", "stage=decision_policy_resolution");
-		const decisionPolicyPromise: Promise<DecisionPolicyResolution> =
-			resolvePromptBundle({
-				db: ctx.db,
-				aiAgent: readyIntake.aiAgent,
-				mode: "background_only",
-			})
-				.then((bundle) => {
-					const policy = bundle.coreDocuments["decision.md"]?.content?.trim();
-					if (!policy) {
-						traceLog(
-							"warn",
-							"stage.end",
-							`stage=decision_policy_resolution | durationMs=${Date.now() - decisionPolicyStart} | fallback=missing`
-						);
-						return {
-							policy: PROMPT_TEMPLATES.DECISION_POLICY,
-							fallback: "missing",
-						} as const;
-					}
-					traceLog(
-						"log",
-						"stage.end",
-						`stage=decision_policy_resolution | durationMs=${Date.now() - decisionPolicyStart} | fallback=none`
-					);
-					return { policy, fallback: "none" } as const;
-				})
-				.catch((error) => {
-					traceLog(
-						"warn",
-						"stage.error",
-						`stage=decision_policy_resolution | durationMs=${Date.now() - decisionPolicyStart} | fallback=error`,
-						error
-					);
-					return {
-						policy: PROMPT_TEMPLATES.DECISION_POLICY,
-						fallback: "error" as const,
-						error,
-					};
-				});
+		const decisionPolicyPromise = resolveDecisionPolicyWithFallback({
+			db: ctx.db,
+			aiAgent: readyIntake.aiAgent,
+			traceLog,
+		});
 
 		const continuationResult = await runTracedStage(
 			"continuation_gate",
@@ -363,26 +327,15 @@ export async function runAiAgentPipeline(
 				reason: skipReason,
 			});
 
-			return {
-				status: "skipped",
+			return createSkippedResult({
 				reason: skipReason,
 				publicMessagesSent,
-				retryable: false,
-				metrics: finalizeMetrics(metrics, startTime),
-			};
+				metrics,
+				startTime,
+			});
 		}
 
-		if (continuationResult.decision === "supplement") {
-			continuationHint = {
-				reason: continuationResult.reason,
-				confidence: continuationResult.confidence,
-				deltaHint: continuationResult.deltaHint,
-				latestAiMessageId: continuationResult.latestAiMessageId ?? "",
-				latestAiMessageText:
-					continuationResult.latestAiMessageText ??
-					"Only add missing details; do not repeat the previous AI reply.",
-			};
-		}
+		continuationHint = createContinuationHint(continuationResult);
 
 		// Step 2: Decision - Should AI act?
 		const decisionStart = Date.now();
@@ -442,8 +395,6 @@ export async function runAiAgentPipeline(
 				throw error;
 			}
 		});
-		decisionResult = readyDecision;
-
 		metrics.decisionMs = Date.now() - decisionStart;
 
 		// Emit decision event
@@ -470,13 +421,12 @@ export async function runAiAgentPipeline(
 				reason: readyDecision.reason,
 			});
 
-			return {
-				status: "skipped",
+			return createSkippedResult({
 				reason: readyDecision.reason,
 				publicMessagesSent,
-				retryable: false,
-				metrics: finalizeMetrics(metrics, startTime),
-			};
+				metrics,
+				startTime,
+			});
 		}
 
 		const [, guardResult] = await runTracedStage("credit_guard", async () =>
@@ -499,49 +449,16 @@ export async function runAiAgentPipeline(
 
 		if (!aiCreditGuardResult.allowed) {
 			const blockedReason = `AI credit guard blocked run: ${aiCreditGuardResult.reason}`;
-			const blockedBalanceBefore = aiCreditGuardResult.balance;
-			const blockedBalanceAfterEstimate =
-				typeof blockedBalanceBefore === "number"
-					? blockedBalanceBefore -
-						aiCreditGuardResult.minimumCharge.totalCredits
-					: null;
-
-			try {
-				await logAiCreditUsageTimeline({
-					db: ctx.db,
-					organizationId: ctx.input.organizationId,
-					websiteId: ctx.input.websiteId,
-					conversationId: ctx.input.conversationId,
-					visitorId: ctx.input.visitorId,
-					aiAgentId: readyIntake.aiAgent.id,
-					workflowRunId: ctx.input.workflowRunId,
-					triggerMessageId: ctx.input.messageId,
-					triggerVisibility: readyIntake.triggerMessage?.visibility,
-					payload: {
-						baseCredits: aiCreditGuardResult.minimumCharge.baseCredits,
-						modelCredits: aiCreditGuardResult.minimumCharge.modelCredits,
-						toolCredits: aiCreditGuardResult.minimumCharge.toolCredits,
-						totalCredits: aiCreditGuardResult.minimumCharge.totalCredits,
-						billableToolCount:
-							aiCreditGuardResult.minimumCharge.billableToolCount,
-						excludedToolCount:
-							aiCreditGuardResult.minimumCharge.excludedToolCount,
-						modelId: resolvedModelId,
-						modelIdOriginal,
-						modelMigrationApplied,
-						balanceBefore: blockedBalanceBefore,
-						balanceAfterEstimate: blockedBalanceAfterEstimate,
-						mode: aiCreditGuardResult.mode,
-						blockedReason: aiCreditGuardResult.blockedReason ?? "blocked",
-						ingestStatus: "skipped",
-					},
-				});
-			} catch (error) {
-				conversationLog.warn(
-					`[ai-agent] conv=${convId} | Failed to log blocked AI credit timeline`,
-					error
-				);
-			}
+			await logBlockedAiCreditUsage({
+				ctx,
+				intake: readyIntake,
+				guardResult: aiCreditGuardResult,
+				resolvedModelId,
+				modelIdOriginal,
+				modelMigrationApplied,
+				conversationLog,
+				convId,
+			});
 
 			await safeEmitWorkflowCompleted({
 				conversation: readyIntake.conversation,
@@ -551,23 +468,22 @@ export async function runAiAgentPipeline(
 				reason: blockedReason,
 			});
 
-			return {
-				status: "skipped",
+			return createSkippedResult({
 				reason: blockedReason,
 				publicMessagesSent,
-				retryable: false,
-				metrics: finalizeMetrics(metrics, startTime),
-			};
+				metrics,
+				startTime,
+			});
 		}
 
 		// Only start typing if AI may send visible visitor messages.
 		// background_only = private/internal only.
 		// respond_to_command may still send visitor messages even for private team triggers.
 		// This prevents "phantom typing" when AI observes but doesn't respond.
-		const allowPublicMessages =
-			readyDecision.mode !== "background_only" &&
-			(readyIntake.triggerMessage?.visibility === "public" ||
-				readyDecision.mode === "respond_to_command");
+		const allowPublicMessages = shouldAllowPublicMessages({
+			mode: readyDecision.mode,
+			triggerVisibility: readyIntake.triggerMessage?.visibility,
+		});
 		willSendVisibleMessages = allowPublicMessages;
 
 		// Callback to stop typing - passed to tools
@@ -633,91 +549,18 @@ export async function runAiAgentPipeline(
 
 		const finalizeAiCreditUsage = async (
 			result: GenerationResult | null
-		): Promise<void> => {
-			if (!aiCreditGuardResult) {
-				return;
-			}
-
-			const toolCallsForCredits =
-				result?.chargeableToolCallsByName ?? result?.toolCallsByName;
-			const charge = toolCallsForCredits
-				? calculateAiCreditCharge({
-						modelId: resolvedModelId,
-						toolCallsByName: toolCallsForCredits,
-					})
-				: getMinimumAiCreditCharge(resolvedModelId);
-
-			const balanceBefore = aiCreditGuardResult.balance;
-			const balanceAfterEstimate =
-				typeof balanceBefore === "number"
-					? balanceBefore - charge.totalCredits
-					: null;
-			let ingestStatus: IngestAiCreditUsageStatus | "skipped" = "failed";
-
-			try {
-				const ingestResult = await ingestAiCreditUsage({
-					organizationId: ctx.input.organizationId,
-					credits: charge.totalCredits,
-					workflowRunId: ctx.input.workflowRunId,
-					modelId: resolvedModelId,
-					modelIdOriginal,
-					modelMigrationApplied,
-					mode: aiCreditGuardResult.mode,
-					baseCredits: charge.baseCredits,
-					modelCredits: charge.modelCredits,
-					toolCredits: charge.toolCredits,
-					billableToolCount: charge.billableToolCount,
-					excludedToolCount: charge.excludedToolCount,
-					totalToolCount: charge.totalToolCount,
-				});
-				ingestStatus = ingestResult.status;
-				if (ingestStatus === "failed") {
-					conversationLog.error(
-						`[ai-agent] conv=${convId} | Failed to ingest AI credit usage`
-					);
-				}
-			} catch (error) {
-				ingestStatus = "failed";
-				conversationLog.error(
-					`[ai-agent] conv=${convId} | Failed to ingest AI credit usage`,
-					error
-				);
-			}
-
-			try {
-				await logAiCreditUsageTimeline({
-					db: ctx.db,
-					organizationId: ctx.input.organizationId,
-					websiteId: ctx.input.websiteId,
-					conversationId: ctx.input.conversationId,
-					visitorId: ctx.input.visitorId,
-					aiAgentId: readyIntake.aiAgent.id,
-					workflowRunId: ctx.input.workflowRunId,
-					triggerMessageId: ctx.input.messageId,
-					triggerVisibility: readyIntake.triggerMessage?.visibility,
-					payload: {
-						baseCredits: charge.baseCredits,
-						modelCredits: charge.modelCredits,
-						toolCredits: charge.toolCredits,
-						totalCredits: charge.totalCredits,
-						billableToolCount: charge.billableToolCount,
-						excludedToolCount: charge.excludedToolCount,
-						modelId: resolvedModelId,
-						modelIdOriginal,
-						modelMigrationApplied,
-						balanceBefore,
-						balanceAfterEstimate,
-						mode: aiCreditGuardResult.mode,
-						ingestStatus,
-					},
-				});
-			} catch (error) {
-				conversationLog.warn(
-					`[ai-agent] conv=${convId} | Failed to log AI credit timeline`,
-					error
-				);
-			}
-		};
+		): Promise<void> =>
+			finalizeAiCreditUsageForRun({
+				ctx,
+				intake: readyIntake,
+				guardResult: aiCreditGuardResult,
+				result,
+				resolvedModelId,
+				modelIdOriginal,
+				modelMigrationApplied,
+				conversationLog,
+				convId,
+			});
 
 		// Step 3: Generation - Call LLM with tools
 		const generationStart = Date.now();
@@ -840,71 +683,16 @@ export async function runAiAgentPipeline(
 			}
 		}
 
-		// FALLBACK: If AI returned respond/escalate/resolve but didn't call sendMessage,
-		// send a fallback message so the visitor isn't left without a response
-		const requiresMessage = ["respond", "escalate", "resolve"].includes(
-			readyGeneration.decision.action
-		);
-		const sentMessages = publicMessagesSent;
-		const missingAuthoritativeSend = sentMessages === 0;
-		const needsFallbackMessage =
-			missingAuthoritativeSend &&
-			(readyGeneration.needsFallbackMessage || requiresMessage);
-
-		if (needsFallbackMessage && allowPublicMessages) {
-			if (readyGeneration.needsFallbackMessage) {
-				conversationLog.warn(
-					`[ai-agent] conv=${convId} | Repair failed, sending fallback message`
-				);
-			}
-			conversationLog.warn(
-				`[ai-agent] conv=${convId} | AI forgot to call sendMessage! Sending fallback...`
-			);
-
-			// Construct a fallback message based on the action
-			let fallbackMessage: string;
-			switch (readyGeneration.decision.action) {
-				case "escalate":
-					fallbackMessage =
-						"Let me connect you with a team member who can help.";
-					break;
-				case "resolve":
-					fallbackMessage =
-						"I hope that helped! Let me know if you need anything else.";
-					break;
-				default:
-					// For respond, use a safe generic message (do not leak reasoning)
-					fallbackMessage =
-						"Thanks for your message. I'm looking into this now. Could you share any extra details that might help?";
-			}
-
-			try {
-				const fallbackSend = await sendMessage({
-					db: ctx.db,
-					conversationId: convId,
-					organizationId: ctx.input.organizationId,
-					websiteId: ctx.input.websiteId,
-					visitorId: ctx.input.visitorId,
-					aiAgentId: readyIntake.aiAgent.id,
-					text: fallbackMessage,
-					idempotencyKey: `public:${ctx.input.messageId}:fallback`,
-				});
-				if (!fallbackSend.paused) {
-					markPublicMessageSent({
-						messageId: fallbackSend.messageId,
-						created: fallbackSend.created,
-					});
-				}
-				conversationLog.log(
-					`[ai-agent] conv=${convId} | Fallback message sent successfully`
-				);
-			} catch (fallbackError) {
-				conversationLog.error(
-					`[ai-agent] conv=${convId} | Failed to send fallback:`,
-					fallbackError
-				);
-			}
-		}
+		await maybeSendFallbackMessage({
+			ctx,
+			intake: readyIntake,
+			generation: readyGeneration,
+			allowPublicMessages,
+			publicMessagesSent,
+			markPublicMessageSent,
+			conversationLog,
+			convId,
+		});
 
 		// Step 4: Execution - Execute actions
 		const executionStart = Date.now();
@@ -963,13 +751,11 @@ export async function runAiAgentPipeline(
 			`status=completed | action=${readyGeneration.decision.action} | totalMs=${finalMetrics.totalMs}`
 		);
 
-		return {
-			status: "completed",
+		return createCompletedResult({
 			action: readyGeneration.decision.action,
 			publicMessagesSent,
-			retryable: false,
 			metrics: finalMetrics,
-		};
+		});
 	} catch (error) {
 		// Run followup for cleanup (workflow state, etc.)
 		if (intakeResult?.status === "ready") {
@@ -1013,13 +799,12 @@ export async function runAiAgentPipeline(
 			});
 		}
 
-		return {
-			status: "error",
+		return createErrorResult({
 			error: errorMessage,
 			publicMessagesSent,
-			retryable: publicMessagesSent === 0,
-			metrics: finalizeMetrics(metrics, startTime),
-		};
+			metrics,
+			startTime,
+		});
 	} finally {
 		// Single authoritative typing cleanup.
 		if (typingHeartbeat?.running) {
@@ -1063,10 +848,392 @@ export async function runAiAgentPipeline(
 	}
 }
 
+function createInitialMetrics(): PipelineMetrics {
+	return {
+		intakeMs: 0,
+		decisionMs: 0,
+		generationMs: 0,
+		executionMs: 0,
+		followupMs: 0,
+		totalMs: 0,
+	};
+}
+
+function createSkippedResult(params: {
+	reason: string;
+	publicMessagesSent: number;
+	metrics: PipelineMetrics;
+	startTime: number;
+}): AiAgentPipelineResult {
+	return {
+		status: "skipped",
+		reason: params.reason,
+		publicMessagesSent: params.publicMessagesSent,
+		retryable: false,
+		metrics: finalizeMetrics(params.metrics, params.startTime),
+	};
+}
+
+function createCompletedResult(params: {
+	action: string;
+	publicMessagesSent: number;
+	metrics: PipelineMetrics;
+}): AiAgentPipelineResult {
+	return {
+		status: "completed",
+		action: params.action,
+		publicMessagesSent: params.publicMessagesSent,
+		retryable: false,
+		metrics: params.metrics,
+	};
+}
+
+function createErrorResult(params: {
+	error: string;
+	publicMessagesSent: number;
+	metrics: PipelineMetrics;
+	startTime: number;
+}): AiAgentPipelineResult {
+	return {
+		status: "error",
+		error: params.error,
+		publicMessagesSent: params.publicMessagesSent,
+		retryable: params.publicMessagesSent === 0,
+		metrics: finalizeMetrics(params.metrics, params.startTime),
+	};
+}
+
+function createSafeEmitter<TParams>(params: {
+	stageName: string;
+	failureMessage: string;
+	runTracedStage: RunTracedStageFn;
+	conversationLog: ConversationLog;
+	emitter: (input: TParams) => Promise<void>;
+}): (input: TParams) => Promise<void> {
+	return async (input) => {
+		try {
+			await params.runTracedStage(params.stageName, async () =>
+				params.emitter(input)
+			);
+		} catch (error) {
+			params.conversationLog.warn(params.failureMessage, error);
+		}
+	};
+}
+
+function resolveDecisionPolicyWithFallback(params: {
+	db: Database;
+	aiAgent: ReadyIntakeResult["aiAgent"];
+	traceLog: TraceLogFn;
+}): Promise<DecisionPolicyResolution> {
+	const decisionPolicyStart = Date.now();
+	params.traceLog("log", "stage.start", "stage=decision_policy_resolution");
+	return resolvePromptBundle({
+		db: params.db,
+		aiAgent: params.aiAgent,
+		mode: "background_only",
+	})
+		.then((bundle) => {
+			const policy = bundle.coreDocuments["decision.md"]?.content?.trim();
+			if (!policy) {
+				params.traceLog(
+					"warn",
+					"stage.end",
+					`stage=decision_policy_resolution | durationMs=${Date.now() - decisionPolicyStart} | fallback=missing`
+				);
+				return {
+					policy: PROMPT_TEMPLATES.DECISION_POLICY,
+					fallback: "missing",
+				} as const;
+			}
+			params.traceLog(
+				"log",
+				"stage.end",
+				`stage=decision_policy_resolution | durationMs=${Date.now() - decisionPolicyStart} | fallback=none`
+			);
+			return { policy, fallback: "none" } as const;
+		})
+		.catch((error) => {
+			params.traceLog(
+				"warn",
+				"stage.error",
+				`stage=decision_policy_resolution | durationMs=${Date.now() - decisionPolicyStart} | fallback=error`,
+				error
+			);
+			return {
+				policy: PROMPT_TEMPLATES.DECISION_POLICY,
+				fallback: "error",
+				error,
+			} as const;
+		});
+}
+
+function createContinuationHint(
+	continuationResult: Awaited<ReturnType<typeof continuationGate>>
+): ContinuationHint | undefined {
+	if (continuationResult.decision !== "supplement") {
+		return;
+	}
+	return {
+		reason: continuationResult.reason,
+		confidence: continuationResult.confidence,
+		deltaHint: continuationResult.deltaHint,
+		latestAiMessageId: continuationResult.latestAiMessageId ?? "",
+		latestAiMessageText:
+			continuationResult.latestAiMessageText ??
+			"Only add missing details; do not repeat the previous AI reply.",
+	};
+}
+
+function shouldAllowPublicMessages(params: {
+	mode: DecisionResult["mode"];
+	triggerVisibility?: "public" | "private";
+}): boolean {
+	if (params.mode === "background_only") {
+		return false;
+	}
+	return (
+		params.triggerVisibility === "public" ||
+		params.mode === "respond_to_command"
+	);
+}
+
+async function logBlockedAiCreditUsage(params: {
+	ctx: PipelineContext;
+	intake: ReadyIntakeResult;
+	guardResult: AiCreditGuardResult;
+	resolvedModelId: string;
+	modelIdOriginal: string;
+	modelMigrationApplied: boolean;
+	conversationLog: ConversationLog;
+	convId: string;
+}): Promise<void> {
+	const blockedBalanceBefore = params.guardResult.balance;
+	const blockedBalanceAfterEstimate =
+		typeof blockedBalanceBefore === "number"
+			? blockedBalanceBefore - params.guardResult.minimumCharge.totalCredits
+			: null;
+	try {
+		await logAiCreditUsageTimeline({
+			db: params.ctx.db,
+			organizationId: params.ctx.input.organizationId,
+			websiteId: params.ctx.input.websiteId,
+			conversationId: params.ctx.input.conversationId,
+			visitorId: params.ctx.input.visitorId,
+			aiAgentId: params.intake.aiAgent.id,
+			workflowRunId: params.ctx.input.workflowRunId,
+			triggerMessageId: params.ctx.input.messageId,
+			triggerVisibility: params.intake.triggerMessage?.visibility,
+			payload: {
+				baseCredits: params.guardResult.minimumCharge.baseCredits,
+				modelCredits: params.guardResult.minimumCharge.modelCredits,
+				toolCredits: params.guardResult.minimumCharge.toolCredits,
+				totalCredits: params.guardResult.minimumCharge.totalCredits,
+				billableToolCount: params.guardResult.minimumCharge.billableToolCount,
+				excludedToolCount: params.guardResult.minimumCharge.excludedToolCount,
+				modelId: params.resolvedModelId,
+				modelIdOriginal: params.modelIdOriginal,
+				modelMigrationApplied: params.modelMigrationApplied,
+				balanceBefore: blockedBalanceBefore,
+				balanceAfterEstimate: blockedBalanceAfterEstimate,
+				mode: params.guardResult.mode,
+				blockedReason: params.guardResult.blockedReason ?? "blocked",
+				ingestStatus: "skipped",
+			},
+		});
+	} catch (error) {
+		params.conversationLog.warn(
+			`[ai-agent] conv=${params.convId} | Failed to log blocked AI credit timeline`,
+			error
+		);
+	}
+}
+
+async function finalizeAiCreditUsageForRun(params: {
+	ctx: PipelineContext;
+	intake: ReadyIntakeResult;
+	guardResult: AiCreditGuardResult | null;
+	result: GenerationResult | null;
+	resolvedModelId: string;
+	modelIdOriginal: string;
+	modelMigrationApplied: boolean;
+	conversationLog: ConversationLog;
+	convId: string;
+}): Promise<void> {
+	if (!params.guardResult?.allowed) {
+		return;
+	}
+
+	const toolCallsForCredits =
+		params.result?.chargeableToolCallsByName ?? params.result?.toolCallsByName;
+	const charge = toolCallsForCredits
+		? calculateAiCreditCharge({
+				modelId: params.resolvedModelId,
+				toolCallsByName: toolCallsForCredits,
+			})
+		: getMinimumAiCreditCharge(params.resolvedModelId);
+
+	const balanceBefore = params.guardResult.balance;
+	const balanceAfterEstimate =
+		typeof balanceBefore === "number"
+			? balanceBefore - charge.totalCredits
+			: null;
+	let ingestStatus: IngestAiCreditUsageStatus | "skipped" = "failed";
+
+	try {
+		const ingestResult = await ingestAiCreditUsage({
+			organizationId: params.ctx.input.organizationId,
+			credits: charge.totalCredits,
+			workflowRunId: params.ctx.input.workflowRunId,
+			modelId: params.resolvedModelId,
+			modelIdOriginal: params.modelIdOriginal,
+			modelMigrationApplied: params.modelMigrationApplied,
+			mode: params.guardResult.mode,
+			baseCredits: charge.baseCredits,
+			modelCredits: charge.modelCredits,
+			toolCredits: charge.toolCredits,
+			billableToolCount: charge.billableToolCount,
+			excludedToolCount: charge.excludedToolCount,
+			totalToolCount: charge.totalToolCount,
+		});
+		ingestStatus = ingestResult.status;
+		if (ingestStatus === "failed") {
+			params.conversationLog.error(
+				`[ai-agent] conv=${params.convId} | Failed to ingest AI credit usage`
+			);
+		}
+	} catch (error) {
+		ingestStatus = "failed";
+		params.conversationLog.error(
+			`[ai-agent] conv=${params.convId} | Failed to ingest AI credit usage`,
+			error
+		);
+	}
+
+	try {
+		await logAiCreditUsageTimeline({
+			db: params.ctx.db,
+			organizationId: params.ctx.input.organizationId,
+			websiteId: params.ctx.input.websiteId,
+			conversationId: params.ctx.input.conversationId,
+			visitorId: params.ctx.input.visitorId,
+			aiAgentId: params.intake.aiAgent.id,
+			workflowRunId: params.ctx.input.workflowRunId,
+			triggerMessageId: params.ctx.input.messageId,
+			triggerVisibility: params.intake.triggerMessage?.visibility,
+			payload: {
+				baseCredits: charge.baseCredits,
+				modelCredits: charge.modelCredits,
+				toolCredits: charge.toolCredits,
+				totalCredits: charge.totalCredits,
+				billableToolCount: charge.billableToolCount,
+				excludedToolCount: charge.excludedToolCount,
+				modelId: params.resolvedModelId,
+				modelIdOriginal: params.modelIdOriginal,
+				modelMigrationApplied: params.modelMigrationApplied,
+				balanceBefore,
+				balanceAfterEstimate,
+				mode: params.guardResult.mode,
+				ingestStatus,
+			},
+		});
+	} catch (error) {
+		params.conversationLog.warn(
+			`[ai-agent] conv=${params.convId} | Failed to log AI credit timeline`,
+			error
+		);
+	}
+}
+
+function shouldSendFallbackMessage(params: {
+	generation: GenerationResult;
+	publicMessagesSent: number;
+}): boolean {
+	if (params.publicMessagesSent > 0) {
+		return false;
+	}
+	return (
+		params.generation.needsFallbackMessage === true ||
+		REQUIRED_MESSAGE_ACTIONS.has(params.generation.decision.action)
+	);
+}
+
+function fallbackMessageForAction(action: string): string {
+	switch (action) {
+		case "escalate":
+			return "Let me connect you with a team member who can help.";
+		case "resolve":
+			return "I hope that helped! Let me know if you need anything else.";
+		default:
+			return "Thanks for your message. I'm looking into this now. Could you share any extra details that might help?";
+	}
+}
+
+async function maybeSendFallbackMessage(params: {
+	ctx: PipelineContext;
+	intake: ReadyIntakeResult;
+	generation: GenerationResult;
+	allowPublicMessages: boolean;
+	publicMessagesSent: number;
+	markPublicMessageSent: (params: {
+		messageId: string;
+		created: boolean;
+		duplicateSuppressed?: boolean;
+	}) => void;
+	conversationLog: ConversationLog;
+	convId: string;
+}): Promise<void> {
+	const needsFallbackMessage =
+		params.allowPublicMessages &&
+		shouldSendFallbackMessage({
+			generation: params.generation,
+			publicMessagesSent: params.publicMessagesSent,
+		});
+	if (!needsFallbackMessage) {
+		return;
+	}
+
+	if (params.generation.needsFallbackMessage) {
+		params.conversationLog.warn(
+			`[ai-agent] conv=${params.convId} | Repair failed, sending fallback message`
+		);
+	}
+	params.conversationLog.warn(
+		`[ai-agent] conv=${params.convId} | AI forgot to call sendMessage! Sending fallback...`
+	);
+
+	try {
+		const fallbackSend = await sendMessage({
+			db: params.ctx.db,
+			conversationId: params.ctx.input.conversationId,
+			organizationId: params.ctx.input.organizationId,
+			websiteId: params.ctx.input.websiteId,
+			visitorId: params.ctx.input.visitorId,
+			aiAgentId: params.intake.aiAgent.id,
+			text: fallbackMessageForAction(params.generation.decision.action),
+			idempotencyKey: `public:${params.ctx.input.messageId}:fallback`,
+		});
+		if (!fallbackSend.paused) {
+			params.markPublicMessageSent({
+				messageId: fallbackSend.messageId,
+				created: fallbackSend.created,
+			});
+		}
+		params.conversationLog.log(
+			`[ai-agent] conv=${params.convId} | Fallback message sent successfully`
+		);
+	} catch (error) {
+		params.conversationLog.error(
+			`[ai-agent] conv=${params.convId} | Failed to send fallback:`,
+			error
+		);
+	}
+}
+
 function finalizeMetrics(
-	metrics: AiAgentPipelineResult["metrics"],
+	metrics: PipelineMetrics,
 	startTime: number
-): AiAgentPipelineResult["metrics"] {
+): PipelineMetrics {
 	return {
 		...metrics,
 		totalMs: Date.now() - startTime,

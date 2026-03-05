@@ -19,4 +19,5 @@ export const TOOL_RENDERER_MAP: Record<
 	updateSentiment: UpdateSentimentActivity,
 	setPriority: SetPriorityActivity,
 	aiCreditUsage: AiCreditUsageActivity,
+	generationUsage: AiCreditUsageActivity,
 };

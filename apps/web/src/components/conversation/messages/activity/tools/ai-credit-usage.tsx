@@ -12,6 +12,7 @@ type CreditPayload = {
 	totalCredits: number;
 	billableToolCount: number;
 	excludedToolCount: number;
+	totalToolCount?: number;
 	modelId: string;
 	modelIdOriginal?: string;
 	modelMigrationApplied?: boolean;
@@ -20,20 +21,115 @@ type CreditPayload = {
 	mode: "normal" | "outage";
 	blockedReason?: string;
 	ingestStatus?: string;
+	inputTokens?: number;
+	outputTokens?: number;
+	totalTokens?: number;
+	tokenSource?: "provider" | "fallback_constant";
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function toNumber(value: unknown, fallback = 0): number {
+	return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function toNullableNumber(value: unknown): number | null {
+	return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function toStringOrEmpty(value: unknown): string {
+	return typeof value === "string" ? value : "";
+}
+
+function toMode(value: unknown): "normal" | "outage" {
+	return value === "outage" ? "outage" : "normal";
+}
+
+function normalizeCreditPayload(
+	payload: Record<string, unknown>
+): CreditPayload | null {
+	if (typeof payload.totalCredits !== "number") {
+		return null;
+	}
+
+	return {
+		baseCredits: toNumber(payload.baseCredits),
+		modelCredits: toNumber(payload.modelCredits),
+		toolCredits: toNumber(payload.toolCredits),
+		totalCredits: toNumber(payload.totalCredits),
+		billableToolCount: toNumber(payload.billableToolCount),
+		excludedToolCount: toNumber(payload.excludedToolCount),
+		totalToolCount: toNumber(payload.totalToolCount),
+		modelId: toStringOrEmpty(payload.modelId),
+		modelIdOriginal:
+			typeof payload.modelIdOriginal === "string"
+				? payload.modelIdOriginal
+				: undefined,
+		modelMigrationApplied: payload.modelMigrationApplied === true,
+		balanceBefore: toNullableNumber(payload.balanceBefore),
+		balanceAfterEstimate: toNullableNumber(payload.balanceAfterEstimate),
+		mode: toMode(payload.mode),
+		blockedReason:
+			typeof payload.blockedReason === "string"
+				? payload.blockedReason
+				: undefined,
+		ingestStatus:
+			typeof payload.ingestStatus === "string"
+				? payload.ingestStatus
+				: undefined,
+		inputTokens:
+			typeof payload.inputTokens === "number" ? payload.inputTokens : undefined,
+		outputTokens:
+			typeof payload.outputTokens === "number"
+				? payload.outputTokens
+				: undefined,
+		totalTokens:
+			typeof payload.totalTokens === "number" ? payload.totalTokens : undefined,
+		tokenSource:
+			payload.tokenSource === "fallback_constant"
+				? "fallback_constant"
+				: "provider",
+	};
+}
+
 function parsePayload(output: unknown): CreditPayload | null {
 	if (!isRecord(output)) {
 		return null;
 	}
-	if (typeof output.totalCredits !== "number") {
+
+	const directPayload = normalizeCreditPayload(output);
+	if (directPayload) {
+		return directPayload;
+	}
+
+	const credits = isRecord(output.credits) ? output.credits : null;
+	if (!credits) {
 		return null;
 	}
-	return output as unknown as CreditPayload;
+
+	const normalizedCredits = normalizeCreditPayload(credits);
+	if (!normalizedCredits) {
+		return null;
+	}
+
+	const tokens = isRecord(output.tokens) ? output.tokens : null;
+	if (!tokens) {
+		return normalizedCredits;
+	}
+
+	return {
+		...normalizedCredits,
+		inputTokens:
+			typeof tokens.inputTokens === "number" ? tokens.inputTokens : undefined,
+		outputTokens:
+			typeof tokens.outputTokens === "number" ? tokens.outputTokens : undefined,
+		totalTokens:
+			typeof tokens.totalTokens === "number" ? tokens.totalTokens : undefined,
+		tokenSource:
+			tokens.source === "fallback_constant" ? "fallback_constant" : "provider",
+	};
 }
 
 function shortenModelId(modelId: string): string {
@@ -163,6 +259,17 @@ export function AiCreditUsageActivity({
 							)
 						</span>
 					</DetailRow>
+					{typeof payload.totalTokens === "number" && (
+						<DetailRow label="Tokens">
+							{payload.totalTokens}
+							{typeof payload.inputTokens === "number" &&
+							typeof payload.outputTokens === "number" ? (
+								<span className="ml-1 font-normal text-muted-foreground">
+									({payload.inputTokens} in / {payload.outputTokens} out)
+								</span>
+							) : null}
+						</DetailRow>
+					)}
 
 					<div className="my-1.5 border-border/30 border-t" />
 

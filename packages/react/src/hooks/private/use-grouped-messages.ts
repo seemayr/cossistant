@@ -126,7 +126,7 @@ type GroupableTimelineItemType =
 	| "standalone_event";
 
 /** Tool names that should never be grouped with other activity items. */
-const STANDALONE_TOOL_NAMES = new Set(["aiCreditUsage"]);
+const STANDALONE_TOOL_NAMES = new Set(["aiCreditUsage", "generationUsage"]);
 
 function getGroupableTimelineItemType(
 	item: TimelineItem

@@ -2,7 +2,12 @@ import { getBehaviorSettings } from "@api/ai-agent/settings";
 import type { AiAgentSelect } from "@api/db/schema/ai-agent";
 import type { ToolSet } from "@api/lib/ai";
 import { FINISH_TOOL_IDS, SHARED_PIPELINE_TOOL_CATALOG } from "./catalog";
-import type { PipelineToolContext, ToolAvailability } from "./contracts";
+import type {
+	PipelineToolContext,
+	PipelineToolDefinition,
+	ToolAvailability,
+} from "./contracts";
+import { wrapPipelineToolsWithTelemetry } from "./telemetry";
 
 const FINISH_TOOL_NAME_SET = new Set<string>(FINISH_TOOL_IDS);
 
@@ -71,6 +76,7 @@ export function buildPipelineToolset(params: {
 	context: PipelineToolContext;
 }): PipelineToolBuildResult {
 	const tools: ToolSet = {};
+	const activeDefinitions: PipelineToolDefinition[] = [];
 	const toolNames: string[] = [];
 	const finishToolNames: string[] = [];
 
@@ -97,6 +103,7 @@ export function buildPipelineToolset(params: {
 		}
 
 		tools[entry.id] = instance;
+		activeDefinitions.push(entry);
 		toolNames.push(entry.id);
 
 		if (isFinishToolName(entry.id)) {
@@ -105,7 +112,11 @@ export function buildPipelineToolset(params: {
 	}
 
 	return {
-		tools,
+		tools: wrapPipelineToolsWithTelemetry({
+			tools,
+			context: params.context,
+			definitions: activeDefinitions,
+		}),
 		toolNames,
 		finishToolNames,
 	};

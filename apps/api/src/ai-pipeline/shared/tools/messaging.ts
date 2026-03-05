@@ -2,8 +2,11 @@ import { addInternalNote } from "@api/ai-agent/actions/internal-note";
 import { sendMessage as sendPublicMessage } from "@api/ai-agent/actions/send-message";
 import { tool } from "ai";
 import { z } from "zod";
-import type { PipelineToolContext, PipelineToolResult } from "./contracts";
-import { incrementToolCall } from "./helpers";
+import type {
+	PipelineToolContext,
+	PipelineToolResult,
+	ToolTelemetrySpec,
+} from "./contracts";
 
 const sendMessageInputSchema = z.object({
 	message: z
@@ -60,8 +63,6 @@ export function createSendMessageTool(ctx: PipelineToolContext) {
 			runSequentially<
 				PipelineToolResult<{ messageId: string; created: boolean }>
 			>(async () => {
-				incrementToolCall(ctx, "sendMessage");
-
 				if (!ctx.allowPublicMessages) {
 					return {
 						success: false,
@@ -137,8 +138,6 @@ export function createSendPrivateMessageTool(ctx: PipelineToolContext) {
 		execute: async ({
 			message,
 		}): Promise<PipelineToolResult<{ noteId: string; created: boolean }>> => {
-			incrementToolCall(ctx, "sendPrivateMessage");
-
 			ctx.runtimeState.privateSendSequence += 1;
 			const slot = ctx.runtimeState.privateSendSequence;
 			const result = await addInternalNote({
@@ -162,3 +161,31 @@ export function createSendPrivateMessageTool(ctx: PipelineToolContext) {
 		},
 	});
 }
+
+export const SEND_MESSAGE_TELEMETRY: ToolTelemetrySpec = {
+	summary: {
+		partial: "Sending message to visitor...",
+		result: "Sent visitor message",
+		error: "Failed to send visitor message",
+	},
+	progress: {
+		partial: "Preparing response...",
+		result: "Response sent",
+		error: "Failed to send response",
+		audience: "all",
+	},
+};
+
+export const SEND_PRIVATE_MESSAGE_TELEMETRY: ToolTelemetrySpec = {
+	summary: {
+		partial: "Saving internal note...",
+		result: "Saved internal note",
+		error: "Failed to save internal note",
+	},
+	progress: {
+		partial: "Saving internal note...",
+		result: "Internal note saved",
+		error: "Failed to save internal note",
+		audience: "dashboard",
+	},
+};

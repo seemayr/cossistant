@@ -2,8 +2,12 @@ import { escalate as escalateAction } from "@api/ai-agent/actions/escalate";
 import { updateStatus } from "@api/ai-agent/actions/update-status";
 import { tool } from "ai";
 import { z } from "zod";
-import type { PipelineToolContext, PipelineToolResult } from "./contracts";
-import { incrementToolCall, setFinalAction, setToolError } from "./helpers";
+import type {
+	PipelineToolContext,
+	PipelineToolResult,
+	ToolTelemetrySpec,
+} from "./contracts";
+import { setFinalAction, setToolError } from "./helpers";
 
 const respondSchema = z.object({
 	reasoning: z.string().min(1),
@@ -39,7 +43,6 @@ export function createRespondTool(ctx: PipelineToolContext) {
 			reasoning,
 			confidence,
 		}): Promise<PipelineToolResult<{ action: "respond" }>> => {
-			incrementToolCall(ctx, "respond");
 			setFinalAction(ctx, {
 				action: "respond",
 				reasoning,
@@ -63,8 +66,6 @@ export function createEscalateTool(ctx: PipelineToolContext) {
 			confidence,
 			urgency,
 		}): Promise<PipelineToolResult<{ action: "escalate" | "respond" }>> => {
-			incrementToolCall(ctx, "escalate");
-
 			if (ctx.isEscalated) {
 				setFinalAction(ctx, {
 					action: "respond",
@@ -131,8 +132,6 @@ export function createResolveTool(ctx: PipelineToolContext) {
 			reasoning,
 			confidence,
 		}): Promise<PipelineToolResult<{ action: "resolve" }>> => {
-			incrementToolCall(ctx, "resolve");
-
 			try {
 				await updateStatus({
 					db: ctx.db,
@@ -178,8 +177,6 @@ export function createMarkSpamTool(ctx: PipelineToolContext) {
 			reasoning,
 			confidence,
 		}): Promise<PipelineToolResult<{ action: "mark_spam" }>> => {
-			incrementToolCall(ctx, "markSpam");
-
 			try {
 				await updateStatus({
 					db: ctx.db,
@@ -224,7 +221,6 @@ export function createSkipTool(ctx: PipelineToolContext) {
 		execute: async ({
 			reasoning,
 		}): Promise<PipelineToolResult<{ action: "skip" }>> => {
-			incrementToolCall(ctx, "skip");
 			setFinalAction(ctx, {
 				action: "skip",
 				reasoning,
@@ -237,3 +233,73 @@ export function createSkipTool(ctx: PipelineToolContext) {
 		},
 	});
 }
+
+export const RESPOND_TELEMETRY: ToolTelemetrySpec = {
+	summary: {
+		partial: "Finalizing response...",
+		result: "Response action captured",
+		error: "Failed to finalize response action",
+	},
+	progress: {
+		partial: "Finalizing response...",
+		result: "Response finalized",
+		error: "Failed to finalize response",
+		audience: "all",
+	},
+};
+
+export const ESCALATE_TELEMETRY: ToolTelemetrySpec = {
+	summary: {
+		partial: "Escalating conversation...",
+		result: "Conversation escalated",
+		error: "Failed to escalate conversation",
+	},
+	progress: {
+		partial: "Escalating to human support...",
+		result: "Escalation completed",
+		error: "Escalation failed",
+		audience: "all",
+	},
+};
+
+export const RESOLVE_TELEMETRY: ToolTelemetrySpec = {
+	summary: {
+		partial: "Resolving conversation...",
+		result: "Conversation resolved",
+		error: "Failed to resolve conversation",
+	},
+	progress: {
+		partial: "Resolving conversation...",
+		result: "Conversation resolved",
+		error: "Resolve failed",
+		audience: "all",
+	},
+};
+
+export const MARK_SPAM_TELEMETRY: ToolTelemetrySpec = {
+	summary: {
+		partial: "Marking conversation as spam...",
+		result: "Conversation marked as spam",
+		error: "Failed to mark spam",
+	},
+	progress: {
+		partial: "Marking as spam...",
+		result: "Conversation marked as spam",
+		error: "Spam action failed",
+		audience: "dashboard",
+	},
+};
+
+export const SKIP_TELEMETRY: ToolTelemetrySpec = {
+	summary: {
+		partial: "Skipping response...",
+		result: "Skipped response",
+		error: "Failed to skip response",
+	},
+	progress: {
+		partial: "Skipping response...",
+		result: "Response skipped",
+		error: "Skip failed",
+		audience: "dashboard",
+	},
+};

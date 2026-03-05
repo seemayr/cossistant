@@ -11,6 +11,9 @@ const formatHistoryForGenerationMock = mock(() => [
 	{ role: "user" as const, content: "hello" },
 ]);
 const logAiPipelineMock = mock(() => {});
+const emitPipelineGenerationProgressMock = mock((async () => {}) as (
+	...args: unknown[]
+) => Promise<void>);
 
 type MockAgentOptions = {
 	model: string;
@@ -147,6 +150,10 @@ mock.module("../../logger", () => ({
 	logAiPipeline: logAiPipelineMock,
 }));
 
+mock.module("../events", () => ({
+	emitPipelineGenerationProgress: emitPipelineGenerationProgressMock,
+}));
+
 const modulePromise = import("./index");
 
 function createAbortError(): Error {
@@ -200,6 +207,7 @@ describe("runGenerationRuntime", () => {
 		formatHistoryForGenerationMock.mockClear();
 		buildPipelineToolsetMock.mockClear();
 		logAiPipelineMock.mockClear();
+		emitPipelineGenerationProgressMock.mockClear();
 	});
 
 	it("retries on timeout and succeeds with fallback model", async () => {

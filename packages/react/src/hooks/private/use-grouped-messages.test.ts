@@ -514,6 +514,33 @@ describe("groupTimelineItems", () => {
 		}
 	});
 
+	it("renders generationUsage as a standalone timeline_tool for compatibility", () => {
+		const base = new Date("2024-01-01T12:00:00.000Z").getTime();
+		const items: TimelineItem[] = [
+			createToolItem({
+				id: "generation-1",
+				createdAt: new Date(base).toISOString(),
+				toolName: "generationUsage",
+				aiAgentId: "ai-1",
+			}),
+		];
+		(items[0] as TimelineItem).tool = "generationUsage";
+
+		const grouped = groupTimelineItems(
+			items,
+			items.map((item) => new Date(item.createdAt).getTime())
+		);
+
+		expect(grouped).toHaveLength(2);
+		expect(grouped[0]?.type).toBe("day_separator");
+		expect(grouped[1]?.type).toBe("timeline_tool");
+
+		if (grouped[1]?.type === "timeline_tool") {
+			expect(grouped[1].item.id).toBe("generation-1");
+			expect(grouped[1].tool).toBe("generationUsage");
+		}
+	});
+
 	it("aiCreditUsage between other tools breaks the activity group", () => {
 		const base = new Date("2024-01-01T12:00:00.000Z").getTime();
 		const creditItem = createToolItem({

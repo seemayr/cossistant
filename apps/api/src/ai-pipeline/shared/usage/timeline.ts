@@ -10,9 +10,8 @@ import {
 	getToolLogType,
 	TimelineItemVisibility,
 } from "@cossistant/types";
-import type { GenerationTokenUsage } from "../generation/contracts";
 
-export const GENERATION_USAGE_TIMELINE_TOOL_NAME = "generationUsage";
+export const AI_CREDIT_USAGE_TIMELINE_TOOL_NAME = "aiCreditUsage";
 
 export type GenerationUsageTimelinePayload = {
 	workflowRunId: string;
@@ -21,18 +20,25 @@ export type GenerationUsageTimelinePayload = {
 	modelId: string;
 	modelIdOriginal?: string;
 	modelMigrationApplied?: boolean;
-	tokens: GenerationTokenUsage;
-	credits: {
-		baseCredits: number;
-		modelCredits: number;
-		toolCredits: number;
-		totalCredits: number;
-		billableToolCount: number;
-		excludedToolCount: number;
-		totalToolCount: number;
-		mode: "normal" | "outage";
-		ingestStatus: IngestAiCreditUsageStatus | "failed" | "skipped";
-	};
+	inputTokens: number;
+	outputTokens: number;
+	totalTokens: number;
+	tokenSource: "provider" | "fallback_constant";
+	baseCredits: number;
+	modelCredits: number;
+	toolCredits: number;
+	totalCredits: number;
+	billableToolCount: number;
+	excludedToolCount: number;
+	totalToolCount: number;
+	mode: "normal" | "outage";
+	ingestStatus:
+		| IngestAiCreditUsageStatus
+		| "failed"
+		| "skipped"
+		| "skipped_zero";
+	balanceBefore: number | null;
+	balanceAfterEstimate: number | null;
 };
 
 function isUniqueViolationError(error: unknown): boolean {
@@ -48,7 +54,7 @@ function isUniqueViolationError(error: unknown): boolean {
 }
 
 function getTimelineItemId(workflowRunId: string): string {
-	return generateIdempotentULID(`tool:${workflowRunId}:generation-usage`);
+	return generateIdempotentULID(`tool:${workflowRunId}:ai-credit-usage`);
 }
 
 function buildToolPart(payload: GenerationUsageTimelinePayload) {
@@ -56,7 +62,7 @@ function buildToolPart(payload: GenerationUsageTimelinePayload) {
 		cossistant: {
 			visibility: TimelineItemVisibility.PRIVATE,
 			toolTimeline: {
-				logType: getToolLogType(GENERATION_USAGE_TIMELINE_TOOL_NAME),
+				logType: getToolLogType(AI_CREDIT_USAGE_TIMELINE_TOOL_NAME),
 				workflowRunId: payload.workflowRunId,
 				triggerMessageId: payload.triggerMessageId,
 				...(payload.triggerVisibility
@@ -67,9 +73,9 @@ function buildToolPart(payload: GenerationUsageTimelinePayload) {
 	};
 
 	return {
-		type: `tool-${GENERATION_USAGE_TIMELINE_TOOL_NAME}`,
-		toolCallId: "generation-usage",
-		toolName: GENERATION_USAGE_TIMELINE_TOOL_NAME,
+		type: `tool-${AI_CREDIT_USAGE_TIMELINE_TOOL_NAME}`,
+		toolCallId: "ai-credit-usage",
+		toolName: AI_CREDIT_USAGE_TIMELINE_TOOL_NAME,
 		state: "result",
 		input: {
 			workflowRunId: payload.workflowRunId,
@@ -83,7 +89,7 @@ function buildToolPart(payload: GenerationUsageTimelinePayload) {
 }
 
 function buildTimelineText(payload: GenerationUsageTimelinePayload): string {
-	return `Generation usage: ${payload.tokens.totalTokens} tokens, ${payload.credits.totalCredits} credits`;
+	return `AI usage: ${payload.totalTokens} tokens, ${payload.totalCredits} credits`;
 }
 
 export async function logGenerationUsageTimeline(params: {
@@ -114,7 +120,7 @@ export async function logGenerationUsageTimeline(params: {
 				aiAgentId: params.aiAgentId,
 				visitorId: params.visitorId,
 				visibility: TimelineItemVisibility.PRIVATE,
-				tool: GENERATION_USAGE_TIMELINE_TOOL_NAME,
+				tool: AI_CREDIT_USAGE_TIMELINE_TOOL_NAME,
 			},
 		});
 		return;
@@ -134,7 +140,7 @@ export async function logGenerationUsageTimeline(params: {
 		item: {
 			text,
 			parts: [part],
-			tool: GENERATION_USAGE_TIMELINE_TOOL_NAME,
+			tool: AI_CREDIT_USAGE_TIMELINE_TOOL_NAME,
 		},
 	});
 }

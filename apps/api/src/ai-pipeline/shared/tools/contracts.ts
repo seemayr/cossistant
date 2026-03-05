@@ -21,11 +21,56 @@ export type ToolRuntimeError = {
 export type ToolRuntimeState = {
 	finalAction: CapturedFinalAction | null;
 	publicMessagesSent: number;
+	/** Total tool attempts (includes failed/throwing calls). */
 	toolCallCounts: Record<string, number>;
+	/** Successful tool calls (result state). */
+	successfulToolCallCounts: Record<string, number>;
+	/** Failed tool calls (error state or thrown). */
+	failedToolCallCounts: Record<string, number>;
+	/** Successful calls used for credit accounting. */
+	chargeableToolCallCounts: Record<string, number>;
 	publicSendSequence: number;
 	privateSendSequence: number;
 	sentPublicMessageIds: Set<string>;
 	lastToolError: ToolRuntimeError | null;
+};
+
+export type ToolTracePayloadMode = "raw" | "sanitized" | "metadata";
+
+export type PipelineToolLogger = {
+	log: (...args: unknown[]) => void;
+	warn: (...args: unknown[]) => void;
+	error: (...args: unknown[]) => void;
+};
+
+export type ToolTelemetryTextParams = {
+	toolName: string;
+	input: Record<string, unknown>;
+	output?: unknown;
+	errorText?: string;
+};
+
+export type ToolTelemetryText =
+	| string
+	| ((params: ToolTelemetryTextParams) => string);
+
+export type ToolTelemetrySpec = {
+	summary: {
+		partial: ToolTelemetryText;
+		result: ToolTelemetryText;
+		error: ToolTelemetryText;
+	};
+	progress: {
+		partial?: ToolTelemetryText;
+		result?: ToolTelemetryText;
+		error?: ToolTelemetryText;
+		/**
+		 * "auto" maps customer-facing tools to audience=all and internal tools to dashboard.
+		 */
+		audience?: "auto" | "all" | "dashboard";
+	};
+	sanitizeInput?: (input: unknown) => Record<string, unknown>;
+	sanitizeOutput?: (output: unknown) => unknown;
 };
 
 export type PipelineToolContext = {
@@ -50,11 +95,24 @@ export type PipelineToolContext = {
 	startTyping?: () => Promise<void>;
 	stopTyping?: () => Promise<void>;
 	runtimeState: ToolRuntimeState;
+	debugLogger?: PipelineToolLogger;
+	deepTraceEnabled?: boolean;
+	tracePayloadMode?: ToolTracePayloadMode;
 };
 
 export type PipelineToolFactory = (
 	ctx: PipelineToolContext
 ) => ToolSet[string] | null;
+
+export type PipelineToolDefinition = {
+	id: import("@cossistant/types").AiAgentToolId;
+	factory: PipelineToolFactory;
+	availability: ToolAvailability;
+	behaviorSettingKey:
+		| import("@cossistant/types").AiAgentBehaviorSettingKey
+		| null;
+	telemetry: ToolTelemetrySpec;
+};
 
 export type ToolAvailability = {
 	primary: boolean;

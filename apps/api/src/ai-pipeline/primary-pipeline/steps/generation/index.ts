@@ -1,6 +1,10 @@
 import type { Database } from "@api/db";
 import type { GenerationRuntimeResult } from "../../../shared/generation";
 import { runGenerationRuntime } from "../../../shared/generation";
+import type {
+	PipelineToolLogger,
+	ToolTracePayloadMode,
+} from "../../../shared/tools/contracts";
 import type { PrimaryPipelineInput } from "../../contracts";
 import type { DecisionResult } from "../decision";
 import type { IntakeReadyContext } from "../intake/types";
@@ -12,6 +16,9 @@ export async function runPrimaryGenerationStep(params: {
 	decision: DecisionResult;
 	startTyping?: () => Promise<void>;
 	stopTyping?: () => Promise<void>;
+	debugLogger?: PipelineToolLogger;
+	deepTraceEnabled?: boolean;
+	tracePayloadMode?: ToolTracePayloadMode;
 }): Promise<GenerationRuntimeResult> {
 	const trigger = params.intake.triggerMessage;
 
@@ -33,6 +40,9 @@ export async function runPrimaryGenerationStep(params: {
 		allowPublicMessages: params.decision.mode !== "background_only",
 		startTyping: params.startTyping,
 		stopTyping: params.stopTyping,
+		debugLogger: params.debugLogger,
+		deepTraceEnabled: params.deepTraceEnabled,
+		tracePayloadMode: params.tracePayloadMode,
 	});
 }
 

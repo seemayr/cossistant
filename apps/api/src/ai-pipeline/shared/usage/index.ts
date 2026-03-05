@@ -51,18 +51,25 @@ export async function trackGenerationUsage(params: {
 		  }
 		| undefined;
 	toolCallsByName?: Record<string, number> | null;
+	chargeableToolCallsByName?: Record<string, number> | null;
 }): Promise<GenerationUsageTrackingResult> {
 	const usageTokens = resolveGenerationTokenUsage({
 		providerUsage: params.providerUsage,
 	});
 	const mode = params.mode ?? "normal";
 
+	const effectiveToolCallsByName =
+		params.chargeableToolCallsByName &&
+		Object.keys(params.chargeableToolCallsByName).length > 0
+			? params.chargeableToolCallsByName
+			: params.toolCallsByName;
 	const hasToolCounts =
-		params.toolCallsByName && Object.keys(params.toolCallsByName).length > 0;
+		effectiveToolCallsByName &&
+		Object.keys(effectiveToolCallsByName).length > 0;
 	const charge = hasToolCounts
 		? calculateAiCreditCharge({
 				modelId: params.modelId,
-				toolCallsByName: params.toolCallsByName,
+				toolCallsByName: effectiveToolCallsByName,
 			})
 		: getMinimumAiCreditCharge(params.modelId);
 
@@ -107,18 +114,21 @@ export async function trackGenerationUsage(params: {
 		modelId: params.modelId,
 		modelIdOriginal: params.modelIdOriginal,
 		modelMigrationApplied: params.modelMigrationApplied,
-		tokens: usageTokens,
-		credits: {
-			baseCredits: charge.baseCredits,
-			modelCredits: charge.modelCredits,
-			toolCredits: charge.toolCredits,
-			totalCredits: charge.totalCredits,
-			billableToolCount: charge.billableToolCount,
-			excludedToolCount: charge.excludedToolCount,
-			totalToolCount: charge.totalToolCount,
-			mode,
-			ingestStatus,
-		},
+		inputTokens: usageTokens.inputTokens,
+		outputTokens: usageTokens.outputTokens,
+		totalTokens: usageTokens.totalTokens,
+		tokenSource: usageTokens.source,
+		baseCredits: charge.baseCredits,
+		modelCredits: charge.modelCredits,
+		toolCredits: charge.toolCredits,
+		totalCredits: charge.totalCredits,
+		billableToolCount: charge.billableToolCount,
+		excludedToolCount: charge.excludedToolCount,
+		totalToolCount: charge.totalToolCount,
+		mode,
+		ingestStatus,
+		balanceBefore: null,
+		balanceAfterEstimate: null,
 	};
 
 	try {
@@ -152,7 +162,7 @@ export async function trackGenerationUsage(params: {
 }
 
 export {
-	GENERATION_USAGE_TIMELINE_TOOL_NAME,
+	AI_CREDIT_USAGE_TIMELINE_TOOL_NAME,
 	type GenerationUsageTimelinePayload,
 } from "./timeline";
 export { TOKEN_USAGE_FALLBACK_TOTAL } from "./token-usage";

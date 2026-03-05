@@ -58,6 +58,10 @@ const TOOL_ICON_MAP: Record<string, ActionIconDefinition> = {
 		key: "aiCreditUsage",
 		Icon: DollarSign,
 	},
+	generationUsage: {
+		key: "aiCreditUsage",
+		Icon: DollarSign,
+	},
 };
 
 const DEFAULT_EVENT_ICON: ActionIconDefinition = {

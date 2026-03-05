@@ -1,4 +1,6 @@
+import { env } from "@api/env";
 import { logAiPipeline } from "../logger";
+import { createPipelineDevConversationLog } from "../shared/dev-conversation-log";
 import { emitPipelineSeen, PipelineTypingHeartbeat } from "../shared/events";
 import { trackGenerationUsage } from "../shared/usage";
 import type {
@@ -52,11 +54,31 @@ export type {
 	IntakeStepResult,
 } from "./steps/intake/types";
 
+function resolveTracePayloadMode(
+	value: string | undefined
+): "raw" | "sanitized" | "metadata" {
+	switch (value) {
+		case "raw":
+		case "sanitized":
+		case "metadata":
+			return value;
+		default:
+			return "sanitized";
+	}
+}
+
 export async function runPrimaryPipeline(
 	ctx: PrimaryPipelineContext
 ): Promise<PrimaryPipelineResult> {
 	const pipelineStartedAt = Date.now();
 	const metrics = createStageMetrics();
+	const conversationLog = createPipelineDevConversationLog(
+		ctx.input.conversationId
+	);
+	const deepTraceEnabled = env.AI_AGENT_DEEP_TRACE_ENABLED === true;
+	const tracePayloadMode = resolveTracePayloadMode(
+		env.AI_AGENT_TRACE_PAYLOAD_MODE
+	);
 
 	logAiPipeline({
 		area: "primary",
@@ -68,6 +90,9 @@ export async function runPrimaryPipeline(
 			jobId: ctx.input.jobId,
 		},
 	});
+	conversationLog.log(
+		`[ai-pipeline:primary] conv=${ctx.input.conversationId} workflowRunId=${ctx.input.workflowRunId} evt=start trigger=${ctx.input.messageId}`
+	);
 
 	try {
 		const intakeResult = await measureStage(metrics, "intakeMs", () =>
@@ -195,6 +220,9 @@ export async function runPrimaryPipeline(
 						decision: decisionResult,
 						startTyping: allowPublicMessages ? startTyping : undefined,
 						stopTyping: allowPublicMessages ? stopTyping : undefined,
+						debugLogger: conversationLog,
+						deepTraceEnabled,
+						tracePayloadMode,
 					})
 				);
 			} finally {
@@ -239,6 +267,7 @@ export async function runPrimaryPipeline(
 					intakeResult.data.modelResolution.modelMigrationApplied,
 				providerUsage: generationResult.usage,
 				toolCallsByName: generationResult.toolCallsByName,
+				chargeableToolCallsByName: generationResult.chargeableToolCallsByName,
 			});
 		} catch (error) {
 			logAiPipeline({
@@ -347,5 +376,12 @@ export async function runPrimaryPipeline(
 			retryable: true,
 			action: "primary_error",
 		});
+	} finally {
+		if (deepTraceEnabled) {
+			conversationLog.log(
+				`[ai-pipeline:primary] conv=${ctx.input.conversationId} workflowRunId=${ctx.input.workflowRunId} evt=end durationMs=${Date.now() - pipelineStartedAt}`
+			);
+		}
+		await conversationLog.flush();
 	}
 }

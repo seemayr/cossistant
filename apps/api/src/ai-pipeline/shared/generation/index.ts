@@ -9,6 +9,7 @@ import {
 import { generateVisitorName } from "@cossistant/core";
 import type { PrepareStepFunction } from "ai";
 import { logAiPipeline } from "../../logger";
+import { emitPipelineGenerationProgress } from "../events";
 import { buildPipelineToolset, type PipelineToolBuildResult } from "../tools";
 import type { PipelineToolContext, ToolRuntimeState } from "../tools/contracts";
 import type {
@@ -120,6 +121,9 @@ function createToolRuntimeState(): ToolRuntimeState {
 		finalAction: null,
 		publicMessagesSent: 0,
 		toolCallCounts: {},
+		successfulToolCallCounts: {},
+		failedToolCallCounts: {},
+		chargeableToolCallCounts: {},
 		publicSendSequence: 0,
 		privateSendSequence: 0,
 		sentPublicMessageIds: new Set<string>(),
@@ -158,7 +162,43 @@ function buildToolContext(params: {
 		startTyping: input.startTyping,
 		stopTyping: input.stopTyping,
 		runtimeState,
+		debugLogger: input.debugLogger,
+		deepTraceEnabled: input.deepTraceEnabled,
+		tracePayloadMode: input.tracePayloadMode,
 	};
+}
+
+function emitDebugLog(
+	input: GenerationRuntimeInput,
+	level: "log" | "warn" | "error",
+	message: string,
+	payload?: unknown
+): void {
+	const logger = input.debugLogger;
+	const args = payload === undefined ? [message] : [message, payload];
+
+	if (logger) {
+		if (level === "warn") {
+			logger.warn(...args);
+			return;
+		}
+		if (level === "error") {
+			logger.error(...args);
+			return;
+		}
+		logger.log(...args);
+		return;
+	}
+
+	if (level === "warn") {
+		console.warn(...args);
+		return;
+	}
+	if (level === "error") {
+		console.error(...args);
+		return;
+	}
+	console.log(...args);
 }
 
 function buildFallbackToolset(params: {
@@ -297,8 +337,35 @@ async function runGenerationAttempt(params: {
 			budget: params.nonFinishToolBudget,
 		},
 	});
+	const deepTraceEnabled = params.input.deepTraceEnabled === true;
+	if (deepTraceEnabled) {
+		emitDebugLog(
+			params.input,
+			"log",
+			`[ai-pipeline:generation] conv=${params.input.conversation.id} workflowRunId=${params.input.workflowRunId} evt=attempt_start attempt=${params.attempt} model=${params.modelId}`
+		);
+	}
 
 	try {
+		await emitPipelineGenerationProgress({
+			conversation: params.input.conversation,
+			aiAgentId: params.input.aiAgent.id,
+			workflowRunId: params.input.workflowRunId,
+			phase: "generating",
+			message:
+				params.attempt === 1
+					? "Generating response..."
+					: "Retrying response generation...",
+			audience: "dashboard",
+		}).catch((error) => {
+			emitDebugLog(
+				params.input,
+				"warn",
+				`[ai-pipeline:generation] conv=${params.input.conversation.id} workflowRunId=${params.input.workflowRunId} evt=progress_generating_failed`,
+				error
+			);
+		});
+
 		const agent = new ToolLoopAgent({
 			model: createModel(params.modelId),
 			instructions: params.systemPrompt,
@@ -314,8 +381,27 @@ async function runGenerationAttempt(params: {
 			abortSignal: generationAbortController.signal,
 		});
 
+		await emitPipelineGenerationProgress({
+			conversation: params.input.conversation,
+			aiAgentId: params.input.aiAgent.id,
+			workflowRunId: params.input.workflowRunId,
+			phase: "finalizing",
+			message: "Finalizing response...",
+			audience: "dashboard",
+		}).catch((error) => {
+			emitDebugLog(
+				params.input,
+				"warn",
+				`[ai-pipeline:generation] conv=${params.input.conversation.id} workflowRunId=${params.input.workflowRunId} evt=progress_finalizing_failed`,
+				error
+			);
+		});
+
 		const durationMs = Date.now() - startedAt;
 		const toolCallsByName = { ...params.runtimeState.toolCallCounts };
+		const chargeableToolCallsByName = {
+			...params.runtimeState.chargeableToolCallCounts,
+		};
 		const totalToolCalls = countTotalToolCalls(toolCallsByName);
 
 		if (params.runtimeState.lastToolError?.fatal) {
@@ -334,6 +420,7 @@ async function runGenerationAttempt(params: {
 				failureCode: "runtime_error",
 				publicMessagesSent: params.runtimeState.publicMessagesSent,
 				toolCallsByName,
+				chargeableToolCallsByName,
 				totalToolCalls,
 				usage: toUsage(result.usage),
 			};
@@ -368,6 +455,7 @@ async function runGenerationAttempt(params: {
 				failureCode: "missing_finish_action",
 				publicMessagesSent: params.runtimeState.publicMessagesSent,
 				toolCallsByName,
+				chargeableToolCallsByName,
 				totalToolCalls,
 				usage: toUsage(result.usage),
 			};
@@ -386,12 +474,16 @@ async function runGenerationAttempt(params: {
 			action: params.runtimeState.finalAction,
 			publicMessagesSent: params.runtimeState.publicMessagesSent,
 			toolCallsByName,
+			chargeableToolCallsByName,
 			totalToolCalls,
 			usage: toUsage(result.usage),
 		};
 	} catch (error) {
 		const durationMs = Date.now() - startedAt;
 		const toolCallsByName = { ...params.runtimeState.toolCallCounts };
+		const chargeableToolCallsByName = {
+			...params.runtimeState.chargeableToolCallCounts,
+		};
 		const totalToolCalls = countTotalToolCalls(toolCallsByName);
 
 		if (
@@ -437,6 +529,7 @@ async function runGenerationAttempt(params: {
 					failureCode,
 					publicMessagesSent: params.runtimeState.publicMessagesSent,
 					toolCallsByName,
+					chargeableToolCallsByName,
 					totalToolCalls,
 				};
 			}
@@ -454,6 +547,7 @@ async function runGenerationAttempt(params: {
 				failureCode,
 				publicMessagesSent: params.runtimeState.publicMessagesSent,
 				toolCallsByName,
+				chargeableToolCallsByName,
 				totalToolCalls,
 			};
 		}
@@ -476,12 +570,20 @@ async function runGenerationAttempt(params: {
 			failureCode: "runtime_error",
 			publicMessagesSent: params.runtimeState.publicMessagesSent,
 			toolCallsByName,
+			chargeableToolCallsByName,
 			totalToolCalls,
 		};
 	} finally {
 		clearTimeout(timeout);
 		if (params.input.abortSignal) {
 			params.input.abortSignal.removeEventListener("abort", onExternalAbort);
+		}
+		if (deepTraceEnabled) {
+			emitDebugLog(
+				params.input,
+				"log",
+				`[ai-pipeline:generation] conv=${params.input.conversation.id} workflowRunId=${params.input.workflowRunId} evt=attempt_end attempt=${params.attempt} model=${params.modelId}`
+			);
 		}
 	}
 }
@@ -495,6 +597,22 @@ export async function runGenerationRuntime(
 		runtimeState,
 	});
 
+	await emitPipelineGenerationProgress({
+		conversation: input.conversation,
+		aiAgentId: input.aiAgent.id,
+		workflowRunId: input.workflowRunId,
+		phase: "thinking",
+		message: "Analyzing conversation context...",
+		audience: "dashboard",
+	}).catch((error) => {
+		emitDebugLog(
+			input,
+			"warn",
+			`[ai-pipeline:generation] conv=${input.conversation.id} workflowRunId=${input.workflowRunId} evt=progress_thinking_failed`,
+			error
+		);
+	});
+
 	const baseToolsetResolution = buildPipelineToolset({
 		aiAgent: input.aiAgent,
 		context: toolContext,
@@ -506,6 +624,7 @@ export async function runGenerationRuntime(
 			action: buildSafeSkipAction("No tools available after policy gating"),
 			publicMessagesSent: runtimeState.publicMessagesSent,
 			toolCallsByName: runtimeState.toolCallCounts,
+			chargeableToolCallsByName: runtimeState.chargeableToolCallCounts,
 			totalToolCalls: 0,
 			attempts: [],
 		};
@@ -517,6 +636,7 @@ export async function runGenerationRuntime(
 			action: buildSafeSkipAction("No finish tools available"),
 			publicMessagesSent: runtimeState.publicMessagesSent,
 			toolCallsByName: runtimeState.toolCallCounts,
+			chargeableToolCallsByName: runtimeState.chargeableToolCallCounts,
 			totalToolCalls: 0,
 			attempts: [],
 		};

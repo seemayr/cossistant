@@ -6,6 +6,10 @@ import type {
 	RoleAwareMessage,
 	VisitorContext,
 } from "../../primary-pipeline/contracts";
+import type {
+	PipelineToolLogger,
+	ToolTracePayloadMode,
+} from "../tools/contracts";
 
 export type PipelineKind = "primary" | "background";
 
@@ -57,6 +61,9 @@ export type GenerationRuntimeInput = {
 	startTyping?: () => Promise<void>;
 	stopTyping?: () => Promise<void>;
 	abortSignal?: AbortSignal;
+	debugLogger?: PipelineToolLogger;
+	deepTraceEnabled?: boolean;
+	tracePayloadMode?: ToolTracePayloadMode;
 };
 
 export type GenerationRuntimeResult = {
@@ -64,6 +71,7 @@ export type GenerationRuntimeResult = {
 	action: CapturedFinalAction;
 	publicMessagesSent: number;
 	toolCallsByName: Record<string, number>;
+	chargeableToolCallsByName?: Record<string, number>;
 	totalToolCalls: number;
 	usage?: {
 		inputTokens?: number;

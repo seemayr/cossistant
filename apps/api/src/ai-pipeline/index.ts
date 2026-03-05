@@ -38,7 +38,9 @@ export {
 	type VisitorContext,
 } from "./primary-pipeline";
 export {
+	emitPipelineGenerationProgress,
 	emitPipelineSeen,
+	emitPipelineToolProgress,
 	emitPipelineTypingStart,
 	emitPipelineTypingStop,
 	PipelineTypingHeartbeat,
