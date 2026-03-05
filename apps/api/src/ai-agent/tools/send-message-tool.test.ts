@@ -203,7 +203,10 @@ describe("createSendMessageTool", () => {
 		const tool = createSendMessageTool(
 			createToolContext({ stopTyping, startTyping }) as never
 		) as unknown as {
-			execute: (input: { message: string }) => Promise<{ success: boolean }>;
+			execute: (input: {
+				message: string;
+				lastMessage?: boolean;
+			}) => Promise<{ success: boolean }>;
 		};
 
 		const result = await tool.execute({ message: "Single reply" });
@@ -211,6 +214,34 @@ describe("createSendMessageTool", () => {
 		expect(result.success).toBe(true);
 		expect(stopTyping).toHaveBeenCalledTimes(1);
 		expect(startTyping).toHaveBeenCalledTimes(0);
+	});
+
+	it("keeps typing visible after non-final message chunks", async () => {
+		const { createSendMessageTool } = await sendMessageToolModulePromise;
+		const stopTyping = mock(async () => {});
+		const startTyping = mock(async () => {});
+		const tool = createSendMessageTool(
+			createToolContext({ stopTyping, startTyping }) as never
+		) as unknown as {
+			execute: (input: {
+				message: string;
+				lastMessage?: boolean;
+			}) => Promise<{ success: boolean }>;
+		};
+
+		const first = await tool.execute({
+			message: "First chunk",
+			lastMessage: false,
+		});
+		const second = await tool.execute({
+			message: "Final chunk",
+			lastMessage: true,
+		});
+
+		expect(first.success).toBe(true);
+		expect(second.success).toBe(true);
+		expect(startTyping).toHaveBeenCalledTimes(2);
+		expect(stopTyping).toHaveBeenCalledTimes(1);
 	});
 
 	it("allows multiple distinct public messages in the same run", async () => {
@@ -250,7 +281,10 @@ describe("createSendMessageTool", () => {
 		const tool = createSendMessageTool(
 			createToolContext({ stopTyping, startTyping }) as never
 		) as unknown as {
-			execute: (input: { message: string }) => Promise<{ success: boolean }>;
+			execute: (input: {
+				message: string;
+				lastMessage?: boolean;
+			}) => Promise<{ success: boolean }>;
 		};
 
 		const first = await tool.execute({ message: "First reply" });
@@ -261,6 +295,39 @@ describe("createSendMessageTool", () => {
 		expect(first.success).toBe(true);
 		expect(second.success).toBe(true);
 		expect(startTyping).toHaveBeenCalledTimes(1);
+		expect(stopTyping).toHaveBeenCalledTimes(2);
+	});
+
+	it("stops typing on paused/error paths even when marked non-final", async () => {
+		sendMessageActionMock.mockResolvedValueOnce({
+			messageId: "msg-paused",
+			created: false,
+			paused: true,
+		});
+		sendMessageActionMock.mockRejectedValueOnce(new Error("network timeout"));
+		const { createSendMessageTool } = await sendMessageToolModulePromise;
+		const stopTyping = mock(async () => {});
+		const startTyping = mock(async () => {});
+		const tool = createSendMessageTool(
+			createToolContext({ stopTyping, startTyping }) as never
+		) as unknown as {
+			execute: (input: {
+				message: string;
+				lastMessage?: boolean;
+			}) => Promise<{ success: boolean }>;
+		};
+
+		const pausedResult = await tool.execute({
+			message: "Paused path",
+			lastMessage: false,
+		});
+		const errorResult = await tool.execute({
+			message: "Error path",
+			lastMessage: false,
+		});
+
+		expect(pausedResult.success).toBe(false);
+		expect(errorResult.success).toBe(false);
 		expect(stopTyping).toHaveBeenCalledTimes(2);
 	});
 });

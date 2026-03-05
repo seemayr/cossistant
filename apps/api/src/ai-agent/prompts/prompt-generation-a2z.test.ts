@@ -474,7 +474,8 @@ Acme helps teams manage invoices, recurring billing, and account operations with
 
 		  Rules:
 		  - One thoughtful reply beats many fragments
-		  - Send at most one public message per run
+		  - Prefer one public message; split into 2-3 short parts only when it improves clarity
+		  - If sending multiple public messages, use sendMessage(lastMessage=false) for non-final parts and sendMessage(lastMessage=true) for the final part
 		  - Do not repeat yourself across queued triggers"
 		  ,
 		    "security.md": 
@@ -489,7 +490,7 @@ Acme helps teams manage invoices, recurring billing, and account operations with
 
 		  ## Tools (required)
 		  Messaging:
-		  - sendMessage(message) -> visitor (only if allowed)
+		  - sendMessage(message, lastMessage?) -> visitor (only if allowed)
 		  - sendPrivateMessage(message) -> internal only
 
 		  Finish with exactly ONE action:
@@ -544,7 +545,7 @@ Acme helps teams manage invoices, recurring billing, and account operations with
 
 		  ## Tools (required)
 		  Messaging:
-		  - sendMessage(message) -> visitor (only if allowed)
+		  - sendMessage(message, lastMessage?) -> visitor (only if allowed)
 		  - sendPrivateMessage(message) -> internal only
 
 		  Finish with exactly ONE action:
@@ -632,7 +633,8 @@ Acme helps teams manage invoices, recurring billing, and account operations with
 
 		  Rules:
 		  - One thoughtful reply beats many fragments
-		  - Send at most one public message per run
+		  - Prefer one public message; split into 2-3 short parts only when it improves clarity
+		  - If sending multiple public messages, use sendMessage(lastMessage=false) for non-final parts and sendMessage(lastMessage=true) for the final part
 		  - Do not repeat yourself across queued triggers
 
 		  ## When to Escalate

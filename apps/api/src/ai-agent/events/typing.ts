@@ -64,6 +64,9 @@ export class TypingHeartbeat {
 	private readonly aiAgentId: string;
 	private intervalHandle: ReturnType<typeof setInterval> | null = null;
 	private isRunning = false;
+	private desiredRunning = false;
+	private typingVisible = false;
+	private transitionChain: Promise<void> = Promise.resolve();
 
 	constructor(params: TypingParams) {
 		this.conversation = params.conversation;
@@ -75,29 +78,51 @@ export class TypingHeartbeat {
 	 * Immediately emits a typing event and schedules periodic heartbeats.
 	 */
 	async start(): Promise<void> {
-		if (this.isRunning) {
-			return;
-		}
-		this.isRunning = true;
+		this.desiredRunning = true;
+		await this.enqueueTransition(async () => {
+			if (this.isRunning) {
+				return;
+			}
+			this.isRunning = true;
 
-		const convId = this.conversation.id;
-		console.log(
-			`[ai-agent:typing] conv=${convId} | Starting heartbeat | interval=${HEARTBEAT_INTERVAL_MS}ms`
-		);
+			const convId = this.conversation.id;
+			console.log(
+				`[ai-agent:typing] conv=${convId} | Starting heartbeat | interval=${HEARTBEAT_INTERVAL_MS}ms`
+			);
 
-		// Emit immediately
-		await this.emitTyping();
+			try {
+				// Emit immediately
+				await this.emitTyping();
 
-		// Schedule periodic heartbeats
-		this.intervalHandle = setInterval(() => {
-			console.log(`[ai-agent:typing] conv=${convId} | Heartbeat tick`);
-			// Fire-and-forget, don't await in interval
-			this.emitTyping().catch((err) => {
-				console.warn(
-					`[ai-agent:typing] conv=${convId} | Failed to emit heartbeat: ${err instanceof Error ? err.message : "Unknown error"}`
-				);
-			});
-		}, HEARTBEAT_INTERVAL_MS);
+				// A stop was requested while start was in-flight.
+				if (!this.desiredRunning) {
+					this.isRunning = false;
+					return;
+				}
+
+				// Schedule periodic heartbeats
+				this.intervalHandle = setInterval(() => {
+					if (!(this.isRunning && this.desiredRunning)) {
+						return;
+					}
+					console.log(`[ai-agent:typing] conv=${convId} | Heartbeat tick`);
+					// Fire-and-forget, don't await in interval
+					this.emitTyping().catch((err) => {
+						console.warn(
+							`[ai-agent:typing] conv=${convId} | Failed to emit heartbeat: ${err instanceof Error ? err.message : "Unknown error"}`
+						);
+					});
+				}, HEARTBEAT_INTERVAL_MS);
+				this.intervalHandle.unref?.();
+			} catch (error) {
+				this.isRunning = false;
+				if (this.intervalHandle) {
+					clearInterval(this.intervalHandle);
+					this.intervalHandle = null;
+				}
+				throw error;
+			}
+		});
 	}
 
 	/**
@@ -105,47 +130,51 @@ export class TypingHeartbeat {
 	 * Includes retry logic to ensure the stop event is delivered.
 	 */
 	async stop(): Promise<void> {
-		if (!this.isRunning) {
-			return;
-		}
-		this.isRunning = false;
+		this.desiredRunning = false;
+		await this.enqueueTransition(async () => {
+			if (!(this.isRunning || this.intervalHandle || this.typingVisible)) {
+				return;
+			}
+			this.isRunning = false;
 
-		const convId = this.conversation.id;
-		console.log(`[ai-agent:typing] conv=${convId} | Stopping heartbeat`);
+			const convId = this.conversation.id;
+			console.log(`[ai-agent:typing] conv=${convId} | Stopping heartbeat`);
 
-		// Clear the interval FIRST to prevent any more heartbeats
-		if (this.intervalHandle) {
-			clearInterval(this.intervalHandle);
-			this.intervalHandle = null;
-		}
+			// Clear the interval FIRST to prevent any more heartbeats
+			if (this.intervalHandle) {
+				clearInterval(this.intervalHandle);
+				this.intervalHandle = null;
+			}
 
-		// Emit stop event with retry for reliability
-		const MAX_RETRIES = 2;
-		for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-			try {
-				await emitTypingStop({
-					conversation: this.conversation,
-					aiAgentId: this.aiAgentId,
-				});
-				console.log(
-					`[ai-agent:typing] conv=${convId} | Typing stopped (attempt ${attempt})`
-				);
-				return; // Success, exit
-			} catch (error) {
-				console.error(
-					`[ai-agent:typing] conv=${convId} | Failed to emit typing stop (attempt ${attempt}/${MAX_RETRIES}):`,
-					error
-				);
-				if (attempt < MAX_RETRIES) {
-					// Brief delay before retry
-					await new Promise((resolve) => setTimeout(resolve, 100));
+			// Emit stop event with retry for reliability
+			const MAX_RETRIES = 2;
+			for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+				try {
+					await emitTypingStop({
+						conversation: this.conversation,
+						aiAgentId: this.aiAgentId,
+					});
+					console.log(
+						`[ai-agent:typing] conv=${convId} | Typing stopped (attempt ${attempt})`
+					);
+					this.typingVisible = false;
+					return; // Success, exit
+				} catch (error) {
+					console.error(
+						`[ai-agent:typing] conv=${convId} | Failed to emit typing stop (attempt ${attempt}/${MAX_RETRIES}):`,
+						error
+					);
+					if (attempt < MAX_RETRIES) {
+						// Brief delay before retry
+						await new Promise((resolve) => setTimeout(resolve, 100));
+					}
 				}
 			}
-		}
-		// All retries failed - client's 6-second TTL will eventually clear it
-		console.warn(
-			`[ai-agent:typing] conv=${convId} | All stop attempts failed, relying on client TTL`
-		);
+			// All retries failed - client's 6-second TTL will eventually clear it
+			console.warn(
+				`[ai-agent:typing] conv=${convId} | All stop attempts failed, relying on client TTL`
+			);
+		});
 	}
 
 	/**
@@ -153,6 +182,15 @@ export class TypingHeartbeat {
 	 */
 	get running(): boolean {
 		return this.isRunning;
+	}
+
+	private async enqueueTransition(run: () => Promise<void>): Promise<void> {
+		const queued = this.transitionChain.then(run, run);
+		this.transitionChain = queued.then(
+			() => {},
+			() => {}
+		);
+		await queued;
 	}
 
 	private async emitTyping(): Promise<void> {
@@ -179,6 +217,7 @@ export class TypingHeartbeat {
 				actor: { type: "ai_agent", aiAgentId: this.aiAgentId },
 				isTyping: true,
 			});
+			this.typingVisible = true;
 			console.log(
 				`[ai-agent:typing] conv=${convId} | Typing event emitted successfully`
 			);

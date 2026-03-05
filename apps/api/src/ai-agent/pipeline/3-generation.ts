@@ -112,7 +112,7 @@ type GenerationInput = {
 	triggerVisibility?: "public" | "private";
 	/** Optional abort signal for interruption handling */
 	abortSignal?: AbortSignal;
-	/** Callback to stop the typing indicator just before a message is sent */
+	/** Callback to stop typing when message sending is complete */
 	stopTyping?: () => Promise<void>;
 	/** Callback to start/restart the typing indicator during inter-message delays */
 	startTyping?: () => Promise<void>;
@@ -779,7 +779,7 @@ export async function generate(
 			sendMessage: 0,
 			sendPrivateMessage: 0,
 		},
-		// Callback to stop typing indicator just before a message is sent
+		// Callback to stop typing indicator after final/public send completion
 		stopTyping,
 		// Callback to start/restart typing indicator during delays between messages
 		startTyping,

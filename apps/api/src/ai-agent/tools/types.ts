@@ -31,7 +31,7 @@ export type ActionCapture = {
 
 /**
  * Callback to stop the typing indicator.
- * Called just before a message is sent so typing doesn't linger.
+ * Called after a message resolves (or on failure) to prevent lingering typing.
  */
 export type StopTypingCallback = () => Promise<void>;
 
@@ -93,8 +93,8 @@ export type ToolContext = {
 	 */
 	counters?: MessageCounters;
 	/**
-	 * Callback to stop the typing indicator just before a message is sent.
-	 * Prevents typing from lingering after the message is already visible.
+	 * Callback to stop the typing indicator after final/public send completion.
+	 * Prevents typing from lingering after the response is complete.
 	 */
 	stopTyping?: StopTypingCallback;
 	/**

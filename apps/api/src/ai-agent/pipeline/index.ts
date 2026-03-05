@@ -32,7 +32,6 @@ import { sendMessage } from "../actions/send-message";
 import {
 	emitDecisionMade,
 	emitSeen,
-	emitTypingStop,
 	emitWorkflowCompleted,
 	TypingHeartbeat,
 } from "../events";
@@ -140,7 +139,8 @@ export async function runAiAgentPipeline(
 	let executionResult: ExecutionResult | null = null;
 	let typingHeartbeat: TypingHeartbeat | null = null;
 	let willSendVisibleMessages = false;
-	let typingSessionStarted = false;
+	let typingLifecycleClosed = false;
+	let typingTransitionChain: Promise<void> = Promise.resolve();
 	let publicMessagesSent = 0;
 	let continuationHint: ContinuationHint | undefined;
 	let aiCreditGuardResult: AiCreditGuardResult | null = null;
@@ -153,6 +153,17 @@ export async function runAiAgentPipeline(
 		env.AI_AGENT_TRACE_PAYLOAD_MODE
 	);
 	const heartbeatIntervalMs = Math.max(250, env.AI_AGENT_TRACE_HEARTBEAT_MS);
+
+	const queueTypingTransition = async (
+		run: () => Promise<void>
+	): Promise<void> => {
+		const queued = typingTransitionChain.then(run, run);
+		typingTransitionChain = queued.then(
+			() => {},
+			() => {}
+		);
+		await queued;
+	};
 
 	const markPublicMessageSent = (params: {
 		messageId: string;
@@ -487,47 +498,41 @@ export async function runAiAgentPipeline(
 		willSendVisibleMessages = allowPublicMessages;
 
 		// Callback to stop typing - passed to tools
-		// Stops the typing indicator just before a message is sent
+		// Stops typing after the current message resolves.
 		const stopTyping = async (): Promise<void> => {
-			if (typingHeartbeat?.running) {
-				conversationLog.log(
-					`[ai-agent] conv=${convId} | Stopping typing via tool callback`
-				);
-				await typingHeartbeat.stop();
-			}
-		};
+			await queueTypingTransition(async () => {
+				if (typingLifecycleClosed || !willSendVisibleMessages) {
+					return;
+				}
 
-		// Capture conversation and aiAgent for use in closures
-		// (TypeScript doesn't narrow inside async callbacks)
-		const conversation = readyIntake.conversation;
-		const aiAgent = readyIntake.aiAgent;
+				if (typingHeartbeat?.running) {
+					conversationLog.log(
+						`[ai-agent] conv=${convId} | Stopping typing via tool callback`
+					);
+					await typingHeartbeat.stop();
+				}
+			});
+		};
 
 		// Callback to start/restart typing - passed to tools
 		// Used to show typing indicator during inter-message delays
 		// This ensures users see "typing..." between multiple messages
 		const startTyping = async (): Promise<void> => {
-			// Only start typing if we should be showing typing indicators
-			if (!willSendVisibleMessages) {
-				return;
-			}
+			await queueTypingTransition(async () => {
+				// Only start typing if we should be showing typing indicators
+				if (typingLifecycleClosed || !willSendVisibleMessages) {
+					return;
+				}
 
-			// If heartbeat was stopped, restart it
-			if (typingHeartbeat && !typingHeartbeat.running) {
-				conversationLog.log(
-					`[ai-agent] conv=${convId} | Restarting typing via tool callback`
-				);
-				await typingHeartbeat.start();
-			} else if (!typingHeartbeat) {
-				// Create new heartbeat if none exists
-				typingHeartbeat = new TypingHeartbeat({
-					conversation,
-					aiAgentId: aiAgent.id,
-				});
-				conversationLog.log(
-					`[ai-agent] conv=${convId} | Creating new typing heartbeat via tool callback`
-				);
-				await typingHeartbeat.start();
-			}
+				// Never create a late heartbeat here; lifecycle ownership stays in
+				// the orchestrator startup path.
+				if (typingHeartbeat && !typingHeartbeat.running) {
+					conversationLog.log(
+						`[ai-agent] conv=${convId} | Restarting typing via tool callback`
+					);
+					await typingHeartbeat.start();
+				}
+			});
 		};
 
 		if (willSendVisibleMessages) {
@@ -539,8 +544,14 @@ export async function runAiAgentPipeline(
 			conversationLog.log(
 				`[ai-agent] conv=${convId} | Starting typing indicator (AI will respond)`
 			);
-			await typingHeartbeat.start();
-			typingSessionStarted = true;
+			await queueTypingTransition(async () => {
+				if (typingLifecycleClosed) {
+					return;
+				}
+				if (typingHeartbeat && !typingHeartbeat.running) {
+					await typingHeartbeat.start();
+				}
+			});
 		} else {
 			conversationLog.log(
 				`[ai-agent] conv=${convId} | Skipping typing indicator (background_only mode)`
@@ -619,7 +630,7 @@ export async function runAiAgentPipeline(
 					triggerSenderType: readyIntake.triggerMessage?.senderType,
 					triggerVisibility: readyIntake.triggerMessage?.visibility,
 					abortSignal: generationAbortController.signal,
-					stopTyping, // Stop typing just before message is sent
+					stopTyping, // Stop typing when final send is complete
 					startTyping, // Start typing for inter-message delays
 					onPublicMessageSent: markPublicMessageSent,
 					allowPublicMessages,
@@ -807,34 +818,18 @@ export async function runAiAgentPipeline(
 		});
 	} finally {
 		// Single authoritative typing cleanup.
-		if (typingHeartbeat?.running) {
-			try {
-				await typingHeartbeat.stop();
-			} catch (error) {
-				conversationLog.warn(
-					`[ai-agent] conv=${convId} | Failed to stop typing heartbeat in cleanup:`,
-					error
-				);
-			}
-		}
-
-		if (
-			typingSessionStarted &&
-			willSendVisibleMessages &&
-			intakeResult?.status === "ready"
-		) {
-			const readyIntakeForTypingStop = intakeResult;
-			try {
-				await emitTypingStop({
-					conversation: readyIntakeForTypingStop.conversation,
-					aiAgentId: readyIntakeForTypingStop.aiAgent.id,
-				});
-			} catch (error) {
-				conversationLog.warn(
-					`[ai-agent] conv=${convId} | Final typing stop emit failed:`,
-					error
-				);
-			}
+		typingLifecycleClosed = true;
+		try {
+			await queueTypingTransition(async () => {
+				if (typingHeartbeat?.running) {
+					await typingHeartbeat.stop();
+				}
+			});
+		} catch (error) {
+			conversationLog.warn(
+				`[ai-agent] conv=${convId} | Failed to stop typing heartbeat in cleanup:`,
+				error
+			);
 		}
 
 		try {

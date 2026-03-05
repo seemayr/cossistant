@@ -118,6 +118,7 @@ class MockTypingHeartbeat {
 		}
 		this.isRunning = false;
 		await typingHeartbeatStopMock();
+		await emitTypingStopMock();
 	}
 
 	get running(): boolean {
@@ -504,6 +505,52 @@ describe("runAiAgentPipeline retryability and typing cleanup", () => {
 		expect(typingHeartbeatStopMock).toHaveBeenCalledTimes(1);
 		expect(emitTypingStopMock).toHaveBeenCalledTimes(1);
 		expect(devConversationLogFlushMock).toHaveBeenCalledTimes(1);
+	});
+
+	it("ignores late typing restarts after pipeline cleanup", async () => {
+		const { runAiAgentPipeline } = await pipelineModulePromise;
+		let lateStartTyping: (() => Promise<void>) | undefined;
+		generateMock.mockImplementation(async (...args: unknown[]) => {
+			const [input] = args as [{ startTyping?: () => Promise<void> }];
+			lateStartTyping = input.startTyping;
+			return {
+				decision: {
+					action: "skip",
+					reasoning: "nothing to send",
+					confidence: 0.8,
+				},
+				toolCalls: {
+					sendMessage: 0,
+					sendPrivateMessage: 0,
+				},
+			};
+		});
+
+		const result = await runAiAgentPipeline({
+			db: {} as never,
+			input: {
+				conversationId: "conv-1",
+				messageId: "trigger-msg-1",
+				messageCreatedAt: new Date().toISOString(),
+				websiteId: "site-1",
+				organizationId: "org-1",
+				visitorId: "visitor-1",
+				aiAgentId: "ai-1",
+				workflowRunId: "workflow-late-typing",
+				jobId: "job-late-typing",
+			},
+		});
+
+		expect(result.status).toBe("completed");
+		expect(typingHeartbeatStartMock).toHaveBeenCalledTimes(1);
+		expect(typingHeartbeatStopMock).toHaveBeenCalledTimes(1);
+		expect(emitTypingStopMock).toHaveBeenCalledTimes(1);
+
+		await lateStartTyping?.();
+
+		expect(typingHeartbeatStartMock).toHaveBeenCalledTimes(1);
+		expect(typingHeartbeatStopMock).toHaveBeenCalledTimes(1);
+		expect(emitTypingStopMock).toHaveBeenCalledTimes(1);
 	});
 
 	it("emits AI seen when processing a public visitor trigger", async () => {

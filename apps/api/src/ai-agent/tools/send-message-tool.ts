@@ -9,8 +9,8 @@ import { tool } from "ai";
 import { z } from "zod";
 import type { ToolContext, ToolResult } from "./types";
 
-const MIN_ADAPTIVE_DELAY_MS = 400;
-const MAX_ADAPTIVE_DELAY_MS = 1800;
+const MIN_ADAPTIVE_DELAY_MS = 650;
+const MAX_ADAPTIVE_DELAY_MS = 2100;
 const IS_TEST_ENV = process.env.NODE_ENV === "test";
 
 function normalizeMessageForDedup(message: string): string {
@@ -43,15 +43,19 @@ function estimateAdaptiveDelayMs(input: {
 
 	const words = input.message.trim().split(/\s+/).filter(Boolean).length;
 	const chars = input.message.length;
-	const base = 300;
-	const wordCost = words * 45;
-	const charCost = Math.min(chars, 320) * 1.5;
+	const punctuationCost = Math.min(
+		(input.message.match(/[.!?]/g)?.length ?? 0) * 90,
+		270
+	);
+	const base = 360;
+	const wordCost = words * 50;
+	const charCost = Math.min(chars, 320) * 1.3;
 	const jitter = deterministicJitter(
 		`${input.conversationId}:${input.triggerMessageId}:${input.messageNumber}`
 	);
 
 	return clamp(
-		Math.round(base + wordCost + charCost + jitter),
+		Math.round(base + wordCost + charCost + punctuationCost + jitter),
 		MIN_ADAPTIVE_DELAY_MS,
 		MAX_ADAPTIVE_DELAY_MS
 	);
@@ -62,6 +66,27 @@ async function sleep(ms: number): Promise<void> {
 		return;
 	}
 	await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function invokeTypingCallback(
+	callback: (() => Promise<void>) | undefined,
+	params: {
+		conversationId: string;
+		callbackName: "startTyping" | "stopTyping";
+	}
+): Promise<void> {
+	if (!callback) {
+		return;
+	}
+
+	try {
+		await callback();
+	} catch (error) {
+		console.warn(
+			`[tool:sendMessage] conv=${params.conversationId} | Failed to ${params.callbackName}:`,
+			error
+		);
+	}
 }
 
 async function isSupersededVisitorTrigger(ctx: ToolContext): Promise<boolean> {
@@ -91,6 +116,13 @@ const inputSchema = z.object({
 		.describe(
 			"The message text to send to the visitor. Keep each message to 1-2 sentences for readability."
 		),
+	lastMessage: z
+		.boolean()
+		.optional()
+		.default(true)
+		.describe(
+			"Whether this is the final public message in this run. Set false when you will send another public message next."
+		),
 });
 
 /**
@@ -114,9 +146,10 @@ export function createSendMessageTool(ctx: ToolContext) {
 	};
 
 	return tool({
-		description: "Send a public message visible to the visitor.",
+		description:
+			"Send a public message visible to the visitor. Set lastMessage=false when another public message will follow in this run.",
 		inputSchema,
-		execute: ({ message }) =>
+		execute: ({ message, lastMessage }) =>
 			runSequentially<
 				ToolResult<{
 					sent: boolean;
@@ -125,6 +158,7 @@ export function createSendMessageTool(ctx: ToolContext) {
 					staleTriggerSuppressed?: boolean;
 				}>
 			>(async () => {
+				let keepTypingAfterSend = false;
 				try {
 					if (!ctx.allowPublicMessages) {
 						console.warn(
@@ -195,16 +229,10 @@ export function createSendMessageTool(ctx: ToolContext) {
 						console.log(
 							`[tool:sendMessage] conv=${ctx.conversationId} | pacing delay=${adaptiveDelayMs}ms before send #${messageNumber}`
 						);
-						if (ctx.startTyping) {
-							try {
-								await ctx.startTyping();
-							} catch (error) {
-								console.warn(
-									`[tool:sendMessage] conv=${ctx.conversationId} | Failed to start typing during pacing:`,
-									error
-								);
-							}
-						}
+						await invokeTypingCallback(ctx.startTyping, {
+							conversationId: ctx.conversationId,
+							callbackName: "startTyping",
+						});
 						await sleep(adaptiveDelayMs);
 					}
 
@@ -249,6 +277,14 @@ export function createSendMessageTool(ctx: ToolContext) {
 						`[tool:sendMessage] conv=${ctx.conversationId} | sent=${result.created}`
 					);
 
+					keepTypingAfterSend = lastMessage === false;
+					if (keepTypingAfterSend) {
+						await invokeTypingCallback(ctx.startTyping, {
+							conversationId: ctx.conversationId,
+							callbackName: "startTyping",
+						});
+					}
+
 					return {
 						success: true,
 						data: { sent: result.created, messageId: result.messageId },
@@ -264,15 +300,11 @@ export function createSendMessageTool(ctx: ToolContext) {
 							error instanceof Error ? error.message : "Failed to send message",
 					};
 				} finally {
-					if (ctx.stopTyping) {
-						try {
-							await ctx.stopTyping();
-						} catch (error) {
-							console.warn(
-								`[tool:sendMessage] conv=${ctx.conversationId} | Failed to stop typing in cleanup:`,
-								error
-							);
-						}
+					if (!keepTypingAfterSend) {
+						await invokeTypingCallback(ctx.stopTyping, {
+							conversationId: ctx.conversationId,
+							callbackName: "stopTyping",
+						});
 					}
 				}
 			}),

@@ -74,7 +74,8 @@ Stay silent (use skip, no sendMessage) when:
 
 Rules:
 - One thoughtful reply beats many fragments
-- Send at most one public message per run
+- Prefer one public message; split into 2-3 short parts only when it improves clarity
+- If sending multiple public messages, use sendMessage(lastMessage=false) for non-final parts and sendMessage(lastMessage=true) for the final part
 - Do not repeat yourself across queued triggers`,
 
 	/**

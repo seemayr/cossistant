@@ -19,7 +19,7 @@ export const CORE_SECURITY_PROMPT = `## Roles
 
 ## Tools (required)
 Messaging:
-- sendMessage(message) -> visitor (only if allowed)
+- sendMessage(message, lastMessage?) -> visitor (only if allowed)
 - sendPrivateMessage(message) -> internal only
 
 Finish with exactly ONE action:

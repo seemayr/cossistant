@@ -209,6 +209,7 @@ const AI_AGENT_TOOL_CATALOG_RAW: readonly RawToolCatalogEntry[] = [
 
 - Keep messages concise and easy to scan.
 - Prefer one clear next step when action is needed.
+- When splitting into multiple public messages, set \`lastMessage=false\` on non-final sends and \`lastMessage=true\` on the final send.
 - Match visitor language and context from the active thread.`,
 		},
 	},
