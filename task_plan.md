@@ -1,3 +1,32 @@
+# Task: Simplify AI Agent Pipeline (`apps/api/src/ai-agent/pipeline/index.ts`)
+
+## Goal
+Reduce complexity in pipeline orchestration while preserving behavior and feature parity.
+
+## Status: PHASE 1 — IN PROGRESS
+
+## Phases
+
+### Phase 1: Audit behavior and test coverage — IN PROGRESS
+- [x] Read current pipeline implementation end-to-end
+- [x] Inventory existing pipeline tests and asserted behaviors
+- [ ] Identify safe extraction/simplification boundaries
+
+### Phase 2: Refactor for clarity and maintainability
+- [ ] Extract repeated control-flow helpers (skip/emit/fallback/metrics)
+- [ ] Reduce in-function closure sprawl and unused state
+- [ ] Keep external API and stage ordering unchanged
+
+### Phase 3: Verify feature parity
+- [ ] Run targeted pipeline tests
+- [ ] Fix any regression introduced by refactor
+- [ ] Summarize changes and remaining risks
+
+## Errors Encountered
+| Error | Attempt | Resolution |
+|---|---|---|
+| None yet | 0 | N/A |
+
 # Task: Fix Avatar Stack Race Condition (Widget Home Page)
 
 ## Goal

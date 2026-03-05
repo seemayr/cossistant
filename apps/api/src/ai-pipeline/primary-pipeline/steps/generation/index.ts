@@ -1,4 +1,5 @@
 import type { Database } from "@api/db";
+import type { GenerationRuntimeResult } from "../../../shared/generation";
 import { runGenerationRuntime } from "../../../shared/generation";
 import type { PrimaryPipelineInput } from "../../contracts";
 import type { DecisionResult } from "../decision";

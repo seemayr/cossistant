@@ -265,6 +265,8 @@ export async function runPrimaryPipeline(
 				fields: {
 					stage: "generation",
 					retryable,
+					failureCode: generationResult.failureCode,
+					attempts: generationResult.attempts?.length,
 					message: errorMessage,
 				},
 			});

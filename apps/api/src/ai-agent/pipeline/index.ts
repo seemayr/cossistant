@@ -94,6 +94,28 @@ type PipelineContext = {
 };
 
 const GENERATION_TIMEOUT_MS = 45_000;
+const REQUIRED_MESSAGE_ACTIONS = new Set(["respond", "escalate", "resolve"]);
+
+type PipelineMetrics = AiAgentPipelineResult["metrics"];
+type ReadyIntakeResult = Extract<IntakeResult, { status: "ready" }>;
+type ConversationLog = ReturnType<typeof createDevConversationLog>;
+type TraceLevel = "log" | "warn" | "error";
+type TraceLogFn = (
+	level: TraceLevel,
+	event: string,
+	fields?: string,
+	payload?: unknown
+) => void;
+type RunTracedStageFn = <T>(
+	stageName: string,
+	run: () => Promise<T>
+) => Promise<T>;
+
+type DecisionPolicyResolution = {
+	policy: string;
+	fallback: "none" | "missing" | "error";
+	error?: unknown;
+};
 
 /**
  * Run the AI agent pipeline
@@ -107,21 +129,13 @@ export async function runAiAgentPipeline(
 	const startTime = Date.now();
 	const convId = ctx.input.conversationId;
 	const conversationLog = createDevConversationLog(convId);
-	const metrics = {
-		intakeMs: 0,
-		decisionMs: 0,
-		generationMs: 0,
-		executionMs: 0,
-		followupMs: 0,
-		totalMs: 0,
-	};
+	const metrics = createInitialMetrics();
 
 	conversationLog.log(
 		`[ai-agent] conv=${convId} | Starting pipeline | trigger=${ctx.input.messageId}`
 	);
 
 	let intakeResult: IntakeResult | null = null;
-	let decisionResult: DecisionResult | null = null;
 	let generationResult: GenerationResult | null = null;
 	let executionResult: ExecutionResult | null = null;
 	let typingHeartbeat: TypingHeartbeat | null = null;
@@ -139,11 +153,6 @@ export async function runAiAgentPipeline(
 		env.AI_AGENT_TRACE_PAYLOAD_MODE
 	);
 	const heartbeatIntervalMs = Math.max(250, env.AI_AGENT_TRACE_HEARTBEAT_MS);
-	type DecisionPolicyResolution = {
-		policy: string;
-		fallback: "none" | "missing" | "error";
-		error?: unknown;
-	};
 
 	const markPublicMessageSent = (params: {
 		messageId: string;
@@ -215,48 +224,29 @@ export async function runAiAgentPipeline(
 		}
 	};
 
-	const safeEmitDecisionMade = async (
-		params: Parameters<typeof emitDecisionMade>[0]
-	): Promise<void> => {
-		try {
-			await runTracedStage("emit_decision_made", async () =>
-				emitDecisionMade(params)
-			);
-		} catch (error) {
-			conversationLog.warn(
-				`[ai-agent] conv=${convId} | Failed to emit decision event`,
-				error
-			);
-		}
-	};
+	const safeEmitDecisionMade = createSafeEmitter({
+		stageName: "emit_decision_made",
+		failureMessage: `[ai-agent] conv=${convId} | Failed to emit decision event`,
+		runTracedStage,
+		conversationLog,
+		emitter: emitDecisionMade,
+	});
 
-	const safeEmitWorkflowCompleted = async (
-		params: Parameters<typeof emitWorkflowCompleted>[0]
-	): Promise<void> => {
-		try {
-			await runTracedStage("emit_workflow_completed", async () =>
-				emitWorkflowCompleted(params)
-			);
-		} catch (error) {
-			conversationLog.warn(
-				`[ai-agent] conv=${convId} | Failed to emit workflow completed event`,
-				error
-			);
-		}
-	};
+	const safeEmitWorkflowCompleted = createSafeEmitter({
+		stageName: "emit_workflow_completed",
+		failureMessage: `[ai-agent] conv=${convId} | Failed to emit workflow completed event`,
+		runTracedStage,
+		conversationLog,
+		emitter: emitWorkflowCompleted,
+	});
 
-	const safeEmitSeen = async (
-		params: Parameters<typeof emitSeen>[0]
-	): Promise<void> => {
-		try {
-			await runTracedStage("emit_seen", async () => emitSeen(params));
-		} catch (error) {
-			conversationLog.warn(
-				`[ai-agent] conv=${convId} | Failed to emit seen event`,
-				error
-			);
-		}
-	};
+	const safeEmitSeen = createSafeEmitter({
+		stageName: "emit_seen",
+		failureMessage: `[ai-agent] conv=${convId} | Failed to emit seen event`,
+		runTracedStage,
+		conversationLog,
+		emitter: emitSeen,
+	});
 
 	traceLog("log", "pipeline.start");
 
@@ -272,13 +262,12 @@ export async function runAiAgentPipeline(
 			conversationLog.log(
 				`[ai-agent] conv=${convId} | Skipped at intake | reason="${intakeResult.reason}"`
 			);
-			return {
-				status: "skipped",
+			return createSkippedResult({
 				reason: intakeResult.reason,
 				publicMessagesSent,
-				retryable: false,
-				metrics: finalizeMetrics(metrics, startTime),
-			};
+				metrics,
+				startTime,
+			});
 		}
 		const readyIntake = intakeResult;
 		const shouldEmitAiSeen =

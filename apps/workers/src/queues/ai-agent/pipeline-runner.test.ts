@@ -138,4 +138,39 @@ describe("runPipelineForWindow", () => {
 		).rejects.toBeInstanceOf(PipelineWindowError);
 		expect(updateConversationAiCursorMock).not.toHaveBeenCalled();
 	});
+
+	it("does not advance cursor when generation times out and pipeline returns error", async () => {
+		runAiAgentPipelineMock.mockResolvedValueOnce({
+			status: "error",
+			error: "Generation timed out",
+			publicMessagesSent: 0,
+			retryable: true,
+			metrics: {
+				intakeMs: 0,
+				decisionMs: 0,
+				generationMs: 0,
+				executionMs: 0,
+				followupMs: 0,
+				totalMs: 0,
+			},
+		});
+
+		const { runPipelineForWindow, PipelineWindowError } = await modulePromise;
+
+		await expect(
+			runPipelineForWindow({
+				db: {} as never,
+				conversation: defaultConversation,
+				aiAgentId: "ai-1",
+				jobId: "job-timeout",
+				messages: [
+					{ id: "msg-timeout", createdAt: "2026-03-04T10:00:00.000Z" },
+					{ id: "msg-after-timeout", createdAt: "2026-03-04T10:00:01.000Z" },
+				],
+			})
+		).rejects.toBeInstanceOf(PipelineWindowError);
+
+		expect(runAiAgentPipelineMock).toHaveBeenCalledTimes(1);
+		expect(updateConversationAiCursorMock).not.toHaveBeenCalled();
+	});
 });

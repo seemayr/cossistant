@@ -72,4 +72,15 @@ export type GenerationRuntimeResult = {
 	};
 	error?: string;
 	aborted?: boolean;
+	failureCode?:
+		| "timeout"
+		| "abort_signal"
+		| "missing_finish_action"
+		| "runtime_error";
+	attempts?: Array<{
+		modelId: string;
+		attempt: number;
+		outcome: "completed" | "timeout" | "error";
+		durationMs: number;
+	}>;
 };
