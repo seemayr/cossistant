@@ -26,6 +26,24 @@ mock.module("../actions/internal-note", () => ({
 
 const modulePromise = import("./messaging");
 
+function isAsyncIterable<T>(value: unknown): value is AsyncIterable<T> {
+	return (
+		typeof value === "object" && value !== null && Symbol.asyncIterator in value
+	);
+}
+
+async function resolveToolResult<T>(value: T | AsyncIterable<T>): Promise<T> {
+	if (!isAsyncIterable<T>(value)) {
+		return value;
+	}
+
+	for await (const chunk of value) {
+		return chunk;
+	}
+
+	throw new Error("Tool returned an empty async iterable");
+}
+
 function createContext(): PipelineToolContext {
 	return {
 		db: {} as never,
@@ -92,19 +110,26 @@ describe("public messaging tool contract", () => {
 		const main = createSendMessageTool(ctx);
 		const follow = createSendFollowUpMessageTool(ctx);
 
-		const ackResult = await ack.execute?.({
-			message: "Let me check.",
-		} as never);
-		const mainResult = await main.execute?.({
-			message: "Here is the answer.",
-		} as never);
-		const followResult = await follow.execute?.({
-			message: "Anything else?",
-		} as never);
+		if (!(ack.execute && main.execute && follow.execute)) {
+			throw new Error("Expected execute handlers for public messaging tools");
+		}
 
-		expect(ackResult?.success).toBe(true);
-		expect(mainResult?.success).toBe(true);
-		expect(followResult?.success).toBe(true);
+		const ackResult = await resolveToolResult(
+			await ack.execute({ message: "Let me check." } as never, {} as never)
+		);
+		const mainResult = await resolveToolResult(
+			await main.execute(
+				{ message: "Here is the answer." } as never,
+				{} as never
+			)
+		);
+		const followResult = await resolveToolResult(
+			await follow.execute({ message: "Anything else?" } as never, {} as never)
+		);
+
+		expect(ackResult.success).toBe(true);
+		expect(mainResult.success).toBe(true);
+		expect(followResult.success).toBe(true);
 		expect(ctx.runtimeState.publicMessageToolSequence).toEqual([
 			"sendAcknowledgeMessage",
 			"sendMessage",
@@ -117,11 +142,16 @@ describe("public messaging tool contract", () => {
 		const { createSendFollowUpMessageTool } = await modulePromise;
 		const ctx = createContext();
 		const follow = createSendFollowUpMessageTool(ctx);
+		if (!follow.execute) {
+			throw new Error("Expected execute handler for follow-up tool");
+		}
 
-		const result = await follow.execute?.({ message: "Following up" } as never);
+		const result = await resolveToolResult(
+			await follow.execute({ message: "Following up" } as never, {} as never)
+		);
 
-		expect(result?.success).toBe(false);
-		expect(result?.error).toContain("Invalid public-message sequence");
+		expect(result.success).toBe(false);
+		expect(result.error).toContain("Invalid public-message sequence");
 		expect(sendPublicMessageMock).toHaveBeenCalledTimes(0);
 	});
 
@@ -129,13 +159,20 @@ describe("public messaging tool contract", () => {
 		const { createSendMessageTool } = await modulePromise;
 		const ctx = createContext();
 		const main = createSendMessageTool(ctx);
+		if (!main.execute) {
+			throw new Error("Expected execute handler for sendMessage tool");
+		}
 
-		const first = await main.execute?.({ message: "First" } as never);
-		const second = await main.execute?.({ message: "Second" } as never);
+		const first = await resolveToolResult(
+			await main.execute({ message: "First" } as never, {} as never)
+		);
+		const second = await resolveToolResult(
+			await main.execute({ message: "Second" } as never, {} as never)
+		);
 
-		expect(first?.success).toBe(true);
-		expect(second?.success).toBe(false);
-		expect(second?.error).toContain("once per run");
+		expect(first.success).toBe(true);
+		expect(second.success).toBe(false);
+		expect(second.error).toContain("once per run");
 		expect(sendPublicMessageMock).toHaveBeenCalledTimes(1);
 	});
 });

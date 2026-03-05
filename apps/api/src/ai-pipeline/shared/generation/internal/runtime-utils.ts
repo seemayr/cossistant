@@ -1,6 +1,4 @@
-import type { ToolSet } from "@api/lib/ai";
 import { generateVisitorName } from "@cossistant/core";
-import type { PipelineToolBuildResult } from "../../tools";
 import type {
 	PipelineToolContext,
 	ToolRuntimeState,
@@ -163,45 +161,6 @@ export function buildToolContext(params: {
 		debugLogger: input.debugLogger,
 		deepTraceEnabled: input.deepTraceEnabled,
 		tracePayloadMode: input.tracePayloadMode,
-	};
-}
-
-export function buildFallbackToolset(params: {
-	baseToolset: PipelineToolBuildResult;
-	allowPublicMessages: boolean;
-}): PipelineToolBuildResult {
-	const allowedToolNames = new Set<string>(params.baseToolset.finishToolNames);
-
-	if (params.allowPublicMessages) {
-		allowedToolNames.add("sendMessage");
-	}
-
-	const tools: ToolSet = {};
-	const toolNames: string[] = [];
-	const finishToolNames: string[] = [];
-
-	for (const toolName of params.baseToolset.toolNames) {
-		if (!allowedToolNames.has(toolName)) {
-			continue;
-		}
-
-		const tool = params.baseToolset.tools[toolName];
-		if (!tool) {
-			continue;
-		}
-
-		tools[toolName] = tool;
-		toolNames.push(toolName);
-
-		if (params.baseToolset.finishToolNames.includes(toolName)) {
-			finishToolNames.push(toolName);
-		}
-	}
-
-	return {
-		tools,
-		toolNames,
-		finishToolNames,
 	};
 }
 

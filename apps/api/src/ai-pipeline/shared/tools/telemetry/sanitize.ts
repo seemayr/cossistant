@@ -1,3 +1,5 @@
+import { isRecord } from "../internal/guards";
+
 export { isRecord } from "../internal/guards";
 
 const MAX_SANITIZE_DEPTH = 4;

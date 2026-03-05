@@ -4,6 +4,7 @@ import {
 	buildModeInstructions,
 	STAGE_1_RUNTIME_GUARDRAILS,
 	STAGE_4_TOOL_PROTOCOL,
+	STAGE_5_FINAL_MESSAGE_CONTRACT,
 } from "./templates";
 
 function buildAgentBehaviorStage(input: GenerationRuntimeInput): string {
@@ -112,6 +113,7 @@ export function buildGenerationSystemPrompt(params: {
 			mode: params.input.mode,
 			humanCommand: params.input.humanCommand,
 		}),
+		STAGE_5_FINAL_MESSAGE_CONTRACT,
 	].filter((section) => section.trim().length > 0);
 
 	return sections.join("\n\n");

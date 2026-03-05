@@ -42,14 +42,30 @@ export type GenerationUsageTimelinePayload = {
 };
 
 function isUniqueViolationError(error: unknown): boolean {
-	if (
-		typeof error === "object" &&
-		error !== null &&
-		"code" in error &&
-		typeof error.code === "string"
-	) {
+	if (typeof error !== "object" || error === null) {
+		return false;
+	}
+
+	if ("code" in error && typeof error.code === "string") {
 		return error.code === "23505";
 	}
+
+	if ("cause" in error) {
+		const cause = (error as { cause?: unknown }).cause;
+		if (
+			typeof cause === "object" &&
+			cause !== null &&
+			"code" in cause &&
+			typeof cause.code === "string"
+		) {
+			return cause.code === "23505";
+		}
+	}
+
+	if ("message" in error && typeof error.message === "string") {
+		return error.message.toLowerCase().includes("duplicate key");
+	}
+
 	return false;
 }
 

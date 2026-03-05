@@ -6,7 +6,6 @@ const stepCountIsMock = mock((_count: number) => () => false);
 const getBehaviorSettingsMock = mock(() => ({
 	maxToolInvocationsPerRun: 15,
 }));
-const buildGenerationSystemPromptMock = mock(() => "system-prompt");
 const formatHistoryForGenerationMock = mock(() => [
 	{ role: "user" as const, content: "hello" },
 ]);
@@ -155,10 +154,6 @@ mock.module("../prompt/resolver", () => ({
 	})),
 }));
 
-mock.module("./prompt/builder", () => ({
-	buildGenerationSystemPrompt: buildGenerationSystemPromptMock,
-}));
-
 mock.module("./messages/format-history", () => ({
 	formatHistoryForGeneration: formatHistoryForGenerationMock,
 }));
@@ -188,6 +183,7 @@ function createInput(overrides: Partial<Record<string, unknown>> = {}) {
 			id: "ai-1",
 			name: "Agent",
 			model: "moonshotai/kimi-k2.5",
+			basePrompt: "You are a helpful support assistant.",
 			behaviorSettings: {},
 		} as never,
 		conversation: {
@@ -220,59 +216,13 @@ describe("runGenerationRuntime", () => {
 		hasToolCallMock.mockClear();
 		stepCountIsMock.mockClear();
 		getBehaviorSettingsMock.mockClear();
-		buildGenerationSystemPromptMock.mockClear();
 		formatHistoryForGenerationMock.mockClear();
 		buildPipelineToolsetMock.mockClear();
 		logAiPipelineMock.mockClear();
 		emitPipelineGenerationProgressMock.mockClear();
 	});
 
-	it("retries on timeout and succeeds with fallback model", async () => {
-		queuedGenerateHandlers.push(async () => {
-			throw createAbortError();
-		});
-		queuedGenerateHandlers.push(async ({ options }) => {
-			await options.tools.sendMessage.execute({ message: "Hello there" });
-			await options.tools.respond.execute({
-				reasoning: "Handled",
-				confidence: 1,
-			});
-			return {
-				usage: {
-					inputTokens: 10,
-					outputTokens: 20,
-					totalTokens: 30,
-				},
-			};
-		});
-
-		const { runGenerationRuntime } = await modulePromise;
-		const result = await runGenerationRuntime(createInput() as never);
-
-		expect(result.status).toBe("completed");
-		expect(result.action.action).toBe("respond");
-		expect(result.publicMessagesSent).toBe(1);
-		expect(result.attempts).toHaveLength(2);
-		expect(result.attempts?.[0]).toMatchObject({
-			modelId: "moonshotai/kimi-k2.5",
-			attempt: 1,
-			outcome: "timeout",
-		});
-		expect(result.attempts?.[1]).toMatchObject({
-			modelId: "openai/gpt-4o-mini",
-			attempt: 2,
-			outcome: "completed",
-		});
-		expect(createModelMock.mock.calls.map((call) => call[0])).toEqual([
-			"moonshotai/kimi-k2.5",
-			"openai/gpt-4o-mini",
-		]);
-	});
-
-	it("returns error when both attempts time out before any public message", async () => {
-		queuedGenerateHandlers.push(async () => {
-			throw createAbortError();
-		});
+	it("returns error on timeout before any public message without fallback retry", async () => {
 		queuedGenerateHandlers.push(async () => {
 			throw createAbortError();
 		});
@@ -283,9 +233,15 @@ describe("runGenerationRuntime", () => {
 		expect(result.status).toBe("error");
 		expect(result.failureCode).toBe("timeout");
 		expect(result.publicMessagesSent).toBe(0);
-		expect(
-			result.attempts?.map((attempt: { outcome: string }) => attempt.outcome)
-		).toEqual(["timeout", "timeout"]);
+		expect(result.attempts).toHaveLength(1);
+		expect(result.attempts?.[0]).toMatchObject({
+			modelId: "moonshotai/kimi-k2.5",
+			attempt: 1,
+			outcome: "timeout",
+		});
+		expect(createModelMock.mock.calls.map((call) => call[0])).toEqual([
+			"moonshotai/kimi-k2.5",
+		]);
 	});
 
 	it("completes without retry when timeout happens after a public message", async () => {
@@ -307,7 +263,6 @@ describe("runGenerationRuntime", () => {
 
 	it("returns missing_finish_action error when no finish tool is called", async () => {
 		queuedGenerateHandlers.push(async () => ({ usage: {} }));
-		queuedGenerateHandlers.push(async () => ({ usage: {} }));
 
 		const { runGenerationRuntime } = await modulePromise;
 		const result = await runGenerationRuntime(createInput() as never);
@@ -315,9 +270,8 @@ describe("runGenerationRuntime", () => {
 		expect(result.status).toBe("error");
 		expect(result.failureCode).toBe("missing_finish_action");
 		expect(result.publicMessagesSent).toBe(0);
-		expect(result.attempts).toHaveLength(2);
+		expect(result.attempts).toHaveLength(1);
 		expect(result.attempts?.[0]?.outcome).toBe("error");
-		expect(result.attempts?.[1]?.outcome).toBe("error");
 	});
 
 	it("keeps explicit skip as a valid completed silent outcome", async () => {
@@ -347,6 +301,28 @@ describe("runGenerationRuntime", () => {
 
 		const { runGenerationRuntime } = await modulePromise;
 		const result = await runGenerationRuntime(createInput() as never);
+
+		expect(result.status).toBe("error");
+		expect(result.failureCode).toBe("runtime_error");
+		expect(result.error).toContain("requires sendMessage");
+	});
+
+	it("fails command completion when main sendMessage was not called", async () => {
+		queuedGenerateHandlers.push(async ({ options }) => {
+			await options.tools.respond.execute({
+				reasoning: "Handled command without public reply",
+				confidence: 1,
+			});
+			return { usage: {} };
+		});
+
+		const { runGenerationRuntime } = await modulePromise;
+		const result = await runGenerationRuntime(
+			createInput({
+				mode: "respond_to_command",
+				humanCommand: "Please reply to the visitor",
+			}) as never
+		);
 
 		expect(result.status).toBe("error");
 		expect(result.failureCode).toBe("runtime_error");

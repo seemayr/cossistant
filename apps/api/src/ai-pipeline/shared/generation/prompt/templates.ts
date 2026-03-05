@@ -13,11 +13,20 @@ export const STAGE_4_TOOL_PROTOCOL = `## Tool Protocol
 - End every run with exactly one finish tool: respond, escalate, resolve, markSpam, or skip.
 - Public messaging roles:
   - sendAcknowledgeMessage: optional short acknowledgement before main response.
-  - sendMessage: required main response for visitor-facing replies.
+  - sendMessage: required main response for non-background answer completions.
   - sendFollowUpMessage: optional short addendum after the main response.
 - Allowed public message sequences: main, ack->main, main->followUp, ack->main->followUp.
 - Never call acknowledge/follow-up without a main sendMessage call.
 - If no action is needed, call skip with a short reason.`;
+
+export const STAGE_5_FINAL_MESSAGE_CONTRACT = `## Final Public Message Contract (Apply Last)
+- For public messaging flow, only use these tools: sendAcknowledgeMessage, sendMessage, sendFollowUpMessage.
+- Each of those three tools can be used at most once per run.
+- sendAcknowledgeMessage is optional.
+- sendMessage is mandatory when mode is not background_only and finish action is not skip.
+- sendFollowUpMessage is optional and only valid after sendMessage.
+- Allowed sequences only: main, ack->main, main->followUp, ack->main->followUp.
+- Keep the main sendMessage concise (usually 1-3 short sentences unless detail is requested).`;
 
 export function buildModeInstructions(params: {
 	mode: GenerationMode;
@@ -27,7 +36,7 @@ export function buildModeInstructions(params: {
 		return `## Mode: Respond To Command
 A human teammate asked for execution help.
 - Prioritize completing the teammate request.
-- Use sendMessage only when the teammate intent is visitor-facing.
+- For non-skip completion in this mode, sendMessage is required as the main public response.
 - Use sendPrivateMessage for internal-only notes or handoff context.
 - Keep public/private messages human, concise, and directly useful.
 - Command: ${params.humanCommand?.trim() || "(none provided)"}`;

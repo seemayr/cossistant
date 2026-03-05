@@ -114,4 +114,83 @@ describe("logGenerationUsageTimeline", () => {
 			},
 		});
 	});
+
+	it("updates existing row when create fails with wrapped unique violation", async () => {
+		const { logGenerationUsageTimeline } = await modulePromise;
+		createTimelineItemMock.mockRejectedValue({ cause: { code: "23505" } });
+
+		await logGenerationUsageTimeline({
+			db: {} as never,
+			organizationId: "org-1",
+			websiteId: "site-1",
+			conversationId: "conv-1",
+			visitorId: "visitor-1",
+			aiAgentId: "ai-1",
+			payload: {
+				workflowRunId: "wf-1",
+				triggerMessageId: "trigger-1",
+				modelId: "moonshotai/kimi-k2.5",
+				inputTokens: 100,
+				outputTokens: 50,
+				totalTokens: 150,
+				tokenSource: "provider",
+				baseCredits: 1,
+				modelCredits: 0,
+				toolCredits: 0,
+				totalCredits: 1,
+				billableToolCount: 0,
+				excludedToolCount: 0,
+				totalToolCount: 0,
+				mode: "normal",
+				ingestStatus: "skipped",
+				balanceBefore: null,
+				balanceAfterEstimate: null,
+			},
+		});
+
+		expect(updateTimelineItemMock).toHaveBeenCalledTimes(1);
+	});
+
+	it("throws when create fails with non-unique wrapped error", async () => {
+		const { logGenerationUsageTimeline } = await modulePromise;
+		createTimelineItemMock.mockRejectedValue({
+			cause: { code: "XX000" },
+			message: "internal error",
+		});
+
+		await expect(
+			logGenerationUsageTimeline({
+				db: {} as never,
+				organizationId: "org-1",
+				websiteId: "site-1",
+				conversationId: "conv-1",
+				visitorId: "visitor-1",
+				aiAgentId: "ai-1",
+				payload: {
+					workflowRunId: "wf-1",
+					triggerMessageId: "trigger-1",
+					modelId: "moonshotai/kimi-k2.5",
+					inputTokens: 100,
+					outputTokens: 50,
+					totalTokens: 150,
+					tokenSource: "provider",
+					baseCredits: 1,
+					modelCredits: 0,
+					toolCredits: 0,
+					totalCredits: 1,
+					billableToolCount: 0,
+					excludedToolCount: 0,
+					totalToolCount: 0,
+					mode: "normal",
+					ingestStatus: "skipped",
+					balanceBefore: null,
+					balanceAfterEstimate: null,
+				},
+			})
+		).rejects.toMatchObject({
+			cause: { code: "XX000" },
+		});
+
+		expect(updateTimelineItemMock).not.toHaveBeenCalled();
+	});
 });
