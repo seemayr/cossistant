@@ -22,7 +22,9 @@ export const AI_AGENT_TOOL_IDS = [
 	"updateConversationTitle",
 	"updateSentiment",
 	"setPriority",
+	"sendAcknowledgeMessage",
 	"sendMessage",
+	"sendFollowUpMessage",
 	"sendPrivateMessage",
 	"respond",
 	"escalate",
@@ -191,26 +193,69 @@ const AI_AGENT_TOOL_CATALOG_RAW: readonly RawToolCatalogEntry[] = [
 		},
 	},
 	{
-		id: "sendMessage",
-		label: "Send Public Message",
-		description: "Send the customer-visible response.",
+		id: "sendAcknowledgeMessage",
+		label: "Send Acknowledge Message",
+		description: "Send a short acknowledgement before the main answer.",
 		category: "messaging",
 		group: "behavior",
 		order: 6,
+		isSystem: true,
+		isRequired: false,
+		isToggleable: false,
+		behaviorSettingKey: null,
+		defaultSkill: {
+			name: "send-acknowledge-message.md",
+			label: "Send Acknowledge Message",
+			description: "Use this only for a short, immediate acknowledgement.",
+			content: `## Role
+
+- Use this only for a brief acknowledgement before the main answer.
+- Keep it very short and do not include final resolution details.
+- Skip this tool when you can directly send the main response.`,
+		},
+	},
+	{
+		id: "sendMessage",
+		label: "Send Main Message",
+		description: "Send the main customer-visible response.",
+		category: "messaging",
+		group: "behavior",
+		order: 7,
 		isSystem: true,
 		isRequired: true,
 		isToggleable: false,
 		behaviorSettingKey: null,
 		defaultSkill: {
 			name: "send-message.md",
-			label: "Send Public Message",
-			description: "Public message composition hints.",
-			content: `## Message Composition
+			label: "Send Main Message",
+			description: "Main response composition rules.",
+			content: `## Role
 
-- Keep messages concise and easy to scan.
-- Prefer one clear next step when action is needed.
-- When splitting into multiple public messages, set \`lastMessage=false\` on non-final sends and \`lastMessage=true\` on the final send.
-- Match visitor language and context from the active thread.`,
+- Use this for the main answer that resolves the visitor need.
+- Keep it concise, direct, and actionable.
+- This tool is required for visitor-facing replies.`,
+		},
+	},
+	{
+		id: "sendFollowUpMessage",
+		label: "Send Follow-up Message",
+		description: "Send one optional closing follow-up after the main answer.",
+		category: "messaging",
+		group: "behavior",
+		order: 8,
+		isSystem: true,
+		isRequired: false,
+		isToggleable: false,
+		behaviorSettingKey: null,
+		defaultSkill: {
+			name: "send-follow-up-message.md",
+			label: "Send Follow-up Message",
+			description: "Optional short follow-up usage rules.",
+			content: `## Role
+
+- Use this only after the main message when a short follow-up adds value.
+- Keep it to one short addendum, not a second full answer.
+- Do not use it without a prior main message.`,
 		},
 	},
 	{
@@ -219,7 +264,7 @@ const AI_AGENT_TOOL_CATALOG_RAW: readonly RawToolCatalogEntry[] = [
 		description: "Send internal notes to teammates that visitors cannot see.",
 		category: "messaging",
 		group: "behavior",
-		order: 7,
+		order: 9,
 		isSystem: true,
 		isRequired: true,
 		isToggleable: false,

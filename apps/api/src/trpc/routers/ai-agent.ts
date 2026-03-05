@@ -2,15 +2,15 @@ import {
 	getBehaviorPromptCatalog,
 	getBehaviorPromptDefinition,
 	getEditableCorePromptCatalog,
-} from "@api/ai-agent/behaviors/catalog";
-import { buildCapabilitiesStudioResponse } from "@api/ai-agent/capabilities-studio";
+} from "@api/ai-pipeline/shared/prompt/behavior-catalog";
+import { buildCapabilitiesStudioResponse } from "@api/ai-pipeline/shared/prompt/capabilities-studio";
 import {
 	EDITABLE_CORE_PROMPT_DOCUMENT_NAME_SET,
 	PromptDocumentConflictError,
 	PromptDocumentValidationError,
-} from "@api/ai-agent/prompts/documents";
-import { buildFallbackCoreDocuments } from "@api/ai-agent/prompts/resolver";
-import { getBehaviorSettings } from "@api/ai-agent/settings";
+} from "@api/ai-pipeline/shared/prompt/documents";
+import { buildFallbackCoreDocuments } from "@api/ai-pipeline/shared/prompt/resolver";
+import { getBehaviorSettings } from "@api/ai-pipeline/shared/settings";
 import {
 	createAiAgent,
 	deleteAiAgent,

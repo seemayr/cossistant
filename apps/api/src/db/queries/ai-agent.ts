@@ -1,4 +1,4 @@
-import { validateBehaviorSettings } from "@api/ai-agent/settings";
+import { validateBehaviorSettings } from "@api/ai-pipeline/shared/settings";
 import type { Database } from "@api/db";
 import {
 	type AiAgentBehaviorSettings,

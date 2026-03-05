@@ -28,9 +28,12 @@ Delayed, non-public follow-up pipeline:
 |---|---|
 | `apps/api/src/ai-pipeline/index.ts` | Exports `runPrimaryPipeline`, `runBackgroundPipeline`, and compatibility alias `runAiAgentPipeline -> runPrimaryPipeline`. |
 | `apps/api/src/ai-pipeline/primary-pipeline/index.ts` | Primary pipeline entrypoint (intake -> decision -> generation). |
+| `apps/api/src/ai-pipeline/primary-pipeline/internal/*` | Internal orchestration helpers for trace mode, seen emit, typing lifecycle, and usage tracking. |
 | `apps/api/src/ai-pipeline/background-pipeline/index.ts` | Background pipeline shell entrypoint. |
-| `apps/api/src/ai-pipeline/shared/generation/*` | Shared generation runtime (staged prompt builder + tool-loop orchestration). |
+| `apps/api/src/ai-pipeline/shared/generation/*` | Shared generation runtime entrypoint + prompt/history adapters. |
+| `apps/api/src/ai-pipeline/shared/generation/internal/*` | Generation runtime internals (attempt runner, runtime state helpers, debug logging). |
 | `apps/api/src/ai-pipeline/shared/tools/*` | Shared reusable tool registry and tool modules (side effects executed in-tool). |
+| `apps/api/src/ai-pipeline/shared/tools/telemetry/*` | Telemetry internals (sanitize/redact, summary/progress text, trace logging, timeline persistence). |
 | `apps/api/src/ai-pipeline/shared/usage/*` | Token + credit usage tracking and private generation usage timeline event. |
 | `packages/jobs/src/ai-agent-job-scheduler.ts` | Primary queue enqueue semantics (`ai-agent`). |
 | `packages/jobs/src/ai-agent-background-job-scheduler.ts` | Background queue enqueue/reschedule semantics (`ai-agent-background`). |
@@ -199,42 +202,42 @@ Planned next iteration:
 
 - title/priority/sentiment/category maintenance logic under background pipeline.
 
-## 11) Migration Map (Concrete File Changes)
+## 11) Cleanup Map (Concrete File Changes)
 
 ### API pipeline structure
 
 - `apps/api/src/ai-pipeline/index.ts`
 - `apps/api/src/ai-pipeline/primary-pipeline/index.ts`
 - `apps/api/src/ai-pipeline/background-pipeline/index.ts`
+- `apps/api/src/ai-pipeline/primary-pipeline/internal/trace.ts`
+- `apps/api/src/ai-pipeline/primary-pipeline/internal/seen.ts`
+- `apps/api/src/ai-pipeline/primary-pipeline/internal/typing.ts`
+- `apps/api/src/ai-pipeline/primary-pipeline/internal/usage.ts`
+- `apps/api/src/ai-pipeline/primary-pipeline/steps/decision/result-mapping.ts`
+- `apps/api/src/ai-pipeline/shared/generation/internal/debug-log.ts`
+- `apps/api/src/ai-pipeline/shared/generation/internal/runtime-utils.ts`
+- `apps/api/src/ai-pipeline/shared/generation/internal/attempt.ts`
+- `apps/api/src/ai-pipeline/shared/tools/telemetry/sanitize.ts`
+- `apps/api/src/ai-pipeline/shared/tools/telemetry/text.ts`
+- `apps/api/src/ai-pipeline/shared/tools/telemetry/logging.ts`
+- `apps/api/src/ai-pipeline/shared/tools/telemetry/timeline.ts`
+- `apps/api/src/ai-pipeline/shared/tools/internal/guards.ts`
 
-### Jobs package
+### Tests
 
-- `packages/jobs/src/types.ts`
-- `packages/jobs/src/ai-agent-background-job-scheduler.ts`
-- `packages/jobs/src/triggers/ai-agent-background.ts`
-- `packages/jobs/src/index.ts`
-- `packages/jobs/src/triggers/index.ts`
+- `apps/api/src/ai-pipeline/primary-pipeline/steps/decision/index.test.ts`
+- `apps/api/src/ai-pipeline/primary-pipeline/steps/decision/tag-detection.test.ts`
+- `apps/api/src/ai-pipeline/shared/tools/telemetry.test.ts`
 
-### Workers
+### Consumers verified unchanged
 
-- `apps/workers/src/queues/ai-agent/worker.ts`
 - `apps/workers/src/queues/ai-agent/pipeline-runner.ts`
 - `apps/workers/src/queues/ai-agent-background/worker.ts`
-- `apps/workers/src/queues/index.ts`
-- `apps/workers/src/index.ts`
-
-### API queue producers
-
-- `apps/api/src/utils/queue-triggers.ts`
 
 ## 12) Validation Commands
 
-1. `bunx tsc -p packages/jobs/tsconfig.json --noEmit`
-2. `bunx tsc -p apps/api/tsconfig.json --noEmit`
-3. `bunx tsc -p apps/workers/tsconfig.json --noEmit`
-4. `bun test packages/jobs/src/ai-agent-background-job-scheduler.test.ts`
-5. `bun test packages/jobs/src/triggers/ai-agent-background.test.ts`
-6. `bun test apps/workers/src/queues/ai-agent/pipeline-runner.test.ts`
-7. `bun test apps/workers/src/queues/ai-agent/worker.test.ts`
-8. `bun test apps/workers/src/queues/ai-agent-background/worker.test.ts`
-9. `bun test apps/workers/src/queues/index.test.ts`
+1. `bun test apps/api/src/ai-pipeline`
+2. `bun test apps/workers/src/queues/ai-agent/pipeline-runner.test.ts`
+3. `bun test apps/workers/src/queues/ai-agent-background/worker.test.ts`
+4. `bunx tsc -p apps/api/tsconfig.json --noEmit`
+5. `bunx tsc -p apps/workers/tsconfig.json --noEmit`

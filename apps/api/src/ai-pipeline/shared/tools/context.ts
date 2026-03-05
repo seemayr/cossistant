@@ -12,6 +12,7 @@ import type {
 	PipelineToolResult,
 	ToolTelemetrySpec,
 } from "./contracts";
+import { isRecord } from "./internal/guards";
 
 const searchKnowledgeInputSchema = z.object({
 	query: z
@@ -186,10 +187,6 @@ export function createIdentifyVisitorTool(ctx: PipelineToolContext) {
 			};
 		},
 	});
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function getSearchKnowledgeBaseResultCount(output: unknown): number | null {

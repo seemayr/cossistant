@@ -1,6 +1,6 @@
-import { getBehaviorSettings } from "@api/ai-agent/settings";
 import type { AiAgentSelect } from "@api/db/schema/ai-agent";
 import type { ToolSet } from "@api/lib/ai";
+import { getBehaviorSettings } from "../settings";
 import { FINISH_TOOL_IDS, SHARED_PIPELINE_TOOL_CATALOG } from "./catalog";
 import type {
 	PipelineToolContext,

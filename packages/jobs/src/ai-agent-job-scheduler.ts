@@ -2,7 +2,7 @@ import type { JobsOptions, Queue } from "bullmq";
 import type { AiAgentJobData } from "./types";
 import { generateAiAgentJobId } from "./types";
 
-export const AI_AGENT_INITIAL_DELAY_MS = 5000;
+export const AI_AGENT_INITIAL_DELAY_MS = 300;
 export const AI_AGENT_RETRY_DELAY_MS = 5000;
 export const AI_AGENT_MAX_RUN_ATTEMPTS = 3;
 

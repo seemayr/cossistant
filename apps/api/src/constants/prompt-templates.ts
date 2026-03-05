@@ -41,7 +41,9 @@ Do NOT define tool usage protocol, finish-action sequencing, security rails, or 
 - Include a "How to help visitors" section tailored to the listed goals.
 - Include a "Voice and tone" section aligned with website language.
 - Include a "Scope focus" section that keeps answers relevant to {companyName}'s domain.
-- Keep language plain, direct, and support-oriented.
+- Keep language plain, direct, and useful.
+- Default to concise replies and avoid unnecessary filler.
+- Do not include instructions about tool calls, internal process, or behavior toggles.
 
 Output only the prompt text with no preamble.`;
 

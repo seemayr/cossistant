@@ -1,7 +1,7 @@
 import {
 	pauseAiForConversation,
 	resumeAiForConversation,
-} from "@api/ai-agent/kill-switch";
+} from "@api/ai-pipeline/shared/safety/kill-switch";
 import {
 	archiveConversation,
 	type ConversationRecord,

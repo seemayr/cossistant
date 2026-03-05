@@ -35,8 +35,12 @@ import {
 	SKIP_TELEMETRY,
 } from "./finish";
 import {
+	createSendAcknowledgeMessageTool,
+	createSendFollowUpMessageTool,
 	createSendMessageTool,
 	createSendPrivateMessageTool,
+	SEND_ACKNOWLEDGE_MESSAGE_TELEMETRY,
+	SEND_FOLLOW_UP_MESSAGE_TELEMETRY,
 	SEND_MESSAGE_TELEMETRY,
 	SEND_PRIVATE_MESSAGE_TELEMETRY,
 } from "./messaging";
@@ -96,11 +100,25 @@ export const SHARED_PIPELINE_TOOL_CATALOG: readonly PipelineToolDefinition[] = [
 		telemetry: SET_PRIORITY_TELEMETRY,
 	},
 	{
+		id: "sendAcknowledgeMessage",
+		factory: createSendAcknowledgeMessageTool,
+		availability: { primary: true, background: false, publicOnly: true },
+		behaviorSettingKey: null,
+		telemetry: SEND_ACKNOWLEDGE_MESSAGE_TELEMETRY,
+	},
+	{
 		id: "sendMessage",
 		factory: createSendMessageTool,
 		availability: { primary: true, background: false, publicOnly: true },
 		behaviorSettingKey: null,
 		telemetry: SEND_MESSAGE_TELEMETRY,
+	},
+	{
+		id: "sendFollowUpMessage",
+		factory: createSendFollowUpMessageTool,
+		availability: { primary: true, background: false, publicOnly: true },
+		behaviorSettingKey: null,
+		telemetry: SEND_FOLLOW_UP_MESSAGE_TELEMETRY,
 	},
 	{
 		id: "sendPrivateMessage",

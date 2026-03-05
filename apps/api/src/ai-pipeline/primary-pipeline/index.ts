@@ -1,12 +1,17 @@
 import { env } from "@api/env";
 import { logAiPipeline } from "../logger";
 import { createPipelineDevConversationLog } from "../shared/dev-conversation-log";
-import { emitPipelineSeen, PipelineTypingHeartbeat } from "../shared/events";
-import { trackGenerationUsage } from "../shared/usage";
 import type {
 	PrimaryPipelineContext,
 	PrimaryPipelineResult,
 } from "./contracts";
+import { emitPipelineSeenSafe } from "./internal/seen";
+import { resolveTracePayloadMode } from "./internal/trace";
+import {
+	createPrimaryTypingControls,
+	startPrimaryTypingSafely,
+} from "./internal/typing";
+import { trackPrimaryGenerationUsage } from "./internal/usage";
 import { runDecisionStep } from "./steps/decision";
 import { runPrimaryGenerationStep } from "./steps/generation";
 import { runIntakeStep } from "./steps/intake";
@@ -53,19 +58,6 @@ export type {
 	IntakeReadyContext,
 	IntakeStepResult,
 } from "./steps/intake/types";
-
-function resolveTracePayloadMode(
-	value: string | undefined
-): "raw" | "sanitized" | "metadata" {
-	switch (value) {
-		case "raw":
-		case "sanitized":
-		case "metadata":
-			return value;
-		default:
-			return "sanitized";
-	}
-}
 
 export async function runPrimaryPipeline(
 	ctx: PrimaryPipelineContext
@@ -121,24 +113,12 @@ export async function runPrimaryPipeline(
 			});
 		}
 
-		try {
-			await emitPipelineSeen({
-				db: ctx.db,
-				conversation: intakeResult.data.conversation,
-				aiAgentId: intakeResult.data.aiAgent.id,
-			});
-		} catch (error) {
-			logAiPipeline({
-				area: "primary",
-				event: "seen_emit_failed",
-				level: "warn",
-				conversationId: ctx.input.conversationId,
-				fields: {
-					stage: "seen",
-				},
-				error,
-			});
-		}
+		await emitPipelineSeenSafe({
+			db: ctx.db,
+			conversation: intakeResult.data.conversation,
+			aiAgentId: intakeResult.data.aiAgent.id,
+			conversationId: ctx.input.conversationId,
+		});
 
 		const decisionResult = await measureStage(metrics, "decisionMs", () =>
 			runDecisionStep({
@@ -168,47 +148,17 @@ export async function runPrimaryPipeline(
 		}
 
 		const allowPublicMessages = decisionResult.mode !== "background_only";
-		let typingHeartbeat: PipelineTypingHeartbeat | null = null;
+		const typingControls = createPrimaryTypingControls({
+			allowPublicMessages,
+			conversation: intakeResult.data.conversation,
+			aiAgentId: intakeResult.data.aiAgent.id,
+			conversationId: ctx.input.conversationId,
+		});
 
-		const startTyping = async (): Promise<void> => {
-			if (!allowPublicMessages) {
-				return;
-			}
-
-			if (!typingHeartbeat) {
-				typingHeartbeat = new PipelineTypingHeartbeat({
-					conversation: intakeResult.data.conversation,
-					aiAgentId: intakeResult.data.aiAgent.id,
-				});
-			}
-
-			if (!typingHeartbeat.running) {
-				await typingHeartbeat.start();
-			}
-		};
-
-		const stopTyping = async (): Promise<void> => {
-			if (typingHeartbeat) {
-				await typingHeartbeat.stop();
-			}
-		};
-
-		if (allowPublicMessages) {
-			try {
-				await startTyping();
-			} catch (error) {
-				logAiPipeline({
-					area: "primary",
-					event: "typing_start_failed",
-					level: "warn",
-					conversationId: ctx.input.conversationId,
-					fields: {
-						stage: "typing",
-					},
-					error,
-				});
-			}
-		}
+		await startPrimaryTypingSafely({
+			conversationId: ctx.input.conversationId,
+			controls: typingControls,
+		});
 
 		const generationResult = await (async () => {
 			try {
@@ -218,28 +168,15 @@ export async function runPrimaryPipeline(
 						pipelineInput: ctx.input,
 						intake: intakeResult.data,
 						decision: decisionResult,
-						startTyping: allowPublicMessages ? startTyping : undefined,
-						stopTyping: allowPublicMessages ? stopTyping : undefined,
+						startTyping: typingControls.startTyping,
+						stopTyping: typingControls.stopTyping,
 						debugLogger: conversationLog,
 						deepTraceEnabled,
 						tracePayloadMode,
 					})
 				);
 			} finally {
-				try {
-					await (typingHeartbeat as PipelineTypingHeartbeat | null)?.stop();
-				} catch (error) {
-					logAiPipeline({
-						area: "primary",
-						event: "typing_stop_failed",
-						level: "warn",
-						conversationId: ctx.input.conversationId,
-						fields: {
-							stage: "typing",
-						},
-						error,
-					});
-				}
+				await typingControls.stopSafely();
 			}
 		})();
 
@@ -250,37 +187,17 @@ export async function runPrimaryPipeline(
 			  }
 			| undefined;
 
-		try {
-			usageTelemetry = await trackGenerationUsage({
-				db: ctx.db,
-				organizationId: ctx.input.organizationId,
-				websiteId: ctx.input.websiteId,
-				conversationId: ctx.input.conversationId,
-				visitorId: ctx.input.visitorId,
-				aiAgentId: intakeResult.data.aiAgent.id,
-				workflowRunId: ctx.input.workflowRunId,
-				triggerMessageId: ctx.input.messageId,
-				triggerVisibility: intakeResult.data.triggerMessage?.visibility,
-				modelId: intakeResult.data.modelResolution.modelIdResolved,
-				modelIdOriginal: intakeResult.data.modelResolution.modelIdOriginal,
-				modelMigrationApplied:
-					intakeResult.data.modelResolution.modelMigrationApplied,
-				providerUsage: generationResult.usage,
-				toolCallsByName: generationResult.toolCallsByName,
-				chargeableToolCallsByName: generationResult.chargeableToolCallsByName,
-			});
-		} catch (error) {
-			logAiPipeline({
-				area: "primary",
-				event: "usage_track_failed",
-				level: "warn",
-				conversationId: ctx.input.conversationId,
-				fields: {
-					stage: "usage",
-				},
-				error,
-			});
-		}
+		usageTelemetry = await trackPrimaryGenerationUsage({
+			db: ctx.db,
+			organizationId: ctx.input.organizationId,
+			websiteId: ctx.input.websiteId,
+			conversationId: ctx.input.conversationId,
+			visitorId: ctx.input.visitorId,
+			workflowRunId: ctx.input.workflowRunId,
+			triggerMessageId: ctx.input.messageId,
+			intake: intakeResult.data,
+			generationResult,
+		});
 
 		if (generationResult.status === "error") {
 			const errorMessage =

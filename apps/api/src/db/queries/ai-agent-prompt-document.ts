@@ -5,7 +5,7 @@ import {
 	normalizePromptDocumentName,
 	PromptDocumentConflictError,
 	PromptDocumentValidationError,
-} from "@api/ai-agent/prompts/documents";
+} from "@api/ai-pipeline/shared/prompt/documents";
 import type { Database } from "@api/db";
 import {
 	type AiAgentPromptDocumentInsert,

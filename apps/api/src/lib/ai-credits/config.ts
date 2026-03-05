@@ -3,7 +3,9 @@ export const AI_CREDIT_PRICING_CONFIG = {
 	includedBillableTools: 2,
 	perExtraToolCredits: 0.5,
 	excludedToolNames: [
+		"sendAcknowledgeMessage",
 		"sendMessage",
+		"sendFollowUpMessage",
 		"sendPrivateMessage",
 		"aiDecision",
 		"respond",

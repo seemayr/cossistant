@@ -74,10 +74,28 @@ ${buildToolInventorySection(params)}
 ${STAGE_4_TOOL_PROTOCOL}`;
 }
 
+function buildToolSkillStage(params: {
+	toolSkills: Array<{ label: string; content: string }>;
+}): string {
+	if (params.toolSkills.length === 0) {
+		return "";
+	}
+
+	const entries = params.toolSkills
+		.map(
+			(skill) =>
+				`### ${skill.label}\n${skill.content.trim() || "No additional instructions."}`
+		)
+		.join("\n\n");
+
+	return `## Active Tool Skills\nApply these tool-specific instructions when relevant.\n\n${entries}`;
+}
+
 export function buildGenerationSystemPrompt(params: {
 	input: GenerationRuntimeInput;
 	toolset: ToolSet;
 	toolNames: string[];
+	toolSkills?: Array<{ label: string; content: string }>;
 }): string {
 	const sections = [
 		STAGE_1_RUNTIME_GUARDRAILS,
@@ -87,11 +105,14 @@ export function buildGenerationSystemPrompt(params: {
 			toolset: params.toolset,
 			toolNames: params.toolNames,
 		}),
+		buildToolSkillStage({
+			toolSkills: params.toolSkills ?? [],
+		}),
 		buildModeInstructions({
 			mode: params.input.mode,
 			humanCommand: params.input.humanCommand,
 		}),
-	];
+	].filter((section) => section.trim().length > 0);
 
 	return sections.join("\n\n");
 }

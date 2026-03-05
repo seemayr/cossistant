@@ -2,66 +2,9 @@ import type { Database } from "@api/db";
 import { logAiPipeline } from "../../../logger";
 import { resolveDecisionPolicy } from "./decision-policy";
 import { runDeterministicDecision } from "./deterministic";
+import { mapSmartDecisionToDecisionResult } from "./result-mapping";
 import { runSmartDecision } from "./smart";
 import type { DecisionResult, DecisionStepInput } from "./types";
-
-function mapSmartDecisionToDecisionResult(params: {
-	input: DecisionStepInput;
-	cleanedTriggerText: string;
-	smartDecision: Awaited<ReturnType<typeof runSmartDecision>>;
-}): DecisionResult {
-	const { input, smartDecision, cleanedTriggerText } = params;
-	const triggerMessage = input.triggerMessage;
-
-	if (smartDecision.intent === "observe") {
-		return {
-			shouldAct: false,
-			reason: `Smart decision: ${smartDecision.reasoning}`,
-			mode: "background_only",
-			humanCommand: null,
-			isEscalated: input.conversationState.isEscalated,
-			escalationReason: input.conversationState.escalationReason,
-			smartDecision,
-		};
-	}
-
-	if (smartDecision.intent === "assist_team") {
-		return {
-			shouldAct: true,
-			reason: `Smart decision: ${smartDecision.reasoning}`,
-			mode: "background_only",
-			humanCommand:
-				triggerMessage?.senderType === "human_agent"
-					? cleanedTriggerText
-					: null,
-			isEscalated: input.conversationState.isEscalated,
-			escalationReason: input.conversationState.escalationReason,
-			smartDecision,
-		};
-	}
-
-	if (triggerMessage?.senderType === "human_agent") {
-		return {
-			shouldAct: true,
-			reason: `Smart decision: ${smartDecision.reasoning}`,
-			mode: "respond_to_command",
-			humanCommand: cleanedTriggerText,
-			isEscalated: input.conversationState.isEscalated,
-			escalationReason: input.conversationState.escalationReason,
-			smartDecision,
-		};
-	}
-
-	return {
-		shouldAct: true,
-		reason: `Smart decision: ${smartDecision.reasoning}`,
-		mode: "respond_to_visitor",
-		humanCommand: null,
-		isEscalated: input.conversationState.isEscalated,
-		escalationReason: input.conversationState.escalationReason,
-		smartDecision,
-	};
-}
 
 export async function runDecisionStep(params: {
 	db: Database;
@@ -71,17 +14,6 @@ export async function runDecisionStep(params: {
 
 	if (deterministicDecision.type === "final") {
 		return deterministicDecision.result;
-	}
-
-	if (!params.input.triggerMessage) {
-		return {
-			shouldAct: false,
-			reason: "No trigger message",
-			mode: "background_only",
-			humanCommand: null,
-			isEscalated: params.input.conversationState.isEscalated,
-			escalationReason: params.input.conversationState.escalationReason,
-		};
 	}
 
 	const decisionPolicyResolution = await resolveDecisionPolicy({
@@ -101,6 +33,10 @@ export async function runDecisionStep(params: {
 			},
 			error: decisionPolicyResolution.error,
 		});
+	}
+
+	if (!params.input.triggerMessage) {
+		throw new Error("triggerMessage is required for smart decision");
 	}
 
 	const smartDecision = await runSmartDecision({

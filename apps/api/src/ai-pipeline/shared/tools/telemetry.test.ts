@@ -432,4 +432,121 @@ describe("wrapPipelineToolsWithTelemetry", () => {
 		expect(result).toMatchObject({ success: true });
 		expect(context.runtimeState.successfulToolCallCounts.respond).toBe(1);
 	});
+
+	it("emits trace payloads according to tracePayloadMode", async () => {
+		const { wrapPipelineToolsWithTelemetry } = await modulePromise;
+
+		const runWithMode = async (mode: "raw" | "sanitized" | "metadata") => {
+			const logSpy = mock(() => {});
+			const warnSpy = mock(() => {});
+			const errorSpy = mock(() => {});
+			const context = createContext({
+				deepTraceEnabled: true,
+				tracePayloadMode: mode,
+				debugLogger: {
+					log: logSpy,
+					warn: warnSpy,
+					error: errorSpy,
+				},
+			});
+			const tools = wrapPipelineToolsWithTelemetry({
+				tools: {
+					respond: {
+						execute: async () => ({
+							success: true,
+							data: {
+								email: "visitor@example.com",
+								token: "secret-token",
+								value: "ok",
+							},
+						}),
+					},
+				} as never,
+				context: context as never,
+				definitions: [
+					{
+						id: "respond",
+						factory: (() => null) as never,
+						availability: {
+							primary: true,
+							background: false,
+							publicOnly: true,
+						},
+						behaviorSettingKey: null,
+						telemetry: {
+							summary: {
+								partial: "Responding...",
+								result: "Responded",
+								error: "Failed response",
+							},
+							progress: {
+								partial: "Responding...",
+								result: "Responded",
+								error: "Failed response",
+								audience: "all",
+							},
+						},
+					},
+				] as never,
+			});
+
+			await tools.respond?.execute?.(
+				{
+					reasoning: "ok",
+					confidence: 1,
+					email: "visitor@example.com",
+					token: "secret-token",
+				} as never,
+				{ toolCallId: `call-${mode}` } as never
+			);
+
+			const startCall = logSpy.mock.calls.find((call) => {
+				const [message] = call as unknown[];
+				return String(message).includes("evt=start");
+			}) as unknown[] | undefined;
+			const endCall = logSpy.mock.calls.find((call) => {
+				const [message] = call as unknown[];
+				return String(message).includes("evt=end state=result");
+			}) as unknown[] | undefined;
+			const startPayload = startCall?.[1] as { input?: unknown } | undefined;
+			const endPayload = endCall?.[1] as { output?: unknown } | undefined;
+
+			return {
+				startPayload: startPayload?.input,
+				endPayload: endPayload?.output,
+			};
+		};
+
+		const raw = await runWithMode("raw");
+		const sanitized = await runWithMode("sanitized");
+		const metadata = await runWithMode("metadata");
+
+		expect(raw.startPayload).toMatchObject({
+			email: "visitor@example.com",
+			token: "secret-token",
+		});
+		expect(sanitized.startPayload).toMatchObject({
+			email: "[REDACTED]",
+			token: "[REDACTED]",
+		});
+		expect(metadata.startPayload).toMatchObject({
+			kind: "object",
+		});
+
+		expect(raw.endPayload).toMatchObject({
+			data: {
+				email: "visitor@example.com",
+				token: "secret-token",
+			},
+		});
+		expect(sanitized.endPayload).toMatchObject({
+			data: {
+				email: "[REDACTED]",
+				token: "[REDACTED]",
+			},
+		});
+		expect(metadata.endPayload).toMatchObject({
+			kind: "object",
+		});
+	});
 });

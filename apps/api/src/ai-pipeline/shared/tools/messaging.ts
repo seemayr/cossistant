@@ -1,14 +1,15 @@
-import { addInternalNote } from "@api/ai-agent/actions/internal-note";
-import { sendMessage as sendPublicMessage } from "@api/ai-agent/actions/send-message";
 import { tool } from "ai";
 import { z } from "zod";
+import { addInternalNote } from "../actions/internal-note";
+import { sendMessage as sendPublicMessage } from "../actions/send-message";
 import type {
 	PipelineToolContext,
 	PipelineToolResult,
+	PublicMessageToolName,
 	ToolTelemetrySpec,
 } from "./contracts";
 
-const sendMessageInputSchema = z.object({
+const publicMessageInputSchema = z.object({
 	message: z
 		.string()
 		.min(1)
@@ -21,6 +22,70 @@ const sendPrivateMessageInputSchema = z.object({
 		.min(1)
 		.describe("Private internal note for teammates only."),
 });
+
+const PUBLIC_MESSAGE_TOOL_ORDER = [
+	"sendAcknowledgeMessage",
+	"sendMessage",
+	"sendFollowUpMessage",
+] as const satisfies readonly PublicMessageToolName[];
+
+function getAllowedNextPublicTools(
+	sequence: PublicMessageToolName[]
+): PublicMessageToolName[] {
+	if (sequence.length === 0) {
+		return ["sendAcknowledgeMessage", "sendMessage"];
+	}
+
+	if (sequence.length === 1) {
+		if (sequence[0] === "sendAcknowledgeMessage") {
+			return ["sendMessage"];
+		}
+		if (sequence[0] === "sendMessage") {
+			return ["sendFollowUpMessage"];
+		}
+		return [];
+	}
+
+	if (
+		sequence.length === 2 &&
+		sequence[0] === "sendAcknowledgeMessage" &&
+		sequence[1] === "sendMessage"
+	) {
+		return ["sendFollowUpMessage"];
+	}
+
+	return [];
+}
+
+function validateAndTrackPublicMessageToolCall(params: {
+	ctx: PipelineToolContext;
+	toolName: PublicMessageToolName;
+}): PipelineToolResult<null> | null {
+	const { ctx, toolName } = params;
+	const currentCount = ctx.runtimeState.publicMessageToolCounts[toolName] ?? 0;
+	if (currentCount >= 1) {
+		return {
+			success: false,
+			error: `${toolName} can only be called once per run`,
+		};
+	}
+
+	const allowedNextTools = getAllowedNextPublicTools(
+		ctx.runtimeState.publicMessageToolSequence
+	);
+	if (!allowedNextTools.includes(toolName)) {
+		return {
+			success: false,
+			error: `Invalid public-message sequence. Allowed next tool(s): ${
+				allowedNextTools.length > 0 ? allowedNextTools.join(", ") : "none"
+			}`,
+		};
+	}
+
+	ctx.runtimeState.publicMessageToolCounts[toolName] = currentCount + 1;
+	ctx.runtimeState.publicMessageToolSequence.push(toolName);
+	return null;
+}
 
 async function invokeTypingCallback(
 	callback: (() => Promise<void>) | undefined,
@@ -43,91 +108,126 @@ async function invokeTypingCallback(
 	}
 }
 
-export function createSendMessageTool(ctx: PipelineToolContext) {
-	let sendChain: Promise<void> = Promise.resolve();
-	let nextCreatedAtMs = Date.now();
+async function executePublicMessageSend(params: {
+	ctx: PipelineToolContext;
+	toolName: PublicMessageToolName;
+	message: string;
+}): Promise<PipelineToolResult<{ messageId: string; created: boolean }>> {
+	const { ctx, toolName, message } = params;
+	if (!ctx.allowPublicMessages) {
+		return {
+			success: false,
+			error: "Public messages are disabled for this generation mode",
+		};
+	}
 
-	const runSequentially = async <T>(run: () => Promise<T>): Promise<T> => {
-		const queued = sendChain.then(run);
-		sendChain = queued.then(
-			() => {},
-			() => {}
-		);
-		return queued;
+	const sequenceError = validateAndTrackPublicMessageToolCall({
+		ctx,
+		toolName,
+	});
+	if (sequenceError) {
+		return {
+			success: false,
+			error: sequenceError.error,
+		};
+	}
+
+	const trimmedMessage = message.trim();
+	if (!trimmedMessage) {
+		return {
+			success: false,
+			error: "Message is empty",
+		};
+	}
+
+	ctx.runtimeState.publicSendSequence += 1;
+	const slot = ctx.runtimeState.publicSendSequence;
+	const createdAt = new Date(Math.max(Date.now(), Date.now() + slot));
+
+	await invokeTypingCallback(ctx.stopTyping, {
+		conversationId: ctx.conversationId,
+		callbackName: "stopTyping",
+	});
+
+	const result = await sendPublicMessage({
+		db: ctx.db,
+		conversationId: ctx.conversationId,
+		organizationId: ctx.organizationId,
+		websiteId: ctx.websiteId,
+		visitorId: ctx.visitorId,
+		aiAgentId: ctx.aiAgentId,
+		text: trimmedMessage,
+		idempotencyKey: `public:${ctx.triggerMessageId}:${toolName}:slot:${slot}`,
+		createdAt,
+	});
+
+	if (result.paused) {
+		return {
+			success: false,
+			error: "AI is paused for this conversation",
+		};
+	}
+
+	if (
+		result.messageId &&
+		!ctx.runtimeState.sentPublicMessageIds.has(result.messageId)
+	) {
+		ctx.runtimeState.sentPublicMessageIds.add(result.messageId);
+		ctx.runtimeState.publicMessagesSent += 1;
+	}
+
+	await invokeTypingCallback(ctx.startTyping, {
+		conversationId: ctx.conversationId,
+		callbackName: "startTyping",
+	});
+
+	return {
+		success: true,
+		data: {
+			messageId: result.messageId,
+			created: result.created,
+		},
 	};
+}
 
+function createPublicMessageTool(params: {
+	ctx: PipelineToolContext;
+	toolName: PublicMessageToolName;
+	description: string;
+}) {
 	return tool({
-		description: "Send a public message visible to the visitor.",
-		inputSchema: sendMessageInputSchema,
+		description: params.description,
+		inputSchema: publicMessageInputSchema,
 		execute: ({ message }) =>
-			runSequentially<
-				PipelineToolResult<{ messageId: string; created: boolean }>
-			>(async () => {
-				if (!ctx.allowPublicMessages) {
-					return {
-						success: false,
-						error: "Public messages are disabled for this generation mode",
-					};
-				}
-
-				const trimmedMessage = message.trim();
-				if (!trimmedMessage) {
-					return {
-						success: false,
-						error: "Message is empty",
-					};
-				}
-
-				ctx.runtimeState.publicSendSequence += 1;
-				const slot = ctx.runtimeState.publicSendSequence;
-				nextCreatedAtMs = Math.max(nextCreatedAtMs + 1, Date.now());
-				const createdAt = new Date(nextCreatedAtMs);
-
-				await invokeTypingCallback(ctx.stopTyping, {
-					conversationId: ctx.conversationId,
-					callbackName: "stopTyping",
-				});
-
-				const result = await sendPublicMessage({
-					db: ctx.db,
-					conversationId: ctx.conversationId,
-					organizationId: ctx.organizationId,
-					websiteId: ctx.websiteId,
-					visitorId: ctx.visitorId,
-					aiAgentId: ctx.aiAgentId,
-					text: trimmedMessage,
-					idempotencyKey: `public:${ctx.triggerMessageId}:slot:${slot}`,
-					createdAt,
-				});
-
-				if (result.paused) {
-					return {
-						success: false,
-						error: "AI is paused for this conversation",
-					};
-				}
-
-				if (
-					result.messageId &&
-					!ctx.runtimeState.sentPublicMessageIds.has(result.messageId)
-				) {
-					ctx.runtimeState.sentPublicMessageIds.add(result.messageId);
-					ctx.runtimeState.publicMessagesSent += 1;
-				}
-
-				await invokeTypingCallback(ctx.startTyping, {
-					conversationId: ctx.conversationId,
-					callbackName: "startTyping",
-				});
-
-				return {
-					success: true,
-					data: {
-						messageId: result.messageId,
-						created: result.created,
-					},
-				};
+			executePublicMessageSend({
+				ctx: params.ctx,
+				toolName: params.toolName,
+				message,
 			}),
+	});
+}
+
+export function createSendAcknowledgeMessageTool(ctx: PipelineToolContext) {
+	return createPublicMessageTool({
+		ctx,
+		toolName: "sendAcknowledgeMessage",
+		description: "Send a short acknowledgement before the main response.",
+	});
+}
+
+export function createSendMessageTool(ctx: PipelineToolContext) {
+	return createPublicMessageTool({
+		ctx,
+		toolName: "sendMessage",
+		description: "Send the main public response to the visitor.",
+	});
+}
+
+export function createSendFollowUpMessageTool(ctx: PipelineToolContext) {
+	return createPublicMessageTool({
+		ctx,
+		toolName: "sendFollowUpMessage",
+		description: "Send one optional follow-up message after the main response.",
 	});
 }
 
@@ -162,16 +262,44 @@ export function createSendPrivateMessageTool(ctx: PipelineToolContext) {
 	});
 }
 
+export const SEND_ACKNOWLEDGE_MESSAGE_TELEMETRY: ToolTelemetrySpec = {
+	summary: {
+		partial: "Sending acknowledgement...",
+		result: "Sent acknowledgement",
+		error: "Failed to send acknowledgement",
+	},
+	progress: {
+		partial: "Sending acknowledgement...",
+		result: "Acknowledgement sent",
+		error: "Failed to send acknowledgement",
+		audience: "all",
+	},
+};
+
 export const SEND_MESSAGE_TELEMETRY: ToolTelemetrySpec = {
 	summary: {
-		partial: "Sending message to visitor...",
-		result: "Sent visitor message",
-		error: "Failed to send visitor message",
+		partial: "Sending main response...",
+		result: "Sent main response",
+		error: "Failed to send main response",
 	},
 	progress: {
 		partial: "Preparing response...",
 		result: "Response sent",
 		error: "Failed to send response",
+		audience: "all",
+	},
+};
+
+export const SEND_FOLLOW_UP_MESSAGE_TELEMETRY: ToolTelemetrySpec = {
+	summary: {
+		partial: "Sending follow-up...",
+		result: "Sent follow-up",
+		error: "Failed to send follow-up",
+	},
+	progress: {
+		partial: "Sending follow-up...",
+		result: "Follow-up sent",
+		error: "Failed to send follow-up",
 		audience: "all",
 	},
 };
@@ -189,3 +317,5 @@ export const SEND_PRIVATE_MESSAGE_TELEMETRY: ToolTelemetrySpec = {
 		audience: "dashboard",
 	},
 };
+
+export { PUBLIC_MESSAGE_TOOL_ORDER };

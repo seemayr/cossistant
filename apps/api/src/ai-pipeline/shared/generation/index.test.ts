@@ -57,6 +57,14 @@ const buildPipelineToolsetMock = mock(
 			runtimeState: {
 				toolCallCounts: Record<string, number>;
 				publicMessagesSent: number;
+				publicMessageToolSequence: Array<
+					"sendAcknowledgeMessage" | "sendMessage" | "sendFollowUpMessage"
+				>;
+				publicMessageToolCounts: {
+					sendAcknowledgeMessage: number;
+					sendMessage: number;
+					sendFollowUpMessage: number;
+				};
 				finalAction: {
 					action: "respond" | "skip";
 					reasoning: string;
@@ -84,6 +92,8 @@ const buildPipelineToolsetMock = mock(
 					execute: async (_input: unknown) => {
 						increment("sendMessage");
 						context.runtimeState.publicMessagesSent += 1;
+						context.runtimeState.publicMessageToolCounts.sendMessage += 1;
+						context.runtimeState.publicMessageToolSequence.push("sendMessage");
 						return {
 							success: true,
 							data: { messageId: `msg-${Date.now()}`, created: true },
@@ -130,12 +140,19 @@ mock.module("@api/lib/ai", () => ({
 	ToolLoopAgent: ToolLoopAgentMock,
 }));
 
-mock.module("@api/ai-agent/settings", () => ({
+mock.module("../settings", () => ({
 	getBehaviorSettings: getBehaviorSettingsMock,
 }));
 
 mock.module("../tools", () => ({
 	buildPipelineToolset: buildPipelineToolsetMock,
+}));
+
+mock.module("../prompt/resolver", () => ({
+	resolvePromptBundle: mock(async () => ({
+		coreDocuments: {},
+		enabledSkills: [],
+	})),
 }));
 
 mock.module("./prompt/builder", () => ({
@@ -317,5 +334,22 @@ describe("runGenerationRuntime", () => {
 		expect(result.failureCode).toBeUndefined();
 		expect(result.attempts).toHaveLength(1);
 		expect(result.attempts?.[0]?.outcome).toBe("completed");
+	});
+
+	it("fails visitor-facing completion when main sendMessage was not called", async () => {
+		queuedGenerateHandlers.push(async ({ options }) => {
+			await options.tools.respond.execute({
+				reasoning: "No public reply sent",
+				confidence: 1,
+			});
+			return { usage: {} };
+		});
+
+		const { runGenerationRuntime } = await modulePromise;
+		const result = await runGenerationRuntime(createInput() as never);
+
+		expect(result.status).toBe("error");
+		expect(result.failureCode).toBe("runtime_error");
+		expect(result.error).toContain("requires sendMessage");
 	});
 });

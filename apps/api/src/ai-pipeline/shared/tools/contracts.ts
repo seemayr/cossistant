@@ -18,6 +18,11 @@ export type ToolRuntimeError = {
 	fatal: boolean;
 };
 
+export type PublicMessageToolName =
+	| "sendAcknowledgeMessage"
+	| "sendMessage"
+	| "sendFollowUpMessage";
+
 export type ToolRuntimeState = {
 	finalAction: CapturedFinalAction | null;
 	publicMessagesSent: number;
@@ -31,6 +36,8 @@ export type ToolRuntimeState = {
 	chargeableToolCallCounts: Record<string, number>;
 	publicSendSequence: number;
 	privateSendSequence: number;
+	publicMessageToolSequence: PublicMessageToolName[];
+	publicMessageToolCounts: Record<PublicMessageToolName, number>;
 	sentPublicMessageIds: Set<string>;
 	lastToolError: ToolRuntimeError | null;
 };

@@ -1,7 +1,7 @@
-import { resolvePromptBundle } from "@api/ai-agent/prompts/resolver";
-import { PROMPT_TEMPLATES } from "@api/ai-agent/prompts/templates";
 import type { Database } from "@api/db";
 import type { AiAgentSelect } from "@api/db/schema/ai-agent";
+import { resolvePromptBundle } from "../../../shared/prompt/resolver";
+import { PROMPT_TEMPLATES } from "../../../shared/prompt/templates";
 
 export type DecisionPolicyResolution = {
 	policy: string;

@@ -208,7 +208,7 @@ describe("tools-studio-utils", () => {
 		);
 		expect(sendMessageTool).toBeDefined();
 		expect(sendMessageTool?.group).toBe("behavior");
-		expect(sendMessageTool?.order).toBe(6);
+		expect(sendMessageTool?.order).toBe(7);
 		expect(sendMessageTool?.enabled).toBe(false);
 		expect(sendMessageTool?.skillContent).toBe("custom send content");
 		expect(sendMessageTool?.skillHasOverride).toBe(true);
@@ -237,7 +237,9 @@ describe("tools-studio-utils", () => {
 		expect(sections.alwaysOnTools.map((tool) => tool.id)).toEqual([
 			"searchKnowledgeBase",
 			"identifyVisitor",
+			"sendAcknowledgeMessage",
 			"sendMessage",
+			"sendFollowUpMessage",
 			"sendPrivateMessage",
 			"respond",
 			"skip",

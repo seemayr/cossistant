@@ -1,13 +1,14 @@
-import { updatePriority } from "@api/ai-agent/actions/update-priority";
-import { updateSentiment } from "@api/ai-agent/actions/update-sentiment";
-import { updateTitle } from "@api/ai-agent/actions/update-title";
 import { tool } from "ai";
 import { z } from "zod";
+import { updatePriority } from "../actions/update-priority";
+import { updateSentiment } from "../actions/update-sentiment";
+import { updateTitle } from "../actions/update-title";
 import type {
 	PipelineToolContext,
 	PipelineToolResult,
 	ToolTelemetrySpec,
 } from "./contracts";
+import { isRecord } from "./internal/guards";
 
 const updateTitleInputSchema = z.object({
 	title: z.string().min(1).max(100),
@@ -93,10 +94,6 @@ export function createSetPriorityTool(ctx: PipelineToolContext) {
 			};
 		},
 	});
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function getTitleFromToolOutput(output: unknown): string | null {

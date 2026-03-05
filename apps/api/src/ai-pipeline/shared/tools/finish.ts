@@ -1,7 +1,7 @@
-import { escalate as escalateAction } from "@api/ai-agent/actions/escalate";
-import { updateStatus } from "@api/ai-agent/actions/update-status";
 import { tool } from "ai";
 import { z } from "zod";
+import { escalate as escalateAction } from "../actions/escalate";
+import { updateStatus } from "../actions/update-status";
 import type {
 	PipelineToolContext,
 	PipelineToolResult,
