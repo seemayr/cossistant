@@ -2,14 +2,23 @@ import { format } from "date-fns";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { JsonLdScripts } from "@/components/seo/json-ld";
 import { AsciiImage } from "@/components/ui/ascii-image";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import Icon from "@/components/ui/icons";
 import { Separator } from "@/components/ui/separator";
-import { BASE_URL } from "@/constants";
-import { blog } from "@/lib/source";
-import { absoluteUrl } from "@/lib/utils";
+import {
+	blogArticle,
+	buildBlogPostingJsonLd,
+	buildBreadcrumbJsonLd,
+} from "@/lib/metadata";
+import {
+	getBlogData,
+	getBlogPostBySlug,
+	getBlogPostSlug,
+	getPublishedBlogPosts,
+} from "@/lib/seo-content";
 import { mdxComponents } from "../../components/docs/mdx-components";
 
 export const revalidate = false;
@@ -17,32 +26,12 @@ export const dynamic = "force-static";
 export const dynamicParams = false;
 
 const DEFAULT_BLOG_IMAGE = "https://cdn.cossistant.com/landing/main-large.jpg";
-
-type BlogPage = ReturnType<typeof blog.getPages>[number];
-
-function getPublishedPosts() {
-	return blog
-		.getPages()
-		.filter((post) => post.data.published !== false)
-		.sort(
-			(a, b) =>
-				new Date(b.data.date).getTime() - new Date(a.data.date).getTime()
-		);
-}
-
-function getPostBySlug(slug: string): BlogPage | undefined {
-	const posts = getPublishedPosts();
-	return posts.find((post) => {
-		// Check custom slug first, then file slug
-		const postSlug = post.data.slug || post.slugs[0];
-		return postSlug === slug;
-	});
-}
+type BlogPage = ReturnType<typeof getPublishedBlogPosts>[number];
 
 export function generateStaticParams() {
-	const posts = getPublishedPosts();
+	const posts = getPublishedBlogPosts();
 	return posts.map((post) => ({
-		slug: post.data.slug || post.slugs[0],
+		slug: getBlogPostSlug(post),
 	}));
 }
 
@@ -50,91 +39,37 @@ export async function generateMetadata(props: {
 	params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
 	const params = await props.params;
-	const post = getPostBySlug(params.slug);
+	const post = getBlogPostBySlug(params.slug);
 
 	if (!post) {
 		return {};
 	}
 
-	const { title, description, image, author, date, canonical, tags } =
-		post.data;
-	const url = absoluteUrl(post.url);
+	const data = getBlogData(post);
+	const { title, description, image, author, date, canonical, tags, keywords } =
+		data;
 
-	return {
+	return blogArticle({
 		title,
 		description,
-		authors: [{ name: author }],
-		keywords: tags,
-		openGraph: {
-			title,
-			description,
-			type: "article",
-			url,
-			publishedTime: date,
-			authors: [author],
-			tags,
-			images: image
-				? [{ url: image, alt: title }]
-				: [
-						{
-							url: `/og?title=${encodeURIComponent(title)}&description=${encodeURIComponent(description)}`,
-						},
-					],
-		},
-		twitter: {
-			card: "summary_large_image",
-			title,
-			description,
-			images: image
-				? [{ url: image, alt: title }]
-				: [
-						{
-							url: `/og?title=${encodeURIComponent(title)}&description=${encodeURIComponent(description)}`,
-						},
-					],
-			creator: "@cossistant",
-		},
-		alternates: {
-			canonical: canonical || url,
-		},
-	};
-}
-
-function generateArticleJsonLd(post: BlogPage) {
-	const { title, description, image, author, date, tags } = post.data;
-
-	return {
-		"@context": "https://schema.org",
-		"@type": "Article",
-		headline: title,
-		description,
-		image: image ? `${BASE_URL}${image}` : undefined,
-		author: {
-			"@type": "Person",
-			name: author,
-		},
-		publisher: {
-			"@type": "Organization",
-			name: "Cossistant",
-			logo: {
-				"@type": "ImageObject",
-				url: `${BASE_URL}/logo-email.png`,
-			},
-		},
-		datePublished: date,
-		dateModified: date,
-		mainEntityOfPage: {
-			"@type": "WebPage",
-			"@id": absoluteUrl(post.url),
-		},
-		keywords: tags.join(", "),
-	};
+		path: post.url,
+		canonical,
+		image:
+			image ||
+			`/og?title=${encodeURIComponent(title)}&description=${encodeURIComponent(description)}`,
+		keywords,
+		tags,
+		authors: [author],
+		publishedTime: date,
+		modifiedTime: data.updatedAt ?? date,
+		noIndex: data.noindex,
+	});
 }
 
 function RelatedArticles({ slugs }: { slugs: string[] }) {
-	const posts = getPublishedPosts();
+	const posts = getPublishedBlogPosts();
 	const relatedPosts = slugs
-		.map((slug) => posts.find((p) => (p.data.slug || p.slugs[0]) === slug))
+		.map((slug) => posts.find((post) => getBlogPostSlug(post) === slug))
 		.filter((p): p is BlogPage => p !== undefined)
 		.slice(0, 3);
 
@@ -147,7 +82,8 @@ function RelatedArticles({ slugs }: { slugs: string[] }) {
 			<h2 className="mb-6 font-medium text-xl">Related Articles</h2>
 			<div className="grid gap-4 md:grid-cols-3">
 				{relatedPosts.map((post) => {
-					const date = new Date(post.data.date);
+					const relatedPost = getBlogData(post);
+					const date = new Date(relatedPost.date);
 					return (
 						<Link
 							className="group flex flex-col gap-3 border border-primary/10 border-dashed bg-background-50 p-5 transition-colors hover:bg-background-100 dark:bg-background-100 dark:hover:bg-background-200"
@@ -155,14 +91,14 @@ function RelatedArticles({ slugs }: { slugs: string[] }) {
 							key={post.url}
 						>
 							<h3 className="line-clamp-2 font-medium tracking-tight transition-colors group-hover:text-primary">
-								{post.data.title}
+								{relatedPost.title}
 							</h3>
 							<p className="line-clamp-2 text-muted-foreground text-sm">
-								{post.data.description}
+								{relatedPost.description}
 							</p>
 							<time
 								className="mt-auto font-mono text-muted-foreground text-xs"
-								dateTime={post.data.date}
+								dateTime={relatedPost.date}
 							>
 								{format(date, "MMM d, yyyy")}
 							</time>
@@ -178,34 +114,47 @@ export default async function BlogPostPage(props: {
 	params: Promise<{ slug: string }>;
 }) {
 	const params = await props.params;
-	const post = getPostBySlug(params.slug);
+	const post = getBlogPostBySlug(params.slug);
 
 	if (!post) {
 		notFound();
 	}
 
-	const { title, description, image, author, date, tags, related } = post.data;
+	const data = getBlogData(post);
+	const { title, description, image, author, date, tags, related } = data;
 	const MDX = post.data.body;
 	const formattedDate = format(new Date(date), "MMMM d, yyyy");
 
 	// Find prev/next posts for navigation
-	const allPosts = getPublishedPosts();
+	const allPosts = getPublishedBlogPosts();
 	const currentIndex = allPosts.indexOf(post);
 	const prevPost =
 		currentIndex < allPosts.length - 1 ? allPosts[currentIndex + 1] : null;
 	const nextPost = currentIndex > 0 ? allPosts[currentIndex - 1] : null;
 
-	const jsonLd = generateArticleJsonLd(post);
-
 	return (
 		<>
-			<script
-				// biome-ignore lint/security/noDangerouslySetInnerHtml: JSON-LD structured data is safe, controlled server-side content
-				dangerouslySetInnerHTML={{
-					__html: JSON.stringify(jsonLd),
-				}}
-				id="article-jsonld"
-				type="application/ld+json"
+			<JsonLdScripts
+				data={[
+					buildBlogPostingJsonLd({
+						title,
+						description,
+						path: post.url,
+						image:
+							image ||
+							`/og?title=${encodeURIComponent(title)}&description=${encodeURIComponent(description)}`,
+						author,
+						publishedTime: date,
+						modifiedTime: data.updatedAt ?? date,
+						tags,
+					}),
+					buildBreadcrumbJsonLd([
+						{ name: "Home", path: "/" },
+						{ name: "Blog", path: "/blog" },
+						{ name: title, path: post.url },
+					]),
+				]}
+				idPrefix="blog-article-jsonld"
 			/>
 			<article className="flex flex-col py-20 pb-40">
 				<div className="mx-auto w-full max-w-3xl px-4 md:px-0">

@@ -1,10 +1,11 @@
 import { format } from "date-fns";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { JsonLdScripts } from "@/components/seo/json-ld";
 import { Button } from "@/components/ui/button";
 import Icon from "@/components/ui/icons";
-import { changelog } from "@/lib/source";
-import { absoluteUrl } from "@/lib/utils";
+import { buildCollectionPageJsonLd, changelogCollection } from "@/lib/metadata";
+import { getChangelogData, getSortedChangelogEntries } from "@/lib/seo-content";
 import { mdxComponents } from "../../../components/docs/mdx-components";
 
 export const revalidate = false;
@@ -14,7 +15,7 @@ export const dynamicParams = false;
 const ITEMS_PER_PAGE = 10;
 
 export function generateStaticParams() {
-	const allEntries = changelog.getPages();
+	const allEntries = getSortedChangelogEntries();
 	const totalPages = Math.ceil(allEntries.length / ITEMS_PER_PAGE);
 
 	// Only generate pages 2+ (page 1 is at /changelog)
@@ -37,32 +38,14 @@ export async function generateMetadata(props: {
 	const description =
 		"All the latest updates, improvements, and fixes to Cossistant.";
 
-	return {
+	return changelogCollection({
 		title,
 		description,
-		openGraph: {
-			title,
-			description,
-			type: "website",
-			url: absoluteUrl(`/changelog/page/${pageNumber}`),
-			images: [
-				{
-					url: `/og?title=${encodeURIComponent(title)}&description=${encodeURIComponent(description)}`,
-				},
-			],
-		},
-		twitter: {
-			card: "summary_large_image",
-			title,
-			description,
-			images: [
-				{
-					url: `/og?title=${encodeURIComponent(title)}&description=${encodeURIComponent(description)}`,
-				},
-			],
-			creator: "@cossistant",
-		},
-	};
+		path: `/changelog/page/${pageNumber}`,
+		image: `/og?title=${encodeURIComponent(title)}&description=${encodeURIComponent(description)}`,
+		noIndex: true,
+		follow: true,
+	});
 }
 
 export default async function ChangelogPaginatedPage(props: {
@@ -76,12 +59,7 @@ export default async function ChangelogPaginatedPage(props: {
 		redirect("/changelog");
 	}
 
-	const allEntries = changelog
-		.getPages()
-		.sort(
-			(a, b) =>
-				new Date(b.data.date).getTime() - new Date(a.data.date).getTime()
-		);
+	const allEntries = getSortedChangelogEntries();
 
 	const totalPages = Math.ceil(allEntries.length / ITEMS_PER_PAGE);
 
@@ -100,6 +78,15 @@ export default async function ChangelogPaginatedPage(props: {
 
 	return (
 		<div className="flex flex-col py-20 pb-40">
+			<JsonLdScripts
+				data={buildCollectionPageJsonLd({
+					title: `Changelog - Page ${pageNumber}`,
+					description:
+						"All the latest updates, improvements, and fixes to Cossistant.",
+					path: `/changelog/page/${pageNumber}`,
+				})}
+				idPrefix="changelog-page-jsonld"
+			/>
 			<div className="mx-auto w-full max-w-3xl px-4 md:px-0">
 				<header className="mb-16">
 					<h1 className="font-medium text-4xl tracking-tight">Changelog</h1>
@@ -110,8 +97,9 @@ export default async function ChangelogPaginatedPage(props: {
 
 				<div className="flex flex-col">
 					{entries.map((entry) => {
+						const entryData = getChangelogData(entry);
 						const MDX = entry.data.body;
-						const date = new Date(entry.data.date);
+						const date = new Date(entryData.date);
 
 						return (
 							<article className="relative pb-16" key={entry.url}>
@@ -121,15 +109,15 @@ export default async function ChangelogPaginatedPage(props: {
 										<div className="flex items-center gap-3 md:flex-col md:items-start md:gap-1">
 											<a
 												className="inline-flex items-center rounded-sm bg-background-300 px-2.5 py-1 font-mono text-sm transition-colors hover:bg-background-400 dark:bg-background-400 dark:hover:bg-background-500"
-												href={`https://www.npmjs.com/package/@cossistant/react/v/${entry.data.version}`}
+												href={`https://www.npmjs.com/package/@cossistant/react/v/${entryData.version}`}
 												rel="noopener noreferrer"
 												target="_blank"
 											>
-												{entry.data.version}
+												{entryData.version}
 											</a>
 											<time
 												className="text-muted-foreground text-sm"
-												dateTime={entry.data.date}
+												dateTime={entryData.date}
 											>
 												{format(date, "MMM d, yyyy")}
 											</time>
@@ -139,7 +127,7 @@ export default async function ChangelogPaginatedPage(props: {
 									{/* Content */}
 									<div className="min-w-0 flex-1">
 										<h2 className="mb-6 font-medium text-xl">
-											{entry.data.description}
+											{entryData.description}
 										</h2>
 										<div className="w-full flex-1 *:data-[slot=alert]:first:mt-0">
 											<MDX components={mdxComponents} />

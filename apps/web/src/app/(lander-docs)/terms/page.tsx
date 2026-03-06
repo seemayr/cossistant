@@ -1,12 +1,13 @@
-import type { Metadata } from "next";
 import Link from "next/link";
+import { marketing } from "@/lib/metadata";
 import { LegalPageLayout } from "../components/legal-page-layout";
 
-export const metadata: Metadata = {
-	title: "Terms of Service - Cossistant",
+export const metadata = marketing({
+	title: "Terms of Service",
 	description:
 		"Terms and conditions for using Cossistant's support infrastructure platform.",
-};
+	path: "/terms",
+});
 
 const sections = [
 	{

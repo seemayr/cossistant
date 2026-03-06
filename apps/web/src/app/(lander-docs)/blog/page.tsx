@@ -1,13 +1,15 @@
 import { format } from "date-fns";
 import Image from "next/image";
 import Link from "next/link";
+import { JsonLdScripts } from "@/components/seo/json-ld";
 import { AsciiImage } from "@/components/ui/ascii-image";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import Icon from "@/components/ui/icons";
 import { ANTHONY_AVATAR } from "@/constants";
-import { blog } from "@/lib/source";
-import { absoluteUrl, cn } from "@/lib/utils";
+import { blogCollection, buildCollectionPageJsonLd } from "@/lib/metadata";
+import { getAllBlogTags, getPublishedBlogPosts } from "@/lib/seo-content";
+import { cn } from "@/lib/utils";
 
 const AUTHOR_AVATARS: Record<string, string> = {
 	"Anthony Riera": ANTHONY_AVATAR,
@@ -24,56 +26,20 @@ export function generateMetadata() {
 	const description =
 		"Insights, tutorials, and updates about AI-powered customer support and the Cossistant platform.";
 
-	return {
+	return blogCollection({
 		title,
 		description,
-		openGraph: {
-			title,
-			description,
-			type: "website",
-			url: absoluteUrl("/blog"),
-			images: [
-				{
-					url: `/og?title=${encodeURIComponent(title)}&description=${encodeURIComponent(description)}`,
-				},
-			],
-		},
-		twitter: {
-			card: "summary_large_image",
-			title,
-			description,
-			images: [
-				{
-					url: `/og?title=${encodeURIComponent(title)}&description=${encodeURIComponent(description)}`,
-				},
-			],
-			creator: "@cossistant",
-		},
-	};
+		path: "/blog",
+		image: `/og?title=${encodeURIComponent(title)}&description=${encodeURIComponent(description)}`,
+		keywords: [
+			"Cossistant blog",
+			"AI support tutorials",
+			"React support guides",
+		],
+	});
 }
 
-type BlogPage = ReturnType<typeof blog.getPages>[number];
-
-function getPublishedPosts() {
-	return blog
-		.getPages()
-		.filter((post) => post.data.published !== false)
-		.sort(
-			(a, b) =>
-				new Date(b.data.date).getTime() - new Date(a.data.date).getTime()
-		);
-}
-
-function getAllTags(): string[] {
-	const posts = getPublishedPosts();
-	const tags = new Set<string>();
-	for (const post of posts) {
-		for (const tag of post.data.tags) {
-			tags.add(tag);
-		}
-	}
-	return Array.from(tags);
-}
+type BlogPage = ReturnType<typeof getPublishedBlogPosts>[number];
 
 function BlogHero({ post }: { post: BlogPage }) {
 	const date = new Date(post.data.date);
@@ -203,7 +169,7 @@ export const Section = ({
 );
 
 export default function BlogPage() {
-	const allPosts = getPublishedPosts();
+	const allPosts = getPublishedBlogPosts();
 
 	// Find the most recent top post for hero, or use the most recent post
 	const topPosts = allPosts.filter((post) => post.data.top);
@@ -220,13 +186,22 @@ export default function BlogPage() {
 
 	return (
 		<div className="flex flex-col py-20 pb-40">
+			<JsonLdScripts
+				data={buildCollectionPageJsonLd({
+					title: "Blog",
+					description:
+						"Insights, tutorials, and updates about AI-powered customer support and the Cossistant platform.",
+					path: "/blog",
+				})}
+				idPrefix="blog-collection-jsonld"
+			/>
 			<div className="mx-auto mt-10 w-full max-w-5xl px-4 md:px-0">
 				{/* Header */}
 				<header className="mb-12">
 					<h1 className="mb-6 font-medium text-4xl tracking-tight">Blog</h1>
 					{/* Tag Filters */}
 					<div className="flex flex-wrap gap-2">
-						{getAllTags().map((tag) => (
+						{getAllBlogTags().map((tag) => (
 							<Badge asChild key={tag} variant="secondary">
 								<Link href={`/blog/tag/${encodeURIComponent(tag)}`}>{tag}</Link>
 							</Badge>

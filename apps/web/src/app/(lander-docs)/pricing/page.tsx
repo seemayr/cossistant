@@ -6,9 +6,9 @@ import {
 	PLAN_CONFIG,
 } from "@api/lib/plans/config";
 import { Check, Info, X } from "lucide-react";
-import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { JsonLdScripts } from "@/components/seo/json-ld";
 import {
 	Accordion,
 	AccordionContent,
@@ -19,13 +19,24 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 import { TooltipOnHover } from "@/components/ui/tooltip";
+import {
+	buildOrganizationJsonLd,
+	buildSoftwareApplicationJsonLd,
+	marketing,
+} from "@/lib/metadata";
 import { PromoBannerOrnaments } from "./promo-banner-ornaments";
 import { PromoIndicator } from "./promo-indicator";
 
-export const metadata: Metadata = {
-	title: "Pricing - Cossistant",
+export const metadata = marketing({
+	title: "Pricing",
 	description: "Simple, transparent pricing for your customer support needs.",
-};
+	path: "/pricing",
+	keywords: [
+		"Cossistant pricing",
+		"support widget pricing",
+		"AI support pricing",
+	],
+});
 
 const FeatureHeader = ({ featureKey }: { featureKey: FeatureKey }) => {
 	const featureConfig = FEATURE_CONFIG[featureKey];
@@ -168,6 +179,18 @@ export default function PricingPage() {
 
 	return (
 		<div className="flex flex-col pt-40">
+			<JsonLdScripts
+				data={[
+					buildOrganizationJsonLd(),
+					buildSoftwareApplicationJsonLd({
+						title: "Cossistant Pricing",
+						description:
+							"Simple, transparent pricing for the Cossistant AI and human support framework.",
+						path: "/pricing",
+					}),
+				]}
+				idPrefix="pricing-jsonld"
+			/>
 			<div className="mx-auto max-w-2xl text-center">
 				<h1 className="font-f37-stout text-4xl leading-tight md:text-6xl">
 					Pricing

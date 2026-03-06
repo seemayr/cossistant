@@ -6,7 +6,7 @@ import Script from "next/script";
 import "./globals.css";
 
 import { Toaster } from "@/components/ui/sonner";
-import { generateSiteMetadata } from "@/lib/metadata";
+import { createRootMetadata } from "@/lib/metadata";
 import { Providers } from "./providers";
 
 const geistSans = Geist({
@@ -33,7 +33,7 @@ const F37Stout = localFont({
 	display: "swap",
 });
 
-export const metadata = generateSiteMetadata();
+export const metadata = createRootMetadata();
 
 export const viewport = {
 	width: "device-width",

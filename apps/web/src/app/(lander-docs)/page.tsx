@@ -2,9 +2,15 @@ import { SupportConfig } from "@cossistant/react/support-config";
 import { SenderType } from "@cossistant/types";
 import Link from "next/link";
 import { FakeDashboard } from "@/components/landing/fake-dashboard";
+import { JsonLdScripts } from "@/components/seo/json-ld";
 import { Button } from "@/components/ui/button";
 import { Logos } from "@/components/ui/logos";
 import { TooltipOnHover } from "@/components/ui/tooltip";
+import {
+	buildOrganizationJsonLd,
+	buildSoftwareApplicationJsonLd,
+	marketing,
+} from "@/lib/metadata";
 import { AnimationControls } from "./components/animation-controls";
 import { Benefits } from "./components/benefits";
 import { BrowserWithBackground } from "./components/browser-with-background";
@@ -13,9 +19,32 @@ import { Install } from "./components/install";
 
 export const dynamic = "force-dynamic";
 
+export const metadata = marketing({
+	title: "AI Support Framework for React and Next.js",
+	description:
+		"Cossistant is the open-source AI and human support framework for React and Next.js apps, with programmable actions, custom UI, and code-first workflows.",
+	path: "/",
+	keywords: [
+		"React support widget",
+		"Next.js support widget",
+		"AI support framework",
+		"customer support infrastructure",
+	],
+});
+
 export default async function Landing() {
 	return (
 		<>
+			<JsonLdScripts
+				data={[
+					buildOrganizationJsonLd(),
+					buildSoftwareApplicationJsonLd({
+						description:
+							"Cossistant is the open-source AI and human support framework for React and Next.js apps, with programmable actions and custom UI.",
+					}),
+				]}
+				idPrefix="landing-jsonld"
+			/>
 			<SupportConfig
 				defaultMessages={[
 					{

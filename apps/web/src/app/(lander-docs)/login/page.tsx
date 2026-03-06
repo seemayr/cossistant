@@ -1,12 +1,13 @@
 import { LoginForm } from "@/app/(lander-docs)/components/login-form";
 import { FakeSupportWidget } from "@/components/landing/fake-support-widget";
 import { BackgroundImage } from "@/components/ui/background-image";
-import { generateSiteMetadata } from "@/lib/metadata";
+import { utilityNoindex } from "@/lib/metadata";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = generateSiteMetadata({
+export const metadata = utilityNoindex({
 	title: "Sign in",
+	path: "/login",
 });
 
 export default function LoginPage() {
