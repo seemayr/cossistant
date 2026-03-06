@@ -150,7 +150,6 @@ export function buildToolContext(params: {
 		pipelineKind: input.pipelineKind,
 		mode: input.mode,
 		isEscalated: input.conversationState.isEscalated,
-		startTyping: input.startTyping,
 		stopTyping: input.stopTyping,
 		runtimeState,
 		debugLogger: input.debugLogger,

@@ -58,7 +58,6 @@ export type GenerationRuntimeInput = {
 	triggerSenderType?: "visitor" | "human_agent" | "ai_agent";
 	triggerVisibility?: "public" | "private";
 	allowPublicMessages: boolean;
-	startTyping?: () => Promise<void>;
 	stopTyping?: () => Promise<void>;
 	abortSignal?: AbortSignal;
 	debugLogger?: PipelineToolLogger;

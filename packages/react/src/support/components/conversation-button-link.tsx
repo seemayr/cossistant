@@ -1,7 +1,11 @@
 import { type Conversation, ConversationStatus } from "@cossistant/types";
 import type React from "react";
-import { useConversationPreview } from "../../hooks/use-conversation-preview";
+import {
+	type ConversationPreviewLastMessage,
+	useConversationPreview,
+} from "../../hooks/use-conversation-preview";
 import { type SupportTextKey, useSupportText } from "../text";
+import type { SupportTextResolvedFormatter } from "../text/locales/keys";
 import { cn } from "../utils";
 import { Avatar } from "./avatar";
 import { coButtonVariants } from "./button";
@@ -29,6 +33,79 @@ const STATUS_TEXT_KEYS: Record<ConversationStatus, SupportTextKey> = {
 		"component.conversationButtonLink.status.resolved",
 	[ConversationStatus.SPAM]: "component.conversationButtonLink.status.spam",
 };
+
+type ConversationButtonPreviewSelection = {
+	subtitle: string | null;
+	showTyping: boolean;
+};
+
+type ConversationButtonPreviewMessage = Pick<
+	ConversationPreviewLastMessage,
+	"content" | "time" | "isFromVisitor" | "senderName"
+>;
+
+function normalizePreviewText(value: string | null | undefined): string {
+	return value?.trim().replace(/\s+/g, " ") ?? "";
+}
+
+export function resolveConversationButtonPreviewSelection({
+	title,
+	lastMessage,
+	isTyping,
+	text,
+}: {
+	title: string;
+	lastMessage: ConversationButtonPreviewMessage | null;
+	isTyping: boolean;
+	text: SupportTextResolvedFormatter;
+}): ConversationButtonPreviewSelection {
+	if (isTyping) {
+		return {
+			subtitle: null,
+			showTyping: true,
+		};
+	}
+
+	if (!lastMessage) {
+		return {
+			subtitle: null,
+			showTyping: false,
+		};
+	}
+
+	const normalizedMessage = normalizePreviewText(lastMessage.content);
+
+	if (!normalizedMessage) {
+		return {
+			subtitle: null,
+			showTyping: false,
+		};
+	}
+
+	if (normalizePreviewText(title) !== normalizedMessage) {
+		return {
+			subtitle: lastMessage.content,
+			showTyping: false,
+		};
+	}
+
+	if (lastMessage.isFromVisitor) {
+		return {
+			subtitle: text("component.conversationButtonLink.lastMessage.visitor", {
+				time: lastMessage.time,
+			}),
+			showTyping: false,
+		};
+	}
+
+	return {
+		subtitle: text("component.conversationButtonLink.lastMessage.agent", {
+			name: lastMessage.senderName ?? text("common.fallbacks.unknown"),
+			time: lastMessage.time,
+		}),
+		showTyping: false,
+	};
+}
 
 /**
  * Renders a navigable preview card for a conversation including assigned agent
@@ -58,11 +135,13 @@ export function ConversationButtonLink({
 			? text(statusTextKey)
 			: text("common.fallbacks.unknown");
 
-	// Show the actual title if it exists, otherwise use the preview title (which may fallback to message)
-	const displayTitle = conversation.title || preview.title;
-
-	// Show the truncated message content as secondary text
-	const messagePreview = lastMessage?.content || null;
+	const displayTitle = preview.title;
+	const previewSelection = resolveConversationButtonPreviewSelection({
+		title: displayTitle,
+		lastMessage,
+		isTyping: typing.isTyping,
+		text,
+	});
 
 	return (
 		<button
@@ -92,11 +171,11 @@ export function ConversationButtonLink({
 						{displayTitle}
 					</h3>
 				</div>
-				{typing.isTyping ? (
+				{previewSelection.showTyping ? (
 					<BouncingDots />
-				) : messagePreview ? (
+				) : previewSelection.subtitle ? (
 					<p className="truncate text-co-primary/60 text-sm">
-						{messagePreview}
+						{previewSelection.subtitle}
 					</p>
 				) : null}
 			</div>

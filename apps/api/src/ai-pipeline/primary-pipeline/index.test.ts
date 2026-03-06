@@ -52,15 +52,25 @@ const emitPipelineGenerationProgressMock = mock(async () => {});
 const emitPipelineToolProgressMock = mock(async () => {});
 const emitPipelineTypingStartMock = mock(async () => {});
 const emitPipelineTypingStopMock = mock(async () => {});
+const typingHeartbeatStartMock = mock(() => {});
+const typingHeartbeatStopMock = mock(() => {});
 
 class PipelineTypingHeartbeatMock {
 	private isRunning = false;
 
 	async start() {
+		if (this.isRunning) {
+			return;
+		}
+		typingHeartbeatStartMock();
 		this.isRunning = true;
 	}
 
 	async stop() {
+		if (!this.isRunning) {
+			return;
+		}
+		typingHeartbeatStopMock();
 		this.isRunning = false;
 	}
 
@@ -124,6 +134,8 @@ describe("runPrimaryPipeline generation error/skip behavior", () => {
 		emitPipelineToolProgressMock.mockClear();
 		emitPipelineTypingStartMock.mockClear();
 		emitPipelineTypingStopMock.mockClear();
+		typingHeartbeatStartMock.mockClear();
+		typingHeartbeatStopMock.mockClear();
 
 		runIntakeStepMock.mockResolvedValue({
 			status: "ready",
@@ -324,5 +336,44 @@ describe("runPrimaryPipeline generation error/skip behavior", () => {
 
 		expect(result.status).toBe("error");
 		expect(result.retryable).toBe(true);
+	});
+
+	it("starts typing once, exposes only stopTyping to generation, and does not restart after a public send", async () => {
+		runGenerationRuntimeMock.mockImplementationOnce(async (input) => {
+			const runtimeInput = input as {
+				startTyping?: unknown;
+				stopTyping?: () => Promise<void>;
+			};
+
+			expect(runtimeInput.startTyping).toBeUndefined();
+			expect(typeof runtimeInput.stopTyping).toBe("function");
+
+			await runtimeInput.stopTyping?.();
+
+			return {
+				status: "completed",
+				action: {
+					action: "respond",
+					reasoning: "ok",
+					confidence: 1,
+				},
+				publicMessagesSent: 1,
+				toolCallsByName: {
+					sendMessage: 1,
+					respond: 1,
+				},
+				totalToolCalls: 2,
+			};
+		});
+
+		const { runPrimaryPipeline } = await modulePromise;
+		const result = await runPrimaryPipeline({
+			db: {} as never,
+			input: baseInput,
+		});
+
+		expect(result.status).toBe("completed");
+		expect(typingHeartbeatStartMock).toHaveBeenCalledTimes(1);
+		expect(typingHeartbeatStopMock).toHaveBeenCalledTimes(1);
 	});
 });

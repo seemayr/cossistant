@@ -53,7 +53,6 @@ function buildGenerationRuntimeInput(params: {
 		triggerSenderType: trigger?.senderType,
 		triggerVisibility: trigger?.visibility,
 		allowPublicMessages: decision.mode !== "background_only",
-		startTyping: typingControls.startTyping,
 		stopTyping: typingControls.stopTyping,
 		debugLogger: params.debugLogger,
 		deepTraceEnabled: params.deepTraceEnabled,

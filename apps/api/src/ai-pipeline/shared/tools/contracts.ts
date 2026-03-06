@@ -98,7 +98,6 @@ export type PipelineToolContext = {
 	pipelineKind: PipelineKind;
 	mode: GenerationMode;
 	isEscalated: boolean;
-	startTyping?: () => Promise<void>;
 	stopTyping?: () => Promise<void>;
 	runtimeState: ToolRuntimeState;
 	debugLogger?: PipelineToolLogger;

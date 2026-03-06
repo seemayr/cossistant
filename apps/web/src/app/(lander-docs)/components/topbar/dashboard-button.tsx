@@ -2,8 +2,6 @@
 
 import Link from "next/link";
 
-import { Avatar } from "@/components/ui/avatar";
-
 import { Button } from "@/components/ui/button";
 import { TopbarButton } from "@/components/ui/topbar-button";
 import { authClient } from "@/lib/auth/client";

@@ -81,7 +81,7 @@ async function invokeTypingCallback(
 	callback: (() => Promise<void>) | undefined,
 	params: {
 		conversationId: string;
-		callbackName: "startTyping" | "stopTyping";
+		callbackName: "stopTyping";
 	}
 ): Promise<void> {
 	if (!callback) {
@@ -167,11 +167,6 @@ async function executePublicMessageSend(params: {
 		ctx.runtimeState.sentPublicMessageIds.add(result.messageId);
 		ctx.runtimeState.publicMessagesSent += 1;
 	}
-
-	await invokeTypingCallback(ctx.startTyping, {
-		conversationId: ctx.conversationId,
-		callbackName: "startTyping",
-	});
 
 	return {
 		success: true,

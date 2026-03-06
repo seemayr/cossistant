@@ -208,4 +208,58 @@ describe("public messaging tool contract", () => {
 		expect(ctx.runtimeState.publicSendSequence).toBe(1);
 		expect(sendPublicMessageMock).toHaveBeenCalledTimes(2);
 	});
+
+	it("stops typing before a successful send and never restarts it", async () => {
+		const { createSendMessageTool } = await modulePromise;
+		const stopTypingMock = mock(async () => {});
+		const startTypingMock = mock(async () => {});
+		const ctx = createContext() as PipelineToolContext & {
+			startTyping?: () => Promise<void>;
+		};
+		ctx.stopTyping = stopTypingMock;
+		ctx.startTyping = startTypingMock;
+
+		const main = createSendMessageTool(ctx);
+		if (!main.execute) {
+			throw new Error("Expected execute handler for sendMessage tool");
+		}
+
+		const result = await resolveToolResult(
+			await main.execute({ message: "Answer" } as never, {} as never)
+		);
+
+		expect(result.success).toBe(true);
+		expect(stopTypingMock).toHaveBeenCalledTimes(1);
+		expect(startTypingMock).not.toHaveBeenCalled();
+	});
+
+	it("does not restart typing after a paused send", async () => {
+		const { createSendMessageTool } = await modulePromise;
+		const stopTypingMock = mock(async () => {});
+		const startTypingMock = mock(async () => {});
+		const ctx = createContext() as PipelineToolContext & {
+			startTyping?: () => Promise<void>;
+		};
+		ctx.stopTyping = stopTypingMock;
+		ctx.startTyping = startTypingMock;
+
+		sendPublicMessageMock.mockResolvedValueOnce({
+			messageId: "msg-paused",
+			created: false,
+			paused: true,
+		});
+
+		const main = createSendMessageTool(ctx);
+		if (!main.execute) {
+			throw new Error("Expected execute handler for sendMessage tool");
+		}
+
+		const result = await resolveToolResult(
+			await main.execute({ message: "Answer" } as never, {} as never)
+		);
+
+		expect(result.success).toBe(false);
+		expect(stopTypingMock).toHaveBeenCalledTimes(1);
+		expect(startTypingMock).not.toHaveBeenCalled();
+	});
 });
