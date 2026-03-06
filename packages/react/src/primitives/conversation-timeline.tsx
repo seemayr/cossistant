@@ -31,6 +31,7 @@ export type ConversationTimelineProps = Omit<
 	isLoading?: boolean;
 	hasMore?: boolean;
 	autoScroll?: boolean;
+	maskHeight?: string;
 	onScrollEnd?: () => void;
 	onScrollStart?: () => void;
 };
@@ -69,6 +70,7 @@ export const ConversationTimeline = (() => {
 				isLoading = false,
 				hasMore = false,
 				autoScroll = true,
+				maskHeight,
 				onScrollEnd,
 				onScrollStart,
 				style: styleProp,
@@ -79,7 +81,7 @@ export const ConversationTimeline = (() => {
 		) => {
 			const internalRef = React.useRef<HTMLDivElement>(null);
 			const { ref: scrollMaskRef, style: scrollMaskStyle } = useScrollMask({
-				maskHeight: "54px",
+				maskHeight: maskHeight ?? "54px",
 				scrollbarWidth: "8px",
 				topThreshold: TOP_THRESHOLD_PX,
 				bottomThreshold: BOTTOM_THRESHOLD_PX,
