@@ -22,6 +22,7 @@ import {
 	countTotalToolCalls,
 	createToolRuntimeState,
 } from "./internal/runtime-utils";
+import { writeGenerationSystemPromptDebugDump } from "./internal/system-prompt-debug-dump";
 import { formatHistoryForGeneration } from "./messages/format-history";
 import { buildGenerationSystemPrompt } from "./prompt/builder";
 
@@ -158,6 +159,10 @@ export async function runGenerationRuntime(
 		toolset: baseToolsetResolution.tools,
 		toolNames: baseToolsetResolution.toolNames,
 		toolSkills: runtimeToolSkills,
+	});
+	await writeGenerationSystemPromptDebugDump({
+		input,
+		systemPrompt,
 	});
 	const messages = formatHistoryForGeneration(
 		input.conversationHistory,

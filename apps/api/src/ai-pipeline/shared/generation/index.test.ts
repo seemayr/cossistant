@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
+import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
 
 const createModelMock = mock((modelId: string) => modelId);
 const hasToolCallMock = mock((_toolName: string) => () => false);
@@ -167,6 +169,32 @@ mock.module("../events", () => ({
 }));
 
 const modulePromise = import("./index");
+const SYSTEM_PROMPT_DEBUG_DIR = resolve(
+	import.meta.dir,
+	"../../../../debug/system-prompts"
+);
+const originalNodeEnv = process.env.NODE_ENV;
+
+function getSystemPromptFilePath(
+	conversationId = "conv-1",
+	triggerMessageId = "msg-trigger-1"
+): string {
+	return join(
+		SYSTEM_PROMPT_DEBUG_DIR,
+		conversationId,
+		triggerMessageId,
+		"system-prompt.md"
+	);
+}
+
+async function fileExists(path: string): Promise<boolean> {
+	try {
+		await access(path);
+		return true;
+	} catch {
+		return false;
+	}
+}
 
 function createAbortError(): Error {
 	const error = new Error("aborted");
@@ -212,6 +240,7 @@ function createInput(overrides: Partial<Record<string, unknown>> = {}) {
 describe("runGenerationRuntime", () => {
 	beforeEach(() => {
 		queuedGenerateHandlers.length = 0;
+		process.env.NODE_ENV = "test";
 		createModelMock.mockClear();
 		hasToolCallMock.mockClear();
 		stepCountIsMock.mockClear();
@@ -220,6 +249,107 @@ describe("runGenerationRuntime", () => {
 		buildPipelineToolsetMock.mockClear();
 		logAiPipelineMock.mockClear();
 		emitPipelineGenerationProgressMock.mockClear();
+	});
+
+	afterEach(async () => {
+		process.env.NODE_ENV = originalNodeEnv;
+		await rm(SYSTEM_PROMPT_DEBUG_DIR, { recursive: true, force: true });
+	});
+
+	it("writes the exact final system prompt to the non-production debug path", async () => {
+		let capturedSystemPrompt = "";
+		queuedGenerateHandlers.push(async ({ options }) => {
+			capturedSystemPrompt = options.instructions;
+			await options.tools.skip.execute({ reasoning: "Nothing to do" });
+			return { usage: {} };
+		});
+
+		const { runGenerationRuntime } = await modulePromise;
+		const result = await runGenerationRuntime(createInput() as never);
+
+		expect(result.status).toBe("completed");
+		expect(capturedSystemPrompt.length).toBeGreaterThan(0);
+		expect(await readFile(getSystemPromptFilePath(), "utf8")).toBe(
+			capturedSystemPrompt
+		);
+	});
+
+	it("does not write a system prompt dump in production", async () => {
+		process.env.NODE_ENV = "production";
+		queuedGenerateHandlers.push(async ({ options }) => {
+			await options.tools.skip.execute({ reasoning: "Nothing to do" });
+			return { usage: {} };
+		});
+
+		const { runGenerationRuntime } = await modulePromise;
+		const result = await runGenerationRuntime(createInput() as never);
+
+		expect(result.status).toBe("completed");
+		expect(await fileExists(getSystemPromptFilePath())).toBe(false);
+	});
+
+	it("overwrites the existing system prompt dump for the same trigger", async () => {
+		const { runGenerationRuntime } = await modulePromise;
+		let firstPrompt = "";
+		let secondPrompt = "";
+
+		queuedGenerateHandlers.push(async ({ options }) => {
+			firstPrompt = options.instructions;
+			await options.tools.skip.execute({ reasoning: "Nothing to do" });
+			return { usage: {} };
+		});
+		await runGenerationRuntime(createInput() as never);
+
+		queuedGenerateHandlers.push(async ({ options }) => {
+			secondPrompt = options.instructions;
+			await options.tools.skip.execute({ reasoning: "Nothing to do" });
+			return { usage: {} };
+		});
+		await runGenerationRuntime(
+			createInput({
+				humanCommand: "Please provide the updated next steps.",
+			}) as never
+		);
+
+		expect(firstPrompt).not.toBe(secondPrompt);
+		expect(await readFile(getSystemPromptFilePath(), "utf8")).toBe(
+			secondPrompt
+		);
+	});
+
+	it("swallows debug dump write failures without changing generation results", async () => {
+		const originalWarn = console.warn;
+		const consoleWarnMock = mock(() => {});
+		console.warn = consoleWarnMock as typeof console.warn;
+
+		await mkdir(join(SYSTEM_PROMPT_DEBUG_DIR, "conv-1"), {
+			recursive: true,
+		});
+		await writeFile(
+			join(SYSTEM_PROMPT_DEBUG_DIR, "conv-1", "msg-trigger-1"),
+			"blocking file",
+			"utf8"
+		);
+		queuedGenerateHandlers.push(async ({ options }) => {
+			await options.tools.skip.execute({ reasoning: "Nothing to do" });
+			return { usage: {} };
+		});
+
+		try {
+			const { runGenerationRuntime } = await modulePromise;
+			const result = await runGenerationRuntime(createInput() as never);
+
+			expect(result.status).toBe("completed");
+			expect(
+				consoleWarnMock.mock.calls.some(
+					(call) =>
+						typeof call[0] === "string" &&
+						call[0].includes("evt=system_prompt_dump_failed")
+				)
+			).toBe(true);
+		} finally {
+			console.warn = originalWarn;
+		}
 	});
 
 	it("returns error on timeout before any public message without fallback retry", async () => {
