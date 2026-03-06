@@ -56,18 +56,38 @@ type ChangelogFrontmatter = {
 	"tiny-excerpt"?: string;
 };
 
+type BlogTagRegistryEntry = {
+	intro: string;
+	aliases?: string[];
+};
+
+type HydratedBlogPage = Omit<BlogPage, "data"> & {
+	data: BlogFrontmatter & BlogPage["data"];
+};
+
 export const BLOG_TAG_MIN_INDEXABLE_POSTS = 3;
 
-const BLOG_TAG_INTROS: Record<string, string> = {
-	react:
-		"Implementation guides and patterns for shipping AI and human support inside React products.",
-	nextjs:
-		"Next.js-focused tutorials for adding, customizing, and scaling support inside App Router apps.",
-	"open-source":
-		"Open-source release notes, implementation details, and product lessons from building Cossistant in public.",
+const BLOG_TAG_REGISTRY: Record<string, BlogTagRegistryEntry> = {
+	react: {
+		intro:
+			"Implementation guides and patterns for shipping AI and human support inside React products.",
+	},
+	nextjs: {
+		intro:
+			"Next.js-focused tutorials for adding, customizing, and scaling support inside App Router apps.",
+		aliases: ["next.js"],
+	},
+	"open-source": {
+		intro:
+			"Open-source release notes, implementation details, and product lessons from building Cossistant in public.",
+	},
 };
 
 const frontmatterCache = new Map<string, Record<string, unknown>>();
+const mergedFrontmatterCache = new Map<
+	string,
+	BlogFrontmatter & BlogPage["data"]
+>();
 
 export type SeoValidationIssue = {
 	level: "error" | "warning";
@@ -121,6 +141,28 @@ function mergeFrontmatter<T>(page: PageWithPath): T {
 
 function normalizeTag(tag: string): string {
 	return tag.trim().toLowerCase();
+}
+
+function normalizeRegistryTag(tag: string): string {
+	return normalizeTag(tag);
+}
+
+function resolveTagRegistryKey(tag: string): string | undefined {
+	const normalized = normalizeRegistryTag(tag);
+
+	for (const [key, entry] of Object.entries(BLOG_TAG_REGISTRY)) {
+		if (key === normalized) {
+			return key;
+		}
+
+		if (
+			entry.aliases?.some((alias) => normalizeRegistryTag(alias) === normalized)
+		) {
+			return key;
+		}
+	}
+
+	return;
 }
 
 function isValidDate(date: string | undefined): boolean {
@@ -180,32 +222,45 @@ function isDescriptionWeak(description: string): boolean {
 }
 
 export function getPublishedBlogPosts(): BlogPage[] {
-	return sortByNewestDate(
-		blog
-			.getPages()
-			.filter((post) => getBlogData(post).published !== false)
-			.map((post) => ({
-				...post,
-				data: {
-					...post.data,
-					date: getBlogData(post).date,
-				},
-			}))
-	);
+	const hydratedPosts: HydratedBlogPage[] = [];
+
+	for (const post of blog.getPages()) {
+		const data = getBlogData(post);
+
+		if (data.published === false) {
+			continue;
+		}
+
+		hydratedPosts.push({
+			...post,
+			data,
+		});
+	}
+
+	return sortByNewestDate(hydratedPosts) as BlogPage[];
 }
 
 export function getBlogPostSlug(post: BlogPage): string {
-	return (
-		getBlogData(post).slug || post.slugs[0] || post.path.replace(/\.mdx$/, "")
-	);
+	const firstSlug = post.slugs[0];
+
+	return getBlogData(post).slug || firstSlug || post.path.replace(/\.mdx$/, "");
 }
 
 export function getBlogData(
 	post: BlogPage
 ): BlogFrontmatter & BlogPage["data"] {
-	return mergeFrontmatter<BlogFrontmatter & BlogPage["data"]>(
+	const cacheKey = post.absolutePath ?? post.path;
+	const cached = mergedFrontmatterCache.get(cacheKey);
+
+	if (cached) {
+		return cached;
+	}
+
+	const merged = mergeFrontmatter<BlogFrontmatter & BlogPage["data"]>(
 		post as unknown as PageWithPath
 	);
+	mergedFrontmatterCache.set(cacheKey, merged);
+	return merged;
 }
 
 export function getBlogPostBySlug(slug: string): BlogPage | undefined {
@@ -237,7 +292,8 @@ export function getPostsByTag(tag: string): BlogPage[] {
 }
 
 export function getBlogTagIntro(tag: string): string | undefined {
-	return BLOG_TAG_INTROS[normalizeTag(tag)];
+	const registryKey = resolveTagRegistryKey(tag);
+	return registryKey ? BLOG_TAG_REGISTRY[registryKey]?.intro : undefined;
 }
 
 export function isBlogTagIndexable(tag: string): boolean {
