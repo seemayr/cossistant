@@ -335,7 +335,7 @@ ${secondPrompt}`);
 
 	it("swallows debug dump write failures without changing generation results", async () => {
 		const originalWarn = console.warn;
-		const consoleWarnMock = mock(() => {});
+		const consoleWarnMock = mock((..._args: unknown[]) => {});
 		console.warn = consoleWarnMock as typeof console.warn;
 
 		await mkdir(join(SYSTEM_PROMPT_DEBUG_DIR, "conv-1"), {
