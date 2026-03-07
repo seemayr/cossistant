@@ -1,6 +1,7 @@
 import type { TypingEntry } from "@cossistant/core";
 import type { AvailableAIAgent, AvailableHumanAgent } from "@cossistant/types";
 import type { SupportTextResolvedFormatter } from "../../support/text/locales/keys";
+import { resolveSupportHumanAgentDisplay } from "../../support/utils/human-agent-display";
 
 export type TimelineTypingParticipant = {
 	id: string;
@@ -67,11 +68,15 @@ export function mapTypingEntriesToPreviewParticipants(
 				const human = availableHumanAgents.find(
 					(agent) => agent.id === entry.actorId
 				);
+				const humanDisplay = resolveSupportHumanAgentDisplay(
+					human,
+					text("common.fallbacks.supportTeam")
+				);
 
 				return {
 					id: entry.actorId,
 					type: "team_member",
-					name: human?.name || text("common.fallbacks.supportTeam"),
+					name: humanDisplay.displayName,
 					image: human?.image ?? null,
 				};
 			}

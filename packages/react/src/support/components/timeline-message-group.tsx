@@ -9,7 +9,9 @@ import {
 	TimelineItemGroupHeader,
 	TimelineItemGroupSeenIndicator,
 } from "../../primitives/timeline-item-group";
+import { useSupportText } from "../text";
 import { cn } from "../utils";
+import { resolveSupportHumanAgentDisplay } from "../utils/human-agent-display";
 import { Avatar } from "./avatar";
 import { TimelineMessageItem } from "./timeline-message-item";
 
@@ -33,6 +35,7 @@ export const TimelineMessageGroup: React.FC<TimelineMessageGroupProps> = ({
 	seenByIds = EMPTY_SEEN_BY_IDS,
 	seenByNames = EMPTY_SEEN_BY_NAMES,
 }) => {
+	const text = useSupportText();
 	// Get agent info for the sender
 	const firstItem = items[0];
 	const humanAgent = availableHumanAgents.find(
@@ -46,6 +49,10 @@ export const TimelineMessageGroup: React.FC<TimelineMessageGroupProps> = ({
 		return null;
 	}
 
+	const humanDisplay = resolveSupportHumanAgentDisplay(
+		humanAgent,
+		text("common.fallbacks.supportTeam")
+	);
 	const hasSeenIndicator = seenByIds.length > 0;
 
 	return (
@@ -79,8 +86,9 @@ export const TimelineMessageGroup: React.FC<TimelineMessageGroupProps> = ({
 							) : (
 								<Avatar
 									className="size-6"
+									facehashSeed={humanDisplay.facehashSeed}
 									image={humanAgent?.image}
-									name={humanAgent?.name || "Support"}
+									name={humanDisplay.displayName}
 								/>
 							)}
 						</TimelineItemGroupAvatar>
@@ -97,7 +105,7 @@ export const TimelineMessageGroup: React.FC<TimelineMessageGroupProps> = ({
 							<TimelineItemGroupHeader className="px-1 text-co-muted-foreground text-xs">
 								{isAI
 									? aiAgent?.name || "AI Assistant"
-									: humanAgent?.name || "Support"}
+									: humanDisplay.displayName}
 							</TimelineItemGroupHeader>
 						)}
 

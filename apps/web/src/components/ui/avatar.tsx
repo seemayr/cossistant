@@ -8,17 +8,9 @@ import * as AvatarPrimitive from "@radix-ui/react-avatar";
 import { Facehash as FacehashComponent } from "facehash";
 import type * as React from "react";
 import { formatTimeAgo } from "@/lib/date";
+import { COSSISTANT_FACEHASH_COLOR_CLASSES } from "@/lib/facehash-palette";
 import { cn } from "@/lib/utils";
 import { TooltipOnHover } from "./tooltip";
-
-// Cossistant brand color classes (Tailwind)
-const COSSISTANT_COLOR_CLASSES = [
-	"dark:bg-cossistant-pink/90 bg-cossistant-pink/20",
-	"dark:bg-cossistant-yellow/90 bg-cossistant-yellow/20",
-	"dark:bg-cossistant-blue/90 bg-cossistant-blue/20",
-	"dark:bg-cossistant-orange/90 bg-cossistant-orange/20",
-	"dark:bg-cossistant-green/90 bg-cossistant-green/20",
-];
 
 function AvatarContainer({
 	className,
@@ -51,8 +43,17 @@ function AvatarImage({
 
 interface AvatarFallbackProps
 	extends React.ComponentProps<typeof AvatarPrimitive.Fallback> {
-	value?: string;
+	value?: string | null;
 	children?: string;
+}
+
+function getNonEmptyString(value: string | null | undefined): string | null {
+	if (typeof value !== "string") {
+		return null;
+	}
+
+	const trimmedValue = value.trim();
+	return trimmedValue.length > 0 ? trimmedValue : null;
 }
 
 function Facehash({
@@ -67,12 +68,15 @@ function Facehash({
 	return (
 		<FacehashComponent
 			className={cn(className)}
-			colorClasses={COSSISTANT_COLOR_CLASSES}
+			colorClasses={COSSISTANT_FACEHASH_COLOR_CLASSES}
 			enableBlink
 			intensity3d="dramatic"
 			interactive={interactive}
 			name={name}
 			size="100%"
+			style={{
+				color: "#000000",
+			}}
 		/>
 	);
 }
@@ -83,13 +87,16 @@ function AvatarFallback({
 	children,
 	...props
 }: AvatarFallbackProps) {
+	const facehashName =
+		getNonEmptyString(value) ?? getNonEmptyString(children) ?? "avatar";
+
 	return (
 		<AvatarPrimitive.Fallback
 			className={cn("flex size-full items-center justify-center", className)}
 			data-slot="avatar-fallback"
 			{...props}
 		>
-			<Facehash name={value ?? children ?? ""} />
+			<Facehash name={facehashName} />
 		</AvatarPrimitive.Fallback>
 	);
 }
@@ -98,12 +105,14 @@ function Avatar({
 	className,
 	url,
 	fallbackName,
+	facehashSeed,
 	lastOnlineAt,
 	status,
 }: {
 	className?: string;
 	url: string | null | undefined;
 	fallbackName: string;
+	facehashSeed?: string;
 	lastOnlineAt?: string | null;
 	status?: "online" | "away";
 }) {
@@ -147,7 +156,10 @@ function Avatar({
 					)}
 				>
 					{url && <AvatarImage alt={fallbackName} src={url} />}
-					<AvatarFallback className="pointer-events-none">
+					<AvatarFallback
+						className="pointer-events-none"
+						value={facehashSeed ?? fallbackName}
+					>
 						{fallbackName}
 					</AvatarFallback>
 				</AvatarContainer>

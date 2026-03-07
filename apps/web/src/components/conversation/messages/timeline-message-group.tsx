@@ -15,6 +15,7 @@ import { useMemo } from "react";
 import { Avatar } from "@/components/ui/avatar";
 import { Logo } from "@/components/ui/logo";
 import type { ConversationHeader } from "@/contexts/inboxes";
+import { resolveDashboardHumanAgentDisplay } from "@/lib/human-agent-display";
 import { cn } from "@/lib/utils";
 import { getVisitorNameWithFallback } from "@/lib/visitors";
 import { ReadIndicator } from "./read-indicator";
@@ -56,6 +57,12 @@ export function TimelineMessageGroup({
 	const humanAgent = teamMembers.find(
 		(agent) => agent.id === firstItem?.userId
 	);
+	const humanDisplay = firstItem?.userId
+		? resolveDashboardHumanAgentDisplay({
+				id: humanAgent?.id ?? firstItem.userId,
+				name: humanAgent?.name ?? null,
+			})
+		: null;
 	const aiAgent = availableAIAgents.find(
 		(agent) => agent.id === firstItem?.aiAgentId
 	);
@@ -154,7 +161,8 @@ export function TimelineMessageGroup({
 									) : (
 										<Avatar
 											className="size-6"
-											fallbackName={humanAgent?.name || "Team"}
+											facehashSeed={humanDisplay?.facehashSeed}
+											fallbackName={humanDisplay?.displayName ?? "Team member"}
 											lastOnlineAt={humanAgent?.lastSeenAt}
 											url={humanAgent?.image}
 										/>
@@ -175,9 +183,7 @@ export function TimelineMessageGroup({
 											? visitorName
 											: isAI
 												? aiAgent?.name || "AI Assistant"
-												: humanAgent?.name ||
-													humanAgent?.email?.split("@")[0] ||
-													"Unknown member"}
+												: (humanDisplay?.displayName ?? "Team member")}
 										{isFromEmail && " via email"}
 									</TimelineItemGroupHeader>
 								)}

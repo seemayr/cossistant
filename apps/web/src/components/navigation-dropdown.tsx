@@ -22,6 +22,7 @@ import { WebsiteImage } from "@/components/ui/website-image";
 import { useOrganizationWebsites, useWebsite } from "@/contexts/website";
 import { useOrganizationRole } from "@/hooks/use-organization-role";
 import { authClient, signOut } from "@/lib/auth/client";
+import { resolveDashboardHumanAgentDisplay } from "@/lib/human-agent-display";
 import { useTRPC } from "@/lib/trpc/client";
 
 type NavigationDropdownProps = {
@@ -41,7 +42,10 @@ export function NavigationDropdown({ websiteSlug }: NavigationDropdownProps) {
 
 	const user = session?.user ?? null;
 	const userEmail = user?.email ?? "";
-	const userDisplayName = user?.name ?? userEmail ?? "You";
+	const userDisplay = resolveDashboardHumanAgentDisplay({
+		id: user?.id ?? "current-user",
+		name: user?.name ?? null,
+	});
 	const userAvatarUrl = user?.image ?? null;
 
 	const websiteName = website?.name ?? "";
@@ -122,11 +126,14 @@ export function NavigationDropdown({ websiteSlug }: NavigationDropdownProps) {
 				<DropdownMenuLabel className="flex items-center gap-3 px-2 py-1.5">
 					<Avatar
 						className="size-6"
-						fallbackName={userDisplayName}
+						facehashSeed={userDisplay.facehashSeed}
+						fallbackName={userDisplay.displayName}
 						url={userAvatarUrl}
 					/>
 					<div className="grid flex-1 text-left text-xs leading-tight">
-						<span className="truncate font-medium">{userDisplayName}</span>
+						<span className="truncate font-medium">
+							{userDisplay.displayName}
+						</span>
 						<span className="truncate text-muted-foreground text-xs">
 							{userEmail}
 						</span>

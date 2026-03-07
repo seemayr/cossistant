@@ -23,8 +23,9 @@ describe("computeFacehash", () => {
 		const second = computeFacehash({ name: "agent-47", colorsLength: 5 });
 
 		expect(second).toEqual(first);
+		expect(first.blinkTimings.left).toEqual(first.blinkTimings.right);
 		expect(first.blinkTimings.left.duration).toBeGreaterThanOrEqual(2);
-		expect(first.blinkTimings.right.duration).toBeGreaterThanOrEqual(2);
+		expect(first.blinkTimings.left.delay).toBeGreaterThanOrEqual(0);
 	});
 
 	it("can produce all public face types", () => {

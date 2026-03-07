@@ -139,13 +139,14 @@ const VISITOR = {
 
 function renderActivityGroup(
 	group: GroupedActivity,
-	isDeveloperModeEnabled = false
+	isDeveloperModeEnabled = false,
+	teamMembers: RouterOutputs["user"]["getWebsiteMembers"] = TEAM_MEMBERS
 ): string {
 	return renderToStaticMarkup(
 		React.createElement(TimelineActivityGroup, {
 			group,
 			availableAIAgents: AVAILABLE_AI_AGENTS,
-			teamMembers: TEAM_MEMBERS,
+			teamMembers,
 			currentUserId: "user-1",
 			visitor: VISITOR,
 			isDeveloperModeEnabled,
@@ -172,6 +173,29 @@ describe("TimelineActivityGroup", () => {
 		expect(html).toContain('data-slot="avatar"');
 		expect(html).not.toContain("flex-row-reverse");
 		expect(html).not.toContain("mb-2 px-1 text-muted-foreground text-xs");
+	});
+
+	it("shows Team member when a human activity actor has no name", () => {
+		const group = createActivityGroup([
+			createEventItem({
+				id: "event-blank-name",
+				createdAt: "2026-01-01T10:00:00.000Z",
+			}),
+		]);
+		const namelessMembers = [
+			{
+				id: "user-1",
+				name: null,
+				email: "nameless@example.com",
+				image: null,
+				lastSeenAt: null,
+			},
+		] as unknown as RouterOutputs["user"]["getWebsiteMembers"];
+
+		const html = renderActivityGroup(group, false, namelessMembers);
+
+		expect(html).toContain("Team member");
+		expect(html).not.toContain("nameless@example.com");
 	});
 
 	it("renders tree prefixes for multi-row activity groups in normal mode", () => {

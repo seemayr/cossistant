@@ -13,6 +13,8 @@ import {
 	TimelineItemGroupAvatar,
 	TimelineItemGroupContent,
 } from "../../primitives/timeline-item-group";
+import { useSupportText } from "../text";
+import { resolveSupportHumanAgentDisplay } from "../utils/human-agent-display";
 import { Avatar } from "./avatar";
 import { ConversationEvent } from "./conversation-event";
 
@@ -93,6 +95,7 @@ export const TimelineActivityGroup: React.FC<TimelineActivityGroupProps> = ({
 	currentVisitorId,
 	tools,
 }) => {
+	const text = useSupportText();
 	const activityRows = useMemo<ActivityRow[]>(() => {
 		const rows: ActivityRow[] = [];
 
@@ -150,6 +153,10 @@ export const TimelineActivityGroup: React.FC<TimelineActivityGroupProps> = ({
 	const aiAgent = availableAIAgents.find(
 		(agent) => agent.id === group.senderId
 	);
+	const humanDisplay = resolveSupportHumanAgentDisplay(
+		humanAgent,
+		text("common.fallbacks.supportTeam")
+	);
 
 	return (
 		<PrimitiveTimelineItemGroup
@@ -171,8 +178,9 @@ export const TimelineActivityGroup: React.FC<TimelineActivityGroupProps> = ({
 						) : (
 							<Avatar
 								className="size-6"
+								facehashSeed={humanDisplay.facehashSeed}
 								image={humanAgent?.image}
-								name={isTeamMember ? humanAgent?.name || "Support" : "Visitor"}
+								name={isTeamMember ? humanDisplay.displayName : "Visitor"}
 							/>
 						)}
 					</TimelineItemGroupAvatar>

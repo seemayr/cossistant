@@ -37,6 +37,14 @@ export {
 	CossistantClient as default,
 	type CossistantClientOptions,
 } from "./client";
+export {
+	type HumanAgentDisplay,
+	type HumanAgentIdentity,
+	type HumanAgentSurface,
+	normalizeHumanAgentName,
+	type ResolveHumanAgentDisplayOptions,
+	resolveHumanAgentDisplay,
+} from "./human-agent-display";
 export { normalizeLocale } from "./locale-utils";
 // Privacy filter utilities
 export {

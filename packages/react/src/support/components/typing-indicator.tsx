@@ -1,6 +1,8 @@
 import type { AvailableAIAgent, AvailableHumanAgent } from "@cossistant/types";
 import * as React from "react";
+import { useSupportText } from "../text";
 import { cn } from "../utils";
+import { resolveSupportHumanAgentDisplay } from "../utils/human-agent-display";
 import { Avatar } from "./avatar";
 
 export type TypingParticipantType = "visitor" | "team_member" | "ai";
@@ -59,6 +61,7 @@ export const TypingIndicator = React.forwardRef<
 		},
 		ref
 	) => {
+		const text = useSupportText();
 		if (!participants || participants.length === 0) {
 			return null;
 		}
@@ -99,15 +102,25 @@ export const TypingIndicator = React.forwardRef<
 								showBackground={!!agent.image}
 							/>
 						))}
-						{typingHumanAgents.map((agent) => (
-							<Avatar
-								className="size-6"
-								image={agent.image}
-								key={agent.id}
-								lastSeenAt={agent.lastSeenAt}
-								name={agent.name}
-							/>
-						))}
+						{typingHumanAgents.map((agent) =>
+							(() => {
+								const humanDisplay = resolveSupportHumanAgentDisplay(
+									agent,
+									text("common.fallbacks.supportTeam")
+								);
+
+								return (
+									<Avatar
+										className="size-6"
+										facehashSeed={humanDisplay.facehashSeed}
+										image={agent.image}
+										key={agent.id}
+										lastSeenAt={agent.lastSeenAt}
+										name={humanDisplay.displayName}
+									/>
+								);
+							})()
+						)}
 					</div>
 				)}
 				<BouncingDots />

@@ -9,7 +9,7 @@ const es: SupportLocaleMessages = {
 	"common.fallbacks.aiAssistant": "Asistente de IA",
 	"common.fallbacks.cossistant": "Cossistant",
 	"common.fallbacks.someone": "Alguien",
-	"common.fallbacks.supportTeam": "Soporte",
+	"common.fallbacks.supportTeam": "Equipo de soporte",
 	"common.fallbacks.unknown": "Desconocido",
 	"common.fallbacks.you": "Tú",
 	"common.labels.aiAgentIndicator": "Agente IA",

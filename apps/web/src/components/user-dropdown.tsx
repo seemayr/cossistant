@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import Icon from "@/components/ui/icons";
 import { authClient, signOut } from "@/lib/auth/client";
+import { resolveDashboardHumanAgentDisplay } from "@/lib/human-agent-display";
 
 type UserDropdownProps = {
 	websiteSlug: string;
@@ -27,8 +28,10 @@ export function UserDropdown({ websiteSlug }: UserDropdownProps) {
 	const { open } = useSupport();
 
 	const user = session?.user ?? null;
-	const userEmail = user?.email ?? "";
-	const userDisplayName = user?.name ?? userEmail ?? "You";
+	const userDisplay = resolveDashboardHumanAgentDisplay({
+		id: user?.id ?? "current-user",
+		name: user?.name ?? null,
+	});
 	const userAvatarUrl = user?.image ?? null;
 
 	useHotkeys(
@@ -58,11 +61,12 @@ export function UserDropdown({ websiteSlug }: UserDropdownProps) {
 					type="button"
 				>
 					<div className="grid flex-1 text-left text-sm leading-tight">
-						<span className="truncate">{userDisplayName}</span>
+						<span className="truncate">{userDisplay.displayName}</span>
 					</div>
 					<Avatar
 						className="size-5"
-						fallbackName={userDisplayName}
+						facehashSeed={userDisplay.facehashSeed}
+						fallbackName={userDisplay.displayName}
 						url={userAvatarUrl}
 					/>
 				</button>

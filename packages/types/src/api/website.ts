@@ -341,7 +341,7 @@ export const availableHumanAgentSchema = z.object({
 		description: "The human agent's unique identifier.",
 		example: "01JG000000000000000000000",
 	}),
-	name: z.string().openapi({
+	name: z.string().nullable().openapi({
 		description: "The agent's name.",
 		example: "John Doe",
 	}),

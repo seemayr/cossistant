@@ -3,6 +3,7 @@ import type {
 	TimelineItem,
 	TimelinePartEvent,
 } from "@cossistant/types/api/timeline-item";
+import { resolveDashboardHumanAgentDisplay } from "./human-agent-display";
 import { getVisitorNameWithFallback } from "./visitors";
 
 export type TimelineEventDisplay = {
@@ -80,14 +81,16 @@ function getActorName(params: EventDisplayParams): {
 	const humanAgent = availableHumanAgents.find(
 		(agent) => agent.id === event.actorUserId
 	);
-
-	const actorName = humanAgent?.name || "Someone";
+	const humanDisplay = resolveDashboardHumanAgentDisplay({
+		id: humanAgent?.id ?? event.actorUserId ?? "unknown-member",
+		name: humanAgent?.name ?? null,
+	});
 
 	return {
-		actorName,
+		actorName: humanDisplay.displayName,
 		avatarType: "human",
 		avatarImage: humanAgent?.image,
-		avatarFallbackName: actorName,
+		avatarFallbackName: humanDisplay.displayName,
 	};
 }
 

@@ -23,6 +23,7 @@ import { useWebsite } from "@/contexts/website";
 import { useConversationDeveloperMode } from "@/hooks/use-conversation-developer-mode";
 import { useDashboardTypingSound } from "@/hooks/use-dashboard-typing-sound";
 import { useSoundPreferences } from "@/hooks/use-sound-preferences";
+import { resolveDashboardHumanAgentDisplay } from "@/lib/human-agent-display";
 import { extractEventPart } from "@/lib/timeline-events";
 import { shouldDisplayToolTimelineItem } from "@/lib/tool-timeline-visibility";
 import { cn } from "@/lib/utils";
@@ -64,10 +65,16 @@ function StandaloneToolAvatar({
 }) {
 	if (item.userId) {
 		const member = teamMembers.find((m) => m.id === item.userId);
+		const memberDisplay = resolveDashboardHumanAgentDisplay({
+			id: member?.id ?? item.userId,
+			name: member?.name ?? null,
+		});
+
 		return (
 			<Avatar
 				className="size-6"
-				fallbackName={member?.name || "Team"}
+				facehashSeed={memberDisplay.facehashSeed}
+				fallbackName={memberDisplay.displayName}
 				url={member?.image}
 			/>
 		);
@@ -152,12 +159,16 @@ export function ConversationTimelineList({
 
 	const availableHumanAgents = useMemo(
 		() =>
-			teamMembers.map((member) => ({
-				id: member.id,
-				name: member.name ?? member.email?.split("@")[0] ?? "Unknown member",
-				image: member.image,
-				lastSeenAt: member.lastSeenAt,
-			})),
+			teamMembers.map((member) => {
+				const memberDisplay = resolveDashboardHumanAgentDisplay(member);
+
+				return {
+					id: member.id,
+					name: memberDisplay.displayName,
+					image: member.image,
+					lastSeenAt: member.lastSeenAt,
+				};
+			}),
 		[teamMembers]
 	);
 

@@ -14,8 +14,10 @@ export type FacehashImageProps = {
 	showInitial: boolean;
 };
 
-function renderFaceGeometryPaths(paths: readonly string[]) {
-	return paths.map((path) => <path d={path} fill="currentColor" key={path} />);
+const PNG_FOREGROUND_COLOR = "#000000";
+
+function renderFaceGeometryPaths(paths: readonly string[], fill: string) {
+	return paths.map((path) => <path d={path} fill={fill} key={path} />);
 }
 
 function getGradientBackground(scene: FacehashScene): string {
@@ -46,6 +48,10 @@ export function FacehashImage({
 		fontSize: sceneUnitToPixels(scene.initialLayout.fontSize, size),
 	};
 	const initialBoxSize = sceneUnitToPixels(32, size);
+	const initialBox = {
+		x: initialPoint.x - initialBoxSize / 2,
+		y: initialPoint.y - initialBoxSize / 2,
+	};
 	const projectionTransform = toSatoriProjectionTransform(
 		scene.projection,
 		size
@@ -83,7 +89,6 @@ export function FacehashImage({
 					display: "flex",
 					alignItems: "center",
 					justifyContent: "center",
-					color: "black",
 					transform: projectionTransform,
 					transformOrigin: "50% 50%",
 				}}
@@ -102,6 +107,7 @@ export function FacehashImage({
 						data-facehash-png-eyes=""
 						fill="none"
 						height={faceBox.height}
+						preserveAspectRatio="none"
 						style={{
 							position: "absolute",
 							left: faceBox.x,
@@ -112,8 +118,18 @@ export function FacehashImage({
 						width={faceBox.width}
 						xmlns="http://www.w3.org/2000/svg"
 					>
-						<g>{renderFaceGeometryPaths(scene.faceGeometry.leftEyePaths)}</g>
-						<g>{renderFaceGeometryPaths(scene.faceGeometry.rightEyePaths)}</g>
+						<g>
+							{renderFaceGeometryPaths(
+								scene.faceGeometry.leftEyePaths,
+								PNG_FOREGROUND_COLOR
+							)}
+						</g>
+						<g>
+							{renderFaceGeometryPaths(
+								scene.faceGeometry.rightEyePaths,
+								PNG_FOREGROUND_COLOR
+							)}
+						</g>
 					</svg>
 
 					{showInitial && (
@@ -121,19 +137,18 @@ export function FacehashImage({
 							data-facehash-png-initial=""
 							style={{
 								position: "absolute",
-								left: initialPoint.x,
-								top: initialPoint.y,
+								left: initialBox.x,
+								top: initialBox.y,
 								width: initialBoxSize,
 								height: initialBoxSize,
 								display: "flex",
 								alignItems: "center",
 								justifyContent: "center",
-								transform: "translate(-50%, -50%)",
 								fontSize: initialPoint.fontSize,
 								lineHeight: 1,
 								fontFamily: "monospace",
 								fontWeight: 700,
-								color: "black",
+								color: PNG_FOREGROUND_COLOR,
 							}}
 						>
 							{scene.data.initial}

@@ -53,4 +53,35 @@ describe("useMentionSearch", () => {
 		expect(results[0]?.id).toBe("searchKnowledgeBase");
 		expect(results[0]?.type).toBe("tool");
 	});
+
+	it("keeps nameless team members searchable when given the Team member fallback", () => {
+		let search: (query: string) => Mention[] = () => [];
+
+		function Harness() {
+			search = useMentionSearch({
+				teamMembers: [
+					{
+						id: "user-1",
+						name: "Team member",
+						email: "nameless@example.com",
+						image: null,
+					},
+				],
+			}).search;
+
+			return null;
+		}
+
+		renderToStaticMarkup(React.createElement(Harness));
+
+		expect(search("team")).toEqual([
+			{
+				id: "user-1",
+				name: "Team member",
+				type: "human-agent",
+				avatar: undefined,
+			},
+		]);
+		expect(search("nameless@example.com")).toHaveLength(1);
+	});
 });

@@ -186,7 +186,7 @@ export const Facehash = React.forwardRef<HTMLDivElement, FacehashProps>(
 					scene={scene}
 					showInitial={showInitial && !onRenderMouth}
 					style={{
-						color: "currentColor",
+						color: "inherit",
 					}}
 					variant={gradientOverlayClass ? "solid" : variant}
 					width="100%"

@@ -1,29 +1,33 @@
 /**
  * Gets the most recent lastOnlineAt timestamp from available human agents
  * @param availableHumanAgents Array of human agents with lastSeenAt timestamps
- * @returns ISO string of the most recent lastSeenAt, or current time if no agents available
+ * @returns ISO string of the most recent lastSeenAt, or null when no valid timestamps exist
  */
 export const getMostRecentLastOnlineAt = (
-	availableHumanAgents: Array<{ lastSeenAt: string }>
-): string => {
+	availableHumanAgents: Array<{ lastSeenAt: string | null }>
+): string | null => {
 	if (availableHumanAgents.length === 0) {
-		return new Date().toISOString();
+		return null;
 	}
 
-	const mostRecentTimestamp = availableHumanAgents.reduce(
-		(mostRecent, agent) => {
-			const agentTime = new Date(agent.lastSeenAt).getTime();
-			// Skip invalid dates (NaN)
-			if (Number.isNaN(agentTime)) {
-				return mostRecent;
-			}
-			return agentTime > mostRecent ? agentTime : mostRecent;
-		},
-		new Date(availableHumanAgents[0].lastSeenAt).getTime()
-	);
+	let mostRecentTimestamp: number | null = null;
 
-	// Fall back to current time if all dates were invalid
-	return Number.isNaN(mostRecentTimestamp)
-		? new Date().toISOString()
+	for (const agent of availableHumanAgents) {
+		if (!agent.lastSeenAt) {
+			continue;
+		}
+
+		const agentTime = Date.parse(agent.lastSeenAt);
+		if (Number.isNaN(agentTime)) {
+			continue;
+		}
+
+		if (mostRecentTimestamp === null || agentTime > mostRecentTimestamp) {
+			mostRecentTimestamp = agentTime;
+		}
+	}
+
+	return mostRecentTimestamp === null
+		? null
 		: new Date(mostRecentTimestamp).toISOString();
 };

@@ -18,7 +18,9 @@ import {
 	DaySeparatorLine,
 	defaultFormatDate,
 } from "../../primitives/day-separator";
+import { useSupportText } from "../text";
 import { cn } from "../utils";
+import { resolveSupportHumanAgentDisplay } from "../utils/human-agent-display";
 import { ConversationEvent } from "./conversation-event";
 import { filterSeenByIdsForViewer } from "./conversation-timeline-utils";
 import { TimelineActivityGroup } from "./timeline-activity-group";
@@ -79,6 +81,7 @@ export const ConversationTimelineList: React.FC<ConversationTimelineProps> = ({
 	tools,
 	renderDaySeparator,
 }) => {
+	const text = useSupportText();
 	const timeline = useConversationTimeline({
 		conversationId,
 		items: timelineItems,
@@ -104,9 +107,13 @@ export const ConversationTimelineList: React.FC<ConversationTimelineProps> = ({
 		const map = new Map<string, string>();
 
 		for (const agent of availableHumanAgents) {
-			if (agent.name) {
-				map.set(agent.id, agent.name);
-			}
+			map.set(
+				agent.id,
+				resolveSupportHumanAgentDisplay(
+					agent,
+					text("common.fallbacks.supportTeam")
+				).displayName
+			);
 		}
 
 		for (const agent of availableAIAgents) {
@@ -116,7 +123,7 @@ export const ConversationTimelineList: React.FC<ConversationTimelineProps> = ({
 		}
 
 		return map;
-	}, [availableHumanAgents, availableAIAgents]);
+	}, [availableHumanAgents, availableAIAgents, text]);
 
 	const getSeenByNames = useCallback(
 		(ids: readonly string[] = EMPTY_SEEN_BY_IDS): readonly string[] => {

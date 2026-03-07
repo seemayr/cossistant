@@ -165,6 +165,7 @@ export function ConversationButtonLink({
 		>
 			<Avatar
 				className="size-8 flex-shrink-0"
+				facehashSeed={assignedAgent.facehashSeed}
 				image={assignedAgent?.image}
 				isAI={assignedAgent?.type === "ai"}
 				lastSeenAt={assignedAgent?.lastSeenAt}

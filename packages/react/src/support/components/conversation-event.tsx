@@ -6,6 +6,7 @@ import type {
 import type React from "react";
 import { useSupportText } from "../text";
 import { cn } from "../utils";
+import { resolveSupportHumanAgentDisplay } from "../utils/human-agent-display";
 import { Avatar } from "./avatar";
 
 export type ConversationEventProps = {
@@ -35,11 +36,16 @@ export const ConversationEvent: React.FC<ConversationEventProps> = ({
 	const aiAgent = availableAIAgents.find(
 		(agent) => agent.id === event.actorAiAgentId
 	);
+	const supportFallbackName = text("common.fallbacks.supportTeam");
+	const humanDisplay = resolveSupportHumanAgentDisplay(
+		humanAgent,
+		supportFallbackName
+	);
 
 	// Get the actor name
 	const actorName = isAI
 		? aiAgent?.name || text("common.fallbacks.cossistant")
-		: humanAgent?.name || text("common.fallbacks.someone");
+		: humanDisplay.displayName;
 
 	// Convert event type to plain English
 	const getEventText = () => {
@@ -118,8 +124,9 @@ export const ConversationEvent: React.FC<ConversationEventProps> = ({
 	) : (
 		<Avatar
 			className="size-6 flex-shrink-0"
+			facehashSeed={humanDisplay.facehashSeed}
 			image={humanAgent?.image}
-			name={humanAgent?.name || text("common.fallbacks.someone")}
+			name={humanDisplay.displayName}
 		/>
 	);
 

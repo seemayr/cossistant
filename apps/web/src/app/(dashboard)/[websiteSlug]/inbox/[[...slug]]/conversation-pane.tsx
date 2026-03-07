@@ -35,6 +35,7 @@ import { useDashboardNewMessageSound } from "@/hooks/use-dashboard-new-message-s
 import { useSendConversationMessage } from "@/hooks/use-send-conversation-message";
 import { useSidebar } from "@/hooks/use-sidebars";
 import { useSoundPreferences } from "@/hooks/use-sound-preferences";
+import { resolveDashboardHumanAgentDisplay } from "@/lib/human-agent-display";
 import { useTRPC } from "@/lib/trpc/client";
 import { cn } from "@/lib/utils";
 
@@ -555,9 +556,10 @@ export function ConversationPane({
 									: null,
 						}
 					: null,
-				teamMembers: members.filter((m): m is typeof m & { name: string } =>
-					Boolean(m.name)
-				),
+				teamMembers: members.map((member) => ({
+					...member,
+					name: resolveDashboardHumanAgentDisplay(member).displayName,
+				})),
 				visitor,
 			},
 		},

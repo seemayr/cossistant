@@ -8,13 +8,10 @@ export const userResponseSchema = z.object({
 		description: "The user's unique identifier.",
 		example: "01JG000000000000000000000",
 	}),
-	name: z
-		.string()
-		.openapi({
-			description: "The user's name.",
-			example: "John Doe",
-		})
-		.optional(),
+	name: z.string().nullable().openapi({
+		description: "The user's name.",
+		example: "John Doe",
+	}),
 	email: z.email().openapi({
 		description: "The user's email address.",
 		example: "john.doe@example.com",

@@ -5,6 +5,7 @@ import { useMemo } from "react";
 
 import { useSupport } from "../provider";
 import { useSupportText } from "../support/text";
+import { resolveSupportHumanAgentDisplay } from "../support/utils/human-agent-display";
 import { formatTimeAgo } from "../support/utils/time";
 import {
 	mapTypingEntriesToPreviewParticipants,
@@ -24,6 +25,7 @@ export type ConversationPreviewLastMessage = {
 export type ConversationPreviewAssignedAgent = {
 	name: string;
 	image: string | null;
+	facehashSeed?: string;
 	type: "human" | "ai" | "fallback";
 	/** Last seen timestamp for human agents, used for online status indicator */
 	lastSeenAt?: string | null;
@@ -159,7 +161,10 @@ export function useConversationPreview(
 				(a) => a.id === lastTimelineMessage.userId
 			);
 			if (agent) {
-				senderName = agent.name;
+				senderName = resolveSupportHumanAgentDisplay(
+					agent,
+					text("common.fallbacks.supportTeam")
+				).displayName;
 				senderImage = agent.image;
 			} else {
 				senderName = text("common.fallbacks.supportTeam");
@@ -201,17 +206,29 @@ export function useConversationPreview(
 			);
 
 			if (human) {
+				const humanDisplay = resolveSupportHumanAgentDisplay(
+					human,
+					supportFallbackName
+				);
+
 				return {
 					type: "human" as const,
-					name: human.name,
+					name: humanDisplay.displayName,
+					facehashSeed: humanDisplay.facehashSeed,
 					image: human.image ?? null,
 					lastSeenAt: human.lastSeenAt ?? null,
 				};
 			}
 
+			const humanDisplay = resolveSupportHumanAgentDisplay(
+				{ id: lastAgentItem.userId, name: null },
+				supportFallbackName
+			);
+
 			return {
 				type: "human" as const,
-				name: supportFallbackName,
+				name: humanDisplay.displayName,
+				facehashSeed: humanDisplay.facehashSeed,
 				image: null,
 				lastSeenAt: null,
 			};
@@ -239,9 +256,15 @@ export function useConversationPreview(
 
 		const fallbackHuman = availableHumanAgents[0];
 		if (fallbackHuman) {
+			const humanDisplay = resolveSupportHumanAgentDisplay(
+				fallbackHuman,
+				supportFallbackName
+			);
+
 			return {
 				type: "human" as const,
-				name: fallbackHuman.name,
+				name: humanDisplay.displayName,
+				facehashSeed: humanDisplay.facehashSeed,
 				image: fallbackHuman.image ?? null,
 				lastSeenAt: fallbackHuman.lastSeenAt ?? null,
 			};
@@ -259,6 +282,7 @@ export function useConversationPreview(
 		return {
 			type: "fallback" as const,
 			name: supportFallbackName,
+			facehashSeed: "public:support-fallback",
 			image: null,
 		};
 	}, [knownTimelineItems, availableHumanAgents, availableAIAgents, text]);

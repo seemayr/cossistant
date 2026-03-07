@@ -33,6 +33,7 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useInviteTeamModal } from "@/hooks/use-invite-team-modal";
+import { resolveDashboardHumanAgentDisplay } from "@/lib/human-agent-display";
 import { getTeamSeatCopy } from "@/lib/team/seat-copy";
 import { useTRPC } from "@/lib/trpc/client";
 
@@ -406,6 +407,10 @@ export function TeamSettingsClient({
 
 					<div className="divide-y divide-primary/10">
 						{settings.members.map((member) => {
+							const memberDisplay = resolveDashboardHumanAgentDisplay({
+								id: member.userId,
+								name: member.name,
+							});
 							const normalizedRole = normalizeRole(member.role);
 							const isSelf = member.userId === currentUserId;
 							const canManageThisMember =
@@ -423,7 +428,8 @@ export function TeamSettingsClient({
 								>
 									<Avatar
 										className="size-8"
-										fallbackName={member.name ?? member.email}
+										facehashSeed={memberDisplay.facehashSeed}
+										fallbackName={memberDisplay.displayName}
 										lastOnlineAt={member.lastSeenAt}
 										url={member.image}
 									/>
@@ -431,7 +437,7 @@ export function TeamSettingsClient({
 									<div className="min-w-0 flex-1">
 										<div className="flex items-center gap-2">
 											<p className="truncate font-medium">
-												{member.name ?? member.email.split("@")[0]}
+												{memberDisplay.displayName}
 											</p>
 											{isSelf && <Badge variant="secondary">You</Badge>}
 										</div>

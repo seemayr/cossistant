@@ -10,6 +10,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Logo } from "@/components/ui/logo";
 import { TooltipOnHover } from "@/components/ui/tooltip";
 import type { ConversationHeader } from "@/contexts/inboxes";
+import { resolveDashboardHumanAgentDisplay } from "@/lib/human-agent-display";
 import { cn } from "@/lib/utils";
 import { getVisitorNameWithFallback } from "@/lib/visitors";
 
@@ -182,7 +183,10 @@ export function ReadIndicator({
 						{readerInfo.map((reader) => {
 							const displayName =
 								reader.type === "human"
-									? reader.name || reader.email?.split("@")[0] || "Unknown"
+									? resolveDashboardHumanAgentDisplay({
+											id: reader.id,
+											name: reader.name,
+										}).displayName
 									: reader.type === "ai"
 										? reader.name || "AI Assistant"
 										: reader.name;
@@ -220,15 +224,21 @@ export function ReadIndicator({
 										}}
 									>
 										{reader.type === "human" ? (
-											<Avatar
-												className="size-5 rounded border border-background"
-												fallbackName={
-													reader.name ||
-													reader.email?.split("@")[0] ||
-													"Unknown member"
-												}
-												url={reader.image}
-											/>
+											(() => {
+												const humanDisplay = resolveDashboardHumanAgentDisplay({
+													id: reader.id,
+													name: reader.name,
+												});
+
+												return (
+													<Avatar
+														className="size-5 rounded border border-background"
+														facehashSeed={humanDisplay.facehashSeed}
+														fallbackName={humanDisplay.displayName}
+														url={reader.image}
+													/>
+												);
+											})()
 										) : reader.type === "ai" ? (
 											<Logo className="size-5 text-primary" />
 										) : (

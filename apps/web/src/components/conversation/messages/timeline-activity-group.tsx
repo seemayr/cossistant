@@ -16,6 +16,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Logo } from "@/components/ui/logo";
 import { generateTreePrefix } from "@/components/web-sources/utils";
 import type { ConversationHeader } from "@/contexts/inboxes";
+import { resolveDashboardHumanAgentDisplay } from "@/lib/human-agent-display";
 import { extractEventPart } from "@/lib/timeline-events";
 import { shouldDisplayToolTimelineItem } from "@/lib/tool-timeline-visibility";
 import { cn } from "@/lib/utils";
@@ -148,16 +149,27 @@ export function TimelineActivityGroup({
 }: TimelineActivityGroupProps) {
 	const availableHumanAgents = useMemo(
 		() =>
-			teamMembers.map((member) => ({
-				id: member.id,
-				name: member.name ?? member.email?.split("@")[0] ?? "Unknown member",
-				image: member.image,
-				lastSeenAt: member.lastSeenAt,
-			})),
+			teamMembers.map((member) => {
+				const memberDisplay = resolveDashboardHumanAgentDisplay(member);
+
+				return {
+					id: member.id,
+					name: memberDisplay.displayName,
+					image: member.image,
+					lastSeenAt: member.lastSeenAt,
+				};
+			}),
 		[teamMembers]
 	);
 
 	const humanAgent = teamMembers.find((agent) => agent.id === group.senderId);
+	const humanDisplay =
+		group.senderType === SenderType.TEAM_MEMBER
+			? resolveDashboardHumanAgentDisplay({
+					id: humanAgent?.id ?? group.senderId ?? "unknown-member",
+					name: humanAgent?.name ?? null,
+				})
+			: null;
 	const aiAgent = availableAIAgents.find(
 		(agent) => agent.id === group.senderId
 	);
@@ -167,9 +179,7 @@ export function TimelineActivityGroup({
 			? visitorName
 			: group.senderType === SenderType.AI
 				? aiAgent?.name || "AI Assistant"
-				: (humanAgent?.name ??
-					humanAgent?.email?.split("@")[0] ??
-					"Unknown member");
+				: (humanDisplay?.displayName ?? "Team member");
 
 	const activityRows = useMemo(() => {
 		const rows: ActivityRow[] = [];
@@ -251,7 +261,8 @@ export function TimelineActivityGroup({
 						) : (
 							<Avatar
 								className="size-6"
-								fallbackName={humanAgent?.name || "Team"}
+								facehashSeed={humanDisplay?.facehashSeed}
+								fallbackName={humanDisplay?.displayName ?? "Team member"}
 								url={humanAgent?.image}
 							/>
 						)}

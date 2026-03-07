@@ -88,8 +88,11 @@ export function computeFacehash(options: ComputeFacehashOptions): FacehashData {
 	const colorIndex = hash % colorsLength;
 	const positionIndex = hash % SPHERE_POSITIONS.length;
 	const position = SPHERE_POSITIONS[positionIndex] ?? { x: 0, y: 0 };
-	const leftSeed = hash * 31;
-	const rightSeed = hash * 37 + 11;
+	const blinkSeed = hash * 31;
+	const blinkTiming = {
+		delay: (blinkSeed % 40) / 10,
+		duration: 2 + (blinkSeed % 40) / 10,
+	};
 
 	return {
 		faceType: FACE_TYPES[faceIndex] ?? "round",
@@ -97,14 +100,8 @@ export function computeFacehash(options: ComputeFacehashOptions): FacehashData {
 		rotation: position,
 		initial: name.charAt(0).toUpperCase(),
 		blinkTimings: {
-			left: {
-				delay: (leftSeed % 40) / 10,
-				duration: 2 + (leftSeed % 40) / 10,
-			},
-			right: {
-				delay: (rightSeed % 40) / 10,
-				duration: 2 + (rightSeed % 40) / 10,
-			},
+			left: { ...blinkTiming },
+			right: { ...blinkTiming },
 		},
 	};
 }

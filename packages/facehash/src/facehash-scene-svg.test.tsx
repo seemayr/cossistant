@@ -65,4 +65,28 @@ describe("FacehashSceneSvg snapshots", () => {
 			expect(renderSvgMarkup("agent-47", { intensity3d })).toMatchSnapshot();
 		});
 	}
+
+	it("applies the same blink animation timing to both eyes", () => {
+		const scene = createFacehashScene({
+			name: "agent-47",
+			intensity3d: "dramatic",
+		});
+		const html = renderToStaticMarkup(
+			<FacehashSceneSvg
+				backgroundColor="#ec4899"
+				enableBlink
+				height={128}
+				idPrefix="blink-test"
+				scene={scene}
+				showInitial
+				variant="gradient"
+				width={128}
+			/>
+		);
+		const animationMatches =
+			html.match(/animation:facehash-blink [^;"]+/g) ?? [];
+
+		expect(animationMatches).toHaveLength(2);
+		expect(new Set(animationMatches).size).toBe(1);
+	});
 });

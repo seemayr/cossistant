@@ -1,5 +1,6 @@
 import type { Database } from "@api/db";
 import { listWebsiteAccessUsers } from "@api/lib/team-seats";
+import { normalizeHumanAgentName } from "@cossistant/core";
 
 // Check if user has access to a website
 export async function getWebsiteMembers(
@@ -16,7 +17,7 @@ export async function getWebsiteMembers(
 
 	return members.map((member) => ({
 		id: member.userId,
-		name: member.name ?? undefined,
+		name: normalizeHumanAgentName(member.name),
 		email: member.email,
 		image: member.image,
 		role: member.role,

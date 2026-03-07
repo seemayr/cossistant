@@ -1,7 +1,9 @@
 import type { AvailableAIAgent, AvailableHumanAgent } from "@cossistant/types";
 import type { ReactElement, ReactNode } from "react";
 import { useRenderElement } from "../../utils/use-render-element";
+import { useSupportText } from "../text";
 import { cn } from "../utils";
+import { resolveSupportHumanAgentDisplay } from "../utils/human-agent-display";
 import { Avatar } from "./avatar";
 
 type AvatarStackProps = {
@@ -110,6 +112,8 @@ export function AvatarStack({
 	spacing = 36,
 	gapWidth = 3,
 }: AvatarStackProps): ReactElement | null {
+	const text = useSupportText();
+	const supportFallbackName = text("common.fallbacks.supportTeam");
 	const displayedHumanAgents = humanAgents.slice(0, 2);
 	const remainingHumanAgentsCount = Math.max(0, humanAgents.length - 2);
 
@@ -154,14 +158,23 @@ export function AvatarStack({
 						size={size}
 						spacing={spacing}
 					>
-						{item.type === "human" && (
-							<Avatar
-								className={cn("size-full")}
-								image={item.agent.image}
-								lastSeenAt={item.agent.lastSeenAt}
-								name={item.agent.name}
-							/>
-						)}
+						{item.type === "human" &&
+							(() => {
+								const humanDisplay = resolveSupportHumanAgentDisplay(
+									item.agent,
+									supportFallbackName
+								);
+
+								return (
+									<Avatar
+										className={cn("size-full")}
+										facehashSeed={humanDisplay.facehashSeed}
+										image={item.agent.image}
+										lastSeenAt={item.agent.lastSeenAt}
+										name={humanDisplay.displayName}
+									/>
+								);
+							})()}
 						{item.type === "count" && (
 							<div className="flex size-full items-center justify-center rounded bg-co-background-200 font-medium text-co-primary text-sm ring-1 ring-co-border/30 dark:bg-co-background-500">
 								+{item.count}

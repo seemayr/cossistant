@@ -21,6 +21,7 @@ import { useLatestConversationMessage } from "@/data/use-latest-conversation-mes
 import { usePrefetchConversationData } from "@/data/use-prefetch-conversation-data";
 import { isInboundVisitorMessage } from "@/lib/conversation-messages";
 import { formatTimeAgo, getWaitingSinceLabel } from "@/lib/date";
+import { resolveDashboardHumanAgentDisplay } from "@/lib/human-agent-display";
 import {
 	buildTimelineEventPreview,
 	extractEventPart,
@@ -247,12 +248,16 @@ export function ConversationItem({
 
 	const availableHumanAgents = useMemo(
 		() =>
-			members.map((member) => ({
-				id: member.id,
-				name: member.name ?? member.email?.split("@")[0] ?? "Someone",
-				image: member.image,
-				lastSeenAt: member.lastSeenAt,
-			})),
+			members.map((member) => {
+				const memberDisplay = resolveDashboardHumanAgentDisplay(member);
+
+				return {
+					id: member.id,
+					name: memberDisplay.displayName,
+					image: member.image,
+					lastSeenAt: member.lastSeenAt,
+				};
+			}),
 		[members]
 	);
 
@@ -336,8 +341,12 @@ export function ConversationItem({
 		// Team member typing - look up member name
 		if (entry?.actorType === "user") {
 			const member = members.find((m) => m.id === entry.actorId);
+			const memberDisplay = resolveDashboardHumanAgentDisplay({
+				id: member?.id ?? entry.actorId,
+				name: member?.name ?? null,
+			});
 			return {
-				name: member?.name ?? member?.email?.split("@")[0] ?? "Team member",
+				name: memberDisplay.displayName,
 				hasPreview: false,
 			};
 		}
