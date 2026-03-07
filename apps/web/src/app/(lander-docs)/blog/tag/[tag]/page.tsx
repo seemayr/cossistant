@@ -1,47 +1,25 @@
 import { format } from "date-fns";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { JsonLdScripts } from "@/components/seo/json-ld";
 import { Badge } from "@/components/ui/badge";
 import Icon from "@/components/ui/icons";
-import { blog } from "@/lib/source";
-import { absoluteUrl } from "@/lib/utils";
+import { blogCollection, buildCollectionPageJsonLd } from "@/lib/metadata";
+import {
+	getAllBlogTags,
+	getBlogTagIntro,
+	getPostsByTag,
+	isBlogTagIndexable,
+} from "@/lib/seo-content";
 
 export const revalidate = false;
 export const dynamic = "force-static";
 export const dynamicParams = false;
 
-type BlogPage = ReturnType<typeof blog.getPages>[number];
-
-function getPublishedPosts() {
-	return blog
-		.getPages()
-		.filter((post) => post.data.published !== false)
-		.sort(
-			(a, b) =>
-				new Date(b.data.date).getTime() - new Date(a.data.date).getTime()
-		);
-}
-
-function getAllTags(): string[] {
-	const posts = getPublishedPosts();
-	const tags = new Set<string>();
-	for (const post of posts) {
-		for (const tag of post.data.tags) {
-			tags.add(tag);
-		}
-	}
-	return Array.from(tags);
-}
-
-function getPostsByTag(tag: string): BlogPage[] {
-	const posts = getPublishedPosts();
-	return posts.filter((post) =>
-		post.data.tags.some((t) => t.toLowerCase() === tag.toLowerCase())
-	);
-}
+type BlogPage = ReturnType<typeof getPostsByTag>[number];
 
 export function generateStaticParams() {
-	const tags = getAllTags();
+	const tags = getAllBlogTags();
 	return tags.map((tag) => ({
 		tag: encodeURIComponent(tag),
 	}));
@@ -53,40 +31,26 @@ export async function generateMetadata(props: {
 	const params = await props.params;
 	const tag = decodeURIComponent(params.tag);
 	const posts = getPostsByTag(tag);
+	const intro = getBlogTagIntro(tag);
 
 	if (posts.length === 0) {
 		return {};
 	}
 
 	const title = `Articles tagged "${tag}"`;
-	const description = `Browse ${posts.length} article${posts.length === 1 ? "" : "s"} about ${tag} on the Cossistant blog.`;
+	const description =
+		intro ||
+		`Browse ${posts.length} article${posts.length === 1 ? "" : "s"} about ${tag} on the Cossistant blog.`;
 
-	return {
+	return blogCollection({
 		title,
 		description,
-		openGraph: {
-			title,
-			description,
-			type: "website",
-			url: absoluteUrl(`/blog/tag/${encodeURIComponent(tag)}`),
-			images: [
-				{
-					url: `/og?title=${encodeURIComponent(title)}&description=${encodeURIComponent(description)}`,
-				},
-			],
-		},
-		twitter: {
-			card: "summary_large_image",
-			title,
-			description,
-			images: [
-				{
-					url: `/og?title=${encodeURIComponent(title)}&description=${encodeURIComponent(description)}`,
-				},
-			],
-			creator: "@cossistant",
-		},
-	};
+		path: `/blog/tag/${encodeURIComponent(tag)}`,
+		image: `/og?title=${encodeURIComponent(title)}&description=${encodeURIComponent(description)}`,
+		noIndex: !isBlogTagIndexable(tag),
+		follow: true,
+		keywords: [tag, "Cossistant blog"],
+	});
 }
 
 function BlogListItem({ post }: { post: BlogPage }) {
@@ -141,10 +105,20 @@ export default async function BlogTagPage(props: {
 	}
 
 	// Get all tags for the tag cloud
-	const allTags = getAllTags();
+	const allTags = getAllBlogTags();
 
 	return (
 		<div className="flex flex-col py-20 pb-40">
+			<JsonLdScripts
+				data={buildCollectionPageJsonLd({
+					title: `Articles tagged "${tag}"`,
+					description:
+						getBlogTagIntro(tag) ||
+						`Browse ${posts.length} article${posts.length === 1 ? "" : "s"} about ${tag} on the Cossistant blog.`,
+					path: `/blog/tag/${encodeURIComponent(tag)}`,
+				})}
+				idPrefix="blog-tag-jsonld"
+			/>
 			<div className="mx-auto w-full max-w-5xl px-4 md:px-0">
 				{/* Header */}
 				<header className="mt-10 mb-12">

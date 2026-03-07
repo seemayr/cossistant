@@ -1,5 +1,6 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { toAbsoluteUrl } from "@/lib/site-url";
 
 export function cn(...inputs: ClassValue[]) {
 	return twMerge(clsx(inputs));
@@ -21,5 +22,5 @@ export function isValidDomain(domain: string) {
 }
 
 export function absoluteUrl(path: string) {
-	return `${process.env.NEXT_PUBLIC_APP_URL}${path}`;
+	return toAbsoluteUrl(path);
 }

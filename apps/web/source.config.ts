@@ -46,6 +46,11 @@ export const docs = defineDocs({
 		schema: frontmatterSchema.extend({
 			preview: z.string().optional(),
 			index: z.boolean().default(false),
+			image: z.string().optional(),
+			canonical: z.string().optional(),
+			noindex: z.boolean().default(false),
+			keywords: z.array(z.string()).optional(),
+			updatedAt: z.string().optional(),
 			search: z
 				.object({
 					kind: searchKindSchema.optional(),
@@ -76,11 +81,14 @@ export const blog = defineCollections({
 		title: z.string(),
 		description: z.string(),
 		date: z.string(),
+		updatedAt: z.string().optional(),
 		author: z.string(),
 		tags: z.array(z.string()),
 		image: z.string().optional(),
 		published: z.boolean().default(true),
 		canonical: z.string().optional(),
+		noindex: z.boolean().default(false),
+		keywords: z.array(z.string()).optional(),
 		/** Featured article eligible for hero display */
 		top: z.boolean().default(false),
 		/** Slugs of related articles for cross-linking */

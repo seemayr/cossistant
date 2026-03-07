@@ -1,5 +1,6 @@
 import { ConversationStatus } from "@cossistant/types";
 import type { InboxView } from "@cossistant/types/schemas";
+import { getSiteOrigin } from "@/lib/site-url";
 
 /**
  * Check if a website slug is valid (not an internal Next.js/webpack path)
@@ -41,8 +42,7 @@ export function getWebSocketUrl() {
 }
 
 export function getLandingBaseUrl() {
-	const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
-	return baseUrl;
+	return getSiteOrigin();
 }
 
 export function extractInboxParamsFromSlug({

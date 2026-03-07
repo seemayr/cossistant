@@ -1,7 +1,8 @@
-import { generateSiteMetadata } from "@/lib/metadata";
+import { utilityNoindex } from "@/lib/metadata";
 
-export const metadata = generateSiteMetadata({
+export const metadata = utilityNoindex({
 	title: "Forgot your password?",
+	path: "/forgot-password",
 });
 
 export const dynamic = "force-dynamic";

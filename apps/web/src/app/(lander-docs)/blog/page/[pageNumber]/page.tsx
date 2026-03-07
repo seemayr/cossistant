@@ -1,10 +1,11 @@
 import { format } from "date-fns";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { JsonLdScripts } from "@/components/seo/json-ld";
 import { Button } from "@/components/ui/button";
 import Icon from "@/components/ui/icons";
-import { blog } from "@/lib/source";
-import { absoluteUrl } from "@/lib/utils";
+import { blogCollection, buildCollectionPageJsonLd } from "@/lib/metadata";
+import { getPublishedBlogPosts } from "@/lib/seo-content";
 
 export const revalidate = false;
 export const dynamic = "force-static";
@@ -13,20 +14,10 @@ export const dynamicParams = false;
 const GRID_COUNT = 3;
 const LIST_PER_PAGE = 6;
 
-type BlogPage = ReturnType<typeof blog.getPages>[number];
-
-function getPublishedPosts() {
-	return blog
-		.getPages()
-		.filter((post) => post.data.published !== false)
-		.sort(
-			(a, b) =>
-				new Date(b.data.date).getTime() - new Date(a.data.date).getTime()
-		);
-}
+type BlogPage = ReturnType<typeof getPublishedBlogPosts>[number];
 
 export function generateStaticParams() {
-	const allPosts = getPublishedPosts();
+	const allPosts = getPublishedBlogPosts();
 	// Hero (1) + Grid (3) = 4 posts on first page
 	const remainingPosts = allPosts.length - 1 - GRID_COUNT;
 	const totalPages = Math.ceil(remainingPosts / LIST_PER_PAGE);
@@ -50,35 +41,14 @@ export async function generateMetadata(props: {
 	const description =
 		"Insights, tutorials, and updates about AI-powered customer support and the Cossistant platform.";
 
-	return {
+	return blogCollection({
 		title,
 		description,
-		openGraph: {
-			title,
-			description,
-			type: "website",
-			url: absoluteUrl(`/blog/page/${pageNumber}`),
-			images: [
-				{
-					url: `/og?title=${encodeURIComponent(title)}&description=${encodeURIComponent(description)}`,
-				},
-			],
-		},
-		twitter: {
-			card: "summary_large_image",
-			title,
-			description,
-			images: [
-				{
-					url: `/og?title=${encodeURIComponent(title)}&description=${encodeURIComponent(description)}`,
-				},
-			],
-			creator: "@cossistant",
-		},
-		robots: {
-			index: false, // Don't index pagination pages
-		},
-	};
+		path: `/blog/page/${pageNumber}`,
+		image: `/og?title=${encodeURIComponent(title)}&description=${encodeURIComponent(description)}`,
+		noIndex: true,
+		follow: true,
+	});
 }
 
 function BlogListItem({ post }: { post: BlogPage }) {
@@ -132,7 +102,7 @@ export default async function BlogPaginatedPage(props: {
 		redirect("/blog");
 	}
 
-	const allPosts = getPublishedPosts();
+	const allPosts = getPublishedBlogPosts();
 
 	// Calculate pagination
 	// Page 1 shows: 1 hero + 3 grid + 6 list = 10 posts
@@ -158,6 +128,15 @@ export default async function BlogPaginatedPage(props: {
 
 	return (
 		<div className="flex flex-col py-20 pb-40">
+			<JsonLdScripts
+				data={buildCollectionPageJsonLd({
+					title: `Blog - Page ${pageNumber}`,
+					description:
+						"Insights, tutorials, and updates about AI-powered customer support and the Cossistant platform.",
+					path: `/blog/page/${pageNumber}`,
+				})}
+				idPrefix="blog-page-jsonld"
+			/>
 			<div className="mx-auto w-full max-w-5xl px-4 md:px-0">
 				{/* Header */}
 				<header className="mb-12">

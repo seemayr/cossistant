@@ -3,13 +3,19 @@ import { findNeighbour } from "fumadocs-core/page-tree";
 // import { APIPage } from "../../components/docs/api-page";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { JsonLdScripts } from "@/components/seo/json-ld";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import Icon from "@/components/ui/icons";
 import { Separator } from "@/components/ui/separator";
 import { GITHUB_URL } from "@/constants";
+import {
+	buildBreadcrumbJsonLd,
+	buildTechArticleJsonLd,
+	docPage,
+} from "@/lib/metadata";
+import { getDocsData } from "@/lib/seo-content";
 import { source } from "@/lib/source";
-import { absoluteUrl } from "@/lib/utils";
 import { DocsTableOfContents } from "../../components/docs/docs-toc";
 import { mdxComponents } from "../../components/docs/mdx-components";
 import { LLMCopyButton, ViewOptions } from "../../components/page-actions";
@@ -22,6 +28,49 @@ export function generateStaticParams() {
 	return source.generateParams();
 }
 
+type DocsPage = NonNullable<ReturnType<typeof source.getPage>>;
+
+function humanizeSegment(segment: string): string {
+	return segment
+		.split("-")
+		.map((part) => {
+			if (part.toLowerCase() === "api") {
+				return "API";
+			}
+
+			if (part.toLowerCase() === "ai") {
+				return "AI";
+			}
+
+			return part.charAt(0).toUpperCase() + part.slice(1);
+		})
+		.join(" ");
+}
+
+function buildDocsBreadcrumbs(page: DocsPage) {
+	const breadcrumbs = [
+		{ name: "Home", path: "/" },
+		{ name: "Docs", path: "/docs" },
+	];
+
+	if (page.slugs.length === 0) {
+		return breadcrumbs;
+	}
+
+	let currentPath = "/docs";
+
+	for (const [index, segment] of page.slugs.entries()) {
+		currentPath = `${currentPath}/${segment}`;
+		const isLast = index === page.slugs.length - 1;
+		breadcrumbs.push({
+			name: isLast ? getDocsData(page).title : humanizeSegment(segment),
+			path: currentPath,
+		});
+	}
+
+	return breadcrumbs;
+}
+
 export async function generateMetadata(props: {
 	params: Promise<{ slug?: string[] }>;
 }) {
@@ -32,42 +81,23 @@ export async function generateMetadata(props: {
 		notFound();
 	}
 
-	const doc = page.data;
+	const doc = getDocsData(page);
 
 	if (!(doc.title && doc.description)) {
 		notFound();
 	}
 
-	return {
+	return docPage({
 		title: doc.title,
 		description: doc.description,
-		openGraph: {
-			title: doc.title,
-			description: doc.description,
-			type: "article",
-			url: absoluteUrl(page.url),
-			images: [
-				{
-					url: `/og?title=${encodeURIComponent(
-						doc.title
-					)}&description=${encodeURIComponent(doc.description)}`,
-				},
-			],
-		},
-		twitter: {
-			card: "summary_large_image",
-			title: doc.title,
-			description: doc.description,
-			images: [
-				{
-					url: `/og?title=${encodeURIComponent(
-						doc.title
-					)}&description=${encodeURIComponent(doc.description)}`,
-				},
-			],
-			creator: "@cossistant",
-		},
-	};
+		path: page.url,
+		canonical: doc.canonical,
+		image:
+			doc.image ||
+			`/og?title=${encodeURIComponent(doc.title)}&description=${encodeURIComponent(doc.description)}`,
+		keywords: doc.keywords ?? doc.search?.tags,
+		noIndex: doc.noindex,
+	});
 }
 
 export default async function Page(props: {
@@ -91,20 +121,36 @@ export default async function Page(props: {
 	// 	);
 	// }
 
-	const doc = page.data;
+	const doc = getDocsData(page);
 	const MDX = doc.body;
 
 	const neighbours = await findNeighbour(source.pageTree, page.url);
 
 	const links = (doc as { links?: { doc?: string; api?: string } }).links;
 
-	const isMainPage = page.slugs.length === 0;
+	const breadcrumbs = buildDocsBreadcrumbs(page);
 
 	return (
 		<div
 			className="flex items-stretch py-20 pb-120 text-[1.05rem] sm:text-[15px] xl:w-full"
 			data-slot="docs"
 		>
+			<JsonLdScripts
+				data={[
+					buildTechArticleJsonLd({
+						title: doc.title,
+						description: doc.description,
+						path: page.url,
+						image:
+							doc.image ||
+							`/og?title=${encodeURIComponent(doc.title)}&description=${encodeURIComponent(doc.description)}`,
+						keywords: doc.keywords ?? doc.search?.tags,
+						dateModified: doc.updatedAt ?? doc.lastModified,
+					}),
+					buildBreadcrumbJsonLd(breadcrumbs),
+				]}
+				idPrefix="docs-jsonld"
+			/>
 			<div className="flex min-w-0 flex-1 flex-col">
 				<div className="h-(--top-spacing) shrink-0" />
 				<div className="mx-auto flex w-full min-w-0 max-w-2xl flex-1 flex-col gap-8 px-4 py-6 text-neutral-800 md:px-0 lg:py-8 dark:text-neutral-300">
