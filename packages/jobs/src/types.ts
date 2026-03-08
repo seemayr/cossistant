@@ -52,6 +52,8 @@ export type AiAgentJobData = {
 	websiteId: string;
 	organizationId: string;
 	aiAgentId: string;
+	messageId: string;
+	messageCreatedAt: string;
 	runAttempt?: number;
 };
 
@@ -72,6 +74,8 @@ export type AiAgentBackgroundJobData = {
 	websiteId: string;
 	organizationId: string;
 	aiAgentId: string;
+	sourceMessageId: string;
+	sourceMessageCreatedAt: string;
 };
 
 export function generateAiAgentBackgroundJobId(conversationId: string): string {

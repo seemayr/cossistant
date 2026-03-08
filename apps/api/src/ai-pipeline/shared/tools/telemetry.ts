@@ -29,9 +29,14 @@ import {
 } from "./telemetry/timeline";
 
 function resolveProgressAudience(params: {
+	context: PipelineToolContext;
 	telemetry: ToolTelemetrySpec;
 	toolName: string;
 }): PipelineToolProgressAudience {
+	if (params.context.pipelineKind === "background") {
+		return "dashboard";
+	}
+
 	const configuredAudience = params.telemetry.progress.audience ?? "auto";
 	if (configuredAudience === "all" || configuredAudience === "dashboard") {
 		return configuredAudience;
@@ -79,7 +84,7 @@ async function safeEmitToolProgress(params: {
 			toolName,
 			state,
 			progressMessage,
-			audience: resolveProgressAudience({ telemetry, toolName }),
+			audience: resolveProgressAudience({ context, telemetry, toolName }),
 		});
 	} catch (error) {
 		emitStructuredToolLog(

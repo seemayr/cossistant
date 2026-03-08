@@ -94,7 +94,6 @@ describe("workers bootstrap idempotency", () => {
 		const { startAllWorkers, stopAllWorkers } = await modulePromise;
 		const params = {
 			redisUrl: "redis://localhost:6379",
-			stateRedis: {} as never,
 		};
 
 		await Promise.all([startAllWorkers(params), startAllWorkers(params)]);

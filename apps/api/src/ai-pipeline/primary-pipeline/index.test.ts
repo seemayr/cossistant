@@ -20,6 +20,8 @@ const runIntakeStepMock = mock((async () => ({
 			isEscalated: false,
 			escalationReason: null,
 		},
+		continuationContext: null,
+		triggerMessageText: "Need help",
 		triggerMessage: {
 			messageId: "msg-1",
 			senderType: "visitor",
@@ -156,6 +158,8 @@ describe("runPrimaryPipeline generation error/skip behavior", () => {
 					isEscalated: false,
 					escalationReason: null,
 				},
+				continuationContext: null,
+				triggerMessageText: "Need help",
 				triggerMessage: {
 					messageId: "msg-1",
 					senderType: "visitor",
@@ -375,5 +379,57 @@ describe("runPrimaryPipeline generation error/skip behavior", () => {
 		expect(result.status).toBe("completed");
 		expect(typingHeartbeatStartMock).toHaveBeenCalledTimes(1);
 		expect(typingHeartbeatStopMock).toHaveBeenCalledTimes(1);
+	});
+
+	it("passes continuation context into generation runtime", async () => {
+		runIntakeStepMock.mockResolvedValueOnce({
+			status: "ready",
+			data: {
+				aiAgent: { id: "ai-1" },
+				modelResolution: {
+					modelIdResolved: "moonshotai/kimi-k2.5",
+					modelIdOriginal: "moonshotai/kimi-k2.5",
+					modelMigrationApplied: false,
+				},
+				conversation: { id: "conv-1" },
+				conversationHistory: [],
+				visitorContext: null,
+				conversationState: {
+					hasHumanAssignee: false,
+					assigneeIds: [],
+					participantIds: [],
+					isEscalated: false,
+					escalationReason: null,
+				},
+				continuationContext: {
+					previousProcessedMessageId: "msg-0",
+					previousProcessedMessageCreatedAt: "2026-03-04T23:59:00.000Z",
+					latestAiReply: "I already asked for the visitor's order number.",
+				},
+				triggerMessageText: "Any update?",
+				triggerMessage: {
+					messageId: "msg-1",
+					senderType: "visitor",
+					visibility: "public",
+				},
+			},
+		});
+
+		const { runPrimaryPipeline } = await modulePromise;
+		const result = await runPrimaryPipeline({
+			db: {} as never,
+			input: baseInput,
+		});
+
+		expect(result.status).toBe("completed");
+		expect(runGenerationRuntimeMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				continuationContext: {
+					previousProcessedMessageId: "msg-0",
+					previousProcessedMessageCreatedAt: "2026-03-04T23:59:00.000Z",
+					latestAiReply: "I already asked for the visitor's order number.",
+				},
+			})
+		);
 	});
 });

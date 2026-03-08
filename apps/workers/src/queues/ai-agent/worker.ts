@@ -1,4 +1,9 @@
-import { getConversationById } from "@api/db/queries/conversation";
+import { getBehaviorSettings } from "@api/ai-pipeline/shared/settings";
+import { getAiAgentById } from "@api/db/queries/ai-agent";
+import {
+	getConversationById,
+	getMessageMetadata,
+} from "@api/db/queries/conversation";
 import {
 	AI_AGENT_BACKGROUND_DELAY_MS,
 	AI_AGENT_INITIAL_DELAY_MS,
@@ -6,43 +11,61 @@ import {
 	AI_AGENT_RETRY_DELAY_MS,
 	type AiAgentBackgroundJobData,
 	type AiAgentJobData,
-	clearAiAgentRunCursor,
-	clearAiAgentRunCursorIfMatches,
 	enqueueConversationScopedAiBackgroundJob,
 	enqueueConversationScopedAiJob,
-	getAiAgentRunCursor,
 	QUEUE_NAMES,
-	setAiAgentRunCursor,
 } from "@cossistant/jobs";
-import {
-	getSafeRedisUrl,
-	type Redis,
-	type RedisOptions,
-} from "@cossistant/redis";
+import { getSafeRedisUrl, type RedisOptions } from "@cossistant/redis";
 import { db } from "@workers/db";
 import { env } from "@workers/env";
 import { type Job, Queue, Worker } from "bullmq";
 import {
-	buildMessageWindowFromCursor,
 	findNextTriggerableMessageAfterCursor,
-} from "./message-window";
-import { PipelineWindowError, runPipelineForWindow } from "./pipeline-runner";
+	type TriggerableMessage,
+} from "./next-triggerable-message";
+import { PipelineMessageError, runPipelineForMessage } from "./pipeline-runner";
 
 type WorkerConfig = {
 	connectionOptions: RedisOptions;
 	redisUrl: string;
-	stateRedis: Redis;
 };
 
 type AiAgentProcessResult = {
-	hadCursor: boolean;
-	processedMessageCount: number;
+	processedMessageId: string | null;
+	processedMessageCreatedAt: string | null;
 };
+
+const COMPLETED_HOOK_MAX_ATTEMPTS = 3;
+
+function hasBackgroundAnalysisEnabled(
+	aiAgentId: Awaited<ReturnType<typeof getAiAgentById>>
+): boolean {
+	if (!aiAgentId) {
+		return false;
+	}
+
+	const settings = getBehaviorSettings(aiAgentId);
+	return (
+		settings.autoGenerateTitle ||
+		settings.autoAnalyzeSentiment ||
+		settings.canSetPriority
+	);
+}
+
+function isTriggerableMessage(
+	message: Awaited<ReturnType<typeof getMessageMetadata>>,
+	conversationId: string
+): message is NonNullable<Awaited<ReturnType<typeof getMessageMetadata>>> {
+	return Boolean(
+		message &&
+			message.conversationId === conversationId &&
+			(message.userId || message.visitorId)
+	);
+}
 
 export function createAiAgentWorker({
 	connectionOptions,
 	redisUrl,
-	stateRedis,
 }: WorkerConfig) {
 	const queueName = QUEUE_NAMES.AI_AGENT;
 	const safeRedisUrl = getSafeRedisUrl(redisUrl);
@@ -55,71 +78,208 @@ export function createAiAgentWorker({
 		tls: connectionOptions.tls ? { ...connectionOptions.tls } : undefined,
 	});
 
+	async function resolveTargetMessageForJob(params: {
+		job: Job<AiAgentJobData>;
+		conversation: Awaited<ReturnType<typeof getConversationById>>;
+	}): Promise<TriggerableMessage | null> {
+		const afterCreatedAt =
+			params.conversation?.aiAgentLastProcessedMessageCreatedAt ?? null;
+		const afterId = params.conversation?.aiAgentLastProcessedMessageId ?? null;
+
+		if (params.conversation && afterCreatedAt && afterId) {
+			return findNextTriggerableMessageAfterCursor({
+				db,
+				organizationId: params.conversation.organizationId,
+				conversationId: params.conversation.id,
+				afterCreatedAt,
+				afterId,
+			});
+		}
+
+		const queuedMessage = await getMessageMetadata(db, {
+			messageId: params.job.data.messageId,
+			organizationId: params.job.data.organizationId,
+		});
+
+		if (!isTriggerableMessage(queuedMessage, params.job.data.conversationId)) {
+			return null;
+		}
+
+		return {
+			id: queuedMessage.id,
+			createdAt: queuedMessage.createdAt,
+		};
+	}
+
+	async function enqueueNextPendingJobFromConversation(params: {
+		job: Job<AiAgentJobData>;
+		conversation: NonNullable<Awaited<ReturnType<typeof getConversationById>>>;
+	}): Promise<void> {
+		if (!schedulerQueue) {
+			return;
+		}
+
+		const afterCreatedAt =
+			params.conversation.aiAgentLastProcessedMessageCreatedAt;
+		const afterId = params.conversation.aiAgentLastProcessedMessageId;
+
+		if (!(afterCreatedAt && afterId)) {
+			return;
+		}
+
+		const nextMessage = await findNextTriggerableMessageAfterCursor({
+			db,
+			organizationId: params.conversation.organizationId,
+			conversationId: params.conversation.id,
+			afterCreatedAt,
+			afterId,
+		});
+
+		if (!nextMessage) {
+			return;
+		}
+
+		await enqueueConversationScopedAiJob({
+			queue: schedulerQueue,
+			data: {
+				...params.job.data,
+				messageId: nextMessage.id,
+				messageCreatedAt: nextMessage.createdAt,
+				runAttempt: 0,
+			},
+			delayMs: 0,
+		});
+	}
+
+	async function retryCompletedHook(
+		label: string,
+		fn: (attempt: number) => Promise<void>
+	): Promise<void> {
+		let lastError: unknown;
+
+		for (
+			let attempt = 1;
+			attempt <= COMPLETED_HOOK_MAX_ATTEMPTS;
+			attempt += 1
+		) {
+			try {
+				await fn(attempt);
+				return;
+			} catch (error) {
+				lastError = error;
+				console.warn(
+					`[worker:ai-agent] ${label} failed attempt ${attempt}/${COMPLETED_HOOK_MAX_ATTEMPTS}`,
+					error
+				);
+			}
+		}
+
+		throw lastError ?? new Error(`[worker:ai-agent] ${label} failed`);
+	}
+
+	async function enqueueRecoveryJobFromCursor(
+		job: Job<AiAgentJobData>
+	): Promise<void> {
+		if (!schedulerQueue) {
+			return;
+		}
+
+		const conversation = await getConversationById(db, {
+			conversationId: job.data.conversationId,
+		});
+		if (!conversation) {
+			return;
+		}
+
+		await enqueueNextPendingJobFromConversation({
+			job,
+			conversation,
+		});
+	}
+
+	async function runCompletedBookkeeping(
+		job: Job<AiAgentJobData>,
+		result: AiAgentProcessResult
+	): Promise<void> {
+		if (!(result.processedMessageId && result.processedMessageCreatedAt)) {
+			return;
+		}
+		if (!schedulerQueue) {
+			return;
+		}
+
+		const conversation = await getConversationById(db, {
+			conversationId: job.data.conversationId,
+		});
+
+		if (!conversation) {
+			return;
+		}
+
+		await enqueueNextPendingJobFromConversation({
+			job,
+			conversation,
+		});
+	}
+
 	async function processAiAgentJob(
 		job: Job<AiAgentJobData>
 	): Promise<AiAgentProcessResult> {
 		const { conversationId, aiAgentId } = job.data;
-		const cursor = await getAiAgentRunCursor(stateRedis, conversationId);
-		if (!cursor) {
-			return { hadCursor: false, processedMessageCount: 0 };
-		}
-
 		const conversation = await getConversationById(db, { conversationId });
 		if (!conversation) {
-			await clearAiAgentRunCursor(stateRedis, conversationId);
-			return { hadCursor: false, processedMessageCount: 0 };
+			return {
+				processedMessageId: null,
+				processedMessageCreatedAt: null,
+			};
 		}
 
-		const windowMessages = await buildMessageWindowFromCursor({
+		const targetMessage = await resolveTargetMessageForJob({
+			job,
+			conversation,
+		});
+		if (!targetMessage) {
+			return {
+				processedMessageId: null,
+				processedMessageCreatedAt: null,
+			};
+		}
+
+		const runResult = await runPipelineForMessage({
 			db,
-			organizationId: conversation.organizationId,
-			conversationId,
-			cursor,
+			conversation: {
+				id: conversation.id,
+				websiteId: conversation.websiteId,
+				organizationId: conversation.organizationId,
+				visitorId: conversation.visitorId,
+			},
+			aiAgentId,
+			jobId: String(job.id ?? `job-${Date.now()}`),
+			message: targetMessage,
 		});
 
-		if (windowMessages.length === 0) {
-			return { hadCursor: true, processedMessageCount: 0 };
-		}
-
-		let processedMessageCount = 0;
-
-		try {
-			const runResult = await runPipelineForWindow({
-				db,
-				conversation: {
-					id: conversation.id,
-					websiteId: conversation.websiteId,
-					organizationId: conversation.organizationId,
-					visitorId: conversation.visitorId,
-				},
-				aiAgentId,
-				jobId: String(job.id ?? `job-${Date.now()}`),
-				messages: windowMessages,
-			});
-			processedMessageCount = runResult.processedMessageCount;
-		} catch (error) {
-			if (error instanceof PipelineWindowError) {
-				await setAiAgentRunCursor(stateRedis, {
-					conversationId,
-					messageId: error.failedMessage.id,
-					messageCreatedAt: error.failedMessage.createdAt,
-				});
-			}
-			throw error;
-		}
-
-		return { hadCursor: true, processedMessageCount };
+		return {
+			processedMessageId: runResult.processedMessageId,
+			processedMessageCreatedAt: runResult.processedMessageCreatedAt,
+		};
 	}
 
 	async function scheduleBackgroundPipeline(
 		job: Job<AiAgentJobData>,
 		result: AiAgentProcessResult
 	): Promise<void> {
-		if (result.processedMessageCount <= 0) {
+		if (!(result.processedMessageId && result.processedMessageCreatedAt)) {
 			return;
 		}
 
 		if (!backgroundSchedulerQueue) {
+			return;
+		}
+
+		const aiAgent = await getAiAgentById(db, {
+			aiAgentId: job.data.aiAgentId,
+		});
+		if (!hasBackgroundAnalysisEnabled(aiAgent)) {
 			return;
 		}
 
@@ -130,6 +290,8 @@ export function createAiAgentWorker({
 				websiteId: job.data.websiteId,
 				organizationId: job.data.organizationId,
 				aiAgentId: job.data.aiAgentId,
+				sourceMessageId: result.processedMessageId,
+				sourceMessageCreatedAt: result.processedMessageCreatedAt,
 			},
 			delayMs: AI_AGENT_BACKGROUND_DELAY_MS,
 		});
@@ -140,103 +302,59 @@ export function createAiAgentWorker({
 		result: AiAgentProcessResult
 	): Promise<void> {
 		try {
-			if (!result.hadCursor) {
-				return;
-			}
-			if (!schedulerQueue) {
-				return;
-			}
-
-			const currentCursor = await getAiAgentRunCursor(
-				stateRedis,
-				job.data.conversationId
+			await retryCompletedHook("completed hook bookkeeping", async () => {
+				await runCompletedBookkeeping(job, result);
+			});
+		} catch (error) {
+			console.error(
+				"[worker:ai-agent] completed hook bookkeeping exhausted retries",
+				error
 			);
-			if (!currentCursor) {
-				return;
-			}
+			await enqueueRecoveryJobFromCursor(job);
+		}
 
-			const conversation = await getConversationById(db, {
-				conversationId: job.data.conversationId,
+		try {
+			await retryCompletedHook("background scheduling", async () => {
+				await scheduleBackgroundPipeline(job, result);
 			});
-
-			if (!conversation) {
-				await clearAiAgentRunCursor(stateRedis, job.data.conversationId);
-				return;
-			}
-
-			const afterCreatedAt = conversation.aiAgentLastProcessedMessageCreatedAt;
-			const afterId = conversation.aiAgentLastProcessedMessageId;
-
-			if (!(afterCreatedAt && afterId)) {
-				await clearAiAgentRunCursorIfMatches(stateRedis, {
-					conversationId: job.data.conversationId,
-					messageId: currentCursor.messageId,
-					messageCreatedAt: currentCursor.messageCreatedAt,
-				});
-				return;
-			}
-
-			const nextMessage = await findNextTriggerableMessageAfterCursor({
-				db,
-				organizationId: conversation.organizationId,
-				conversationId: conversation.id,
-				afterCreatedAt,
-				afterId,
-			});
-
-			if (!nextMessage) {
-				// Compare-and-clear avoids deleting a newer cursor that may have been written
-				// by a concurrent trigger while this completion hook was running.
-				await clearAiAgentRunCursorIfMatches(stateRedis, {
-					conversationId: job.data.conversationId,
-					messageId: currentCursor.messageId,
-					messageCreatedAt: currentCursor.messageCreatedAt,
-				});
-				return;
-			}
-
-			await setAiAgentRunCursor(stateRedis, {
-				conversationId: conversation.id,
-				messageId: nextMessage.id,
-				messageCreatedAt: nextMessage.createdAt,
-			});
-
-			await enqueueConversationScopedAiJob({
-				queue: schedulerQueue,
-				data: {
-					...job.data,
-					runAttempt: 0,
-				},
-				delayMs: 0,
-			});
-		} finally {
-			await scheduleBackgroundPipeline(job, result);
+		} catch (error) {
+			console.error(
+				"[worker:ai-agent] background scheduling exhausted retries",
+				error
+			);
 		}
 	}
 
-	async function handleFailed(job: Job<AiAgentJobData>): Promise<void> {
+	async function handleFailed(
+		job: Job<AiAgentJobData>,
+		error: Error
+	): Promise<void> {
 		if (!schedulerQueue) {
-			return;
-		}
-
-		const cursor = await getAiAgentRunCursor(
-			stateRedis,
-			job.data.conversationId
-		);
-		if (!cursor) {
 			return;
 		}
 
 		const runAttempt = job.data.runAttempt ?? 0;
 		if (runAttempt >= AI_AGENT_MAX_RUN_ATTEMPTS - 1) {
-			await clearAiAgentRunCursor(stateRedis, job.data.conversationId);
+			console.error(
+				`[worker:ai-agent] max retry attempts reached; preserving DB cursor for conversation ${job.data.conversationId}`
+			);
 			return;
 		}
+
+		const failedMessage =
+			error instanceof PipelineMessageError
+				? error.failedMessage
+				: {
+						id: job.data.messageId,
+						createdAt: job.data.messageCreatedAt,
+					};
 
 		await enqueueConversationScopedAiJob({
 			queue: schedulerQueue,
 			data: {
 				...job.data,
+				messageId: failedMessage.id,
+				messageCreatedAt: failedMessage.createdAt,
 				runAttempt: runAttempt + 1,
 			},
 			delayMs: AI_AGENT_RETRY_DELAY_MS,
@@ -292,7 +410,7 @@ export function createAiAgentWorker({
 				if (!job) {
 					return;
 				}
-				void handleFailed(job).catch((retryError) => {
+				void handleFailed(job, error as Error).catch((retryError) => {
 					console.error(
 						"[worker:ai-agent] failed hook retry failed",
 						retryError

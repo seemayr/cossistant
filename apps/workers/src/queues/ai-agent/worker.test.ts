@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it, mock } from "bun:test";
+import { beforeEach, describe, expect, it, mock } from "bun:test";
 import type {
 	AiAgentBackgroundJobData,
 	AiAgentJobData,
@@ -10,11 +10,6 @@ type MockJob<T> = {
 	data: T;
 };
 
-type MockRunCursor = {
-	messageId: string;
-	messageCreatedAt: string;
-};
-
 type MockConversation = {
 	id: string;
 	websiteId: string;
@@ -24,20 +19,24 @@ type MockConversation = {
 	aiAgentLastProcessedMessageId: string | null;
 };
 
-type MockWindowMessage = {
+type MockMessage = {
 	id: string;
 	createdAt: string;
 };
 
 let processor:
-	| ((
-			job: MockJob<AiAgentJobData>
-	  ) => Promise<{ hadCursor: boolean; processedMessageCount: number }>)
+	| ((job: MockJob<AiAgentJobData>) => Promise<{
+			processedMessageId: string | null;
+			processedMessageCreatedAt: string | null;
+	  }>)
 	| null = null;
 let completedHandler:
 	| ((
 			job: MockJob<AiAgentJobData>,
-			result: { hadCursor: boolean; processedMessageCount: number }
+			result: {
+				processedMessageId: string | null;
+				processedMessageCreatedAt: string | null;
+			}
 	  ) => void)
 	| null = null;
 let failedHandler:
@@ -55,9 +54,10 @@ class MockWorker<T> {
 
 	constructor(
 		_queueName: string,
-		processorFn: (
-			job: MockJob<T>
-		) => Promise<{ hadCursor: boolean; processedMessageCount: number }>
+		processorFn: (job: MockJob<T>) => Promise<{
+			processedMessageId: string | null;
+			processedMessageCreatedAt: string | null;
+		}>
 	) {
 		processor = processorFn as typeof processor;
 	}
@@ -67,7 +67,10 @@ class MockWorker<T> {
 		handler:
 			| ((
 					job: MockJob<AiAgentJobData>,
-					result: { hadCursor: boolean; processedMessageCount: number }
+					result: {
+						processedMessageId: string | null;
+						processedMessageCreatedAt: string | null;
+					}
 			  ) => void)
 			| ((job: MockJob<AiAgentJobData>, error: Error) => void)
 	) {
@@ -88,23 +91,38 @@ class MockQueue<T> {
 const getConversationByIdMock = mock(
 	async (): Promise<MockConversation | null> => null
 );
-const getAiAgentRunCursorMock = mock(
-	async (): Promise<MockRunCursor | null> => null
+const getMessageMetadataMock = mock(
+	async (): Promise<{
+		id: string;
+		createdAt: string;
+		conversationId: string;
+		userId: string | null;
+		visitorId: string | null;
+	} | null> => null
 );
-const setAiAgentRunCursorMock = mock(async (): Promise<void> => {});
-const clearAiAgentRunCursorMock = mock(async (): Promise<void> => {});
-const clearAiAgentRunCursorIfMatchesMock = mock(
-	async (): Promise<boolean> => true
-);
-const buildMessageWindowFromCursorMock = mock(
-	async (): Promise<MockWindowMessage[]> => []
-);
+const getAiAgentByIdMock = mock(async () => ({
+	id: "ai-1",
+	behaviorSettings: {},
+}));
+const getBehaviorSettingsMock = mock(() => ({
+	autoGenerateTitle: true,
+	autoAnalyzeSentiment: true,
+	canSetPriority: true,
+}));
 const findNextTriggerableMessageAfterCursorMock = mock(
-	async (): Promise<MockWindowMessage | null> => null
+	async (): Promise<MockMessage | null> => null
 );
-const runPipelineForWindowMock = mock(
-	async (): Promise<{ processedMessageCount: number }> => ({
-		processedMessageCount: 1,
+const runPipelineForMessageMock = mock(
+	async ({
+		message,
+	}: {
+		message: MockMessage;
+	}): Promise<{
+		processedMessageId: string;
+		processedMessageCreatedAt: string;
+	}> => ({
+		processedMessageId: message.id,
+		processedMessageCreatedAt: message.createdAt,
 	})
 );
 const enqueueConversationScopedAiJobMock = mock(
@@ -125,7 +143,7 @@ const enqueueConversationScopedAiBackgroundJobMock = mock(
 	})
 );
 
-class PipelineWindowError extends Error {
+class PipelineMessageError extends Error {
 	failedMessage: { id: string; createdAt: string };
 	constructor(
 		message: string,
@@ -143,6 +161,15 @@ mock.module("bullmq", () => ({
 
 mock.module("@api/db/queries/conversation", () => ({
 	getConversationById: getConversationByIdMock,
+	getMessageMetadata: getMessageMetadataMock,
+}));
+
+mock.module("@api/db/queries/ai-agent", () => ({
+	getAiAgentById: getAiAgentByIdMock,
+}));
+
+mock.module("@api/ai-pipeline/shared/settings", () => ({
+	getBehaviorSettings: getBehaviorSettingsMock,
 }));
 
 mock.module("@cossistant/jobs", () => ({
@@ -154,24 +181,19 @@ mock.module("@cossistant/jobs", () => ({
 	AI_AGENT_INITIAL_DELAY_MS: 5000,
 	AI_AGENT_RETRY_DELAY_MS: 5000,
 	AI_AGENT_MAX_RUN_ATTEMPTS: 3,
-	getAiAgentRunCursor: getAiAgentRunCursorMock,
-	setAiAgentRunCursor: setAiAgentRunCursorMock,
-	clearAiAgentRunCursor: clearAiAgentRunCursorMock,
-	clearAiAgentRunCursorIfMatches: clearAiAgentRunCursorIfMatchesMock,
 	enqueueConversationScopedAiBackgroundJob:
 		enqueueConversationScopedAiBackgroundJobMock,
 	enqueueConversationScopedAiJob: enqueueConversationScopedAiJobMock,
 }));
 
-mock.module("./message-window", () => ({
-	buildMessageWindowFromCursor: buildMessageWindowFromCursorMock,
+mock.module("./next-triggerable-message", () => ({
 	findNextTriggerableMessageAfterCursor:
 		findNextTriggerableMessageAfterCursorMock,
 }));
 
 mock.module("./pipeline-runner", () => ({
-	PipelineWindowError,
-	runPipelineForWindow: runPipelineForWindowMock,
+	PipelineMessageError,
+	runPipelineForMessage: runPipelineForMessageMock,
 }));
 
 mock.module("@workers/db", () => ({ db: {} }));
@@ -188,6 +210,8 @@ function buildJobData(overrides: Partial<AiAgentJobData> = {}): AiAgentJobData {
 		websiteId: "site-1",
 		organizationId: "org-1",
 		aiAgentId: "ai-1",
+		messageId: "msg-1",
+		messageCreatedAt: "2026-03-04T10:00:00.000Z",
 		...overrides,
 	};
 }
@@ -214,11 +238,7 @@ async function runJob(data: AiAgentJobData) {
 	}
 }
 
-describe("ai-agent worker cursor orchestration", () => {
-	afterAll(() => {
-		mock.restore();
-	});
-
+describe("ai-agent worker single-message orchestration", () => {
 	beforeEach(() => {
 		processor = null;
 		completedHandler = null;
@@ -229,13 +249,11 @@ describe("ai-agent worker cursor orchestration", () => {
 		queueWaitUntilReadyMock.mockReset();
 		queueCloseMock.mockReset();
 		getConversationByIdMock.mockReset();
-		getAiAgentRunCursorMock.mockReset();
-		setAiAgentRunCursorMock.mockReset();
-		clearAiAgentRunCursorMock.mockReset();
-		clearAiAgentRunCursorIfMatchesMock.mockReset();
-		buildMessageWindowFromCursorMock.mockReset();
+		getMessageMetadataMock.mockReset();
+		getAiAgentByIdMock.mockReset();
+		getBehaviorSettingsMock.mockReset();
 		findNextTriggerableMessageAfterCursorMock.mockReset();
-		runPipelineForWindowMock.mockReset();
+		runPipelineForMessageMock.mockReset();
 		enqueueConversationScopedAiJobMock.mockReset();
 		enqueueConversationScopedAiBackgroundJobMock.mockReset();
 
@@ -243,75 +261,44 @@ describe("ai-agent worker cursor orchestration", () => {
 		workerCloseMock.mockResolvedValue(undefined);
 		queueWaitUntilReadyMock.mockResolvedValue(undefined);
 		queueCloseMock.mockResolvedValue(undefined);
-		getAiAgentRunCursorMock.mockResolvedValue(null);
-		buildMessageWindowFromCursorMock.mockResolvedValue([]);
+		getMessageMetadataMock.mockResolvedValue({
+			id: "msg-1",
+			createdAt: "2026-03-04T10:00:00.000Z",
+			conversationId: "conv-1",
+			userId: null,
+			visitorId: "visitor-1",
+		});
+		getAiAgentByIdMock.mockResolvedValue({
+			id: "ai-1",
+			behaviorSettings: {},
+		});
+		getBehaviorSettingsMock.mockReturnValue({
+			autoGenerateTitle: true,
+			autoAnalyzeSentiment: true,
+			canSetPriority: true,
+		});
 		findNextTriggerableMessageAfterCursorMock.mockResolvedValue(null);
-		runPipelineForWindowMock.mockResolvedValue({ processedMessageCount: 1 });
-		clearAiAgentRunCursorIfMatchesMock.mockResolvedValue(true);
+		runPipelineForMessageMock.mockImplementation(
+			async ({ message }: { message: MockMessage }) => ({
+				processedMessageId: message.id,
+				processedMessageCreatedAt: message.createdAt,
+			})
+		);
 		enqueueConversationScopedAiJobMock.mockResolvedValue({ status: "created" });
 		enqueueConversationScopedAiBackgroundJobMock.mockResolvedValue({
 			status: "created",
 		});
 	});
 
-	it("no-ops when run cursor is missing", async () => {
-		const { createAiAgentWorker } = await modulePromise;
-		const worker = createAiAgentWorker({
-			connectionOptions: {} as never,
-			redisUrl: "redis://localhost:6379",
-			stateRedis: {} as never,
-		});
-
-		await worker.start();
-		await runJob(buildJobData());
-
-		expect(runPipelineForWindowMock).not.toHaveBeenCalled();
-		expect(enqueueConversationScopedAiJobMock).not.toHaveBeenCalled();
-		expect(enqueueConversationScopedAiBackgroundJobMock).not.toHaveBeenCalled();
-
-		await worker.stop();
-	});
-
-	it("clears run cursor when conversation is missing", async () => {
-		getAiAgentRunCursorMock.mockResolvedValue({
-			messageId: "msg-1",
-			messageCreatedAt: "2026-03-04T10:00:00.000Z",
-		});
-		getConversationByIdMock.mockResolvedValue(null);
-
-		const { createAiAgentWorker } = await modulePromise;
-		const worker = createAiAgentWorker({
-			connectionOptions: {} as never,
-			redisUrl: "redis://localhost:6379",
-			stateRedis: {} as never,
-		});
-
-		await worker.start();
-		await runJob(buildJobData());
-
-		expect(clearAiAgentRunCursorMock).toHaveBeenCalledWith(
-			expect.anything(),
-			"conv-1"
-		);
-		expect(runPipelineForWindowMock).not.toHaveBeenCalled();
-		expect(enqueueConversationScopedAiBackgroundJobMock).not.toHaveBeenCalled();
-
-		await worker.stop();
-	});
-
-	it("does not clear cursor on completion when compare-and-clear does not match", async () => {
-		getAiAgentRunCursorMock.mockResolvedValue({
-			messageId: "msg-1",
-			messageCreatedAt: "2026-03-04T10:00:00.000Z",
-		});
+	it("processes the queued message once when the conversation cursor is empty", async () => {
 		getConversationByIdMock
 			.mockResolvedValueOnce({
 				id: "conv-1",
 				websiteId: "site-1",
 				organizationId: "org-1",
 				visitorId: "visitor-1",
-				aiAgentLastProcessedMessageCreatedAt: "2026-03-04T10:00:00.000Z",
-				aiAgentLastProcessedMessageId: "msg-1",
+				aiAgentLastProcessedMessageCreatedAt: null,
+				aiAgentLastProcessedMessageId: null,
 			})
 			.mockResolvedValueOnce({
 				id: "conv-1",
@@ -321,31 +308,33 @@ describe("ai-agent worker cursor orchestration", () => {
 				aiAgentLastProcessedMessageCreatedAt: "2026-03-04T10:00:00.000Z",
 				aiAgentLastProcessedMessageId: "msg-1",
 			});
-		buildMessageWindowFromCursorMock.mockResolvedValue([
-			{ id: "msg-1", createdAt: "2026-03-04T10:00:00.000Z" },
-		]);
-		findNextTriggerableMessageAfterCursorMock.mockResolvedValue(null);
-		clearAiAgentRunCursorIfMatchesMock.mockResolvedValue(false);
 
 		const { createAiAgentWorker } = await modulePromise;
 		const worker = createAiAgentWorker({
 			connectionOptions: {} as never,
 			redisUrl: "redis://localhost:6379",
-			stateRedis: {} as never,
 		});
 
 		await worker.start();
 		await runJob(buildJobData());
 
-		expect(clearAiAgentRunCursorIfMatchesMock).toHaveBeenCalledWith(
-			expect.anything(),
-			{
-				conversationId: "conv-1",
-				messageId: "msg-1",
-				messageCreatedAt: "2026-03-04T10:00:00.000Z",
-			}
-		);
-		expect(clearAiAgentRunCursorMock).not.toHaveBeenCalled();
+		expect(runPipelineForMessageMock).toHaveBeenCalledTimes(1);
+		expect(runPipelineForMessageMock).toHaveBeenCalledWith({
+			db: expect.anything(),
+			conversation: {
+				id: "conv-1",
+				websiteId: "site-1",
+				organizationId: "org-1",
+				visitorId: "visitor-1",
+			},
+			aiAgentId: "ai-1",
+			jobId: "job-1",
+			message: {
+				id: "msg-1",
+				createdAt: "2026-03-04T10:00:00.000Z",
+			},
+		});
+		expect(enqueueConversationScopedAiJobMock).not.toHaveBeenCalled();
 		expect(enqueueConversationScopedAiBackgroundJobMock).toHaveBeenCalledWith({
 			queue: expect.anything(),
 			data: {
@@ -353,6 +342,8 @@ describe("ai-agent worker cursor orchestration", () => {
 				websiteId: "site-1",
 				organizationId: "org-1",
 				aiAgentId: "ai-1",
+				sourceMessageId: "msg-1",
+				sourceMessageCreatedAt: "2026-03-04T10:00:00.000Z",
 			},
 			delayMs: 60_000,
 		});
@@ -360,11 +351,7 @@ describe("ai-agent worker cursor orchestration", () => {
 		await worker.stop();
 	});
 
-	it("schedules immediate follow-up on completion when newer triggerable message exists", async () => {
-		getAiAgentRunCursorMock.mockResolvedValue({
-			messageId: "msg-1",
-			messageCreatedAt: "2026-03-04T10:00:00.000Z",
-		});
+	it("processes only the earliest pending message after the DB cursor and cascades the next job", async () => {
 		getConversationByIdMock
 			.mockResolvedValueOnce({
 				id: "conv-1",
@@ -382,29 +369,39 @@ describe("ai-agent worker cursor orchestration", () => {
 				aiAgentLastProcessedMessageCreatedAt: "2026-03-04T10:00:01.000Z",
 				aiAgentLastProcessedMessageId: "msg-2",
 			});
-		buildMessageWindowFromCursorMock.mockResolvedValue([
-			{ id: "msg-1", createdAt: "2026-03-04T10:00:00.000Z" },
-		]);
-		findNextTriggerableMessageAfterCursorMock.mockResolvedValue({
-			id: "msg-3",
-			createdAt: "2026-03-04T10:00:02.000Z",
-		});
+		findNextTriggerableMessageAfterCursorMock
+			.mockResolvedValueOnce({
+				id: "msg-2",
+				createdAt: "2026-03-04T10:00:01.000Z",
+			})
+			.mockResolvedValueOnce({
+				id: "msg-3",
+				createdAt: "2026-03-04T10:00:02.000Z",
+			});
 
 		const { createAiAgentWorker } = await modulePromise;
 		const worker = createAiAgentWorker({
 			connectionOptions: {} as never,
 			redisUrl: "redis://localhost:6379",
-			stateRedis: {} as never,
 		});
 
 		await worker.start();
-		await runJob(buildJobData());
+		await runJob(
+			buildJobData({
+				messageId: "msg-3",
+				messageCreatedAt: "2026-03-04T10:00:02.000Z",
+			})
+		);
 
-		expect(setAiAgentRunCursorMock).toHaveBeenCalledWith(expect.anything(), {
-			conversationId: "conv-1",
-			messageId: "msg-3",
-			messageCreatedAt: "2026-03-04T10:00:02.000Z",
-		});
+		expect(runPipelineForMessageMock).toHaveBeenCalledTimes(1);
+		expect(runPipelineForMessageMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				message: {
+					id: "msg-2",
+					createdAt: "2026-03-04T10:00:01.000Z",
+				},
+			})
+		);
 		expect(enqueueConversationScopedAiJobMock).toHaveBeenCalledWith({
 			queue: expect.anything(),
 			data: {
@@ -412,30 +409,100 @@ describe("ai-agent worker cursor orchestration", () => {
 				websiteId: "site-1",
 				organizationId: "org-1",
 				aiAgentId: "ai-1",
+				messageId: "msg-3",
+				messageCreatedAt: "2026-03-04T10:00:02.000Z",
 				runAttempt: 0,
 			},
 			delayMs: 0,
 		});
-		expect(enqueueConversationScopedAiBackgroundJobMock).toHaveBeenCalledWith({
+
+		await worker.stop();
+	});
+
+	it("skips stale jobs that are already at or behind the DB cursor", async () => {
+		getConversationByIdMock.mockResolvedValueOnce({
+			id: "conv-1",
+			websiteId: "site-1",
+			organizationId: "org-1",
+			visitorId: "visitor-1",
+			aiAgentLastProcessedMessageCreatedAt: "2026-03-04T10:00:01.000Z",
+			aiAgentLastProcessedMessageId: "msg-2",
+		});
+		findNextTriggerableMessageAfterCursorMock.mockResolvedValueOnce(null);
+
+		const { createAiAgentWorker } = await modulePromise;
+		const worker = createAiAgentWorker({
+			connectionOptions: {} as never,
+			redisUrl: "redis://localhost:6379",
+		});
+
+		await worker.start();
+		await runJob(buildJobData());
+
+		expect(runPipelineForMessageMock).not.toHaveBeenCalled();
+		expect(enqueueConversationScopedAiJobMock).not.toHaveBeenCalled();
+		expect(enqueueConversationScopedAiBackgroundJobMock).not.toHaveBeenCalled();
+
+		await worker.stop();
+	});
+
+	it("retries the actual failed target message instead of the later queued payload", async () => {
+		getConversationByIdMock.mockResolvedValueOnce({
+			id: "conv-1",
+			websiteId: "site-1",
+			organizationId: "org-1",
+			visitorId: "visitor-1",
+			aiAgentLastProcessedMessageCreatedAt: "2026-03-04T10:00:00.000Z",
+			aiAgentLastProcessedMessageId: "msg-1",
+		});
+		findNextTriggerableMessageAfterCursorMock.mockResolvedValueOnce({
+			id: "msg-2",
+			createdAt: "2026-03-04T10:00:01.000Z",
+		});
+		runPipelineForMessageMock.mockRejectedValueOnce(
+			new PipelineMessageError("boom", {
+				id: "msg-2",
+				createdAt: "2026-03-04T10:00:01.000Z",
+			})
+		);
+
+		const { createAiAgentWorker } = await modulePromise;
+		const worker = createAiAgentWorker({
+			connectionOptions: {} as never,
+			redisUrl: "redis://localhost:6379",
+		});
+
+		await worker.start();
+		await expect(
+			runJob(
+				buildJobData({
+					messageId: "msg-3",
+					messageCreatedAt: "2026-03-04T10:00:02.000Z",
+					runAttempt: 0,
+				})
+			)
+		).rejects.toThrow("boom");
+
+		expect(enqueueConversationScopedAiJobMock).toHaveBeenCalledWith({
 			queue: expect.anything(),
 			data: {
 				conversationId: "conv-1",
 				websiteId: "site-1",
 				organizationId: "org-1",
 				aiAgentId: "ai-1",
+				messageId: "msg-2",
+				messageCreatedAt: "2026-03-04T10:00:01.000Z",
+				runAttempt: 1,
 			},
-			delayMs: 60_000,
+			delayMs: 5000,
 		});
+		expect(enqueueConversationScopedAiBackgroundJobMock).not.toHaveBeenCalled();
 
 		await worker.stop();
 	});
 
-	it("retries failed run with delay and clears cursor after max attempts", async () => {
-		getAiAgentRunCursorMock.mockResolvedValue({
-			messageId: "msg-1",
-			messageCreatedAt: "2026-03-04T10:00:00.000Z",
-		});
-		getConversationByIdMock.mockResolvedValue({
+	it("stops retrying after max attempts", async () => {
+		getConversationByIdMock.mockResolvedValueOnce({
 			id: "conv-1",
 			websiteId: "site-1",
 			organizationId: "org-1",
@@ -443,11 +510,8 @@ describe("ai-agent worker cursor orchestration", () => {
 			aiAgentLastProcessedMessageCreatedAt: null,
 			aiAgentLastProcessedMessageId: null,
 		});
-		buildMessageWindowFromCursorMock.mockResolvedValue([
-			{ id: "msg-1", createdAt: "2026-03-04T10:00:00.000Z" },
-		]);
-		runPipelineForWindowMock.mockRejectedValue(
-			new PipelineWindowError("boom", {
+		runPipelineForMessageMock.mockRejectedValueOnce(
+			new PipelineMessageError("boom", {
 				id: "msg-1",
 				createdAt: "2026-03-04T10:00:00.000Z",
 			})
@@ -457,122 +521,14 @@ describe("ai-agent worker cursor orchestration", () => {
 		const worker = createAiAgentWorker({
 			connectionOptions: {} as never,
 			redisUrl: "redis://localhost:6379",
-			stateRedis: {} as never,
 		});
+
 		await worker.start();
-
-		await expect(runJob(buildJobData({ runAttempt: 0 }))).rejects.toThrow(
-			"boom"
-		);
-		expect(setAiAgentRunCursorMock).toHaveBeenCalledWith(expect.anything(), {
-			conversationId: "conv-1",
-			messageId: "msg-1",
-			messageCreatedAt: "2026-03-04T10:00:00.000Z",
-		});
-		expect(enqueueConversationScopedAiJobMock).toHaveBeenCalledWith({
-			queue: expect.anything(),
-			data: {
-				conversationId: "conv-1",
-				websiteId: "site-1",
-				organizationId: "org-1",
-				aiAgentId: "ai-1",
-				runAttempt: 1,
-			},
-			delayMs: 5000,
-		});
-		expect(enqueueConversationScopedAiBackgroundJobMock).not.toHaveBeenCalled();
-
-		enqueueConversationScopedAiJobMock.mockReset();
 		await expect(runJob(buildJobData({ runAttempt: 2 }))).rejects.toThrow(
 			"boom"
 		);
+
 		expect(enqueueConversationScopedAiJobMock).not.toHaveBeenCalled();
-		expect(clearAiAgentRunCursorMock).toHaveBeenCalledWith(
-			expect.anything(),
-			"conv-1"
-		);
-		expect(enqueueConversationScopedAiBackgroundJobMock).not.toHaveBeenCalled();
-
-		await worker.stop();
-	});
-
-	it("does not schedule background job when processed message count is zero", async () => {
-		getAiAgentRunCursorMock.mockResolvedValue({
-			messageId: "msg-1",
-			messageCreatedAt: "2026-03-04T10:00:00.000Z",
-		});
-		getConversationByIdMock.mockResolvedValue({
-			id: "conv-1",
-			websiteId: "site-1",
-			organizationId: "org-1",
-			visitorId: "visitor-1",
-			aiAgentLastProcessedMessageCreatedAt: "2026-03-04T10:00:00.000Z",
-			aiAgentLastProcessedMessageId: "msg-1",
-		});
-		buildMessageWindowFromCursorMock.mockResolvedValue([
-			{ id: "msg-1", createdAt: "2026-03-04T10:00:00.000Z" },
-		]);
-		findNextTriggerableMessageAfterCursorMock.mockResolvedValue(null);
-		runPipelineForWindowMock.mockResolvedValueOnce({
-			processedMessageCount: 0,
-		});
-
-		const { createAiAgentWorker } = await modulePromise;
-		const worker = createAiAgentWorker({
-			connectionOptions: {} as never,
-			redisUrl: "redis://localhost:6379",
-			stateRedis: {} as never,
-		});
-
-		await worker.start();
-		await runJob(buildJobData());
-
-		expect(enqueueConversationScopedAiBackgroundJobMock).not.toHaveBeenCalled();
-
-		await worker.stop();
-	});
-
-	it("handles skipped_active when background job is already running", async () => {
-		getAiAgentRunCursorMock.mockResolvedValue({
-			messageId: "msg-1",
-			messageCreatedAt: "2026-03-04T10:00:00.000Z",
-		});
-		getConversationByIdMock.mockResolvedValue({
-			id: "conv-1",
-			websiteId: "site-1",
-			organizationId: "org-1",
-			visitorId: "visitor-1",
-			aiAgentLastProcessedMessageCreatedAt: "2026-03-04T10:00:00.000Z",
-			aiAgentLastProcessedMessageId: "msg-1",
-		});
-		buildMessageWindowFromCursorMock.mockResolvedValue([
-			{ id: "msg-1", createdAt: "2026-03-04T10:00:00.000Z" },
-		]);
-		findNextTriggerableMessageAfterCursorMock.mockResolvedValue(null);
-		enqueueConversationScopedAiBackgroundJobMock.mockResolvedValueOnce({
-			status: "skipped_active",
-		});
-
-		const { createAiAgentWorker } = await modulePromise;
-		const worker = createAiAgentWorker({
-			connectionOptions: {} as never,
-			redisUrl: "redis://localhost:6379",
-			stateRedis: {} as never,
-		});
-
-		await worker.start();
-		await runJob(buildJobData());
-
-		expect(enqueueConversationScopedAiBackgroundJobMock).toHaveBeenCalledWith({
-			queue: expect.anything(),
-			data: {
-				conversationId: "conv-1",
-				websiteId: "site-1",
-				organizationId: "org-1",
-				aiAgentId: "ai-1",
-			},
-			delayMs: 60_000,
-		});
 
 		await worker.stop();
 	});

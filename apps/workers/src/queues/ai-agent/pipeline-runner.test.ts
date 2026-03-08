@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, mock } from "bun:test";
 type MockPipelineResult = {
 	status: "completed" | "skipped" | "error";
 	error?: string;
+	reason?: string;
+	cursorDisposition: "advance" | "retry";
 	publicMessagesSent: number;
 	retryable: boolean;
 	metrics: {
@@ -15,6 +17,7 @@ type MockPipelineResult = {
 
 const defaultPipelineResult: MockPipelineResult = {
 	status: "completed",
+	cursorDisposition: "advance",
 	publicMessagesSent: 0,
 	retryable: false,
 	metrics: {
@@ -47,7 +50,12 @@ const defaultConversation = {
 	visitorId: "visitor-1",
 };
 
-describe("runPipelineForWindow", () => {
+const defaultMessage = {
+	id: "msg-1",
+	createdAt: "2026-03-04T10:00:00.000Z",
+};
+
+describe("runPipelineForMessage", () => {
 	beforeEach(() => {
 		runPrimaryPipelineMock.mockReset();
 		updateConversationAiCursorMock.mockReset();
@@ -56,35 +64,27 @@ describe("runPipelineForWindow", () => {
 		updateConversationAiCursorMock.mockResolvedValue(undefined);
 	});
 
-	it("processes messages in FIFO order and advances conversation cursor", async () => {
-		const { runPipelineForWindow } = await modulePromise;
+	it("processes one message and advances the conversation cursor", async () => {
+		const { runPipelineForMessage } = await modulePromise;
 
-		const result = await runPipelineForWindow({
+		const result = await runPipelineForMessage({
 			db: {} as never,
 			conversation: defaultConversation,
 			aiAgentId: "ai-1",
 			jobId: "job-1",
-			messages: [
-				{ id: "msg-1", createdAt: "2026-03-04T10:00:00.000Z" },
-				{ id: "msg-2", createdAt: "2026-03-04T10:00:01.000Z" },
-			],
+			message: defaultMessage,
 		});
-		expect(result).toEqual({ processedMessageCount: 2 });
 
-		expect(runPrimaryPipelineMock).toHaveBeenNthCalledWith(
-			1,
+		expect(result).toEqual({
+			processedMessageId: "msg-1",
+			processedMessageCreatedAt: "2026-03-04T10:00:00.000Z",
+		});
+		expect(runPrimaryPipelineMock).toHaveBeenCalledWith(
 			expect.objectContaining({
 				input: expect.objectContaining({ messageId: "msg-1" }),
 			})
 		);
-		expect(runPrimaryPipelineMock).toHaveBeenNthCalledWith(
-			2,
-			expect.objectContaining({
-				input: expect.objectContaining({ messageId: "msg-2" }),
-			})
-		);
-		expect(updateConversationAiCursorMock).toHaveBeenNthCalledWith(
-			1,
+		expect(updateConversationAiCursorMock).toHaveBeenCalledWith(
 			expect.anything(),
 			{
 				conversationId: "conv-1",
@@ -93,22 +93,13 @@ describe("runPipelineForWindow", () => {
 				messageCreatedAt: "2026-03-04T10:00:00.000Z",
 			}
 		);
-		expect(updateConversationAiCursorMock).toHaveBeenNthCalledWith(
-			2,
-			expect.anything(),
-			{
-				conversationId: "conv-1",
-				organizationId: "org-1",
-				messageId: "msg-2",
-				messageCreatedAt: "2026-03-04T10:00:01.000Z",
-			}
-		);
 	});
 
-	it("throws PipelineWindowError when pipeline returns status=error", async () => {
+	it("throws PipelineMessageError when pipeline requests retry", async () => {
 		runPrimaryPipelineMock.mockResolvedValueOnce({
 			status: "error",
 			error: "pipeline failed",
+			cursorDisposition: "retry",
 			publicMessagesSent: 0,
 			retryable: false,
 			metrics: {
@@ -119,26 +110,27 @@ describe("runPipelineForWindow", () => {
 			},
 		});
 
-		const { runPipelineForWindow, PipelineWindowError } = await modulePromise;
+		const { runPipelineForMessage, PipelineMessageError } = await modulePromise;
 
 		await expect(
-			runPipelineForWindow({
+			runPipelineForMessage({
 				db: {} as never,
 				conversation: defaultConversation,
 				aiAgentId: "ai-1",
 				jobId: "job-1",
-				messages: [{ id: "msg-1", createdAt: "2026-03-04T10:00:00.000Z" }],
+				message: defaultMessage,
 			})
-		).rejects.toBeInstanceOf(PipelineWindowError);
+		).rejects.toBeInstanceOf(PipelineMessageError);
 		expect(updateConversationAiCursorMock).not.toHaveBeenCalled();
 	});
 
-	it("does not advance cursor when generation times out and pipeline returns error", async () => {
+	it("advances cursor for explicit skipped attachment-only turns", async () => {
 		runPrimaryPipelineMock.mockResolvedValueOnce({
-			status: "error",
-			error: "Generation timed out",
+			status: "skipped",
+			reason: "Attachment-only message skipped",
+			cursorDisposition: "advance",
 			publicMessagesSent: 0,
-			retryable: true,
+			retryable: false,
 			metrics: {
 				intakeMs: 0,
 				decisionMs: 0,
@@ -147,22 +139,52 @@ describe("runPipelineForWindow", () => {
 			},
 		});
 
-		const { runPipelineForWindow, PipelineWindowError } = await modulePromise;
+		const { runPipelineForMessage } = await modulePromise;
 
-		await expect(
-			runPipelineForWindow({
-				db: {} as never,
-				conversation: defaultConversation,
-				aiAgentId: "ai-1",
-				jobId: "job-timeout",
-				messages: [
-					{ id: "msg-timeout", createdAt: "2026-03-04T10:00:00.000Z" },
-					{ id: "msg-after-timeout", createdAt: "2026-03-04T10:00:01.000Z" },
-				],
-			})
-		).rejects.toBeInstanceOf(PipelineWindowError);
+		const result = await runPipelineForMessage({
+			db: {} as never,
+			conversation: defaultConversation,
+			aiAgentId: "ai-1",
+			jobId: "job-skip",
+			message: defaultMessage,
+		});
 
-		expect(runPrimaryPipelineMock).toHaveBeenCalledTimes(1);
-		expect(updateConversationAiCursorMock).not.toHaveBeenCalled();
+		expect(result).toEqual({
+			processedMessageId: "msg-1",
+			processedMessageCreatedAt: "2026-03-04T10:00:00.000Z",
+		});
+		expect(updateConversationAiCursorMock).toHaveBeenCalledTimes(1);
+	});
+
+	it("advances cursor for terminal non-retryable errors that request advance", async () => {
+		runPrimaryPipelineMock.mockResolvedValueOnce({
+			status: "error",
+			error: "public reply already sent; do not retry",
+			cursorDisposition: "advance",
+			publicMessagesSent: 1,
+			retryable: false,
+			metrics: {
+				intakeMs: 0,
+				decisionMs: 0,
+				generationMs: 0,
+				totalMs: 0,
+			},
+		});
+
+		const { runPipelineForMessage } = await modulePromise;
+
+		const result = await runPipelineForMessage({
+			db: {} as never,
+			conversation: defaultConversation,
+			aiAgentId: "ai-1",
+			jobId: "job-terminal",
+			message: defaultMessage,
+		});
+
+		expect(result).toEqual({
+			processedMessageId: "msg-1",
+			processedMessageCreatedAt: "2026-03-04T10:00:00.000Z",
+		});
+		expect(updateConversationAiCursorMock).toHaveBeenCalledTimes(1);
 	});
 });

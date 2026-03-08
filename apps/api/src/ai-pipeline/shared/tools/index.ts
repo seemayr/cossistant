@@ -1,5 +1,6 @@
 import type { AiAgentSelect } from "@api/db/schema/ai-agent";
 import type { ToolSet } from "@api/lib/ai";
+import type { AiAgentToolId } from "@cossistant/types";
 import { getBehaviorSettings } from "../settings";
 import { FINISH_TOOL_IDS, SHARED_PIPELINE_TOOL_CATALOG } from "./catalog";
 import type {
@@ -74,13 +75,21 @@ export function isFinishToolName(toolName: string): boolean {
 export function buildPipelineToolset(params: {
 	aiAgent: AiAgentSelect;
 	context: PipelineToolContext;
+	allowedToolNames?: readonly AiAgentToolId[];
 }): PipelineToolBuildResult {
 	const tools: ToolSet = {};
 	const activeDefinitions: PipelineToolDefinition[] = [];
 	const toolNames: string[] = [];
 	const finishToolNames: string[] = [];
+	const allowedToolNameSet = params.allowedToolNames
+		? new Set<string>(params.allowedToolNames)
+		: null;
 
 	for (const entry of SHARED_PIPELINE_TOOL_CATALOG) {
+		if (allowedToolNameSet && !allowedToolNameSet.has(entry.id)) {
+			continue;
+		}
+
 		if (
 			!isToolAvailableInContext({
 				availability: entry.availability,

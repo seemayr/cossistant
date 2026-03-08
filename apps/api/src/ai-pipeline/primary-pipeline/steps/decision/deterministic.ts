@@ -46,9 +46,21 @@ function modeForTaggedMessage(message: RoleAwareMessage): ResponseMode {
 export function runDeterministicDecision(
 	input: DecisionStepInput
 ): DeterministicDecisionResult {
-	const { triggerMessage, conversationState } = input;
+	const { triggerMessage, triggerMessageText, conversationState } = input;
 
 	if (!triggerMessage) {
+		if (!triggerMessageText?.trim()) {
+			return {
+				type: "final",
+				result: withConversationState(conversationState, {
+					shouldAct: false,
+					reason: "Attachment-only message skipped",
+					mode: "background_only",
+					humanCommand: null,
+				}),
+			};
+		}
+
 		return {
 			type: "final",
 			result: withConversationState(conversationState, {

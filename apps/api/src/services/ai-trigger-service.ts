@@ -1,11 +1,7 @@
 import { db } from "@api/db";
 import { getActiveAiAgentForWebsite } from "@api/db/queries/ai-agent";
-import { getRedis } from "@api/redis";
 import { getAiAgentQueueTriggers } from "@api/utils/queue-triggers";
-import {
-	AI_AGENT_INITIAL_DELAY_MS,
-	setAiAgentRunCursorIfAbsent,
-} from "@cossistant/jobs";
+import { AI_AGENT_INITIAL_DELAY_MS } from "@cossistant/jobs";
 
 export type EnqueueAiTriggerParams = {
 	conversationId: string;
@@ -24,8 +20,6 @@ export type EnqueueAiTriggerResult = {
 export async function enqueueAiAgentTrigger(
 	params: EnqueueAiTriggerParams
 ): Promise<EnqueueAiTriggerResult> {
-	const redis = getRedis();
-
 	const aiAgent = await getActiveAiAgentForWebsite(db, {
 		websiteId: params.websiteId,
 		organizationId: params.organizationId,
@@ -38,18 +32,14 @@ export async function enqueueAiAgentTrigger(
 		};
 	}
 
-	await setAiAgentRunCursorIfAbsent(redis, {
-		conversationId: params.conversationId,
-		messageId: params.messageId,
-		messageCreatedAt: params.messageCreatedAt,
-	});
-
 	const queueResult = await getAiAgentQueueTriggers().enqueueAiAgentJob(
 		{
 			conversationId: params.conversationId,
 			websiteId: params.websiteId,
 			organizationId: params.organizationId,
 			aiAgentId: aiAgent.id,
+			messageId: params.messageId,
+			messageCreatedAt: params.messageCreatedAt,
 			runAttempt: 0,
 		},
 		{ delayMs: AI_AGENT_INITIAL_DELAY_MS }

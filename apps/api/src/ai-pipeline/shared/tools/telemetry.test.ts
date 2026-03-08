@@ -394,6 +394,54 @@ describe("wrapPipelineToolsWithTelemetry", () => {
 		expect(context.runtimeState.successfulToolCallCounts.respond).toBe(1);
 	});
 
+	it("forces background progress updates to dashboard audience", async () => {
+		const { wrapPipelineToolsWithTelemetry } = await modulePromise;
+		const context = createContext({
+			pipelineKind: "background",
+			mode: "background_only",
+			allowPublicMessages: false,
+		});
+		const tools = wrapPipelineToolsWithTelemetry({
+			tools: {
+				searchKnowledgeBase: {
+					execute: async () => ({ success: true }),
+				},
+			} as never,
+			context: context as never,
+			definitions: [
+				{
+					id: "searchKnowledgeBase",
+					factory: (() => null) as never,
+					availability: { primary: true, background: true },
+					behaviorSettingKey: null,
+					telemetry: {
+						summary: {
+							partial: "Searching...",
+							result: "Done",
+							error: "Failed",
+						},
+						progress: {
+							partial: "Searching...",
+							result: "Done",
+							error: "Failed",
+							audience: "all",
+						},
+					},
+				},
+			] as never,
+		});
+
+		await tools.searchKnowledgeBase?.execute?.(
+			{ query: "billing" } as never,
+			{ toolCallId: "call-background" } as never
+		);
+
+		expect(emitPipelineToolProgressMock).toHaveBeenCalledTimes(2);
+		for (const call of emitPipelineToolProgressMock.mock.calls) {
+			expect(call[0]).toMatchObject({ audience: "dashboard" });
+		}
+	});
+
 	it("is fail-open when timeline creation fails", async () => {
 		const { wrapPipelineToolsWithTelemetry } = await modulePromise;
 		createTimelineItemMock.mockRejectedValue(new Error("timeline offline"));

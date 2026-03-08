@@ -108,15 +108,20 @@ export function extractDecisionSignals(
 		}
 	}
 
-	const now = Date.now();
+	const triggerTimestamp = triggerMessage.timestamp
+		? Date.parse(triggerMessage.timestamp)
+		: Number.NaN;
+	const referenceTime = Number.isNaN(triggerTimestamp)
+		? Date.now()
+		: triggerTimestamp;
 	const humanActive =
 		lastHumanPublicAtMs !== null
-			? now - lastHumanPublicAtMs <= HUMAN_ACTIVE_WINDOW_MS
+			? referenceTime - lastHumanPublicAtMs <= HUMAN_ACTIVE_WINDOW_MS
 			: messagesSinceHuman >= 0 && messagesSinceHuman <= 1;
 
 	const lastHumanSecondsAgo =
 		lastHumanPublicAtMs !== null
-			? Math.max(0, Math.round((now - lastHumanPublicAtMs) / 1000))
+			? Math.max(0, Math.round((referenceTime - lastHumanPublicAtMs) / 1000))
 			: null;
 
 	let visitorBurstCount = 0;

@@ -1,6 +1,7 @@
 import type { AiAgentSelect } from "@api/db/schema/ai-agent";
 import type { ConversationSelect } from "@api/db/schema/conversation";
 import type {
+	ContinuationContext,
 	ConversationState,
 	ModelResolution,
 	RoleAwareMessage,
@@ -15,6 +16,8 @@ export type IntakeReadyContext = {
 	visitorContext: VisitorContext | null;
 	conversationState: ConversationState;
 	triggerMessage: RoleAwareMessage | null;
+	triggerMessageText: string | null;
+	continuationContext: ContinuationContext | null;
 };
 
 export type IntakeStepResult =
@@ -25,10 +28,12 @@ export type IntakeStepResult =
 	| {
 			status: "skipped";
 			reason: string;
+			cursorDisposition: "advance" | "retry";
 	  };
 
 export type TriggerMessageMetadata = {
 	id: string;
 	createdAt: string;
 	conversationId: string;
+	text: string | null;
 };

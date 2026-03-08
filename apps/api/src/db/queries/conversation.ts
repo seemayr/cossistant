@@ -995,7 +995,7 @@ export async function getConversationTimelineItems(
 
 /**
  * Get messages after a cursor (createdAt + id), ordered ascending.
- * Used to hydrate the AI agent queue when Redis state is empty.
+ * Used to find the next human-authored message after the conversation cursor.
  */
 export async function getConversationMessagesAfterCursor(
 	db: Database,
@@ -1239,20 +1239,19 @@ export async function getLatestPublicAiMessage(
 	return message ?? null;
 }
 
-/**
- * Get the latest public AI message created after a given cursor.
- * Used by continuation gating to detect if a queued trigger was already covered.
- */
-export async function getLatestPublicAiMessageAfterCursor(
+export async function getPublicAiMessagesAfterCursor(
 	db: Database,
 	params: {
 		conversationId: string;
 		organizationId: string;
 		afterCreatedAt: string;
 		afterId: string;
+		limit?: number;
 	}
-): Promise<{ id: string; text: string | null; createdAt: string } | null> {
-	const [message] = await db
+): Promise<Array<{ id: string; text: string | null; createdAt: string }>> {
+	const limit = params.limit ?? 10;
+
+	return db
 		.select({
 			id: conversationTimelineItem.id,
 			text: conversationTimelineItem.text,
@@ -1277,10 +1276,28 @@ export async function getLatestPublicAiMessageAfterCursor(
 			)
 		)
 		.orderBy(
-			desc(conversationTimelineItem.createdAt),
-			desc(conversationTimelineItem.id)
+			asc(conversationTimelineItem.createdAt),
+			asc(conversationTimelineItem.id)
 		)
-		.limit(1);
+		.limit(limit);
+}
 
-	return message ?? null;
+/**
+ * Get the latest public AI message created after a given cursor.
+ * Used by continuation gating to detect if a queued trigger was already covered.
+ */
+export async function getLatestPublicAiMessageAfterCursor(
+	db: Database,
+	params: {
+		conversationId: string;
+		organizationId: string;
+		afterCreatedAt: string;
+		afterId: string;
+	}
+): Promise<{ id: string; text: string | null; createdAt: string } | null> {
+	const messages = await getPublicAiMessagesAfterCursor(db, {
+		...params,
+		limit: 10,
+	});
+	return messages.length > 0 ? (messages[messages.length - 1] ?? null) : null;
 }

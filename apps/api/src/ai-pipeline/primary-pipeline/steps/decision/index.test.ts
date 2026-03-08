@@ -23,6 +23,7 @@ function createInput(
 			isEscalated: false,
 			escalationReason: null,
 		},
+		triggerMessageText: "Can you help with this issue?",
 		triggerMessage: {
 			messageId: "msg-1",
 			content: "Can you help with this issue?",
@@ -49,6 +50,27 @@ describe("runDeterministicDecision", () => {
 			result: {
 				shouldAct: false,
 				reason: "No trigger message",
+				mode: "background_only",
+				humanCommand: null,
+				isEscalated: false,
+				escalationReason: null,
+			},
+		});
+	});
+
+	it("returns explicit attachment-only skip when text is blank", () => {
+		const result = runDeterministicDecision(
+			createInput({
+				triggerMessage: null,
+				triggerMessageText: "   ",
+			})
+		);
+
+		expect(result).toEqual({
+			type: "final",
+			result: {
+				shouldAct: false,
+				reason: "Attachment-only message skipped",
 				mode: "background_only",
 				humanCommand: null,
 				isEscalated: false,

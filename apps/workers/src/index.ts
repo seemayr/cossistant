@@ -51,7 +51,7 @@ async function ensureWorkersStarted(): Promise<void> {
 
 	workersStartPromise = (async () => {
 		console.log("[workers] Redis connected, starting workers...");
-		await startAllWorkers({ redisUrl: env.REDIS_URL, stateRedis: redis });
+		await startAllWorkers({ redisUrl: env.REDIS_URL });
 		workersStarted = true;
 	})().catch((error) => {
 		workersStartPromise = null;

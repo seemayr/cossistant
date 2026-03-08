@@ -76,6 +76,8 @@ function buildJobData(
 		websiteId: "site-1",
 		organizationId: "org-1",
 		aiAgentId: "ai-1",
+		sourceMessageId: "msg-1",
+		sourceMessageCreatedAt: "2026-03-04T10:00:00.000Z",
 		...overrides,
 	};
 }

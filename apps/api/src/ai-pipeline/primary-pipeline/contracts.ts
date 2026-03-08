@@ -25,6 +25,7 @@ export type PrimaryPipelineResult = {
 	action?: string;
 	reason?: string;
 	error?: string;
+	cursorDisposition: "advance" | "retry";
 	publicMessagesSent: number;
 	retryable: boolean;
 	usageTokens?: GenerationTokenUsage;
@@ -77,6 +78,12 @@ export type ConversationState = {
 	participantIds: string[];
 	isEscalated: boolean;
 	escalationReason: string | null;
+};
+
+export type ContinuationContext = {
+	previousProcessedMessageId: string;
+	previousProcessedMessageCreatedAt: string;
+	latestAiReply: string;
 };
 
 export type ModelResolution = {

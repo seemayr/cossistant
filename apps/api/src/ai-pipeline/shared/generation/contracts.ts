@@ -1,7 +1,9 @@
 import type { Database } from "@api/db";
 import type { AiAgentSelect } from "@api/db/schema/ai-agent";
 import type { ConversationSelect } from "@api/db/schema/conversation";
+import type { AiAgentToolId } from "@cossistant/types";
 import type {
+	ContinuationContext,
 	ConversationState,
 	RoleAwareMessage,
 	VisitorContext,
@@ -51,6 +53,7 @@ export type GenerationRuntimeInput = {
 	conversationHistory: RoleAwareMessage[];
 	visitorContext: VisitorContext | null;
 	conversationState: ConversationState;
+	continuationContext?: ContinuationContext | null;
 	humanCommand: string | null;
 	workflowRunId: string;
 	triggerMessageId: string;
@@ -63,6 +66,7 @@ export type GenerationRuntimeInput = {
 	debugLogger?: PipelineToolLogger;
 	deepTraceEnabled?: boolean;
 	tracePayloadMode?: ToolTracePayloadMode;
+	toolAllowlist?: AiAgentToolId[];
 };
 
 export type GenerationRuntimeResult = {

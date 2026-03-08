@@ -62,6 +62,8 @@ function buildJobData(overrides: Partial<AiAgentJobData> = {}): AiAgentJobData {
 		websiteId: "site-1",
 		organizationId: "org-1",
 		aiAgentId: "ai-1",
+		messageId: "msg-1",
+		messageCreatedAt: "2026-03-04T10:00:00.000Z",
 		...overrides,
 	};
 }
@@ -113,7 +115,7 @@ describe("createAiAgentTriggers", () => {
 		expect(result).toEqual({ status: "created" });
 		expect(lastAddedJobId).toBe("ai-agent-conv-1");
 		expect(lastAddedData?.conversationId).toBe("conv-1");
-		expect(lastAddedOptions?.delay).toBe(5000);
+		expect(lastAddedOptions?.delay).toBe(300);
 		expect(lastAddedOptions?.removeOnComplete).toBe(true);
 		expect(lastAddedOptions?.removeOnFail).toBe(true);
 

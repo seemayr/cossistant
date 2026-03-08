@@ -7,6 +7,7 @@ import {
 type ResultParams = {
 	metrics: MutableStageMetrics;
 	pipelineStartedAt: number;
+	cursorDisposition?: PrimaryPipelineResult["cursorDisposition"];
 	publicMessagesSent?: number;
 	usageTokens?: PrimaryPipelineResult["usageTokens"];
 	creditUsage?: PrimaryPipelineResult["creditUsage"];
@@ -33,11 +34,17 @@ type FinalizedResultParams =
 export function buildPrimaryPipelineResult(
 	params: FinalizedResultParams
 ): PrimaryPipelineResult {
+	const retryable =
+		params.status === "error" ? (params.retryable ?? true) : false;
+	const cursorDisposition =
+		params.cursorDisposition ?? (retryable ? "retry" : "advance");
+
 	const baseResult = {
 		status: params.status,
 		action: params.action,
+		cursorDisposition,
 		publicMessagesSent: params.publicMessagesSent ?? 0,
-		retryable: params.status === "error" ? (params.retryable ?? true) : false,
+		retryable,
 		usageTokens: params.usageTokens,
 		creditUsage: params.creditUsage,
 		metrics: finalizeStageMetrics({

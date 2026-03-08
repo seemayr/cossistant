@@ -46,6 +46,7 @@ function buildGenerationRuntimeInput(params: {
 		conversationHistory: intake.conversationHistory,
 		visitorContext: intake.visitorContext,
 		conversationState: intake.conversationState,
+		continuationContext: intake.continuationContext,
 		humanCommand: decision.humanCommand,
 		workflowRunId: ctx.input.workflowRunId,
 		triggerMessageId: ctx.input.messageId,
@@ -96,9 +97,11 @@ export async function runPrimaryPipeline(
 		);
 
 		if (intakeResult.status !== "ready") {
+			const retryable = intakeResult.cursorDisposition === "retry";
 			logAiPipeline({
 				area: "primary",
-				event: "skip",
+				event: retryable ? "intake_retry" : "skip",
+				level: retryable ? "warn" : undefined,
 				conversationId: ctx.input.conversationId,
 				fields: {
 					stage: "intake",
@@ -106,10 +109,23 @@ export async function runPrimaryPipeline(
 				},
 			});
 
+			if (retryable) {
+				return buildPrimaryPipelineResult({
+					status: "error",
+					metrics,
+					pipelineStartedAt,
+					cursorDisposition: intakeResult.cursorDisposition,
+					error: intakeResult.reason,
+					retryable: true,
+					action: "intake_skipped",
+				});
+			}
+
 			return buildPrimaryPipelineResult({
 				status: "skipped",
 				metrics,
 				pipelineStartedAt,
+				cursorDisposition: intakeResult.cursorDisposition,
 				reason: intakeResult.reason,
 				action: "intake_skipped",
 			});
@@ -226,6 +242,7 @@ export async function runPrimaryPipeline(
 				pipelineStartedAt,
 				error: errorMessage,
 				retryable,
+				cursorDisposition: retryable ? "retry" : "advance",
 				action: "generation_error",
 				publicMessagesSent: generationResult.publicMessagesSent,
 				usageTokens: usageTelemetry?.usageTokens,
@@ -298,6 +315,7 @@ export async function runPrimaryPipeline(
 			pipelineStartedAt,
 			error: message,
 			retryable: true,
+			cursorDisposition: "retry",
 			action: "primary_error",
 		});
 	} finally {

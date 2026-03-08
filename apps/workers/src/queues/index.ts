@@ -1,4 +1,4 @@
-import type { Redis, RedisOptions } from "@cossistant/redis";
+import type { RedisOptions } from "@cossistant/redis";
 import { getBullConnectionOptions } from "@cossistant/redis";
 import { createAiAgentWorker } from "./ai-agent/worker";
 import { createAiAgentBackgroundWorker } from "./ai-agent-background/worker";
@@ -20,7 +20,6 @@ let startPromise: Promise<void> | null = null;
  */
 export async function startAllWorkers(params: {
 	redisUrl: string;
-	stateRedis: Redis;
 }): Promise<void> {
 	if (workersStarted) {
 		console.warn("[workers] startAllWorkers called after startup, skipping");
@@ -48,7 +47,6 @@ export async function startAllWorkers(params: {
 		const aiAgentWorker = createAiAgentWorker({
 			connectionOptions,
 			redisUrl: params.redisUrl,
-			stateRedis: params.stateRedis,
 		});
 		await aiAgentWorker.start();
 		workers.push(aiAgentWorker);

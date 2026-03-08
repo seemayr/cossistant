@@ -2,6 +2,7 @@ import type { Database } from "@api/db";
 import {
 	getConversationById,
 	getMessageMetadata,
+	getPublicAiMessagesAfterCursor,
 } from "@api/db/queries/conversation";
 import { getCompleteVisitorWithContact } from "@api/db/queries/visitor";
 import type { ConversationSelect } from "@api/db/schema/conversation";
@@ -11,6 +12,7 @@ import {
 } from "@api/db/schema/conversation";
 import { and, eq, isNull } from "drizzle-orm";
 import type {
+	ContinuationContext,
 	ConversationState,
 	RoleAwareMessage,
 	VisitorContext,
@@ -54,6 +56,7 @@ export async function loadConversationSeed(
 			id: triggerMetadata.id,
 			createdAt: triggerMetadata.createdAt,
 			conversationId: triggerMetadata.conversationId,
+			text: triggerMetadata.text ?? null,
 		},
 	};
 }
@@ -135,6 +138,45 @@ async function loadConversationState(
 	};
 }
 
+async function loadContinuationContext(
+	db: Database,
+	params: {
+		conversation: ConversationSelect;
+	}
+): Promise<ContinuationContext | null> {
+	const previousProcessedMessageCreatedAt =
+		params.conversation.aiAgentLastProcessedMessageCreatedAt;
+	const previousProcessedMessageId =
+		params.conversation.aiAgentLastProcessedMessageId;
+
+	if (!(previousProcessedMessageCreatedAt && previousProcessedMessageId)) {
+		return null;
+	}
+
+	const aiReplies = await getPublicAiMessagesAfterCursor(db, {
+		conversationId: params.conversation.id,
+		organizationId: params.conversation.organizationId,
+		afterCreatedAt: previousProcessedMessageCreatedAt,
+		afterId: previousProcessedMessageId,
+		limit: 10,
+	});
+
+	const latestAiReply = aiReplies
+		.map((message) => message.text?.trim() ?? "")
+		.filter((text) => text.length > 0)
+		.join("\n\n");
+
+	if (!latestAiReply) {
+		return null;
+	}
+
+	return {
+		previousProcessedMessageId,
+		previousProcessedMessageCreatedAt,
+		latestAiReply,
+	};
+}
+
 export async function loadIntakeContext(
 	db: Database,
 	params: {
@@ -150,25 +192,34 @@ export async function loadIntakeContext(
 	visitorContext: VisitorContext | null;
 	conversationState: ConversationState;
 	triggerMessage: RoleAwareMessage | null;
+	triggerMessageText: string | null;
+	continuationContext: ContinuationContext | null;
 }> {
-	const [conversationHistory, visitorContext, conversationState] =
-		await Promise.all([
-			buildRoleAwareConversationHistory(db, {
-				conversationId: params.conversationId,
-				organizationId: params.organizationId,
-				websiteId: params.websiteId,
-				maxCreatedAt: params.triggerMetadata.createdAt,
-				maxId: params.triggerMetadata.id,
-			}),
-			loadVisitorContext(db, {
-				visitorId: params.visitorId,
-			}),
-			loadConversationState(db, {
-				conversationId: params.conversationId,
-				organizationId: params.organizationId,
-				conversation: params.conversation,
-			}),
-		]);
+	const [
+		conversationHistory,
+		visitorContext,
+		conversationState,
+		continuationContext,
+	] = await Promise.all([
+		buildRoleAwareConversationHistory(db, {
+			conversationId: params.conversationId,
+			organizationId: params.organizationId,
+			websiteId: params.websiteId,
+			maxCreatedAt: params.triggerMetadata.createdAt,
+			maxId: params.triggerMetadata.id,
+		}),
+		loadVisitorContext(db, {
+			visitorId: params.visitorId,
+		}),
+		loadConversationState(db, {
+			conversationId: params.conversationId,
+			organizationId: params.organizationId,
+			conversation: params.conversation,
+		}),
+		loadContinuationContext(db, {
+			conversation: params.conversation,
+		}),
+	]);
 
 	const triggerMessage =
 		conversationHistory.find(
@@ -180,5 +231,7 @@ export async function loadIntakeContext(
 		visitorContext,
 		conversationState,
 		triggerMessage,
+		triggerMessageText: params.triggerMetadata.text ?? null,
+		continuationContext,
 	};
 }

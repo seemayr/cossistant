@@ -87,6 +87,7 @@ export async function runGenerationRuntime(
 	const baseToolsetResolution = buildPipelineToolset({
 		aiAgent: input.aiAgent,
 		context: toolContext,
+		allowedToolNames: input.toolAllowlist,
 	});
 
 	if (baseToolsetResolution.toolNames.length === 0) {
@@ -114,8 +115,9 @@ export async function runGenerationRuntime(
 	}
 
 	let runtimeToolSkills: Array<{ label: string; content: string }> = [];
+	let promptBundle: Awaited<ReturnType<typeof resolvePromptBundle>>;
 	try {
-		const promptBundle = await resolvePromptBundle({
+		promptBundle = await resolvePromptBundle({
 			db: input.db,
 			aiAgent: input.aiAgent,
 			mode: input.mode,
@@ -156,10 +158,23 @@ export async function runGenerationRuntime(
 			`[ai-pipeline:generation] conv=${input.conversation.id} workflowRunId=${input.workflowRunId} evt=prompt_bundle_resolve_failed`,
 			error
 		);
+
+		return {
+			status: "error",
+			action: buildSafeSkipAction("Failed to resolve prompt bundle"),
+			error: "Failed to resolve prompt bundle",
+			failureCode: "runtime_error",
+			publicMessagesSent: runtimeState.publicMessagesSent,
+			toolCallsByName: runtimeState.toolCallCounts,
+			chargeableToolCallsByName: runtimeState.chargeableToolCallCounts,
+			totalToolCalls: countTotalToolCalls(runtimeState.toolCallCounts),
+			attempts: [],
+		};
 	}
 
 	const systemPrompt = buildGenerationSystemPrompt({
 		input,
+		promptBundle,
 		toolset: baseToolsetResolution.tools,
 		toolNames: baseToolsetResolution.toolNames,
 		toolSkills: runtimeToolSkills,

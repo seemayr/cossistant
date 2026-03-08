@@ -14,6 +14,8 @@ function buildJobData(overrides: Partial<AiAgentJobData> = {}): AiAgentJobData {
 		websiteId: "site-1",
 		organizationId: "org-1",
 		aiAgentId: "ai-1",
+		messageId: "msg-1",
+		messageCreatedAt: "2026-03-04T10:00:00.000Z",
 		...overrides,
 	};
 }

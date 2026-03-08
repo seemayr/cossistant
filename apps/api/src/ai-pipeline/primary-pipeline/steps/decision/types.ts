@@ -24,4 +24,5 @@ export type DecisionStepInput = {
 	conversationHistory: RoleAwareMessage[];
 	conversationState: ConversationState;
 	triggerMessage: RoleAwareMessage | null;
+	triggerMessageText: string | null;
 };

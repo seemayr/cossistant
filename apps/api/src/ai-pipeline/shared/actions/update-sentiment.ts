@@ -27,6 +27,23 @@ type UpdateSentimentParams = {
 	confidence: number;
 };
 
+function isSentimentEffectivelyUnchanged(params: {
+	currentSentiment: ConversationSelect["sentiment"];
+	currentConfidence: ConversationSelect["sentimentConfidence"];
+	nextSentiment: UpdateSentimentParams["sentiment"];
+	nextConfidence: number;
+}): boolean {
+	if (params.currentSentiment !== params.nextSentiment) {
+		return false;
+	}
+
+	if (typeof params.currentConfidence !== "number") {
+		return false;
+	}
+
+	return Math.abs(params.currentConfidence - params.nextConfidence) < 0.01;
+}
+
 /**
  * Update conversation sentiment
  */
@@ -42,6 +59,17 @@ export async function updateSentiment(
 		sentiment,
 		confidence,
 	} = params;
+
+	if (
+		isSentimentEffectivelyUnchanged({
+			currentSentiment: conv.sentiment,
+			currentConfidence: conv.sentimentConfidence,
+			nextSentiment: sentiment,
+			nextConfidence: confidence,
+		})
+	) {
+		return;
+	}
 
 	const now = new Date().toISOString();
 

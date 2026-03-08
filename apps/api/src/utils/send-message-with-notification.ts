@@ -1,8 +1,5 @@
 import { db } from "@api/db";
-import {
-	getConversationById,
-	getMessageMetadata,
-} from "@api/db/queries/conversation";
+import { getMessageMetadata } from "@api/db/queries/conversation";
 import { enqueueAiAgentTrigger } from "@api/services/ai-trigger-service";
 import {
 	getLatestMessageForPush,
@@ -17,7 +14,6 @@ import { sendMemberPushNotification } from "@api/workflows/message/member-push-n
 /**
  * Trigger notification workflow when a member sends a message
  * This notifies other participants and the visitor
- * Also triggers AI agent response if configured
  */
 export async function triggerMemberSentMessageWorkflow(params: {
 	conversationId: string;
@@ -57,21 +53,6 @@ export async function triggerMemberSentMessageWorkflow(params: {
 		console.log(
 			`[notification] Member-sent notification queued for conversation ${params.conversationId}`
 		);
-
-		// Also trigger AI agent response workflow (if configured)
-		// Fetch conversation to get the visitor ID
-		const conversation = await getConversationById(db, {
-			conversationId: params.conversationId,
-		});
-
-		if (conversation?.visitorId) {
-			await triggerAiAgentResponseWorkflow({
-				conversationId: params.conversationId,
-				messageId: params.messageId,
-				websiteId: params.websiteId,
-				organizationId: params.organizationId,
-			});
-		}
 	} catch (error) {
 		// Log errors but don't throw - we don't want to block message creation
 		console.error(
@@ -221,10 +202,10 @@ export async function triggerVisitorSentMessageWorkflow(params: {
 }
 
 /**
- * Trigger AI agent response workflow when a visitor sends a message
- * This checks if an AI agent is configured and active for the website
+ * Enqueue AI agent processing for a message.
+ * AI-authored messages never re-enter the primary queue.
  */
-export async function triggerAiAgentResponseWorkflow(params: {
+export async function enqueueAiAgentMessageTrigger(params: {
 	conversationId: string;
 	messageId: string;
 	websiteId: string;
@@ -238,7 +219,7 @@ export async function triggerAiAgentResponseWorkflow(params: {
 
 		if (!messageMetadata) {
 			console.error(
-				`[ai-agent] Message ${params.messageId} not found, skipping AI response queue`
+				`[ai-agent] Message ${params.messageId} not found, skipping AI queue trigger`
 			);
 			return;
 		}
@@ -255,7 +236,7 @@ export async function triggerAiAgentResponseWorkflow(params: {
 	} catch (error) {
 		// Log errors but don't throw - we don't want to block message creation
 		console.error(
-			`[ai-agent] Failed to trigger AI agent response workflow for conversation ${params.conversationId}:`,
+			`[ai-agent] Failed to enqueue AI agent message trigger for conversation ${params.conversationId}:`,
 			error
 		);
 	}
@@ -288,6 +269,13 @@ export async function triggerMessageNotificationWorkflow(params: {
 			organizationId: params.organizationId,
 			senderId: params.actor.userId,
 		});
+
+		await enqueueAiAgentMessageTrigger({
+			conversationId: params.conversationId,
+			messageId: params.messageId,
+			websiteId: params.websiteId,
+			organizationId: params.organizationId,
+		});
 	} else if (params.actor.type === "visitor") {
 		// Visitor sent a message -> notify all team members
 		await triggerVisitorSentMessageWorkflow({
@@ -298,7 +286,7 @@ export async function triggerMessageNotificationWorkflow(params: {
 			visitorId: params.actor.visitorId,
 		});
 
-		await triggerAiAgentResponseWorkflow({
+		await enqueueAiAgentMessageTrigger({
 			conversationId: params.conversationId,
 			messageId: params.messageId,
 			websiteId: params.websiteId,

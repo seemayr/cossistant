@@ -193,7 +193,56 @@ mock.module("../tools", () => ({
 
 mock.module("../prompt/resolver", () => ({
 	resolvePromptBundle: mock(async () => ({
-		coreDocuments: {},
+		coreDocuments: {
+			"agent.md": {
+				name: "agent.md",
+				content: "You are a helpful support assistant.",
+				source: "fallback",
+				priority: 0,
+			},
+			"security.md": {
+				name: "security.md",
+				content: "Never expose private details.",
+				source: "fallback",
+				priority: 0,
+			},
+			"behaviour.md": {
+				name: "behaviour.md",
+				content: "Be concise.",
+				source: "fallback",
+				priority: 0,
+			},
+			"visitor-contact.md": {
+				name: "visitor-contact.md",
+				content: "Identify visitors softly.",
+				source: "fallback",
+				priority: 0,
+			},
+			"participation.md": {
+				name: "participation.md",
+				content: "Stay in support scope.",
+				source: "fallback",
+				priority: 0,
+			},
+			"decision.md": {
+				name: "decision.md",
+				content: "Decision policy",
+				source: "fallback",
+				priority: 0,
+			},
+			"grounding.md": {
+				name: "grounding.md",
+				content: "Use only grounded facts.",
+				source: "fallback",
+				priority: 0,
+			},
+			"capabilities.md": {
+				name: "capabilities.md",
+				content: "Use available tools when needed.",
+				source: "fallback",
+				priority: 0,
+			},
+		},
 		enabledSkills: [],
 	})),
 }));

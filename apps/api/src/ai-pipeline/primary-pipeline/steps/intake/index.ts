@@ -18,6 +18,7 @@ export async function runIntakeStep(params: {
 		return {
 			status: "skipped",
 			reason: `AI agent ${params.input.aiAgentId} not found`,
+			cursorDisposition: "retry",
 		};
 	}
 
@@ -25,6 +26,7 @@ export async function runIntakeStep(params: {
 		return {
 			status: "skipped",
 			reason: `AI agent ${params.input.aiAgentId} is not active`,
+			cursorDisposition: "retry",
 		};
 	}
 
@@ -48,6 +50,7 @@ export async function runIntakeStep(params: {
 		return {
 			status: "skipped",
 			reason: `Conversation ${params.input.conversationId} not found`,
+			cursorDisposition: "advance",
 		};
 	}
 
@@ -55,6 +58,7 @@ export async function runIntakeStep(params: {
 		return {
 			status: "skipped",
 			reason: `Trigger message ${params.input.messageId} not found`,
+			cursorDisposition: "advance",
 		};
 	}
 
@@ -62,6 +66,7 @@ export async function runIntakeStep(params: {
 		return {
 			status: "skipped",
 			reason: `Trigger message ${params.input.messageId} does not belong to conversation ${params.input.conversationId}`,
+			cursorDisposition: "advance",
 		};
 	}
 
@@ -98,6 +103,8 @@ export async function runIntakeStep(params: {
 			visitorContext: context.visitorContext,
 			conversationState: context.conversationState,
 			triggerMessage: context.triggerMessage,
+			triggerMessageText: context.triggerMessageText,
+			continuationContext: context.continuationContext,
 		},
 	};
 }

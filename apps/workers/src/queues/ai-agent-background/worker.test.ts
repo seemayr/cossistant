@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it, mock } from "bun:test";
+import { beforeEach, describe, expect, it, mock } from "bun:test";
 import type { AiAgentBackgroundJobData } from "@cossistant/jobs";
 
 type MockJob<T> = {
@@ -66,6 +66,18 @@ mock.module("bullmq", () => ({
 
 mock.module("@api/ai-pipeline", () => ({
 	runBackgroundPipeline: runBackgroundPipelineMock,
+	runPrimaryPipeline: mock(async () => ({
+		status: "completed",
+		cursorDisposition: "advance",
+		publicMessagesSent: 0,
+		retryable: false,
+		metrics: {
+			intakeMs: 0,
+			decisionMs: 0,
+			generationMs: 0,
+			totalMs: 0,
+		},
+	})),
 }));
 
 mock.module("@workers/db", () => ({ db: {} }));
@@ -84,6 +96,8 @@ function buildJobData(
 		websiteId: "site-1",
 		organizationId: "org-1",
 		aiAgentId: "ai-1",
+		sourceMessageId: "msg-1",
+		sourceMessageCreatedAt: "2026-03-04T10:00:00.000Z",
 		...overrides,
 	};
 }
@@ -100,10 +114,6 @@ async function runJob(data: AiAgentBackgroundJobData) {
 }
 
 describe("ai-agent background worker", () => {
-	afterAll(() => {
-		mock.restore();
-	});
-
 	beforeEach(() => {
 		processor = null;
 		workerWaitUntilReadyMock.mockReset();
