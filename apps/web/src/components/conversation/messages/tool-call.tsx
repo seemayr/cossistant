@@ -1,3 +1,6 @@
+"use client";
+
+import { useToolDisplayState } from "@cossistant/react/support/components";
 import type { TimelineItem } from "@cossistant/types/api/timeline-item";
 import { getToolTimelineLogType } from "@/lib/tool-timeline-visibility";
 import { resolveToolActivityIcon } from "./activity/action-icon-map";
@@ -166,13 +169,19 @@ export function ToolCall({
 	showIcon?: boolean;
 }) {
 	const strictPart = extractToolPart(item);
-	if (!strictPart && mode !== "developer") {
-		return null;
-	}
-
 	const toolCall = buildNormalizedToolCall(item, strictPart);
+	const delayedState = useToolDisplayState({
+		state: toolCall.state,
+		toolCallId: toolCall.toolCallId,
+		minimumLoadingMs: mode === "default" ? undefined : 0,
+	});
+	const renderedToolCall =
+		mode === "default" && delayedState !== toolCall.state
+			? { ...toolCall, state: delayedState }
+			: toolCall;
 	const timestamp = formatTimestamp(item.createdAt);
 	const icon = resolveToolActivityIcon(toolCall.toolName);
+	const showStateIndicator = mode === "default" && !showIcon;
 
 	if (mode === "developer") {
 		const CustomRenderer = TOOL_RENDERER_MAP[toolCall.toolName];
@@ -201,8 +210,9 @@ export function ToolCall({
 		<Renderer
 			icon={icon}
 			showIcon={showIcon}
+			showStateIndicator={showStateIndicator}
 			timestamp={timestamp}
-			toolCall={toolCall}
+			toolCall={renderedToolCall}
 		/>
 	);
 }

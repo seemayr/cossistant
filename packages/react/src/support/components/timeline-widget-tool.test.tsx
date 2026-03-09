@@ -2,10 +2,7 @@ import { describe, expect, it } from "bun:test";
 import type { TimelineItem } from "@cossistant/types/api/timeline-item";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import {
-	GenericWidgetToolProcessingIndicator,
-	GenericWidgetToolTimelineTool,
-} from "./timeline-widget-tool";
+import { GenericWidgetToolTimelineTool } from "./timeline-widget-tool";
 
 function createToolTimelineItem(
 	overrides: Partial<TimelineItem> = {}
@@ -37,7 +34,7 @@ function createToolTimelineItem(
 }
 
 describe("GenericWidgetToolTimelineTool", () => {
-	it("renders registered tools without a custom renderer", () => {
+	it("renders registered tools as flat inline activity rows", () => {
 		const html = renderToStaticMarkup(
 			<GenericWidgetToolTimelineTool
 				conversationId="conv-1"
@@ -46,6 +43,13 @@ describe("GenericWidgetToolTimelineTool", () => {
 		);
 
 		expect(html).toContain("Searching knowledge base...");
+		expect(html).toContain('data-tool-display-state="partial"');
+		expect(html).toContain('data-tool-execution-indicator-slot="true"');
+		expect(html).toContain('data-tool-execution-indicator="spinner"');
+		expect(html).toContain('data-co-spinner="true"');
+		expect(html).toContain('data-co-spinner-variant="');
+		expect(html).toContain("text-sm");
+		expect(html).not.toContain("rounded-lg");
 	});
 
 	it("returns null for unregistered tools", () => {
@@ -70,17 +74,30 @@ describe("GenericWidgetToolTimelineTool", () => {
 
 		expect(html).toBe("");
 	});
-});
 
-describe("GenericWidgetToolProcessingIndicator", () => {
-	it("uses the registry default progress copy", () => {
+	it("renders terminal states with the shared ascii arrow", () => {
 		const html = renderToStaticMarkup(
-			<GenericWidgetToolProcessingIndicator
-				message={null}
-				toolName="searchKnowledgeBase"
+			<GenericWidgetToolTimelineTool
+				conversationId="conv-1"
+				item={createToolTimelineItem({
+					text: "Finished knowledge base search",
+					parts: [
+						{
+							type: "tool-searchKnowledgeBase",
+							toolCallId: "call-1",
+							toolName: "searchKnowledgeBase",
+							input: { query: "pricing" },
+							state: "result",
+						},
+					],
+				})}
 			/>
 		);
 
-		expect(html).toContain("Searching knowledge base...");
+		expect(html).toContain('data-tool-display-state="result"');
+		expect(html).toContain('data-tool-execution-indicator-slot="true"');
+		expect(html).toContain('data-tool-execution-indicator="arrow"');
+		expect(html).toContain("-&gt;");
+		expect(html).not.toContain('data-co-spinner="true"');
 	});
 });

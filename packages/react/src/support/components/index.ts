@@ -8,6 +8,7 @@ export type { IconName, IconProps, IconVariant } from "./icons";
 export { default as Icon } from "./icons";
 export { SendButton } from "./multimodal-input";
 export { Root, type RootProps } from "./root";
+export { Spinner, type SpinnerProps } from "./spinner";
 export { TimelineActivityGroup } from "./timeline-activity-group";
 export type { TimelineMessageGroupProps } from "./timeline-message-group";
 export { TimelineMessageGroup } from "./timeline-message-group";
@@ -20,3 +21,8 @@ export type {
 	TypingParticipantType,
 } from "./typing-indicator";
 export { TypingIndicator } from "./typing-indicator";
+export {
+	type ToolDisplayState,
+	type UseToolDisplayStateParams,
+	useToolDisplayState,
+} from "./use-tool-display-state";

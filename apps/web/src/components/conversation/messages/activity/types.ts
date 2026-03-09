@@ -21,6 +21,7 @@ export type ToolActivityProps = {
 	toolCall: NormalizedToolCall;
 	timestamp: string;
 	showIcon?: boolean;
+	showStateIndicator?: boolean;
 	icon?: ActivityIcon;
 };
 

@@ -34,7 +34,18 @@ function createToolTimelineItem(
 }
 
 function render(item: TimelineItem, mode?: "default" | "developer"): string {
-	return renderToStaticMarkup(React.createElement(ToolCall, { item, mode }));
+	return renderToStaticMarkup(
+		React.createElement(ToolCall, { item, mode, showIcon: false })
+	);
+}
+
+function renderWithIcon(
+	item: TimelineItem,
+	mode?: "default" | "developer"
+): string {
+	return renderToStaticMarkup(
+		React.createElement(ToolCall, { item, mode, showIcon: true })
+	);
 }
 
 function countOccurrences(html: string, pattern: string): number {
@@ -43,12 +54,12 @@ function countOccurrences(html: string, pattern: string): number {
 
 describe("ToolCall", () => {
 	it("renders mapped icon for known tools", () => {
-		const html = render(createToolTimelineItem());
+		const html = renderWithIcon(createToolTimelineItem());
 		expect(html).toContain('data-activity-icon="searchKnowledgeBase"');
 	});
 
 	it("renders default icon when tool has no specific icon mapping", () => {
-		const html = render(
+		const html = renderWithIcon(
 			createToolTimelineItem({
 				text: "Running sendMessage",
 				parts: [
@@ -69,10 +80,14 @@ describe("ToolCall", () => {
 
 	it("renders partial state as inline activity with spinner-friendly text", () => {
 		const html = render(createToolTimelineItem());
-		expect(html).toContain("Searching knowledge base...");
+		expect(html).toContain('data-tool-display-state="partial"');
+		expect(html).toContain('data-tool-execution-indicator-slot="true"');
+		expect(html).toContain('data-tool-execution-indicator="spinner"');
+		expect(html).toContain("Searching for &quot;pricing&quot;...");
+		expect(html).toContain("ml-2");
 	});
 
-	it("renders result state with source count", () => {
+	it("renders result state with the executed query", () => {
 		const html = render(
 			createToolTimelineItem({
 				parts: [
@@ -91,7 +106,11 @@ describe("ToolCall", () => {
 			})
 		);
 
-		expect(html).toContain("Found 3 sources");
+		expect(html).toContain('data-tool-display-state="result"');
+		expect(html).toContain('data-tool-execution-indicator-slot="true"');
+		expect(html).toContain('data-tool-execution-indicator="arrow"');
+		expect(html).toContain("Searched for &quot;pricing&quot;");
+		expect(html).not.toContain("Found 3 sources");
 	});
 
 	it("renders compact source pills with +N overflow for search results", () => {
@@ -204,7 +223,7 @@ describe("ToolCall", () => {
 			})
 		);
 
-		expect(html).toContain("Knowledge base lookup failed");
+		expect(html).toContain("Search for &quot;pricing&quot; failed");
 	});
 
 	it("falls back to derived summary when item text is missing", () => {
@@ -227,13 +246,28 @@ describe("ToolCall", () => {
 	});
 
 	it("renders developer mode metadata badges and payload", () => {
-		const html = render(createToolTimelineItem(), "developer");
+		const html = render(
+			createToolTimelineItem({
+				text: "Running sendMessage",
+				parts: [
+					{
+						type: "tool-sendMessage",
+						toolCallId: "call-dev-1",
+						toolName: "sendMessage",
+						input: { message: "Hello there" },
+						state: "partial",
+					},
+				],
+				tool: "sendMessage",
+			}),
+			"developer"
+		);
 
-		expect(html).toContain("AI agent dev log");
-		expect(html).toContain("Customer");
+		expect(html).toContain("Running");
+		expect(html).toContain("Log");
 		expect(html).toContain("Dev payload");
 		expect(html).toContain("tool");
-		expect(html).toContain("call-1");
+		expect(html).toContain("call-dev-1");
 	});
 
 	it("renders developer-mode fallback when strict tool part parsing fails", () => {
@@ -246,7 +280,7 @@ describe("ToolCall", () => {
 			"developer"
 		);
 
-		expect(html).toContain("AI agent dev log");
+		expect(html).toContain("Running sendMessage");
 		expect(html).toContain("Fallback rendered from timeline metadata.");
 		expect(html).toContain("sendMessage");
 		expect(html).toContain("tool-1");

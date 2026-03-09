@@ -6,14 +6,8 @@ export type ConversationTimelineToolProps = {
 	conversationId: string;
 };
 
-export type ConversationTimelineProcessingProps = {
-	toolName: string;
-	message?: string | null;
-};
-
 export type ConversationTimelineToolDefinition = {
 	component: React.ComponentType<ConversationTimelineToolProps>;
-	processingComponent?: React.ComponentType<ConversationTimelineProcessingProps>;
 };
 
 export type ConversationTimelineTools = Record<

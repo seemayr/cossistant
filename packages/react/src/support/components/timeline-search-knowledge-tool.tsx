@@ -1,28 +1,22 @@
-import type { TimelineItem } from "@cossistant/types/api/timeline-item";
+"use client";
+
 import type React from "react";
 import { extractToolPart } from "../../utils/timeline-tool";
-import type {
-	ConversationTimelineProcessingProps,
-	ConversationTimelineToolProps,
-} from "./timeline-tool-types";
+import type { ConversationTimelineToolProps } from "./timeline-tool-types";
 import { WidgetToolActivityRow } from "./timeline-widget-tool";
+import { useToolDisplayState } from "./use-tool-display-state";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function extractSourceCount(output: unknown): number | null {
-	if (!isRecord(output)) {
+function extractSearchQuery(input: unknown): string | null {
+	if (!isRecord(input) || typeof input.query !== "string") {
 		return null;
 	}
 
-	const data = isRecord(output.data) ? output.data : null;
-	if (typeof data?.totalFound === "number") {
-		return data.totalFound;
-	}
-
-	const articles = Array.isArray(data?.articles) ? data.articles : null;
-	return articles ? articles.length : null;
+	const query = input.query.trim();
+	return query.length > 0 ? query : null;
 }
 
 function toCompactSourceLabel(article: unknown): string | null {
@@ -65,46 +59,63 @@ function extractSourceLabels(output: unknown): string[] {
 		.slice(0, 3);
 }
 
+function getKnowledgeSearchText(params: {
+	query: string | null;
+	state: "partial" | "result" | "error";
+	resultFallbackText: string;
+}): string {
+	const { query, state, resultFallbackText } = params;
+
+	if (query) {
+		if (state === "partial") {
+			return `Searching for "${query}"...`;
+		}
+
+		if (state === "error") {
+			return `Search for "${query}" failed`;
+		}
+
+		return `Searched for "${query}"`;
+	}
+
+	if (state === "partial") {
+		return "Searching knowledge base...";
+	}
+
+	if (state === "error") {
+		return "Knowledge base lookup failed";
+	}
+
+	return resultFallbackText;
+}
+
 export function SearchKnowledgeTimelineTool({
 	item,
 }: ConversationTimelineToolProps) {
 	const toolPart = extractToolPart(item);
-	const state = toolPart?.state ?? "partial";
+	const rawState = toolPart?.state ?? "partial";
+	const displayState = useToolDisplayState({
+		state: rawState,
+		toolCallId: toolPart?.toolCallId ?? item.id ?? "searchKnowledgeBase",
+	});
+	const query = extractSearchQuery(toolPart?.input);
+	const resultFallbackText =
+		item.text?.trim() || "Finished knowledge base search";
 
-	const text =
-		state === "partial"
-			? "Searching knowledge base..."
-			: state === "error"
-				? "Knowledge base lookup failed"
-				: (() => {
-						const count = extractSourceCount(toolPart?.output);
-						if (typeof count === "number") {
-							return `Found ${count} source${count === 1 ? "" : "s"}`;
-						}
-
-						return item.text?.trim() || "Finished knowledge base search";
-					})();
+	const text = getKnowledgeSearchText({
+		query,
+		state: displayState,
+		resultFallbackText,
+	});
 
 	const sourceLabels =
-		state === "result" ? extractSourceLabels(toolPart?.output) : [];
+		displayState === "result" ? extractSourceLabels(toolPart?.output) : [];
 
 	return (
 		<WidgetToolActivityRow
 			detailLabels={sourceLabels}
-			iconName="search"
-			state={state}
+			state={displayState}
 			text={text}
-		/>
-	);
-}
-
-export function SearchKnowledgeProcessingIndicator({
-	message,
-}: ConversationTimelineProcessingProps) {
-	return (
-		<WidgetToolActivityRow
-			iconName="search"
-			text={message?.trim() || "Searching knowledge base..."}
 		/>
 	);
 }

@@ -221,6 +221,7 @@ export async function runPrimaryPipeline(
 
 		const generationResult = await (async () => {
 			try {
+				await typingControls.startSafely();
 				return await measureStage(metrics, "generationMs", () =>
 					runGenerationRuntime(
 						buildGenerationRuntimeInput({

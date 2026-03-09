@@ -38,18 +38,13 @@ function extractArticles(output: unknown): ArticleSummary[] {
 		}));
 }
 
-function extractSourceCount(output: unknown): number | null {
-	if (!isRecord(output)) {
+function extractSearchQuery(input: unknown): string | null {
+	if (!isRecord(input) || typeof input.query !== "string") {
 		return null;
 	}
 
-	const data = isRecord(output.data) ? output.data : null;
-	if (typeof data?.totalFound === "number") {
-		return data.totalFound;
-	}
-
-	const articles = Array.isArray(data?.articles) ? data.articles : null;
-	return articles ? articles.length : null;
+	const query = input.query.trim();
+	return query.length > 0 ? query : null;
 }
 
 function getSourceLabel(article: ArticleSummary): string {
@@ -74,6 +69,36 @@ function getSourceLabel(article: ArticleSummary): string {
 	}
 
 	return "Untitled";
+}
+
+function getKnowledgeSearchText(params: {
+	query: string | null;
+	state: "partial" | "result" | "error";
+	resultFallbackText: string;
+}): string {
+	const { query, state, resultFallbackText } = params;
+
+	if (query) {
+		if (state === "partial") {
+			return `Searching for "${query}"...`;
+		}
+
+		if (state === "error") {
+			return `Search for "${query}" failed`;
+		}
+
+		return `Searched for "${query}"`;
+	}
+
+	if (state === "partial") {
+		return "Searching knowledge base...";
+	}
+
+	if (state === "error") {
+		return "Knowledge base lookup failed";
+	}
+
+	return resultFallbackText;
 }
 
 function SourcePillList({ articles }: { articles: ArticleSummary[] }) {
@@ -155,17 +180,25 @@ export function SearchKnowledgeBaseActivity({
 	toolCall,
 	timestamp,
 	showIcon = true,
+	showStateIndicator = false,
 	icon,
 }: ToolActivityProps) {
-	const { state, output, summaryText } = toolCall;
+	const { input, state, output, summaryText } = toolCall;
+	const query = extractSearchQuery(input);
+	const text = getKnowledgeSearchText({
+		query,
+		state,
+		resultFallbackText: summaryText,
+	});
 
 	if (state === "partial") {
 		return (
 			<ActivityWrapper
 				icon={icon}
 				showIcon={showIcon}
+				showStateIndicator={showStateIndicator}
 				state="partial"
-				text="Searching knowledge base..."
+				text={text}
 				timestamp={timestamp}
 			/>
 		);
@@ -176,26 +209,23 @@ export function SearchKnowledgeBaseActivity({
 			<ActivityWrapper
 				icon={icon}
 				showIcon={showIcon}
+				showStateIndicator={showStateIndicator}
 				state="error"
-				text="Knowledge base lookup failed"
+				text={text}
 				timestamp={timestamp}
 			/>
 		);
 	}
 
-	const count = extractSourceCount(output);
 	const articles = extractArticles(output);
-	const resultText =
-		typeof count === "number"
-			? `Found ${count} source${count === 1 ? "" : "s"}`
-			: summaryText;
 
 	return (
 		<ActivityWrapper
 			icon={icon}
 			showIcon={showIcon}
+			showStateIndicator={showStateIndicator}
 			state="result"
-			text={resultText}
+			text={text}
 			timestamp={timestamp}
 		>
 			<SourcePillList articles={articles} />

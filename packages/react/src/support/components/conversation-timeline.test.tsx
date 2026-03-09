@@ -107,9 +107,41 @@ describe("ConversationTimelineList live activity", () => {
 		useSupportTextMock.mockClear();
 	});
 
-	it("renders knowledge search status instead of AI typing dots", async () => {
+	it("keeps tool activity in the timeline and typing as the last item", async () => {
 		currentTimelineState = {
 			...currentTimelineState,
+			groupedMessages: {
+				...currentTimelineState.groupedMessages,
+				items: [
+					{
+						type: "timeline_tool",
+						tool: "searchKnowledgeBase",
+						item: {
+							id: "tool-1",
+							conversationId: "conv-1",
+							organizationId: "org-1",
+							visibility: "public",
+							type: "tool",
+							text: "Searching knowledge base...",
+							parts: [
+								{
+									type: "tool-searchKnowledgeBase",
+									toolCallId: "call-1",
+									toolName: "searchKnowledgeBase",
+									input: { query: "pricing" },
+									state: "partial",
+								},
+							],
+							userId: null,
+							visitorId: null,
+							aiAgentId: "ai-1",
+							createdAt: "2026-03-08T10:00:00.000Z",
+							deletedAt: null,
+							tool: "searchKnowledgeBase",
+						},
+					},
+				],
+			},
 			processing: {
 				message: "Searching knowledge base...",
 				tool: {
@@ -123,14 +155,18 @@ describe("ConversationTimelineList live activity", () => {
 		const html = await renderTimeline();
 
 		expect(html).toContain("Searching knowledge base...");
-		expect(html).not.toContain("data-typing-indicator");
-		expect(useTypingSoundMock).toHaveBeenCalledWith(false, {
+		expect(html).toContain('data-tool-execution-indicator-slot="true"');
+		expect(html).toContain('data-typing-indicator="ai:ai-1"');
+		expect(html.indexOf("Searching knowledge base...")).toBeLessThan(
+			html.indexOf("data-typing-indicator")
+		);
+		expect(useTypingSoundMock).toHaveBeenCalledWith(true, {
 			volume: 1,
 			playbackRate: 1.3,
 		});
 	});
 
-	it("hides generic typing when only the AI is typing", async () => {
+	it("renders the existing typing indicator when only the AI is typing", async () => {
 		currentTimelineState = {
 			...currentTimelineState,
 			typingParticipants: [{ id: "ai-1", type: "ai" }],
@@ -139,14 +175,14 @@ describe("ConversationTimelineList live activity", () => {
 		const html = await renderTimeline();
 
 		expect(html).not.toContain("Searching knowledge base...");
-		expect(html).not.toContain("data-typing-indicator");
-		expect(useTypingSoundMock).toHaveBeenCalledWith(false, {
+		expect(html).toContain('data-typing-indicator="ai:ai-1"');
+		expect(useTypingSoundMock).toHaveBeenCalledWith(true, {
 			volume: 1,
 			playbackRate: 1.3,
 		});
 	});
 
-	it("keeps unregistered tool progress hidden in the widget footer", async () => {
+	it("does not render the removed processing footer", async () => {
 		currentTimelineState = {
 			...currentTimelineState,
 			processing: {

@@ -358,7 +358,7 @@ describe("runPrimaryPipeline generation error/skip behavior", () => {
 		expect(result.retryable).toBe(true);
 	});
 
-	it("does not start typing, exposes only stopTyping to generation, and emits a single stop before send cleanup", async () => {
+	it("starts the typing heartbeat for public runs and stops it once before send cleanup", async () => {
 		runGenerationRuntimeMock.mockImplementationOnce(async (input) => {
 			const runtimeInput = input as {
 				startTyping?: unknown;
@@ -393,9 +393,9 @@ describe("runPrimaryPipeline generation error/skip behavior", () => {
 		});
 
 		expect(result.status).toBe("completed");
-		expect(typingHeartbeatStartMock).not.toHaveBeenCalled();
-		expect(typingHeartbeatStopMock).not.toHaveBeenCalled();
-		expect(emitPipelineTypingStopMock).toHaveBeenCalledTimes(1);
+		expect(typingHeartbeatStartMock).toHaveBeenCalledTimes(1);
+		expect(typingHeartbeatStopMock).toHaveBeenCalledTimes(1);
+		expect(emitPipelineTypingStopMock).not.toHaveBeenCalled();
 		expect(emitPipelineProcessingCompletedMock).toHaveBeenCalledWith(
 			expect.objectContaining({
 				status: "success",

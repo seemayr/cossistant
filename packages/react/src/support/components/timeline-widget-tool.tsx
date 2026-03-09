@@ -1,6 +1,7 @@
+"use client";
+
 import {
 	getWidgetToolDefaultProgressMessage,
-	isWidgetLiveStatusTool,
 	isWidgetTimelineTool,
 } from "@cossistant/types";
 import type React from "react";
@@ -9,18 +10,18 @@ import {
 	getToolNameFromTimelineItem,
 	type TimelineToolPartState,
 } from "../../utils/timeline-tool";
-import Icon, { type IconName } from "./icons";
-import type {
-	ConversationTimelineProcessingProps,
-	ConversationTimelineToolProps,
-} from "./timeline-tool-types";
+import { Spinner } from "./spinner";
+import type { ConversationTimelineToolProps } from "./timeline-tool-types";
+import { useToolDisplayState } from "./use-tool-display-state";
 
 type WidgetToolActivityRowProps = {
 	text: string;
 	state?: TimelineToolPartState;
-	iconName?: IconName;
 	detailLabels?: string[];
 };
+
+const TOOL_INDICATOR_SLOT_CLASS_NAME =
+	"flex min-h-6 w-5 shrink-0 items-start justify-center";
 
 function getGenericToolText(params: {
 	toolName: string;
@@ -51,30 +52,53 @@ function getGenericToolText(params: {
 export function WidgetToolActivityRow({
 	text,
 	state = "partial",
-	iconName = "star",
 	detailLabels = [],
 }: WidgetToolActivityRowProps): React.ReactElement {
 	return (
-		<div className="flex w-full flex-col gap-2">
-			<div className="flex items-center gap-2 rounded-lg bg-co-background-300/70 px-3 py-2 text-co-primary/75 text-xs">
-				<Icon
+		<div
+			className="flex w-full flex-col gap-1 text-sm"
+			data-tool-display-state={state}
+		>
+			<div className="flex items-start gap-2">
+				<span
+					aria-hidden="true"
+					className={TOOL_INDICATOR_SLOT_CLASS_NAME}
+					data-tool-execution-indicator-slot="true"
+				>
+					{state === "partial" ? (
+						<span
+							className="mt-1 shrink-0"
+							data-tool-execution-indicator="spinner"
+						>
+							<Spinner className="text-co-primary/70" size={12} />
+						</span>
+					) : (
+						<span
+							className={
+								state === "error"
+									? "font-mono text-co-destructive text-sm leading-6"
+									: "font-mono text-co-muted-foreground text-sm leading-6"
+							}
+							data-tool-execution-indicator="arrow"
+						>
+							{"->"}
+						</span>
+					)}
+				</span>
+				<span
 					className={
 						state === "error"
-							? "size-3.5 text-co-destructive"
-							: "size-3.5 text-co-primary/70"
+							? "min-w-0 flex-1 break-words text-co-destructive text-sm leading-6"
+							: "min-w-0 flex-1 break-words text-co-primary/75 text-sm leading-6"
 					}
-					name={iconName}
-				/>
-				<span className="truncate">{text}</span>
+				>
+					{text}
+				</span>
 			</div>
 			{detailLabels.length > 0 ? (
-				<div className="flex flex-wrap gap-1 pl-1">
+				<div className="flex flex-col gap-1 pl-7 text-co-muted-foreground text-sm leading-5">
 					{detailLabels.map((label) => (
-						<span
-							className="max-w-[11rem] truncate rounded-full bg-co-background-300 px-2 py-1 text-[11px] text-co-primary/60"
-							key={label}
-							title={label}
-						>
+						<span className="truncate" key={label} title={label}>
 							{label}
 						</span>
 					))}
@@ -88,42 +112,29 @@ export function GenericWidgetToolTimelineTool({
 	item,
 }: ConversationTimelineToolProps): React.ReactElement | null {
 	const toolName = getToolNameFromTimelineItem(item);
+	const registeredToolName =
+		toolName && isWidgetTimelineTool(toolName) ? toolName : null;
+	const toolPart = extractToolPart(item);
+	const rawState = toolPart?.state ?? "partial";
+	const displayState = useToolDisplayState({
+		state: rawState,
+		toolCallId:
+			toolPart?.toolCallId ?? item.id ?? registeredToolName ?? "unknown-tool",
+	});
 
-	if (!(toolName && isWidgetTimelineTool(toolName))) {
+	if (!registeredToolName) {
 		return null;
 	}
 
-	const toolPart = extractToolPart(item);
-	const state = toolPart?.state ?? "partial";
-
 	return (
 		<WidgetToolActivityRow
-			state={state}
+			state={displayState}
 			text={getGenericToolText({
-				toolName,
-				state,
-				itemText: item.text,
+				toolName: registeredToolName,
+				state: displayState,
+				itemText: rawState === displayState ? item.text : undefined,
 				errorText: toolPart?.errorText,
 			})}
-		/>
-	);
-}
-
-export function GenericWidgetToolProcessingIndicator({
-	toolName,
-	message,
-}: ConversationTimelineProcessingProps): React.ReactElement | null {
-	if (!isWidgetLiveStatusTool(toolName)) {
-		return null;
-	}
-
-	return (
-		<WidgetToolActivityRow
-			text={
-				message?.trim() ||
-				getWidgetToolDefaultProgressMessage(toolName) ||
-				`Running ${toolName}`
-			}
 		/>
 	);
 }

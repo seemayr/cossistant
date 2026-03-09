@@ -205,18 +205,17 @@ describe("TimelineActivityGroup", () => {
 				createdAt: "2026-01-01T10:00:00.000Z",
 				eventType: "participant_joined",
 			}),
-			createToolItem({
-				id: "tool-1",
+			createEventItem({
+				id: "event-2",
 				createdAt: "2026-01-01T10:01:00.000Z",
-				toolName: "updateSentiment",
-				text: "Updated sentiment to positive",
+				eventType: "status_changed",
 			}),
 		]);
 
 		const html = renderActivityGroup(group);
 
 		expect(html).toContain('data-activity-tree-prefix="event"');
-		expect(html).toContain('data-activity-tree-prefix="tool"');
+		expect(countOccurrences(html, 'data-activity-tree-prefix="event"')).toBe(2);
 		expect(
 			countOccurrences(html, 'data-activity-tree-continuation="true"')
 		).toBe(1);
@@ -230,14 +229,13 @@ describe("TimelineActivityGroup", () => {
 				id: "event-1",
 				createdAt: "2026-01-01T10:00:00.000Z",
 			}),
-			createToolItem({
-				id: "tool-1",
-				createdAt: "2026-01-01T10:01:00.000Z",
-				toolName: "updateSentiment",
-				text: "Updated sentiment to positive",
-			}),
 			createEventItem({
 				id: "event-2",
+				createdAt: "2026-01-01T10:01:00.000Z",
+				eventType: "participant_joined",
+			}),
+			createEventItem({
+				id: "event-3",
 				createdAt: "2026-01-01T10:02:00.000Z",
 				eventType: "status_changed",
 			}),
@@ -251,13 +249,13 @@ describe("TimelineActivityGroup", () => {
 		).toBe(2);
 	});
 
-	it("keeps tree continuation visible when tool rows render source detail pills", () => {
+	it("renders tool groups as flat sender-labeled stacks in normal mode", () => {
 		const group = createActivityGroup([
 			createToolItem({
 				id: "tool-1",
 				createdAt: "2026-01-01T10:00:00.000Z",
 				toolName: "searchKnowledgeBase",
-				text: "Found 6 sources",
+				text: 'Searched for "pricing"',
 				output: {
 					success: true,
 					data: {
@@ -281,28 +279,33 @@ describe("TimelineActivityGroup", () => {
 
 		const html = renderActivityGroup(group);
 
+		expect(html).toContain("Anthony Riera");
 		expect(html).toContain('data-source-pill="true"');
 		expect(html).toContain('data-source-overflow="2"');
-		expect(
-			countOccurrences(html, 'data-activity-tree-continuation="true"')
-		).toBe(1);
+		expect(html).toContain('data-tool-execution-indicator-slot="true"');
+		expect(html).toContain('data-tool-execution-indicator="arrow"');
+		expect(html).toContain("Searched for &quot;pricing&quot;");
+		expect(html).not.toContain("data-activity-tree-prefix=");
 	});
 
-	it("renders single-tool activity groups as one compact line", () => {
+	it("routes single-tool groups through ToolCall in normal mode", () => {
 		const group = createActivityGroup([
 			createToolItem({
 				id: "tool-1",
 				createdAt: "2026-01-01T10:00:00.000Z",
-				toolName: "updateSentiment",
-				text: "Updated sentiment to positive",
+				toolName: "searchKnowledgeBase",
+				text: 'Searched for "pricing"',
 			}),
 		]);
 
 		const html = renderActivityGroup(group);
 
-		expect(html).toContain('data-activity-single-tool="true"');
-		expect(html).toContain("Anthony Riera Updated sentiment to positive");
+		expect(html).toContain("Anthony Riera");
+		expect(html).toContain("Searched for &quot;pricing&quot;");
+		expect(html).toContain('data-tool-execution-indicator-slot="true"');
+		expect(html).toContain('data-tool-execution-indicator="arrow"');
 		expect(html).not.toContain("data-activity-tree-prefix=");
+		expect(html).not.toContain("data-activity-single-tool=");
 		expect(html).not.toContain("data-activity-bullet=");
 	});
 

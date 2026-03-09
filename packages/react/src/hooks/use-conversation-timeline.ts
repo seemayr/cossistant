@@ -2,7 +2,6 @@ import type { TimelineItem } from "@cossistant/types/api/timeline-item";
 import { useMemo } from "react";
 
 import {
-	filterWidgetVisibleTypingEntries,
 	mapTypingEntriesToParticipants,
 	type TimelineTypingParticipant,
 } from "./private/typing";
@@ -48,10 +47,6 @@ export function useConversationTimeline({
 		seenData,
 		currentViewerId: currentVisitorId,
 	});
-	const widgetVisibleTypingEntries = useMemo(
-		() => filterWidgetVisibleTypingEntries(typingEntries),
-		[typingEntries]
-	);
 
 	const lastVisitorMessageGroupIndex = useMemo(() => {
 		for (let index = groupedMessages.items.length - 1; index >= 0; index--) {
@@ -71,15 +66,15 @@ export function useConversationTimeline({
 	}, [groupedMessages.items, currentVisitorId]);
 
 	const typingParticipants = useMemo(
-		() => mapTypingEntriesToParticipants(widgetVisibleTypingEntries),
-		[widgetVisibleTypingEntries]
+		() => mapTypingEntriesToParticipants(typingEntries),
+		[typingEntries]
 	);
 
 	return {
 		groupedMessages,
 		seenData,
 		processing,
-		typingEntries: widgetVisibleTypingEntries,
+		typingEntries,
 		typingParticipants,
 		lastVisitorMessageGroupIndex,
 	};

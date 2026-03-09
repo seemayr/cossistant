@@ -35,6 +35,7 @@ export function SetPriorityActivity({
 	toolCall,
 	timestamp,
 	showIcon = true,
+	showStateIndicator = false,
 	icon,
 }: ToolActivityProps) {
 	const { state, output, summaryText } = toolCall;
@@ -44,6 +45,7 @@ export function SetPriorityActivity({
 			<ActivityWrapper
 				icon={icon}
 				showIcon={showIcon}
+				showStateIndicator={showStateIndicator}
 				state="partial"
 				text="Setting priority..."
 				timestamp={timestamp}
@@ -56,6 +58,7 @@ export function SetPriorityActivity({
 			<ActivityWrapper
 				icon={icon}
 				showIcon={showIcon}
+				showStateIndicator={showStateIndicator}
 				state="error"
 				text="Failed to set priority"
 				timestamp={timestamp}
@@ -78,6 +81,7 @@ export function SetPriorityActivity({
 		<ActivityWrapper
 			icon={icon}
 			showIcon={showIcon}
+			showStateIndicator={showStateIndicator}
 			state="result"
 			text={resultText}
 			timestamp={timestamp}

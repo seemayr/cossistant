@@ -1,7 +1,8 @@
 /*
  * Widget animations — pure CSS replacements for motion library.
  * All keyframes are prefixed with `co-` to avoid conflicts.
- * Scoped under `.cossistant` to match the widget's namespace.
+ * Widget utility classes stay scoped under `.cossistant`.
+ * Shared spinner classes stay unscoped so dashboard and widget can reuse them.
  */
 
 @layer utilities {
@@ -60,9 +61,115 @@
 		}
 	}
 
+	@keyframes co-spinner-orbit {
+		0%,
+		100% {
+			opacity: 0.2;
+			transform: translate3d(
+					var(--co-spinner-orbit-start-x, 0%),
+					var(--co-spinner-orbit-start-y, 0%),
+					0
+				)
+				scale(0.74);
+		}
+
+		45% {
+			opacity: 0.6;
+			transform: translate3d(0, 0, 0) scale(0.88);
+		}
+
+		55% {
+			opacity: 1;
+			transform: translate3d(
+					var(--co-spinner-orbit-peak-x, 0%),
+					var(--co-spinner-orbit-peak-y, 0%),
+					0
+				)
+				scale(1);
+		}
+	}
+
+	@keyframes co-spinner-wave {
+		0%,
+		100% {
+			opacity: 0.18;
+			transform: translate3d(
+					var(--co-spinner-wave-start-x, 0%),
+					var(--co-spinner-wave-start-y, 0%),
+					0
+				)
+				scale(0.72);
+		}
+
+		50% {
+			opacity: 1;
+			transform: translate3d(
+					var(--co-spinner-wave-peak-x, 0%),
+					var(--co-spinner-wave-peak-y, 0%),
+					0
+				)
+				scale(1);
+		}
+	}
+
+	@keyframes co-spinner-pulse {
+		0%,
+		100% {
+			opacity: 0.22;
+			transform: translate3d(0, 0, 0) scale(0.7);
+		}
+
+		50% {
+			opacity: 1;
+			transform: translate3d(
+					var(--co-spinner-pulse-peak-x, 0%),
+					var(--co-spinner-pulse-peak-y, 0%),
+					0
+				)
+				scale(1.05);
+		}
+	}
+
 	/* ------------------------------------------------------------------ */
 	/* Animation classes (scoped to widget)                               */
 	/* ------------------------------------------------------------------ */
+
+	.co-spinner {
+		display: inline-grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		grid-template-rows: repeat(3, minmax(0, 1fr));
+		width: var(--co-spinner-size, 16px);
+		height: var(--co-spinner-size, 16px);
+		gap: var(--co-spinner-gap, 2px);
+		vertical-align: middle;
+	}
+
+	.co-spinner__cell {
+		border-radius: var(--co-spinner-radius, 2px);
+		background: currentColor;
+		animation-duration: 1.15s;
+		animation-delay: var(--co-spinner-delay, 0ms);
+		animation-iteration-count: infinite;
+		animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+		animation-fill-mode: both;
+		transform-origin: center;
+		will-change: opacity, transform;
+	}
+
+	.co-spinner[data-co-spinner-variant="orbit"] .co-spinner__cell {
+		animation-duration: 1.6s;
+		animation-name: co-spinner-orbit;
+	}
+
+	.co-spinner[data-co-spinner-variant="wave"] .co-spinner__cell {
+		animation-duration: 1.75s;
+		animation-name: co-spinner-wave;
+	}
+
+	.co-spinner[data-co-spinner-variant="pulse"] .co-spinner__cell {
+		animation-duration: 1.4s;
+		animation-name: co-spinner-pulse;
+	}
 
 	.cossistant {
 		.co-animate-fade-in {
@@ -99,6 +206,12 @@
 	/* ------------------------------------------------------------------ */
 
 	@media (prefers-reduced-motion: reduce) {
+		.co-spinner__cell {
+			animation: none;
+			opacity: 0.65;
+			transform: none;
+		}
+
 		.cossistant {
 			.co-animate-fade-in,
 			.co-animate-fade-in-scale,

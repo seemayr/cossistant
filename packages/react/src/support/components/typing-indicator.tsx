@@ -86,7 +86,7 @@ export const TypingIndicator = React.forwardRef<
 
 		return (
 			<div
-				className={cn("flex items-center gap-6", className)}
+				className={cn("flex items-center gap-3", className)}
 				ref={ref}
 				{...props}
 			>

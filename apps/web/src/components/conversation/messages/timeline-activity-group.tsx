@@ -51,14 +51,8 @@ type ActivityRow =
 			toolName: string | null;
 	  };
 
-type ToolState = "partial" | "result" | "error";
-
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function isToolState(value: unknown): value is ToolState {
-	return value === "partial" || value === "result" || value === "error";
 }
 
 function getToolNameFromTimelineItem(item: TimelineItem): string | null {
@@ -81,55 +75,6 @@ function getToolNameFromTimelineItem(item: TimelineItem): string | null {
 	}
 
 	return null;
-}
-
-function getToolStateFromTimelineItem(item: TimelineItem): ToolState {
-	for (const part of item.parts) {
-		if (!isRecord(part)) {
-			continue;
-		}
-
-		const partRecord = part as Record<string, unknown>;
-		const partType = partRecord.type;
-		if (typeof partType !== "string" || !partType.startsWith("tool-")) {
-			continue;
-		}
-
-		const partState = partRecord.state;
-		return isToolState(partState) ? partState : "partial";
-	}
-
-	return "partial";
-}
-
-function getFallbackToolSummary(
-	toolName: string | null,
-	state: ToolState
-): string {
-	const label =
-		typeof toolName === "string" && toolName.length > 0 ? toolName : "tool";
-
-	if (state === "result") {
-		return `Completed ${label}`;
-	}
-
-	if (state === "error") {
-		return `Failed ${label}`;
-	}
-
-	return `Running ${label}`;
-}
-
-function getToolActionSummary(
-	item: TimelineItem,
-	toolName: string | null
-): string {
-	const text = typeof item.text === "string" ? item.text.trim() : "";
-	if (text.length > 0) {
-		return text;
-	}
-
-	return getFallbackToolSummary(toolName, getToolStateFromTimelineItem(item));
 }
 
 function formatTimestamp(createdAt: string): string {
@@ -229,15 +174,11 @@ export function TimelineActivityGroup({
 	if (activityRows.length === 0) {
 		return null;
 	}
-	const showTreeLayout = !isDeveloperModeEnabled && activityRows.length > 1;
+	const hasToolRows = activityRows.some((row) => row.type === "tool");
+	const showTreeLayout =
+		!isDeveloperModeEnabled && activityRows.length > 1 && !hasToolRows;
 	const showRowBullets = isDeveloperModeEnabled && activityRows.length > 1;
-	const firstRow = activityRows[0];
-	const singleToolRow =
-		!isDeveloperModeEnabled &&
-		activityRows.length === 1 &&
-		firstRow?.type === "tool"
-			? firstRow
-			: null;
+	const showSenderLabel = !isDeveloperModeEnabled && hasToolRows;
 
 	return (
 		<PrimitiveTimelineItemGroup
@@ -269,97 +210,75 @@ export function TimelineActivityGroup({
 					</TimelineItemGroupAvatar>
 
 					<TimelineItemGroupContent className="flex min-w-0 flex-1 flex-col gap-1 pt-1">
-						{singleToolRow ? (
-							<div
-								className="group/activity flex w-full min-w-0"
-								data-activity-single-tool="true"
-							>
-								<div className="flex min-w-0 flex-1 items-center gap-2 text-muted-foreground text-sm">
-									<span className="break-words">
-										{senderDisplayName}{" "}
-										{getToolActionSummary(
-											singleToolRow.item,
-											singleToolRow.toolName
-										)}
-									</span>
-									<time className="text-xs opacity-0 transition-opacity group-hover/activity:opacity-100">
-										[{formatTimestamp(singleToolRow.item.createdAt)}]
-									</time>
+						<div className="flex w-full min-w-0 flex-col gap-1">
+							{showTreeLayout || showSenderLabel ? (
+								<div className="px-1 text-muted-foreground text-xs">
+									{senderDisplayName}
 								</div>
-							</div>
-						) : (
-							<div className="flex w-full min-w-0 flex-col gap-1">
-								{showTreeLayout ? (
-									<div className="px-1 text-muted-foreground text-xs">
-										{senderDisplayName}
-									</div>
-								) : null}
-								{activityRows.map((row, index) => (
+							) : null}
+							{activityRows.map((row, index) => (
+								<div
+									className={cn(
+										"flex w-full min-w-0",
+										showTreeLayout ? "items-stretch" : "items-start",
+										showTreeLayout || showRowBullets ? "gap-2" : "gap-0"
+									)}
+									key={row.key}
+								>
+									{showTreeLayout ? (
+										<div className="relative min-w-[2.25rem] shrink-0">
+											<span
+												className="block whitespace-pre font-mono text-muted-foreground/70 text-xs leading-6"
+												data-activity-tree-prefix={row.type}
+											>
+												{generateTreePrefix({
+													ancestorsAreLastChild: [],
+													isLast: index === activityRows.length - 1,
+												})}
+											</span>
+											{index < activityRows.length - 1 ? (
+												<span
+													className="-bottom-[1.05rem] pointer-events-none absolute top-[0.29rem] left-[0.3ch] w-px bg-muted-foreground"
+													data-activity-tree-continuation="true"
+												/>
+											) : null}
+										</div>
+									) : showRowBullets ? (
+										<span
+											className="mt-[0.45rem] shrink-0"
+											data-activity-bullet={row.type}
+										>
+											{row.type === "event"
+												? renderEventActionIcon(row.event.eventType)
+												: renderToolActionIcon(row.toolName)}
+										</span>
+									) : null}
 									<div
 										className={cn(
-											"flex w-full min-w-0",
-											showTreeLayout ? "items-stretch" : "items-start",
-											showTreeLayout || showRowBullets ? "gap-2" : "gap-0"
+											"min-w-0",
+											showTreeLayout || showRowBullets ? "flex-1" : "w-full"
 										)}
-										key={row.key}
 									>
-										{showTreeLayout ? (
-											<div className="relative min-w-[2.25rem] shrink-0">
-												<span
-													className="block whitespace-pre font-mono text-muted-foreground/70 text-xs leading-6"
-													data-activity-tree-prefix={row.type}
-												>
-													{generateTreePrefix({
-														ancestorsAreLastChild: [],
-														isLast: index === activityRows.length - 1,
-													})}
-												</span>
-												{index < activityRows.length - 1 ? (
-													<span
-														className="-bottom-[1.05rem] pointer-events-none absolute top-[0.29rem] left-[0.3ch] w-px bg-muted-foreground"
-														data-activity-tree-continuation="true"
-													/>
-												) : null}
-											</div>
-										) : showRowBullets ? (
-											<span
-												className="mt-[0.45rem] shrink-0"
-												data-activity-bullet={row.type}
-											>
-												{row.type === "event"
-													? renderEventActionIcon(row.event.eventType)
-													: renderToolActionIcon(row.toolName)}
-											</span>
-										) : null}
-										<div
-											className={cn(
-												"min-w-0",
-												showTreeLayout || showRowBullets ? "flex-1" : "w-full"
-											)}
-										>
-											{row.type === "event" ? (
-												<ConversationEvent
-													availableAIAgents={availableAIAgents}
-													availableHumanAgents={availableHumanAgents}
-													createdAt={row.item.createdAt}
-													event={row.event}
-													showIcon={false}
-													visitor={visitor}
-												/>
-											) : (
-												<ToolCall
-													item={row.item}
-													mode={
-														isDeveloperModeEnabled ? "developer" : "default"
-													}
-													showIcon={false}
-												/>
-											)}
-										</div>
+										{row.type === "event" ? (
+											<ConversationEvent
+												availableAIAgents={availableAIAgents}
+												availableHumanAgents={availableHumanAgents}
+												createdAt={row.item.createdAt}
+												event={row.event}
+												showIcon={false}
+												visitor={visitor}
+											/>
+										) : (
+											<ToolCall
+												item={row.item}
+												mode={isDeveloperModeEnabled ? "developer" : "default"}
+												showIcon={false}
+											/>
+										)}
 									</div>
-								))}
-							</div>
-						)}
+								</div>
+							))}
+						</div>
 					</TimelineItemGroupContent>
 				</div>
 			)}

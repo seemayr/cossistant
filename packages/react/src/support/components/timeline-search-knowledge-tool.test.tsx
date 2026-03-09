@@ -2,10 +2,7 @@ import { describe, expect, it } from "bun:test";
 import type { TimelineItem } from "@cossistant/types/api/timeline-item";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import {
-	SearchKnowledgeProcessingIndicator,
-	SearchKnowledgeTimelineTool,
-} from "./timeline-search-knowledge-tool";
+import { SearchKnowledgeTimelineTool } from "./timeline-search-knowledge-tool";
 
 function createToolTimelineItem(
 	overrides: Partial<TimelineItem> = {}
@@ -45,11 +42,15 @@ describe("SearchKnowledgeTimelineTool", () => {
 			/>
 		);
 
-		expect(html).toContain("Searching knowledge base...");
-		expect(html).toContain("search");
+		expect(html).toContain("Searching for &quot;pricing&quot;...");
+		expect(html).toContain('data-tool-display-state="partial"');
+		expect(html).toContain('data-tool-execution-indicator-slot="true"');
+		expect(html).toContain('data-tool-execution-indicator="spinner"');
+		expect(html).toContain('data-co-spinner="true"');
+		expect(html).not.toContain("rounded-lg");
 	});
 
-	it("renders result state with a source count and compact source labels", () => {
+	it("renders result state with the executed query and source labels", () => {
 		const html = renderToStaticMarkup(
 			<SearchKnowledgeTimelineTool
 				conversationId="conv-1"
@@ -83,21 +84,43 @@ describe("SearchKnowledgeTimelineTool", () => {
 			/>
 		);
 
-		expect(html).toContain("Found 2 sources");
+		expect(html).toContain("Searched for &quot;pricing&quot;");
 		expect(html).toContain("Billing FAQ");
 		expect(html).toContain("docs.example.com/pricing");
+		expect(html).toContain('data-tool-display-state="result"');
+		expect(html).toContain('data-tool-execution-indicator-slot="true"');
+		expect(html).toContain('data-tool-execution-indicator="arrow"');
+		expect(html).toContain("-&gt;");
+		expect(html).not.toContain("rounded-full");
 	});
-});
 
-describe("SearchKnowledgeProcessingIndicator", () => {
-	it("renders the live processing message", () => {
+	it("replaces zero-source summaries with the executed query", () => {
 		const html = renderToStaticMarkup(
-			<SearchKnowledgeProcessingIndicator
-				message="Searching knowledge base..."
-				toolName="searchKnowledgeBase"
+			<SearchKnowledgeTimelineTool
+				conversationId="conv-1"
+				item={createToolTimelineItem({
+					text: "Found 0 sources",
+					parts: [
+						{
+							type: "tool-searchKnowledgeBase",
+							toolCallId: "call-1",
+							toolName: "searchKnowledgeBase",
+							input: { query: "refund policy" },
+							state: "result",
+							output: {
+								success: true,
+								data: {
+									totalFound: 0,
+									articles: [],
+								},
+							},
+						},
+					],
+				})}
 			/>
 		);
 
-		expect(html).toContain("Searching knowledge base...");
+		expect(html).toContain("Searched for &quot;refund policy&quot;");
+		expect(html).not.toContain("Found 0 sources");
 	});
 });

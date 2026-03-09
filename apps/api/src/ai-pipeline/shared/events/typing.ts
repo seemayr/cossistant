@@ -45,22 +45,27 @@ export class PipelineTypingHeartbeat {
 		}
 
 		this.isRunning = true;
-		await emitPipelineTypingStart({
-			conversation: this.conversation,
-			aiAgentId: this.aiAgentId,
-		});
-
-		this.intervalHandle = setInterval(() => {
-			void emitPipelineTypingStart({
+		try {
+			await emitPipelineTypingStart({
 				conversation: this.conversation,
 				aiAgentId: this.aiAgentId,
-			}).catch((error) => {
-				console.warn(
-					`[ai-pipeline:typing] conv=${this.conversation.id} | Heartbeat emit failed`,
-					error
-				);
 			});
-		}, HEARTBEAT_INTERVAL_MS);
+
+			this.intervalHandle = setInterval(() => {
+				void emitPipelineTypingStart({
+					conversation: this.conversation,
+					aiAgentId: this.aiAgentId,
+				}).catch((error) => {
+					console.warn(
+						`[ai-pipeline:typing] conv=${this.conversation.id} | Heartbeat emit failed`,
+						error
+					);
+				});
+			}, HEARTBEAT_INTERVAL_MS);
+		} catch (error) {
+			this.isRunning = false;
+			throw error;
+		}
 	}
 
 	async stop(): Promise<void> {

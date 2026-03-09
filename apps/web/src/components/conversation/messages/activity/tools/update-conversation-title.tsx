@@ -26,6 +26,7 @@ export function UpdateConversationTitleActivity({
 	toolCall,
 	timestamp,
 	showIcon = true,
+	showStateIndicator = false,
 	icon,
 }: ToolActivityProps) {
 	const { state, output, summaryText } = toolCall;
@@ -35,6 +36,7 @@ export function UpdateConversationTitleActivity({
 			<ActivityWrapper
 				icon={icon}
 				showIcon={showIcon}
+				showStateIndicator={showStateIndicator}
 				state="partial"
 				text="Updating title..."
 				timestamp={timestamp}
@@ -47,6 +49,7 @@ export function UpdateConversationTitleActivity({
 			<ActivityWrapper
 				icon={icon}
 				showIcon={showIcon}
+				showStateIndicator={showStateIndicator}
 				state="error"
 				text="Failed to update title"
 				timestamp={timestamp}
@@ -68,6 +71,7 @@ export function UpdateConversationTitleActivity({
 		<ActivityWrapper
 			icon={icon}
 			showIcon={showIcon}
+			showStateIndicator={showStateIndicator}
 			state="result"
 			text={resultText}
 			timestamp={timestamp}

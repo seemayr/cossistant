@@ -5,7 +5,6 @@ import type {
 } from "@cossistant/types/api/timeline-item";
 import type React from "react";
 import { useCallback, useMemo } from "react";
-import { filterWidgetVisibleTypingParticipants } from "../../hooks/private/typing";
 import type { DaySeparatorItem } from "../../hooks/private/use-grouped-messages";
 import { useConversationTimeline } from "../../hooks/use-conversation-timeline";
 import { useTypingSound } from "../../hooks/use-typing-sound";
@@ -26,10 +25,7 @@ import { ConversationEvent } from "./conversation-event";
 import { filterSeenByIdsForViewer } from "./conversation-timeline-utils";
 import { TimelineActivityGroup } from "./timeline-activity-group";
 import { TimelineMessageGroup } from "./timeline-message-group";
-import {
-	resolveConversationTimelineProcessingComponent,
-	resolveConversationTimelineToolComponent,
-} from "./timeline-tool-registry";
+import { resolveConversationTimelineToolComponent } from "./timeline-tool-registry";
 import type { ConversationTimelineTools } from "./timeline-tool-types";
 import { TypingIndicator } from "./typing-indicator";
 
@@ -50,7 +46,6 @@ const EMPTY_SEEN_BY_IDS: readonly string[] = Object.freeze([]);
 const EMPTY_SEEN_BY_NAMES: readonly string[] = Object.freeze([]);
 
 export type {
-	ConversationTimelineProcessingProps,
 	ConversationTimelineToolDefinition,
 	ConversationTimelineToolProps,
 	ConversationTimelineTools,
@@ -86,21 +81,9 @@ export const ConversationTimelineList: React.FC<ConversationTimelineProps> = ({
 		items: timelineItems,
 		currentVisitorId,
 	});
-	const processingToolName = timeline.processing?.tool?.toolName ?? null;
-	const ProcessingComponent =
-		timeline.processing?.tool?.state === "partial"
-			? resolveConversationTimelineProcessingComponent(
-					processingToolName,
-					tools
-				)
-			: null;
-	const visibleTypingParticipants = useMemo(
-		() => filterWidgetVisibleTypingParticipants(timeline.typingParticipants),
-		[timeline.typingParticipants]
-	);
 
 	// Play typing sound when someone is typing
-	useTypingSound(!ProcessingComponent && visibleTypingParticipants.length > 0, {
+	useTypingSound(timeline.typingParticipants.length > 0, {
 		volume: 1,
 		playbackRate: 1.3,
 	});
@@ -301,19 +284,12 @@ export const ConversationTimelineList: React.FC<ConversationTimelineProps> = ({
 					);
 				})}
 				<div className="w-full">
-					{ProcessingComponent ? (
-						<div className="mt-2">
-							<ProcessingComponent
-								message={timeline.processing?.message}
-								toolName={processingToolName ?? ""}
-							/>
-						</div>
-					) : visibleTypingParticipants.length > 0 ? (
+					{timeline.typingParticipants.length > 0 ? (
 						<TypingIndicator
 							availableAIAgents={availableAIAgents}
 							availableHumanAgents={availableHumanAgents}
 							className="mt-2"
-							participants={visibleTypingParticipants}
+							participants={timeline.typingParticipants}
 						/>
 					) : null}
 				</div>
