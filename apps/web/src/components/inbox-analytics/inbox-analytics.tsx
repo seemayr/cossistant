@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import { useInboxAnalytics } from "@/data/use-inbox-analytics";
+import { isVisitorOnlineEntity, useOnlineNow } from "@/data/use-online-now";
 import {
 	InboxAnalyticsDisplay,
 	type InboxAnalyticsDisplayLayout,
+	type InboxAnalyticsLivePresence,
 } from "./inbox-analytics-display";
 import type { InboxAnalyticsRangeDays } from "./types";
 
@@ -34,12 +36,24 @@ export function useInboxAnalyticsController({
 		rangeDays,
 		enabled,
 	});
+	const livePresenceQuery = useOnlineNow({
+		websiteSlug,
+		enabled,
+	});
+	const livePresence: InboxAnalyticsLivePresence = {
+		count:
+			livePresenceQuery.data?.filter((entity) => isVisitorOnlineEntity(entity))
+				.length ?? null,
+		isFetching: livePresenceQuery.isFetching,
+		isLoading: livePresenceQuery.isLoading,
+	};
 
 	return {
 		data: query.data ?? null,
 		isError: query.isError,
 		isLoading: query.isLoading || query.isFetching,
 		isSheetOpen,
+		livePresence,
 		rangeDays,
 		setIsSheetOpen,
 		setRangeDays,
@@ -63,6 +77,7 @@ export function InboxAnalytics({
 			isError={analytics.isError}
 			isLoading={analytics.isLoading}
 			layout={layout}
+			livePresence={analytics.livePresence}
 			onRangeChange={analytics.setRangeDays}
 			rangeDays={analytics.rangeDays}
 		/>

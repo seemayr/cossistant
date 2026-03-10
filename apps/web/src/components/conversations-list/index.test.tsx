@@ -61,9 +61,19 @@ mock.module("@/contexts/inboxes", () => ({
 mock.module("@/components/inbox-analytics", () => ({
 	InboxAnalyticsDisplay: ({
 		layout = "inline",
+		livePresence,
 	}: {
 		layout?: "inline" | "sheet";
-	}) => <div data-layout={layout} data-slot="mock-inbox-analytics" />,
+		livePresence?: {
+			count: number | null;
+		};
+	}) => (
+		<div
+			data-layout={layout}
+			data-live-count={livePresence?.count ?? "none"}
+			data-slot="mock-inbox-analytics"
+		/>
+	),
 	InboxAnalyticsRangeControl: ({ className }: { className?: string }) => (
 		<div className={className} data-slot="mock-inbox-analytics-range-control" />
 	),
@@ -72,6 +82,11 @@ mock.module("@/components/inbox-analytics", () => ({
 		isError: false,
 		isLoading: false,
 		isSheetOpen: isAnalyticsSheetOpen,
+		livePresence: {
+			count: 6,
+			isFetching: true,
+			isLoading: false,
+		},
 		rangeDays: 7,
 		setIsSheetOpen: () => {},
 		setRangeDays: () => {},
@@ -118,10 +133,12 @@ describe("ConversationsList analytics controls", () => {
 
 		expect(html).toContain(">Analytics<");
 		expect(html).toContain("lg:hidden");
+		expect(html).toContain('data-slot="inbox-desktop-analytics-slot"');
 		expect(html).toContain('data-slot="mock-inbox-analytics"');
+		expect(html).toContain('data-live-count="6"');
 		expect(html).toContain('data-slot="mock-inbox-analytics-range-control"');
+		expect(html).toContain("hidden px-1 pt-2 lg:block");
 		expect(html).toContain("hidden lg:flex");
-		expect(html).toContain("hidden px-1 lg:block");
 	});
 
 	it("hides analytics controls outside the inbox view", async () => {

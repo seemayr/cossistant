@@ -1,5 +1,8 @@
 export { InboxAnalytics, useInboxAnalyticsController } from "./inbox-analytics";
-export type { InboxAnalyticsDisplayLayout } from "./inbox-analytics-display";
+export type {
+	InboxAnalyticsDisplayLayout,
+	InboxAnalyticsLivePresence,
+} from "./inbox-analytics-display";
 export {
 	InboxAnalyticsDisplay,
 	InboxAnalyticsRangeControl,

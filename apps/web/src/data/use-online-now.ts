@@ -3,9 +3,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { queryTinybirdPipe, useTinybirdToken } from "@/lib/tinybird";
 
-type OnlineEntity = {
+const ONLINE_NOW_REFRESH_INTERVAL_MS = 30_000;
+
+export const ONLINE_NOW_QUERY_KEY_PREFIX = ["tinybird", "online-now"] as const;
+
+export type OnlineEntity = {
 	entity_id: string;
-	entity_type: string;
+	entity_type: "visitor" | "user";
 	name: string;
 	image: string;
 	country_code: string | null;
@@ -14,6 +18,14 @@ type OnlineEntity = {
 	longitude: number | null;
 	last_seen: string;
 };
+
+export function getOnlineNowQueryKeyPrefix(websiteSlug: string) {
+	return [...ONLINE_NOW_QUERY_KEY_PREFIX, websiteSlug] as const;
+}
+
+export function isVisitorOnlineEntity(entity: OnlineEntity) {
+	return entity.entity_type === "visitor";
+}
 
 export function useOnlineNow({
 	websiteSlug,
@@ -27,7 +39,7 @@ export function useOnlineNow({
 	const { data: tokenData } = useTinybirdToken(websiteSlug);
 
 	return useQuery({
-		queryKey: ["tinybird", "online-now", websiteSlug, minutes],
+		queryKey: [...ONLINE_NOW_QUERY_KEY_PREFIX, websiteSlug, minutes],
 		queryFn: () => {
 			const { token, host } = tokenData ?? {};
 			if (!(token && host)) {
@@ -41,7 +53,7 @@ export function useOnlineNow({
 			);
 		},
 		enabled: enabled && !!tokenData,
-		staleTime: 30_000,
-		refetchInterval: 30_000,
+		staleTime: ONLINE_NOW_REFRESH_INTERVAL_MS,
+		refetchInterval: ONLINE_NOW_REFRESH_INTERVAL_MS,
 	});
 }

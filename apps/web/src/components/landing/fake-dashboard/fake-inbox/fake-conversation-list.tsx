@@ -178,7 +178,11 @@ export function FakeConversationList({
 	return (
 		<PageContent className="h-full contain-strict">
 			<ScrollArea className="h-full">
-				{analyticsSlot ? <div className="pb-8">{analyticsSlot}</div> : null}
+				{analyticsSlot ? (
+					<div className="pt-2 pb-8" data-slot="fake-inbox-analytics-slot">
+						{analyticsSlot}
+					</div>
+				) : null}
 				{groupedResult.items.map((item, index) => {
 					if (item.type === "header") {
 						const isFirstHeader = index === 0;

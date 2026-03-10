@@ -35,4 +35,24 @@ describe("FakeConversationList", () => {
 
 		expect(html).toContain("Can you help me verify this production fix?");
 	});
+
+	it("adds subtle spacing above the analytics slot", () => {
+		const conversation = createMarcConversation(
+			"Can you help me verify this production fix?",
+			new Date("2026-01-01T10:00:00.000Z")
+		);
+
+		const html = renderToStaticMarkup(
+			<React.StrictMode>
+				<FakeConversationList
+					analyticsSlot={<div>analytics-slot</div>}
+					conversations={[conversation]}
+				/>
+			</React.StrictMode>
+		);
+
+		expect(html).toContain('data-slot="fake-inbox-analytics-slot"');
+		expect(html).toContain("pt-2 pb-8");
+		expect(html).toContain("analytics-slot");
+	});
 });

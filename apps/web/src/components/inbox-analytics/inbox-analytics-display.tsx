@@ -13,8 +13,15 @@ import { INBOX_ANALYTICS_RANGES, type InboxAnalyticsRangeDays } from "./types";
 
 export type InboxAnalyticsDisplayLayout = "inline" | "sheet";
 
+export type InboxAnalyticsLivePresence = {
+	count: number | null;
+	isLoading: boolean;
+	isFetching: boolean;
+};
+
 type InboxAnalyticsDisplayProps = {
 	data: InboxAnalyticsResponse | null;
+	livePresence?: InboxAnalyticsLivePresence;
 	rangeDays: InboxAnalyticsRangeDays;
 	onRangeChange: (rangeDays: InboxAnalyticsRangeDays) => void;
 	isLoading?: boolean;
@@ -40,6 +47,9 @@ type MetricDisplay = MetricConfig & {
 	deltaLabel: string;
 	trendPositive: boolean | null;
 };
+
+const LIVE_PRESENCE_DESCRIPTION =
+	"Connected visitors seen in the last 10 minutes.";
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
 	maximumFractionDigits: 0,
@@ -171,6 +181,72 @@ const getDeltaClassName = (trendPositive: boolean | null) => {
 	return trendPositive ? "text-emerald-600" : "text-rose-600";
 };
 
+function LivePresenceDot() {
+	return (
+		<span aria-hidden="true" className="relative flex size-2 shrink-0">
+			<span
+				className="absolute inset-0 animate-ping rounded-full bg-emerald-600/45"
+				data-slot="inbox-analytics-live-dot-pulse"
+			/>
+			<span
+				className="relative size-2 rounded-full bg-emerald-600"
+				data-slot="inbox-analytics-live-dot"
+			/>
+		</span>
+	);
+}
+
+function LivePresenceValue({
+	className,
+	livePresence,
+}: {
+	className: string;
+	livePresence: InboxAnalyticsLivePresence;
+}) {
+	if (livePresence.isLoading && livePresence.count === null) {
+		return <Skeleton className="h-5 w-8" />;
+	}
+
+	return (
+		<span
+			aria-live="polite"
+			className={className}
+			data-slot="inbox-analytics-live-count"
+		>
+			{formatCount(livePresence.count)}
+		</span>
+	);
+}
+
+function InlineLivePresenceMetric({
+	livePresence,
+}: {
+	livePresence: InboxAnalyticsLivePresence;
+}) {
+	return (
+		<TooltipOnHover
+			content={LIVE_PRESENCE_DESCRIPTION}
+			delay={300}
+			side="bottom"
+		>
+			<section
+				aria-label="Live visitors"
+				className="flex h-[42px] min-w-[150px] flex-1 cursor-help flex-col justify-between"
+				data-slot="inbox-analytics-live-presence"
+			>
+				<p className="text-primary/60 text-xs">Live visitors</p>
+				<div className="flex items-center justify-start gap-2">
+					<LivePresenceDot />
+					<LivePresenceValue
+						className="font-semibold text-md text-primary"
+						livePresence={livePresence}
+					/>
+				</div>
+			</section>
+		</TooltipOnHover>
+	);
+}
+
 function InlineMetric({
 	metric,
 	isLoading,
@@ -184,7 +260,10 @@ function InlineMetric({
 
 	return (
 		<TooltipOnHover content={metric.description} delay={300} side="bottom">
-			<div className="flex h-[42px] min-w-[150px] flex-1 cursor-help flex-col justify-between">
+			<div
+				className="flex h-[42px] min-w-[150px] flex-1 cursor-help flex-col justify-between"
+				data-slot="inbox-analytics-metric"
+			>
 				<p className="text-primary/60 text-xs">{metric.label}</p>
 				<div className="flex items-center justify-start gap-2">
 					{isLoading ? (
@@ -202,13 +281,39 @@ function InlineMetric({
 					{isLoading ? (
 						<Skeleton className="h-4 w-10" />
 					) : (
-						<span className={cn("font-medium text-xs", deltaClassName)}>
+						<span
+							className={cn("font-medium text-xs", deltaClassName)}
+							data-slot="inbox-analytics-delta"
+						>
 							{metric.deltaLabel}
 						</span>
 					)}
 				</div>
 			</div>
 		</TooltipOnHover>
+	);
+}
+
+function SheetLivePresenceMetric({
+	livePresence,
+}: {
+	livePresence: InboxAnalyticsLivePresence;
+}) {
+	return (
+		<section
+			aria-label="Live visitors"
+			className="flex flex-col gap-2 rounded-[10px] border border-primary/10 bg-background-100/70 px-3 py-3"
+			data-slot="inbox-analytics-live-presence"
+		>
+			<p className="text-primary/60 text-xs">Live visitors</p>
+			<div className="flex items-center justify-start gap-2">
+				<LivePresenceDot />
+				<LivePresenceValue
+					className="font-semibold text-lg text-primary"
+					livePresence={livePresence}
+				/>
+			</div>
+		</section>
 	);
 }
 
@@ -284,6 +389,7 @@ export function InboxAnalyticsRangeControl({
 
 export function InboxAnalyticsDisplay({
 	data,
+	livePresence,
 	rangeDays,
 	onRangeChange,
 	isLoading = false,
@@ -332,6 +438,9 @@ export function InboxAnalyticsDisplay({
 			{layout === "inline" ? (
 				<>
 					<div className="flex min-w-0 flex-1 gap-2 overflow-x-auto pr-1">
+						{livePresence ? (
+							<InlineLivePresenceMetric livePresence={livePresence} />
+						) : null}
 						{metrics.map((metric) => (
 							<InlineMetric
 								isLoading={isLoading}
@@ -359,6 +468,9 @@ export function InboxAnalyticsDisplay({
 						/>
 					) : null}
 					<div className="flex flex-col gap-3">
+						{livePresence ? (
+							<SheetLivePresenceMetric livePresence={livePresence} />
+						) : null}
 						{metrics.map((metric) => (
 							<SheetMetric
 								isLoading={isLoading}

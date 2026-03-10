@@ -83,12 +83,16 @@ export function ConversationsList({
 			: smartItems;
 
 	const renderDesktopAnalytics = () => (
-		<div className="hidden px-1 lg:block">
+		<div
+			className="hidden px-1 pt-2 lg:block"
+			data-slot="inbox-desktop-analytics-slot"
+		>
 			<InboxAnalyticsDisplay
 				controlSize="sm"
 				data={analytics.data}
 				isError={analytics.isError}
 				isLoading={analytics.isLoading}
+				livePresence={analytics.livePresence}
 				onRangeChange={analytics.setRangeDays}
 				rangeDays={analytics.rangeDays}
 				showControl={false}
@@ -155,6 +159,7 @@ export function ConversationsList({
 										isError={analytics.isError}
 										isLoading={analytics.isLoading}
 										layout="sheet"
+										livePresence={analytics.livePresence}
 										onRangeChange={analytics.setRangeDays}
 										rangeDays={analytics.rangeDays}
 									/>

@@ -7,12 +7,20 @@ import type {
 import { useMemo, useRef, useState } from "react";
 import {
 	InboxAnalyticsDisplay,
+	type InboxAnalyticsLivePresence,
+	InboxAnalyticsRangeControl,
 	type InboxAnalyticsRangeDays,
 } from "@/components/inbox-analytics";
 import { Page, PageHeader, PageHeaderTitle } from "@/components/ui/layout";
 import { FakeInboxNavigationSidebar } from "../fake-sidebar/inbox";
 import { FakeConversationList } from "./fake-conversation-list";
 import { FakeMouseCursor } from "./fake-mouse-cursor";
+
+const DEMO_LIVE_PRESENCE: InboxAnalyticsLivePresence = {
+	count: 12,
+	isFetching: true,
+	isLoading: false,
+};
 
 type Props = {
 	conversations: ConversationHeader[];
@@ -96,14 +104,27 @@ export function FakeInbox({
 						<div className="flex items-center gap-2">
 							<PageHeaderTitle className="capitalize">Inbox</PageHeaderTitle>
 						</div>
+						<div
+							className="flex items-center justify-end gap-2"
+							data-slot="fake-inbox-header-controls"
+						>
+							<InboxAnalyticsRangeControl
+								onRangeChange={setRangeDays}
+								rangeDays={rangeDays}
+								size="sm"
+							/>
+						</div>
 					</PageHeader>
 
 					<FakeConversationList
 						analyticsSlot={
 							<InboxAnalyticsDisplay
+								controlSize="sm"
 								data={analyticsData}
+								livePresence={DEMO_LIVE_PRESENCE}
 								onRangeChange={setRangeDays}
 								rangeDays={rangeDays}
+								showControl={false}
 							/>
 						}
 						conversations={conversations}

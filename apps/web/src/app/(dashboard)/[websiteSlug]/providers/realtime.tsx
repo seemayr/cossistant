@@ -9,6 +9,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { UpgradeModal } from "@/components/plan/upgrade-modal";
 import { useUserSession, useWebsite } from "@/contexts/website";
+import { getOnlineNowQueryKeyPrefix } from "@/data/use-online-now";
 import { getVisitorPresenceQueryKeyPrefix } from "@/data/use-visitor-presence";
 import { useTRPC } from "@/lib/trpc/client";
 import { handleConversationCreated } from "./events/handlers/conversation-created";
@@ -95,6 +96,19 @@ export function Realtime({ children }: { children: ReactNode }) {
 		() => getVisitorPresenceQueryKeyPrefix(website.slug),
 		[website.slug]
 	);
+	const onlineNowQueryKeyPrefix = useMemo(
+		() => getOnlineNowQueryKeyPrefix(website.slug),
+		[website.slug]
+	);
+
+	const invalidatePresenceQueries = useCallback(() => {
+		void queryClient.invalidateQueries({
+			queryKey: presenceQueryKeyPrefix,
+		});
+		void queryClient.invalidateQueries({
+			queryKey: onlineNowQueryKeyPrefix,
+		});
+	}, [onlineNowQueryKeyPrefix, presenceQueryKeyPrefix, queryClient]);
 
 	const realtimeContext = useMemo<DashboardRealtimeContext>(
 		() => ({
@@ -175,18 +189,24 @@ export function Realtime({ children }: { children: ReactNode }) {
 					});
 				},
 			],
+			userConnected: [
+				() => {
+					invalidatePresenceQueries();
+				},
+			],
+			userDisconnected: [
+				() => {
+					invalidatePresenceQueries();
+				},
+			],
 			visitorConnected: [
-				(_data, meta) => {
-					void meta.context.queryClient.invalidateQueries({
-						queryKey: presenceQueryKeyPrefix,
-					});
+				() => {
+					invalidatePresenceQueries();
 				},
 			],
 			visitorDisconnected: [
-				(_data, meta) => {
-					void meta.context.queryClient.invalidateQueries({
-						queryKey: presenceQueryKeyPrefix,
-					});
+				() => {
+					invalidatePresenceQueries();
 				},
 			],
 			// Web crawling events
@@ -280,7 +300,7 @@ export function Realtime({ children }: { children: ReactNode }) {
 				},
 			],
 		}),
-		[presenceQueryKeyPrefix]
+		[invalidatePresenceQueries]
 	);
 
 	useRealtime<DashboardRealtimeContext>({
