@@ -5,6 +5,7 @@ import type { OnChangeFn, SortingState } from "@tanstack/react-table";
 import { parseAsInteger, parseAsString, useQueryState } from "nuqs";
 import { useCallback, useMemo } from "react";
 
+import { useContactVisitorDetailState } from "@/hooks/use-contact-visitor-detail-state";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 
 export const CONTACTS_PAGE_SIZE_OPTIONS = [10, 25, 50] as const;
@@ -33,7 +34,8 @@ type ContactsTableControlsValue = {
 	setVisitorStatus: (status: ContactListVisitorStatus) => void;
 	selectedContactId: string | null;
 	setSelectedContactId: (contactId: string | null) => void;
-	isSheetOpen: boolean;
+	closeDetailPage: () => void;
+	isDetailPageOpen: boolean;
 };
 
 const DEFAULT_SORTING: SortingState = [{ id: "updatedAt", desc: true }];
@@ -143,12 +145,13 @@ export function useContactsTableControls(): ContactsTableControlsValue {
 		? visitorStatusParam
 		: "all";
 
-	const [selectedContactIdParam, setSelectedContactIdParam] = useQueryState(
-		"contact",
-		parseAsString
-	);
-	const selectedContactId = selectedContactIdParam ?? null;
-	const isSheetOpen = selectedContactId !== null;
+	const {
+		closeDetailPage,
+		contactId: selectedContactId,
+		openContactDetail,
+		visitorId,
+	} = useContactVisitorDetailState();
+	const isDetailPageOpen = selectedContactId !== null || visitorId !== null;
 
 	const sorting = useMemo<SortingState>(
 		() => [{ id: sortField, desc: sortOrder === "desc" }],
@@ -227,9 +230,14 @@ export function useContactsTableControls(): ContactsTableControlsValue {
 
 	const setSelectedContactId = useCallback(
 		(contactId: string | null) => {
-			void setSelectedContactIdParam(contactId);
+			if (contactId) {
+				void openContactDetail(contactId);
+				return;
+			}
+
+			void closeDetailPage();
 		},
-		[setSelectedContactIdParam]
+		[closeDetailPage, openContactDetail]
 	);
 
 	return {
@@ -246,6 +254,9 @@ export function useContactsTableControls(): ContactsTableControlsValue {
 		setVisitorStatus,
 		selectedContactId,
 		setSelectedContactId,
-		isSheetOpen,
+		closeDetailPage: () => {
+			void closeDetailPage();
+		},
+		isDetailPageOpen,
 	};
 }

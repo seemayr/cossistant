@@ -1,0 +1,67 @@
+{
+  "name": "@cossistant/globe",
+  "type": "module",
+  "version": "0.1.0",
+  "private": false,
+  "author": "Cossistant team",
+  "description": "React-first WebGL globe with DOM pin overlays and built-in clustering.",
+  "keywords": [
+    "react",
+    "globe",
+    "webgl",
+    "map",
+    "pins",
+    "clustering",
+    "typescript",
+    "visualization"
+  ],
+  "bugs": {
+    "url": "https://github.com/cossistantcom/cossistant/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cossistantcom/cossistant.git",
+    "directory": "packages/globe"
+  },
+  "license": "MIT",
+  "homepage": "https://cossistant.com",
+  "exports": {
+    ".": "./src/index.ts",
+    "./cossistant": "./src/cossistant/index.tsx"
+  },
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "types": "./src/index.ts",
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "phenomenon": "^1.6.0"
+  },
+  "devDependencies": {
+    "@cossistant/typescript-config": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": ">=18 <20",
+    "react-dom": ">=18 <20",
+    "@types/react": ""
+  },
+  "peerDependenciesMeta": {
+    "@types/react": {
+      "optional": true
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "directory": "dist"
+  },
+  "scripts": {
+    "build": "tsdown && rm -rf dist/node_modules dist/packages && find dist -name '*.map' -delete && bun run prepare-package",
+    "prepare-package": "bun ../../scripts/prepare-package.ts",
+    "pub:release": "bun run build && npm publish ./dist --access public",
+    "pub:beta": "bun run build && npm publish ./dist --access public --tag beta --no-git-checks",
+    "test": "bun test src",
+    "lint": "biome check .",
+    "check-types": "tsc --noEmit --project tsconfig.json"
+  }
+}

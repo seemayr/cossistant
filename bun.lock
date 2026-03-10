@@ -121,6 +121,7 @@
         "@better-auth/infra": "^0.1.8",
         "@cossistant/api": "workspace:*",
         "@cossistant/core": "workspace:*",
+        "@cossistant/globe": "workspace:*",
         "@cossistant/location": "workspace:*",
         "@cossistant/next": "workspace:*",
         "@cossistant/tiny-markdown": "workspace:*",
@@ -304,6 +305,24 @@
       "optionalPeers": [
         "@types/react",
         "next",
+      ],
+    },
+    "packages/globe": {
+      "name": "@cossistant/globe",
+      "version": "0.1.0",
+      "dependencies": {
+        "phenomenon": "^1.6.0",
+      },
+      "devDependencies": {
+        "@cossistant/typescript-config": "workspace:*",
+      },
+      "peerDependencies": {
+        "@types/react": "",
+        "react": ">=18 <20",
+        "react-dom": ">=18 <20",
+      },
+      "optionalPeers": [
+        "@types/react",
       ],
     },
     "packages/jobs": {
@@ -891,6 +910,8 @@
     "@cossistant/example-nextjs-tailwind": ["@cossistant/example-nextjs-tailwind@workspace:examples/nextjs-tailwind"],
 
     "@cossistant/facehash-landing": ["@cossistant/facehash-landing@workspace:apps/facehash-landing"],
+
+    "@cossistant/globe": ["@cossistant/globe@workspace:packages/globe"],
 
     "@cossistant/jobs": ["@cossistant/jobs@workspace:packages/jobs"],
 

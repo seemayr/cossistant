@@ -9,6 +9,7 @@
     "@better-auth/infra": "^0.1.8",
     "@cossistant/api": "workspace:*",
     "@cossistant/core": "workspace:*",
+    "@cossistant/globe": "workspace:*",
     "@cossistant/location": "workspace:*",
     "@cossistant/next": "workspace:*",
     "@cossistant/tiny-markdown": "workspace:*",

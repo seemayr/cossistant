@@ -10,6 +10,7 @@ const nextConfig = {
 	transpilePackages: [
 		"@cossistant/api",
 		"@cossistant/core",
+		"@cossistant/globe",
 		"@cossistant/location",
 		"@cossistant/react",
 		"@cossistant/next",

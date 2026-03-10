@@ -19,7 +19,7 @@ export type VisitorSidebarHeaderProps = {
 	contact?: NonNullable<
 		RouterOutputs["conversation"]["getVisitorById"]
 	>["contact"];
-	onContactClick?: () => void;
+	onOpenDetail?: () => void;
 };
 
 export function VisitorSidebarHeader({
@@ -29,14 +29,8 @@ export function VisitorSidebarHeader({
 	lastSeenAt,
 	status,
 	contact,
-	onContactClick,
+	onOpenDetail,
 }: VisitorSidebarHeaderProps) {
-	const handleClick = () => {
-		if (contact && onContactClick) {
-			onContactClick();
-		}
-	};
-
 	const headerContent = (
 		<>
 			<Avatar
@@ -58,8 +52,7 @@ export function VisitorSidebarHeader({
 		</>
 	);
 
-	// When there's a contact, render a simple button that opens the sheet
-	if (contact) {
+	if (onOpenDetail) {
 		return (
 			<div className="flex h-10 w-full items-center justify-between">
 				<button
@@ -67,7 +60,7 @@ export function VisitorSidebarHeader({
 						"flex w-full items-center gap-3 rounded-lg px-2 py-1.5 transition-colors",
 						"hover:bg-background-200 dark:hover:bg-background-300"
 					)}
-					onClick={handleClick}
+					onClick={onOpenDetail}
 					type="button"
 				>
 					{headerContent}
@@ -76,7 +69,14 @@ export function VisitorSidebarHeader({
 		);
 	}
 
-	// When there's no contact, show a popover with explanation
+	if (contact) {
+		return (
+			<div className="flex h-10 w-full items-center justify-between px-2 py-1.5">
+				<div className="flex w-full items-center gap-3">{headerContent}</div>
+			</div>
+		);
+	}
+
 	return (
 		<Popover>
 			<PopoverTrigger asChild>

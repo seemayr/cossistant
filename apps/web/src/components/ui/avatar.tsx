@@ -111,6 +111,7 @@ function Avatar({
 	facehashSeed,
 	lastOnlineAt,
 	status,
+	tooltipContent,
 }: {
 	className?: string;
 	url: string | null | undefined;
@@ -118,6 +119,7 @@ function Avatar({
 	facehashSeed?: string;
 	lastOnlineAt?: string | null;
 	status?: "online" | "away";
+	tooltipContent?: React.ReactNode | null;
 }) {
 	const now = Date.now();
 	const lastOnlineDate = lastOnlineAt ? new Date(lastOnlineAt) : null;
@@ -141,17 +143,19 @@ function Avatar({
 	const isAway = computedStatus === "away";
 	const awayWindowMinutes = Math.round(PRESENCE_AWAY_WINDOW_MS / 60_000);
 
-	const tooltipContent = lastOnlineDate
+	const defaultTooltipContent = lastOnlineDate
 		? isOnline
 			? `${fallbackName} is online`
 			: isAway
 				? `${fallbackName} last seen less than ${awayWindowMinutes} minutes ago`
 				: `${fallbackName} last seen ${formatTimeAgo(lastOnlineDate)}`
 		: null;
+	const resolvedTooltipContent =
+		tooltipContent === undefined ? defaultTooltipContent : tooltipContent;
 
 	return (
-		<TooltipOnHover content={tooltipContent}>
-			<div className="relative">
+		<TooltipOnHover content={resolvedTooltipContent}>
+			<div className="relative inline-flex w-fit" data-slot="avatar-wrapper">
 				<AvatarContainer
 					className={cn(
 						"size-8 shrink-0 ring-1 ring-border ring-offset-1 ring-offset-background",

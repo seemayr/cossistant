@@ -75,6 +75,7 @@
     "test:watch": "bun test src --watch",
     "test:coverage": "bun test src --coverage",
     "db:seed": "bun run scripts/seed.ts",
+    "db:seed:visitors": "bun run scripts/seed-visitors.ts",
     "db:migrate": "bun run scripts/migrate.ts",
     "db:studio": "drizzle-kit studio",
     "better-auth:generate-schema": "npx @better-auth/cli@latest generate --output ./src/db/schema/auth-generated.ts",

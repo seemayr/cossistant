@@ -13,6 +13,7 @@ import {
 	trpc,
 } from "@/lib/trpc/server";
 import { isValidWebsiteSlug } from "@/lib/url";
+import { ContactVisitorDetailOverlay } from "./overlays/detail-page-overlay";
 import { ModalsAndSheets } from "./overlays/modals-and-sheets";
 import { Realtime } from "./providers/realtime";
 import { DashboardWebSocketProvider } from "./providers/websocket";
@@ -111,7 +112,10 @@ export default async function Layout({ children, params }: LayoutProps) {
 										changelogContent={changelogContent}
 										latestRelease={latestRelease}
 									/>
-									<CentralContainer>{children}</CentralContainer>
+									<CentralContainer>
+										{children}
+										<ContactVisitorDetailOverlay />
+									</CentralContainer>
 									<ModalsAndSheets />
 								</div>
 							</InboxesProvider>

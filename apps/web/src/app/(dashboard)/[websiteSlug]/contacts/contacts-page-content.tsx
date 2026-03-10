@@ -64,9 +64,10 @@ export function ContactsPageContent({ websiteSlug }: ContactsPageContentProps) {
 		sorting,
 		setSorting,
 		visitorStatus,
+		closeDetailPage,
+		isDetailPageOpen,
 		selectedContactId,
 		setSelectedContactId,
-		isSheetOpen,
 	} = useContactsTableControls();
 
 	const activeSort = sorting[0];
@@ -96,9 +97,9 @@ export function ContactsPageContent({ websiteSlug }: ContactsPageContentProps) {
 		[setSelectedContactId]
 	);
 
-	const handleCloseSheet = useCallback(() => {
-		setSelectedContactId(null);
-	}, [setSelectedContactId]);
+	const handleCloseDetailPage = useCallback(() => {
+		closeDetailPage();
+	}, [closeDetailPage]);
 
 	const { focusedIndex, handleMouseEnter } = useContactsKeyboardNavigation({
 		contacts,
@@ -106,8 +107,8 @@ export function ContactsPageContent({ websiteSlug }: ContactsPageContentProps) {
 		itemHeight: ITEM_HEIGHT,
 		enabled: !listQuery.isLoading,
 		onSelectContact: handleSelectContact,
-		onCloseSheet: handleCloseSheet,
-		isSheetOpen,
+		onCloseDetailPage: handleCloseDetailPage,
+		isDetailPageOpen,
 		selectedContactId,
 	});
 

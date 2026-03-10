@@ -8,7 +8,9 @@ import { usePathname, useRouter } from "next/navigation";
 import { useHotkeys } from "react-hotkeys-hook";
 import { ChangelogNotification } from "@/components/changelog-notification";
 import { DashboardTriggerContent } from "@/components/support/custom-trigger";
+import { Button } from "@/components/ui/button";
 import { useWebsite } from "@/contexts/website";
+import { useContactVisitorDetailState } from "@/hooks/use-contact-visitor-detail-state";
 import type { LatestRelease } from "@/lib/latest-release";
 import { useTRPC } from "@/lib/trpc/client";
 import Icon from "../../icons";
@@ -29,6 +31,7 @@ export function NavigationTopbar({
 	const router = useRouter();
 	const website = useWebsite();
 	const trpc = useTRPC();
+	const { activeDetail, closeDetailPage } = useContactVisitorDetailState();
 
 	// Data is pre-fetched in the layout, so it will be available immediately
 	const { data: aiAgent } = useQuery(
@@ -42,53 +45,92 @@ export function NavigationTopbar({
 
 	const baseInboxPath = `/${website?.slug}/inbox`;
 	const isOnInboxView = pathname.startsWith(baseInboxPath);
+	const isDetailPageOpen = activeDetail !== null;
 
-	useHotkeys("escape", () => router.push(baseInboxPath), {
-		enabled: !isOnInboxView,
-		preventDefault: true,
-		enableOnContentEditable: false,
-		enableOnFormTags: false,
-	});
+	useHotkeys(
+		"escape",
+		(event) => {
+			if (!(isDetailPageOpen || !isOnInboxView)) {
+				return;
+			}
+
+			event.preventDefault();
+			event.stopPropagation();
+
+			if (isDetailPageOpen) {
+				void closeDetailPage();
+				return;
+			}
+
+			router.push(baseInboxPath);
+		},
+		{
+			enabled: isDetailPageOpen || !isOnInboxView,
+			preventDefault: true,
+			enableOnContentEditable: false,
+			enableOnFormTags: false,
+		},
+		[baseInboxPath, closeDetailPage, isDetailPageOpen, isOnInboxView, router]
+	);
+
+	const leadingControl = isDetailPageOpen ? (
+		<TooltipOnHover content="Back" shortcuts={["Esc"]} side="right">
+			<motion.div
+				animate={{ opacity: 1, scale: 1 }}
+				exit={{ opacity: 0, scale: 0.8 }}
+				initial={{ opacity: 0, scale: 0.8 }}
+				key="detail-back"
+				transition={{ duration: 0.1 }}
+			>
+				<Button
+					className="mr-2 size-5.5 rounded-md hover:bg-background-200"
+					onClick={() => {
+						void closeDetailPage();
+					}}
+					size="icon-small"
+					type="button"
+					variant="ghost"
+				>
+					<Icon className="size-4 text-primary" name="arrow-left" />
+					<span className="sr-only">Back</span>
+				</Button>
+			</motion.div>
+		</TooltipOnHover>
+	) : isOnInboxView ? (
+		<motion.div
+			animate={{ opacity: 1, scale: 1 }}
+			exit={{ opacity: 0, scale: 0.8 }}
+			initial={{ opacity: 0, scale: 0.8 }}
+			key="logo"
+			transition={{ duration: 0.1 }}
+		>
+			<Link className="mr-2 block" href={baseInboxPath}>
+				<Logo className="size-5.5 text-primary" />
+			</Link>
+		</motion.div>
+	) : (
+		<TooltipOnHover content="Back to Inbox" shortcuts={["Esc"]} side="right">
+			<motion.div
+				animate={{ opacity: 1, scale: 1 }}
+				exit={{ opacity: 0, scale: 0.8 }}
+				initial={{ opacity: 0, scale: 0.8 }}
+				key="inbox-back"
+				transition={{ duration: 0.1 }}
+			>
+				<Link
+					className="mr-2 flex size-5.5 items-center justify-center rounded-md hover:bg-background-200"
+					href={baseInboxPath}
+				>
+					<Icon className="size-4 text-primary" name="arrow-left" />
+				</Link>
+			</motion.div>
+		</TooltipOnHover>
+	);
 
 	return (
 		<header className="flex h-16 min-h-16 w-full items-center justify-between gap-4 pr-5 pl-6.5">
 			<div className="flex flex-1 items-center gap-3">
-				<AnimatePresence mode="wait">
-					{isOnInboxView ? (
-						<motion.div
-							animate={{ opacity: 1, scale: 1 }}
-							exit={{ opacity: 0, scale: 0.8 }}
-							initial={{ opacity: 0, scale: 0.8 }}
-							key="logo"
-							transition={{ duration: 0.1 }}
-						>
-							<Link className="mr-2 block" href={baseInboxPath}>
-								<Logo className="size-5.5 text-primary" />
-							</Link>
-						</motion.div>
-					) : (
-						<TooltipOnHover
-							content="Back to Inbox"
-							shortcuts={["Esc"]}
-							side="right"
-						>
-							<motion.div
-								animate={{ opacity: 1, scale: 1 }}
-								exit={{ opacity: 0, scale: 0.8 }}
-								initial={{ opacity: 0, scale: 0.8 }}
-								key="arrow"
-								transition={{ duration: 0.1 }}
-							>
-								<Link
-									className="mr-2 flex size-5.5 items-center justify-center rounded-md hover:bg-background-200"
-									href={baseInboxPath}
-								>
-									<Icon className="size-4 text-primary" name="arrow-left" />
-								</Link>
-							</motion.div>
-						</TooltipOnHover>
-					)}
-				</AnimatePresence>
+				<AnimatePresence mode="wait">{leadingControl}</AnimatePresence>
 				{latestRelease && (
 					<ChangelogNotification
 						date={latestRelease.date}

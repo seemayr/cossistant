@@ -9,8 +9,8 @@ type UseContactsKeyboardNavigationProps = {
 	itemHeight: number;
 	enabled?: boolean;
 	onSelectContact: (contactId: string) => void;
-	onCloseSheet: () => void;
-	isSheetOpen: boolean;
+	onCloseDetailPage: () => void;
+	isDetailPageOpen: boolean;
 	selectedContactId: string | null;
 };
 
@@ -20,8 +20,8 @@ export function useContactsKeyboardNavigation({
 	itemHeight,
 	enabled = true,
 	onSelectContact,
-	onCloseSheet,
-	isSheetOpen,
+	onCloseDetailPage,
+	isDetailPageOpen,
 	selectedContactId,
 }: UseContactsKeyboardNavigationProps) {
 	const lastInteractionRef = useRef<"keyboard" | "mouse">("keyboard");
@@ -99,7 +99,7 @@ export function useContactsKeyboardNavigation({
 	useHotkeys(
 		["ArrowUp", "ArrowDown", "k", "j", "Enter"],
 		(event, handler) => {
-			if (!enabled || isSheetOpen) {
+			if (!enabled || isDetailPageOpen) {
 				return;
 			}
 
@@ -123,31 +123,31 @@ export function useContactsKeyboardNavigation({
 			}
 		},
 		{
-			enabled: enabled && !isSheetOpen,
+			enabled: enabled && !isDetailPageOpen,
 			enableOnFormTags: false,
 			enableOnContentEditable: false,
 		},
-		[moveFocus, openSelectedContact, enabled, isSheetOpen]
+		[moveFocus, openSelectedContact, enabled, isDetailPageOpen]
 	);
 
-	// Escape to close sheet
+	// Escape closes the detail page and returns focus to the list.
 	useHotkeys(
 		"Escape",
 		(event) => {
-			if (!(enabled && isSheetOpen)) {
+			if (!(enabled && isDetailPageOpen)) {
 				return;
 			}
 
 			event.preventDefault();
 			event.stopPropagation();
-			onCloseSheet();
+			onCloseDetailPage();
 		},
 		{
-			enabled: enabled && isSheetOpen,
+			enabled: enabled && isDetailPageOpen,
 			enableOnFormTags: true,
 			enableOnContentEditable: true,
 		},
-		[onCloseSheet, enabled, isSheetOpen]
+		[onCloseDetailPage, enabled, isDetailPageOpen]
 	);
 
 	// Initialize focus on mount

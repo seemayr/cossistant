@@ -602,13 +602,13 @@ export function ConversationPane({
 
 	return (
 		<>
-			{!hardLimitsEnforced &&
+			{/* {!hardLimitsEnforced &&
 			hardLimitsUnavailableReason === "billing_provider_unavailable" ? (
 				<div className="mx-4 mb-2 rounded border border-cossistant-orange/30 bg-cossistant-orange/5 px-3 py-2 text-cossistant-orange text-xs">
 					Hard-limit checks are temporarily unavailable while billing sync
 					recovers.
 				</div>
-			) : null}
+			) : null} */}
 			<Conversation {...conversationProps} />
 			{planInfo ? (
 				<UpgradeModal

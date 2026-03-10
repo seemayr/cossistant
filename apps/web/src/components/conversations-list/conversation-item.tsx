@@ -12,13 +12,15 @@ import { useQuery } from "@tanstack/react-query";
 import { differenceInHours } from "date-fns";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Avatar } from "@/components/ui/avatar";
+import { TooltipOnHover } from "@/components/ui/tooltip";
 import type { ConversationHeader } from "@/contexts/inboxes";
 import { useVisitorPresenceById } from "@/contexts/visitor-presence";
 import { useUserSession, useWebsiteMembers } from "@/contexts/website";
 import { useLatestConversationMessage } from "@/data/use-latest-conversation-message";
 import { usePrefetchConversationData } from "@/data/use-prefetch-conversation-data";
+import { useContactVisitorDetailState } from "@/hooks/use-contact-visitor-detail-state";
 import { isInboundVisitorMessage } from "@/lib/conversation-messages";
 import { formatTimeAgo, getWaitingSinceLabel } from "@/lib/date";
 import { resolveDashboardHumanAgentDisplay } from "@/lib/human-agent-display";
@@ -33,6 +35,7 @@ import { ConversationBasicActions } from "../conversation/actions/basic";
 import { BouncingDots } from "../conversation/messages/typing-indicator";
 import { Logo } from "../ui/logo";
 import { LockedConversationPreview } from "./locked-conversation-preview";
+import { resolveConversationItemDetailTarget } from "./resolve-conversation-item-detail-target";
 
 type ConversationItemViewProps = {
 	visitorName: string;
@@ -54,6 +57,7 @@ type ConversationItemViewProps = {
 	className?: string;
 	onMouseEnter?: () => void;
 	onClick?: () => void;
+	onAvatarClick?: () => void;
 	href?: string;
 	locked?: boolean;
 };
@@ -78,6 +82,7 @@ export function ConversationItemView({
 	className,
 	onMouseEnter,
 	onClick,
+	onAvatarClick,
 	href,
 	locked = false,
 }: ConversationItemViewProps) {
@@ -95,16 +100,35 @@ export function ConversationItemView({
 		setFormattedTime(null);
 	}, [lastTimelineItemCreatedAt, timeDisplayOverrideAt]);
 
-	const content = (
-		<div className="flex w-full items-center gap-3">
-			<Avatar
-				className="size-8"
-				fallbackName={visitorName}
-				lastOnlineAt={visitorLastSeenAt}
-				status={visitorPresenceStatus}
-				url={visitorAvatarUrl}
-			/>
+	const avatar = (
+		<Avatar
+			className="size-8"
+			fallbackName={visitorName}
+			lastOnlineAt={visitorLastSeenAt}
+			status={visitorPresenceStatus}
+			tooltipContent={null}
+			url={visitorAvatarUrl}
+		/>
+	);
+	const detailsButton = onAvatarClick ? (
+		<TooltipOnHover content="Click to get more details" delay={150}>
+			<button
+				aria-label={`Open details for ${visitorName}`}
+				className="shrink-0 cursor-pointer rounded-[2px] transition-transform duration-150 hover:scale-105 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+				data-slot="conversation-item-avatar-trigger"
+				onClick={onAvatarClick}
+				onMouseEnter={onMouseEnter}
+				type="button"
+			>
+				{avatar}
+			</button>
+		</TooltipOnHover>
+	) : (
+		avatar
+	);
 
+	const mainContent = (
+		<>
 			<div className="flex min-w-0 flex-1 items-center gap-1 md:gap-4">
 				<p className="min-w-[140px] max-w-[140px] shrink-0 truncate capitalize">
 					{visitorName}
@@ -164,7 +188,7 @@ export function ConversationItemView({
 					/>
 				</div>
 			</div>
-		</div>
+		</>
 	);
 
 	const baseClasses = cn(
@@ -174,42 +198,62 @@ export function ConversationItemView({
 		focused && "bg-background-200 text-primary dark:bg-background-300",
 		className
 	);
+	const contentClasses =
+		"flex min-w-0 flex-1 items-center justify-between gap-3 appearance-none border-0 bg-transparent p-0 text-left focus-visible:outline-none focus-visible:ring-0";
 
 	if (href && !locked) {
 		return (
-			<Link
-				className={baseClasses}
-				href={href}
-				onMouseEnter={onMouseEnter}
-				prefetch="auto"
-			>
-				{content}
-			</Link>
+			<div className={baseClasses}>
+				{detailsButton}
+				<Link
+					className={contentClasses}
+					href={href}
+					onMouseEnter={onMouseEnter}
+					prefetch="auto"
+				>
+					{mainContent}
+				</Link>
+			</div>
 		);
 	}
 
 	if (locked) {
 		return (
-			<button
-				className={baseClasses}
-				onClick={onClick}
-				onMouseEnter={onMouseEnter}
-				type="button"
-			>
-				{content}
-			</button>
+			<div className={baseClasses}>
+				{detailsButton}
+				<button
+					className={contentClasses}
+					onClick={onClick}
+					onMouseEnter={onMouseEnter}
+					type="button"
+				>
+					{mainContent}
+				</button>
+			</div>
 		);
 	}
 
 	if (onMouseEnter) {
 		return (
-			<button className={baseClasses} onMouseEnter={onMouseEnter} type="button">
-				{content}
-			</button>
+			<div className={baseClasses}>
+				{detailsButton}
+				<button
+					className={contentClasses}
+					onMouseEnter={onMouseEnter}
+					type="button"
+				>
+					{mainContent}
+				</button>
+			</div>
 		);
 	}
 
-	return <div className={baseClasses}>{content}</div>;
+	return (
+		<div className={baseClasses}>
+			{detailsButton}
+			<div className={contentClasses}>{mainContent}</div>
+		</div>
+	);
 }
 
 type Props = {
@@ -245,6 +289,8 @@ export function ConversationItem({
 	const members = useWebsiteMembers();
 	const trpc = useTRPC();
 	const presence = useVisitorPresenceById(header.visitorId);
+	const { openContactDetail, openVisitorDetail } =
+		useContactVisitorDetailState();
 
 	const availableHumanAgents = useMemo(
 		() =>
@@ -310,6 +356,29 @@ export function ConversationItem({
 		// Prefer normalized visitor data when available as it's more complete
 		return normalizedVisitor ?? headerVisitor;
 	}, [headerVisitor, visitorQuery.data]);
+
+	const detailTarget = useMemo(
+		() =>
+			resolveConversationItemDetailTarget({
+				headerVisitor,
+				visitor,
+				visitorId: header.visitorId,
+			}),
+		[header.visitorId, headerVisitor, visitor]
+	);
+
+	const handleAvatarClick = useCallback(() => {
+		if (!detailTarget) {
+			return;
+		}
+
+		if (detailTarget.type === "contact") {
+			void openContactDetail(detailTarget.id);
+			return;
+		}
+
+		void openVisitorDetail(detailTarget.id);
+	}, [detailTarget, openContactDetail, openVisitorDetail]);
 
 	const typingEntries = useConversationTyping(header.id, {
 		excludeUserId: user.id,
@@ -503,6 +572,7 @@ export function ConversationItem({
 			lastTimelineItemCreatedAt={lastTimelineItemCreatedAt}
 			locked={isLocked}
 			needsHumanIntervention={showNeedsHuman}
+			onAvatarClick={detailTarget ? handleAvatarClick : undefined}
 			onClick={isLocked ? () => onLockedActivate?.(header.id) : undefined}
 			onMouseEnter={() => {
 				setFocused?.();

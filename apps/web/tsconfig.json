@@ -16,6 +16,8 @@
       "@api/*": ["../api/src/*"],
       "@cossistant/react/*": ["../../packages/react/src/*"],
       "@cossistant/react": ["../../packages/react/src"],
+      "@cossistant/globe/*": ["../../packages/globe/src/*"],
+      "@cossistant/globe": ["../../packages/globe/src"],
       "@cossistant/next/*": ["../../packages/next/src/*"],
       "@cossistant/next": ["../../packages/next/src"]
     },
