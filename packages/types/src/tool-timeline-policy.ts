@@ -21,6 +21,14 @@ export const TOOL_WIDGET_ACTIVITY_REGISTRY = {
 	},
 } as const satisfies Record<string, WidgetToolActivityPolicy>;
 
+const DASHBOARD_CONVERSATION_VISIBLE_TOOL_NAMES = new Set([
+	"searchKnowledgeBase",
+	"updateConversationTitle",
+	"setConversationTitle",
+	"updateSentiment",
+	"setPriority",
+]);
+
 const WIDGET_TOOL_ACTIVITY_POLICIES: Record<string, WidgetToolActivityPolicy> =
 	TOOL_WIDGET_ACTIVITY_REGISTRY;
 
@@ -53,7 +61,7 @@ export function getWidgetToolDefaultProgressMessage(
 }
 
 export function isConversationVisibleTool(toolName: string): boolean {
-	return isWidgetTimelineTool(toolName);
+	return DASHBOARD_CONVERSATION_VISIBLE_TOOL_NAMES.has(toolName);
 }
 
 export function getToolLogType(toolName: string): ToolTimelineLogType {
@@ -61,7 +69,7 @@ export function getToolLogType(toolName: string): ToolTimelineLogType {
 		return TOOL_TIMELINE_LOG_TYPE.DECISION;
 	}
 
-	if (isWidgetVisibleTool(toolName)) {
+	if (isConversationVisibleTool(toolName)) {
 		return TOOL_TIMELINE_LOG_TYPE.CUSTOMER_FACING;
 	}
 

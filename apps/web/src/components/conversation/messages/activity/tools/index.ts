@@ -1,6 +1,7 @@
 import type React from "react";
 import type { ToolActivityProps } from "../types";
 import { AiCreditUsageActivity } from "./ai-credit-usage";
+import { CategorizeConversationActivity } from "./categorize-conversation";
 import { SearchKnowledgeBaseActivity } from "./search-knowledge-base";
 import { SetPriorityActivity } from "./set-priority";
 import { UpdateConversationTitleActivity } from "./update-conversation-title";
@@ -18,6 +19,7 @@ export const TOOL_RENDERER_MAP: Record<
 	setConversationTitle: UpdateConversationTitleActivity,
 	updateSentiment: UpdateSentimentActivity,
 	setPriority: SetPriorityActivity,
+	categorizeConversation: CategorizeConversationActivity,
 	aiCreditUsage: AiCreditUsageActivity,
 	generationUsage: AiCreditUsageActivity,
 };

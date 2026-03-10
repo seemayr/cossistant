@@ -116,9 +116,7 @@ export function useConversationAutoSeen(
 			void client
 				.getConversationSeenData({ conversationId })
 				.then((response) => {
-					if (response.seenData.length > 0) {
-						client.seenStore.hydrate(conversationId, response.seenData);
-					}
+					client.seenStore.hydrate(conversationId, response.seenData);
 				})
 				.catch((err) => {
 					if (isNotFoundError(err)) {

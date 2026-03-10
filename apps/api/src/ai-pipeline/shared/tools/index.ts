@@ -25,6 +25,8 @@ function getBehaviorSettingValue(
 	switch (settingKey) {
 		case "autoAnalyzeSentiment":
 			return settings.autoAnalyzeSentiment;
+		case "autoCategorize":
+			return settings.autoCategorize;
 		case "autoGenerateTitle":
 			return settings.autoGenerateTitle;
 		case "canEscalate":

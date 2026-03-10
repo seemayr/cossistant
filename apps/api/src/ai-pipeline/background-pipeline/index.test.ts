@@ -13,7 +13,26 @@ const getBehaviorSettingsMock = mock(() => ({
 	autoGenerateTitle: true,
 	autoAnalyzeSentiment: true,
 	canSetPriority: true,
+	autoCategorize: false,
+	canCategorize: false,
 }));
+const listActiveWebsiteViewsMock = mock(
+	(async (): Promise<
+		Array<{
+			id: string;
+			name: string;
+			description: string | null;
+			prompt: string | null;
+		}>
+	> => []) as (...args: unknown[]) => Promise<
+		Array<{
+			id: string;
+			name: string;
+			description: string | null;
+			prompt: string | null;
+		}>
+	>
+);
 const resolveAndPersistModelMock = mock(
 	async ({ aiAgent }: { aiAgent: any }) => ({
 		aiAgent,
@@ -80,6 +99,9 @@ const runGenerationRuntimeMock = mock((async () => ({
 		updateSentiment: 1,
 		skip: 1,
 	},
+	mutationToolCallsByName: {
+		updateSentiment: 1,
+	},
 	totalToolCalls: 2,
 })) as (...args: unknown[]) => Promise<any>);
 
@@ -89,6 +111,10 @@ mock.module("../logger", () => ({
 
 mock.module("@api/db/queries/ai-agent", () => ({
 	getAiAgentById: getAiAgentByIdMock,
+}));
+
+mock.module("@api/db/queries/view", () => ({
+	listActiveWebsiteViews: listActiveWebsiteViewsMock,
 }));
 
 mock.module("@api/ai-pipeline/shared/settings", () => ({
@@ -155,7 +181,11 @@ describe("runBackgroundPipeline", () => {
 			autoGenerateTitle: true,
 			autoAnalyzeSentiment: true,
 			canSetPriority: true,
+			autoCategorize: false,
+			canCategorize: false,
 		});
+		listActiveWebsiteViewsMock.mockReset();
+		listActiveWebsiteViewsMock.mockResolvedValue([]);
 		resolveAndPersistModelMock.mockImplementation(async ({ aiAgent }) => ({
 			aiAgent,
 			modelResolution: {
@@ -209,6 +239,9 @@ describe("runBackgroundPipeline", () => {
 				updateSentiment: 1,
 				skip: 1,
 			},
+			mutationToolCallsByName: {
+				updateSentiment: 1,
+			},
 			totalToolCalls: 2,
 		});
 	});
@@ -218,6 +251,8 @@ describe("runBackgroundPipeline", () => {
 			autoGenerateTitle: false,
 			autoAnalyzeSentiment: false,
 			canSetPriority: false,
+			autoCategorize: false,
+			canCategorize: false,
 		});
 
 		const { runBackgroundPipeline } = await modulePromise;
@@ -268,6 +303,7 @@ describe("runBackgroundPipeline", () => {
 					"setPriority",
 					"skip",
 				],
+				availableViews: [],
 			})
 		);
 		expect(emitPipelineProcessingCompletedMock).toHaveBeenCalledWith(
@@ -291,6 +327,7 @@ describe("runBackgroundPipeline", () => {
 			toolCallsByName: {
 				skip: 1,
 			},
+			mutationToolCallsByName: {},
 			totalToolCalls: 1,
 		});
 
@@ -307,6 +344,48 @@ describe("runBackgroundPipeline", () => {
 				status: "skipped",
 				workflowRunId: "wf-1",
 				audience: "dashboard",
+			})
+		);
+	});
+
+	it("loads active views and enables categorizeConversation when categorization is available", async () => {
+		getBehaviorSettingsMock.mockReturnValue({
+			autoGenerateTitle: false,
+			autoAnalyzeSentiment: false,
+			canSetPriority: false,
+			autoCategorize: true,
+			canCategorize: true,
+		});
+		listActiveWebsiteViewsMock.mockResolvedValueOnce([
+			{
+				id: "view-1",
+				name: "billing",
+				description: "Money and plan questions",
+				prompt: "Use for billing issues",
+			},
+		]);
+
+		const { runBackgroundPipeline } = await modulePromise;
+		const result = await runBackgroundPipeline({
+			db: {} as never,
+			input: baseInput,
+		});
+
+		expect(result.status).toBe("completed");
+		expect(listActiveWebsiteViewsMock).toHaveBeenCalledWith(expect.anything(), {
+			websiteId: "site-1",
+		});
+		expect(runGenerationRuntimeMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				toolAllowlist: ["categorizeConversation", "skip"],
+				availableViews: [
+					{
+						id: "view-1",
+						name: "billing",
+						description: "Money and plan questions",
+						prompt: "Use for billing issues",
+					},
+				],
 			})
 		);
 	});

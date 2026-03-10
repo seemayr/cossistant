@@ -123,4 +123,36 @@ describe("SearchKnowledgeTimelineTool", () => {
 		expect(html).toContain("Searched for &quot;refund policy&quot;");
 		expect(html).not.toContain("Found 0 sources");
 	});
+
+	it("suppresses the terminal arrow when the caller marks it as a single tool row", () => {
+		const html = renderToStaticMarkup(
+			<SearchKnowledgeTimelineTool
+				conversationId="conv-1"
+				item={createToolTimelineItem({
+					text: "Found 2 sources",
+					parts: [
+						{
+							type: "tool-searchKnowledgeBase",
+							toolCallId: "call-1",
+							toolName: "searchKnowledgeBase",
+							input: { query: "pricing" },
+							state: "result",
+							output: {
+								success: true,
+								data: {
+									totalFound: 2,
+									articles: [],
+								},
+							},
+						},
+					],
+				})}
+				showTerminalIndicator={false}
+			/>
+		);
+
+		expect(html).toContain("Searched for &quot;pricing&quot;");
+		expect(html).not.toContain('data-tool-execution-indicator="arrow"');
+		expect(html).not.toContain('data-tool-execution-indicator-slot="true"');
+	});
 });

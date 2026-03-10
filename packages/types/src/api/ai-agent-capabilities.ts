@@ -22,6 +22,7 @@ export const AI_AGENT_TOOL_IDS = [
 	"updateConversationTitle",
 	"updateSentiment",
 	"setPriority",
+	"categorizeConversation",
 	"sendMessage",
 	"sendPrivateMessage",
 	"respond",
@@ -38,6 +39,7 @@ export const AI_AGENT_BEHAVIOR_SETTING_KEYS = [
 	"canMarkSpam",
 	"canSetPriority",
 	"canEscalate",
+	"autoCategorize",
 	"autoGenerateTitle",
 	"autoAnalyzeSentiment",
 ] as const;
@@ -141,7 +143,9 @@ const AI_AGENT_TOOL_CATALOG_RAW: readonly RawToolCatalogEntry[] = [
 
 - Keep titles short and issue-focused.
 - Use concrete nouns (feature, error, account area).
-- Update only when the conversation topic materially changes.`,
+- Update only when the conversation topic is clear and stable across recent messages.
+- Skip vague, transitional, or generic titles.
+- Do not replace a title unless the newer title is meaningfully better.`,
 		},
 	},
 	{
@@ -191,13 +195,36 @@ const AI_AGENT_TOOL_CATALOG_RAW: readonly RawToolCatalogEntry[] = [
 		},
 	},
 	{
+		id: "categorizeConversation",
+		label: "Categorize Conversation",
+		description: "Add the conversation to one matching saved view.",
+		category: "analysis",
+		group: "behavior",
+		order: 6,
+		isSystem: false,
+		isRequired: false,
+		isToggleable: true,
+		behaviorSettingKey: "autoCategorize",
+		defaultSkill: {
+			name: "categorize-conversation.md",
+			label: "Categorize Conversation",
+			description: "How to choose the best matching saved view.",
+			content: `## Categorization Rules
+
+- Use only one saved view when the match is clear.
+- Match the conversation to the closest existing view prompt and description.
+- Skip when no view clearly fits.
+- Prefer stable themes over one-off phrases from a single message.`,
+		},
+	},
+	{
 		id: "sendMessage",
 		label: "Send Chat Message",
 		description:
 			"Send one short customer-visible chat message. Use up to 3 when shorter bubbles read better.",
 		category: "messaging",
 		group: "behavior",
-		order: 6,
+		order: 7,
 		isSystem: true,
 		isRequired: true,
 		isToggleable: false,
@@ -220,7 +247,7 @@ const AI_AGENT_TOOL_CATALOG_RAW: readonly RawToolCatalogEntry[] = [
 		description: "Send internal notes to teammates that visitors cannot see.",
 		category: "messaging",
 		group: "behavior",
-		order: 7,
+		order: 8,
 		isSystem: true,
 		isRequired: true,
 		isToggleable: false,

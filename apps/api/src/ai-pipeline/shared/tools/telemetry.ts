@@ -120,6 +120,23 @@ function shouldTreatAsFailure(result: unknown): boolean {
 	);
 }
 
+function didToolMutate(result: unknown): boolean {
+	if (!isRecord(result)) {
+		return false;
+	}
+
+	if (typeof result.changed === "boolean") {
+		return result.changed;
+	}
+
+	const data = isRecord(result.data) ? result.data : null;
+	if (typeof data?.changed === "boolean") {
+		return data.changed;
+	}
+
+	return false;
+}
+
 function getFailureTextFromResult(result: unknown): string | null {
 	if (!isRecord(result)) {
 		return null;
@@ -274,6 +291,12 @@ export function wrapPipelineToolsWithTelemetry(params: {
 							params.context.runtimeState.successfulToolCallCounts,
 							toolName
 						);
+						if (didToolMutate(result)) {
+							incrementCount(
+								params.context.runtimeState.mutationToolCallCounts,
+								toolName
+							);
+						}
 						if (!shouldTreatAsFailure(result)) {
 							incrementCount(
 								params.context.runtimeState.chargeableToolCallCounts,

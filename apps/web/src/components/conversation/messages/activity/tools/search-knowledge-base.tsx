@@ -181,6 +181,7 @@ export function SearchKnowledgeBaseActivity({
 	timestamp,
 	showIcon = true,
 	showStateIndicator = false,
+	showTerminalIndicator = true,
 	icon,
 }: ToolActivityProps) {
 	const { input, state, output, summaryText } = toolCall;
@@ -197,6 +198,7 @@ export function SearchKnowledgeBaseActivity({
 				icon={icon}
 				showIcon={showIcon}
 				showStateIndicator={showStateIndicator}
+				showTerminalIndicator={showTerminalIndicator}
 				state="partial"
 				text={text}
 				timestamp={timestamp}
@@ -210,6 +212,7 @@ export function SearchKnowledgeBaseActivity({
 				icon={icon}
 				showIcon={showIcon}
 				showStateIndicator={showStateIndicator}
+				showTerminalIndicator={showTerminalIndicator}
 				state="error"
 				text={text}
 				timestamp={timestamp}
@@ -224,6 +227,7 @@ export function SearchKnowledgeBaseActivity({
 			icon={icon}
 			showIcon={showIcon}
 			showStateIndicator={showStateIndicator}
+			showTerminalIndicator={showTerminalIndicator}
 			state="result"
 			text={text}
 			timestamp={timestamp}

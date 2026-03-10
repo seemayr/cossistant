@@ -5,13 +5,10 @@
  */
 
 import type { Database } from "@api/db";
+import { listConversationViewIds } from "@api/db/queries/conversation";
 import { conversationView } from "@api/db/schema/conversation";
+import { realtime } from "@api/realtime/emitter";
 import { generateShortPrimaryId } from "@api/utils/db/ids";
-import { createTimelineItem } from "@api/utils/timeline-item";
-import {
-	ConversationTimelineType,
-	TimelineItemVisibility,
-} from "@cossistant/types";
 import { and, eq, isNull } from "drizzle-orm";
 
 type CategorizeParams = {
@@ -22,12 +19,17 @@ type CategorizeParams = {
 	visitorId: string;
 	viewId: string;
 	aiAgentId: string;
+	emitTimelineEvent?: boolean;
 };
 
 /**
  * Add a conversation to a view
  */
-export async function categorize(params: CategorizeParams): Promise<void> {
+export async function categorize(params: CategorizeParams): Promise<{
+	changed: boolean;
+	reason?: "already_categorized";
+	viewIds?: string[];
+}> {
 	const {
 		db,
 		conversationId,
@@ -54,8 +56,10 @@ export async function categorize(params: CategorizeParams): Promise<void> {
 		.limit(1);
 
 	if (existing.length > 0) {
-		// Already categorized
-		return;
+		return {
+			changed: false,
+			reason: "already_categorized",
+		};
 	}
 
 	// Add to view
@@ -69,20 +73,25 @@ export async function categorize(params: CategorizeParams): Promise<void> {
 		createdAt: now,
 	});
 
-	// Create timeline event with proper realtime emission
-	const eventText = "AI categorized conversation";
-	await createTimelineItem({
-		db,
+	const viewIds = await listConversationViewIds(db, {
 		organizationId,
-		websiteId,
 		conversationId,
-		conversationOwnerVisitorId: visitorId,
-		item: {
-			type: ConversationTimelineType.EVENT,
-			visibility: TimelineItemVisibility.PRIVATE,
-			text: eventText,
-			parts: [{ type: "text", text: eventText }],
-			aiAgentId,
-		},
 	});
+
+	await realtime.emit("conversationUpdated", {
+		websiteId,
+		organizationId,
+		visitorId,
+		userId: null,
+		conversationId,
+		updates: {
+			viewIds,
+		},
+		aiAgentId,
+	});
+
+	return {
+		changed: true,
+		viewIds,
+	};
 }

@@ -1,5 +1,6 @@
 import { tool } from "ai";
 import { z } from "zod";
+import { categorize } from "../actions/categorize";
 import { updatePriority } from "../actions/update-priority";
 import { updateSentiment } from "../actions/update-sentiment";
 import { updateTitle } from "../actions/update-title";
@@ -24,24 +25,40 @@ const setPriorityInputSchema = z.object({
 	reason: z.string().min(1),
 });
 
+const categorizeConversationInputSchema = z.object({
+	viewId: z.string().min(1),
+	reason: z.string().min(1),
+});
+
 export function createUpdateConversationTitleTool(ctx: PipelineToolContext) {
 	return tool({
 		description: "Set or update the conversation title.",
 		inputSchema: updateTitleInputSchema,
 		execute: async ({
 			title,
-		}): Promise<PipelineToolResult<{ title: string }>> => {
-			await updateTitle({
+		}): Promise<
+			PipelineToolResult<{
+				changed: boolean;
+				title: string;
+				reason?: "unchanged" | "manual_title";
+			}>
+		> => {
+			const result = await updateTitle({
 				db: ctx.db,
 				conversation: ctx.conversation,
 				organizationId: ctx.organizationId,
 				websiteId: ctx.websiteId,
 				aiAgentId: ctx.aiAgentId,
 				title: title.trim(),
+				emitTimelineEvent: false,
 			});
 			return {
 				success: true,
-				data: { title: title.trim() },
+				data: {
+					changed: result.changed,
+					title: title.trim(),
+					...(result.reason ? { reason: result.reason } : {}),
+				},
 			};
 		},
 	});
@@ -54,8 +71,14 @@ export function createUpdateSentimentTool(ctx: PipelineToolContext) {
 		execute: async ({
 			sentiment,
 			reason,
-		}): Promise<PipelineToolResult<{ sentiment: string; reason: string }>> => {
-			await updateSentiment({
+		}): Promise<
+			PipelineToolResult<{
+				changed: boolean;
+				sentiment: string;
+				reason: string;
+			}>
+		> => {
+			const result = await updateSentiment({
 				db: ctx.db,
 				conversation: ctx.conversation,
 				organizationId: ctx.organizationId,
@@ -63,10 +86,15 @@ export function createUpdateSentimentTool(ctx: PipelineToolContext) {
 				aiAgentId: ctx.aiAgentId,
 				sentiment,
 				confidence: 0.9,
+				emitTimelineEvent: false,
 			});
 			return {
 				success: true,
-				data: { sentiment, reason },
+				data: {
+					changed: result.changed,
+					sentiment,
+					reason,
+				},
 			};
 		},
 	});
@@ -79,21 +107,121 @@ export function createSetPriorityTool(ctx: PipelineToolContext) {
 		execute: async ({
 			priority,
 			reason,
-		}): Promise<PipelineToolResult<{ priority: string; reason: string }>> => {
-			await updatePriority({
+		}): Promise<
+			PipelineToolResult<{
+				changed: boolean;
+				priority: string;
+				reason: string;
+			}>
+		> => {
+			const result = await updatePriority({
 				db: ctx.db,
 				conversation: ctx.conversation,
 				organizationId: ctx.organizationId,
 				websiteId: ctx.websiteId,
 				aiAgentId: ctx.aiAgentId,
 				newPriority: priority,
+				emitTimelineEvent: false,
 			});
 			return {
 				success: true,
-				data: { priority, reason },
+				data: {
+					changed: result.changed,
+					priority,
+					reason,
+				},
 			};
 		},
 	});
+}
+
+export function createCategorizeConversationTool(ctx: PipelineToolContext) {
+	if (!(ctx.canCategorize && ctx.availableViews.length > 0)) {
+		return null;
+	}
+
+	return tool({
+		description:
+			"Add the conversation to one matching saved view by viewId when the match is clear.",
+		inputSchema: categorizeConversationInputSchema,
+		execute: async ({
+			viewId,
+			reason,
+		}): Promise<
+			PipelineToolResult<{
+				changed: boolean;
+				viewId: string;
+				viewName: string;
+				reason: string;
+			}>
+		> => {
+			const matchedView = ctx.availableViews.find((view) => view.id === viewId);
+			if (!matchedView) {
+				return {
+					success: false,
+					error: `Unknown viewId: ${viewId}`,
+					data: {
+						changed: false,
+						viewId,
+						viewName: "Unknown view",
+						reason,
+					},
+				};
+			}
+
+			const result = await categorize({
+				db: ctx.db,
+				conversationId: ctx.conversationId,
+				organizationId: ctx.organizationId,
+				websiteId: ctx.websiteId,
+				visitorId: ctx.visitorId,
+				viewId: matchedView.id,
+				aiAgentId: ctx.aiAgentId,
+			});
+
+			return {
+				success: true,
+				data: {
+					changed: result.changed,
+					viewId: matchedView.id,
+					viewName: matchedView.name,
+					reason,
+				},
+			};
+		},
+	});
+}
+
+function getChangedFromToolOutput(output: unknown): boolean | null {
+	if (!isRecord(output)) {
+		return null;
+	}
+
+	const data = isRecord(output.data) ? output.data : null;
+	const value =
+		typeof data?.changed === "boolean"
+			? data.changed
+			: typeof output.changed === "boolean"
+				? output.changed
+				: null;
+
+	return value;
+}
+
+function getToolReasonFromOutput(output: unknown): string | null {
+	if (!isRecord(output)) {
+		return null;
+	}
+
+	const data = isRecord(output.data) ? output.data : null;
+	const candidate =
+		typeof data?.reason === "string"
+			? data.reason
+			: typeof output.reason === "string"
+				? output.reason
+				: null;
+
+	return candidate?.trim() || null;
 }
 
 function getTitleFromToolOutput(output: unknown): string | null {
@@ -144,10 +272,34 @@ function getPriorityFromToolOutput(output: unknown): string | null {
 	return priorityCandidate?.trim() || null;
 }
 
+function getViewNameFromToolOutput(output: unknown): string | null {
+	if (!isRecord(output)) {
+		return null;
+	}
+
+	const data = isRecord(output.data) ? output.data : null;
+	const viewNameCandidate =
+		typeof data?.viewName === "string"
+			? data.viewName
+			: typeof output.viewName === "string"
+				? output.viewName
+				: null;
+
+	return viewNameCandidate?.trim() || null;
+}
+
 export const UPDATE_CONVERSATION_TITLE_TELEMETRY: ToolTelemetrySpec = {
 	summary: {
 		partial: "Updating conversation title...",
 		result: ({ output }) => {
+			const changed = getChangedFromToolOutput(output);
+			if (changed === false) {
+				const reason = getToolReasonFromOutput(output);
+				if (reason === "manual_title") {
+					return "Skipped title update because the title was set manually";
+				}
+				return "Conversation title unchanged";
+			}
 			const title = getTitleFromToolOutput(output);
 			return title
 				? `Updated conversation title to "${title}"`
@@ -157,9 +309,12 @@ export const UPDATE_CONVERSATION_TITLE_TELEMETRY: ToolTelemetrySpec = {
 	},
 	progress: {
 		partial: "Updating conversation title...",
-		result: "Conversation title updated",
+		result: ({ output }) =>
+			getChangedFromToolOutput(output) === false
+				? "Conversation title unchanged"
+				: "Conversation title updated",
 		error: "Failed to update conversation title",
-		audience: "all",
+		audience: "dashboard",
 	},
 };
 
@@ -167,6 +322,9 @@ export const UPDATE_SENTIMENT_TELEMETRY: ToolTelemetrySpec = {
 	summary: {
 		partial: "Updating sentiment...",
 		result: ({ output }) => {
+			if (getChangedFromToolOutput(output) === false) {
+				return "Sentiment unchanged";
+			}
 			const sentiment = getSentimentFromToolOutput(output);
 			return sentiment
 				? `Updated sentiment to ${sentiment}`
@@ -176,9 +334,12 @@ export const UPDATE_SENTIMENT_TELEMETRY: ToolTelemetrySpec = {
 	},
 	progress: {
 		partial: "Analyzing sentiment...",
-		result: "Sentiment updated",
+		result: ({ output }) =>
+			getChangedFromToolOutput(output) === false
+				? "Sentiment unchanged"
+				: "Sentiment updated",
 		error: "Failed to update sentiment",
-		audience: "all",
+		audience: "dashboard",
 	},
 };
 
@@ -186,6 +347,9 @@ export const SET_PRIORITY_TELEMETRY: ToolTelemetrySpec = {
 	summary: {
 		partial: "Setting priority...",
 		result: ({ output }) => {
+			if (getChangedFromToolOutput(output) === false) {
+				return "Priority unchanged";
+			}
 			const priority = getPriorityFromToolOutput(output);
 			return priority ? `Set priority to ${priority}` : "Set priority";
 		},
@@ -193,8 +357,37 @@ export const SET_PRIORITY_TELEMETRY: ToolTelemetrySpec = {
 	},
 	progress: {
 		partial: "Setting priority...",
-		result: "Priority updated",
+		result: ({ output }) =>
+			getChangedFromToolOutput(output) === false
+				? "Priority unchanged"
+				: "Priority updated",
 		error: "Failed to set priority",
+		audience: "dashboard",
+	},
+};
+
+export const CATEGORIZE_CONVERSATION_TELEMETRY: ToolTelemetrySpec = {
+	summary: {
+		partial: "Classifying conversation...",
+		result: ({ output }) => {
+			if (getChangedFromToolOutput(output) === false) {
+				return "Conversation classification unchanged";
+			}
+
+			const viewName = getViewNameFromToolOutput(output);
+			return viewName
+				? `Classified conversation as "${viewName}"`
+				: "Classified conversation";
+		},
+		error: "Failed to classify conversation",
+	},
+	progress: {
+		partial: "Classifying conversation...",
+		result: ({ output }) =>
+			getChangedFromToolOutput(output) === false
+				? "Conversation classification unchanged"
+				: "Conversation classified",
+		error: "Failed to classify conversation",
 		audience: "dashboard",
 	},
 };

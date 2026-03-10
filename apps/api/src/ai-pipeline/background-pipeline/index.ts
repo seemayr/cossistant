@@ -1,6 +1,7 @@
 import { getBehaviorSettings } from "@api/ai-pipeline/shared/settings";
 import type { Database } from "@api/db";
 import { getAiAgentById } from "@api/db/queries/ai-agent";
+import { listActiveWebsiteViews } from "@api/db/queries/view";
 import type { AiAgentToolId } from "@cossistant/types";
 import { logAiPipeline } from "../logger";
 import {
@@ -49,6 +50,7 @@ const BACKGROUND_TOOL_IDS: AiAgentToolId[] = [
 	"updateConversationTitle",
 	"updateSentiment",
 	"setPriority",
+	"categorizeConversation",
 	"skip",
 ];
 
@@ -74,6 +76,10 @@ function getBackgroundToolAllowlist(
 		allowlist.push("setPriority");
 	}
 
+	if (settings.autoCategorize && settings.canCategorize) {
+		allowlist.push("categorizeConversation");
+	}
+
 	allowlist.push("skip");
 	return allowlist;
 }
@@ -85,12 +91,15 @@ function hasBackgroundAnalysisWork(
 }
 
 function hasBackgroundMutation(result: GenerationRuntimeResult): boolean {
+	const mutationCounts =
+		result.mutationToolCallsByName ?? result.toolCallsByName;
+
 	return BACKGROUND_TOOL_IDS.some((toolId) => {
 		if (toolId === "skip") {
 			return false;
 		}
 
-		return (result.toolCallsByName[toolId] ?? 0) > 0;
+		return (mutationCounts[toolId] ?? 0) > 0;
 	});
 }
 
@@ -117,6 +126,7 @@ async function runBackgroundIntake(ctx: BackgroundPipelineContext): Promise<
 			triggerMessage: Awaited<
 				ReturnType<typeof loadIntakeContext>
 			>["triggerMessage"];
+			availableViews: Awaited<ReturnType<typeof listActiveWebsiteViews>>;
 	  }
 	| {
 			status: "skipped";
@@ -184,6 +194,12 @@ async function runBackgroundIntake(ctx: BackgroundPipelineContext): Promise<
 		triggerMetadata,
 	});
 
+	const availableViews = toolAllowlist.includes("categorizeConversation")
+		? await listActiveWebsiteViews(ctx.db, {
+				websiteId: ctx.input.websiteId,
+			})
+		: [];
+
 	return {
 		status: "ready",
 		aiAgent: resolvedAiAgent,
@@ -194,6 +210,7 @@ async function runBackgroundIntake(ctx: BackgroundPipelineContext): Promise<
 		visitorContext: intakeContext.visitorContext,
 		conversationState: intakeContext.conversationState,
 		triggerMessage: intakeContext.triggerMessage,
+		availableViews,
 	};
 }
 
@@ -294,6 +311,12 @@ export async function runBackgroundPipeline(
 			triggerSenderType: intakeResult.triggerMessage?.senderType,
 			triggerVisibility: intakeResult.triggerMessage?.visibility,
 			allowPublicMessages: false,
+			availableViews: intakeResult.availableViews.map((view) => ({
+				id: view.id,
+				name: view.name,
+				description: view.description,
+				prompt: view.prompt,
+			})),
 			toolAllowlist: intakeResult.toolAllowlist,
 		});
 		analysisMs = Date.now() - analysisStartedAt;

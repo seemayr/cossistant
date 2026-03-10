@@ -85,26 +85,6 @@ export function TimelineMessageGroup({
 		[items]
 	);
 
-	// Extract who has read the last timeline item in this group (equal check).
-	const readByIds: string[] = useMemo(() => {
-		if (!lastReadMessageIds || items.length === 0) {
-			return [];
-		}
-
-		const lastId = items.at(-1)?.id;
-		if (!lastId) {
-			return [];
-		}
-
-		const userIds: string[] = [];
-		for (const [userId, itemId] of lastReadMessageIds.entries()) {
-			if (itemId === lastId) {
-				userIds.push(userId);
-			}
-		}
-		return userIds;
-	}, [lastReadMessageIds, items]);
-
 	if (items.length === 0) {
 		return null;
 	}
@@ -113,17 +93,10 @@ export function TimelineMessageGroup({
 		<PrimitiveTimelineItemGroup
 			items={items}
 			lastReadItemIds={lastReadMessageIds}
-			seenByIds={readByIds}
 			viewerId={currentUserId}
 			viewerType={SenderType.TEAM_MEMBER}
 		>
-			{({
-				isSentByViewer,
-				isReceivedByViewer,
-				isVisitor,
-				isAI,
-				isTeamMember,
-			}) => {
+			{({ isSentByViewer, isReceivedByViewer, isVisitor, isAI }) => {
 				const lastItem = items.at(-1);
 
 				return (
@@ -211,8 +184,6 @@ export function TimelineMessageGroup({
 								availableAIAgents={availableAIAgents}
 								currentUserId={currentUserId}
 								firstMessage={firstItem}
-								isSentByViewer={isSentByViewer}
-								isVisitor={isVisitor}
 								lastReadMessageIds={lastReadMessageIds}
 								messageId={lastItem.id}
 								messages={items}

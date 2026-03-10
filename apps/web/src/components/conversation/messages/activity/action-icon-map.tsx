@@ -54,6 +54,10 @@ const TOOL_ICON_MAP: Record<string, ActionIconDefinition> = {
 		key: "setPriority",
 		Icon: Flag,
 	},
+	categorizeConversation: {
+		key: "categorizeConversation",
+		Icon: Tag,
+	},
 	aiCreditUsage: {
 		key: "aiCreditUsage",
 		Icon: DollarSign,

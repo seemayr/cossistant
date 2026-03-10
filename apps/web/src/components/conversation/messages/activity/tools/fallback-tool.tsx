@@ -6,6 +6,7 @@ export function FallbackToolActivity({
 	timestamp,
 	showIcon = true,
 	showStateIndicator = false,
+	showTerminalIndicator = true,
 	icon,
 }: ToolActivityProps) {
 	return (
@@ -13,6 +14,7 @@ export function FallbackToolActivity({
 			icon={icon}
 			showIcon={showIcon}
 			showStateIndicator={showStateIndicator}
+			showTerminalIndicator={showTerminalIndicator}
 			state={toolCall.state}
 			text={toolCall.summaryText}
 			timestamp={timestamp}

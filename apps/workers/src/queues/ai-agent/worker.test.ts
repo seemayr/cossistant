@@ -108,6 +108,8 @@ const getBehaviorSettingsMock = mock(() => ({
 	autoGenerateTitle: true,
 	autoAnalyzeSentiment: true,
 	canSetPriority: true,
+	autoCategorize: false,
+	canCategorize: false,
 }));
 const findNextTriggerableMessageAfterCursorMock = mock(
 	async (): Promise<MockMessage | null> => null
@@ -177,7 +179,9 @@ mock.module("@cossistant/jobs", () => ({
 		AI_AGENT: "ai-agent",
 		AI_AGENT_BACKGROUND: "ai-agent-background",
 	},
-	AI_AGENT_BACKGROUND_DELAY_MS: 60_000,
+	AI_AGENT_BACKGROUND_DELAY_MS: 30_000,
+	generateAiAgentJobId: (conversationId: string) =>
+		`ai-agent-${conversationId}`,
 	AI_AGENT_INITIAL_DELAY_MS: 5000,
 	AI_AGENT_RETRY_DELAY_MS: 5000,
 	AI_AGENT_MAX_RUN_ATTEMPTS: 3,
@@ -276,6 +280,8 @@ describe("ai-agent worker single-message orchestration", () => {
 			autoGenerateTitle: true,
 			autoAnalyzeSentiment: true,
 			canSetPriority: true,
+			autoCategorize: false,
+			canCategorize: false,
 		});
 		findNextTriggerableMessageAfterCursorMock.mockResolvedValue(null);
 		runPipelineForMessageMock.mockImplementation(
@@ -345,8 +351,50 @@ describe("ai-agent worker single-message orchestration", () => {
 				sourceMessageId: "msg-1",
 				sourceMessageCreatedAt: "2026-03-04T10:00:00.000Z",
 			},
-			delayMs: 60_000,
+			delayMs: 30_000,
 		});
+
+		await worker.stop();
+	});
+
+	it("schedules background work when auto-categorization is the only enabled capability", async () => {
+		getBehaviorSettingsMock.mockReturnValue({
+			autoGenerateTitle: false,
+			autoAnalyzeSentiment: false,
+			canSetPriority: false,
+			autoCategorize: true,
+			canCategorize: true,
+		});
+		getConversationByIdMock
+			.mockResolvedValueOnce({
+				id: "conv-1",
+				websiteId: "site-1",
+				organizationId: "org-1",
+				visitorId: "visitor-1",
+				aiAgentLastProcessedMessageCreatedAt: null,
+				aiAgentLastProcessedMessageId: null,
+			})
+			.mockResolvedValueOnce({
+				id: "conv-1",
+				websiteId: "site-1",
+				organizationId: "org-1",
+				visitorId: "visitor-1",
+				aiAgentLastProcessedMessageCreatedAt: "2026-03-04T10:00:00.000Z",
+				aiAgentLastProcessedMessageId: "msg-1",
+			});
+
+		const { createAiAgentWorker } = await modulePromise;
+		const worker = createAiAgentWorker({
+			connectionOptions: {} as never,
+			redisUrl: "redis://localhost:6379",
+		});
+
+		await worker.start();
+		await runJob(buildJobData());
+
+		expect(enqueueConversationScopedAiBackgroundJobMock).toHaveBeenCalledTimes(
+			1
+		);
 
 		await worker.stop();
 	});

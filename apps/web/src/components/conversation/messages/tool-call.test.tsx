@@ -33,9 +33,18 @@ function createToolTimelineItem(
 	};
 }
 
-function render(item: TimelineItem, mode?: "default" | "developer"): string {
+function render(
+	item: TimelineItem,
+	mode?: "default" | "developer",
+	showTerminalIndicator = true
+): string {
 	return renderToStaticMarkup(
-		React.createElement(ToolCall, { item, mode, showIcon: false })
+		React.createElement(ToolCall, {
+			item,
+			mode,
+			showIcon: false,
+			showTerminalIndicator,
+		})
 	);
 }
 
@@ -83,8 +92,8 @@ describe("ToolCall", () => {
 		expect(html).toContain('data-tool-display-state="partial"');
 		expect(html).toContain('data-tool-execution-indicator-slot="true"');
 		expect(html).toContain('data-tool-execution-indicator="spinner"');
+		expect(html).toContain('data-co-spinner="true"');
 		expect(html).toContain("Searching for &quot;pricing&quot;...");
-		expect(html).toContain("ml-2");
 	});
 
 	it("renders result state with the executed query", () => {
@@ -111,6 +120,32 @@ describe("ToolCall", () => {
 		expect(html).toContain('data-tool-execution-indicator="arrow"');
 		expect(html).toContain("Searched for &quot;pricing&quot;");
 		expect(html).not.toContain("Found 3 sources");
+	});
+
+	it("omits the terminal arrow when the render unit contains a single tool call", () => {
+		const html = render(
+			createToolTimelineItem({
+				parts: [
+					{
+						type: "tool-searchKnowledgeBase",
+						toolCallId: "call-single",
+						toolName: "searchKnowledgeBase",
+						input: { query: "pricing" },
+						state: "result",
+						output: {
+							success: true,
+							data: { totalFound: 1, articles: [] },
+						},
+					},
+				],
+			}),
+			"default",
+			false
+		);
+
+		expect(html).toContain('data-tool-display-state="result"');
+		expect(html).not.toContain('data-tool-execution-indicator="arrow"');
+		expect(html).not.toContain('data-tool-execution-indicator-slot="true"');
 	});
 
 	it("renders compact source pills with +N overflow for search results", () => {
@@ -245,7 +280,7 @@ describe("ToolCall", () => {
 		expect(html).toContain("Running sendMessage");
 	});
 
-	it("renders developer mode metadata badges and payload", () => {
+	it("renders developer mode through the dedicated dev log shell", () => {
 		const html = render(
 			createToolTimelineItem({
 				text: "Running sendMessage",
@@ -263,14 +298,13 @@ describe("ToolCall", () => {
 			"developer"
 		);
 
+		expect(html).toContain("Running sendMessage");
+		expect(html).toContain("Dev payload");
 		expect(html).toContain("Running");
 		expect(html).toContain("Log");
-		expect(html).toContain("Dev payload");
-		expect(html).toContain("tool");
-		expect(html).toContain("call-dev-1");
 	});
 
-	it("renders developer-mode fallback when strict tool part parsing fails", () => {
+	it("renders developer-mode fallback through the dev log shell", () => {
 		const html = render(
 			createToolTimelineItem({
 				parts: [],
@@ -281,9 +315,8 @@ describe("ToolCall", () => {
 		);
 
 		expect(html).toContain("Running sendMessage");
+		expect(html).toContain("Dev payload");
 		expect(html).toContain("Fallback rendered from timeline metadata.");
-		expect(html).toContain("sendMessage");
-		expect(html).toContain("tool-1");
 	});
 
 	it("renders updateConversationTitle with quoted title on result", () => {
@@ -356,5 +389,30 @@ describe("ToolCall", () => {
 
 		expect(html).toContain("Conversation priority set to");
 		expect(html).toContain("high");
+	});
+
+	it("renders categorizeConversation with the resolved view name", () => {
+		const html = render(
+			createToolTimelineItem({
+				text: 'Classified as "billing"',
+				parts: [
+					{
+						type: "tool-categorizeConversation",
+						toolCallId: "call-8",
+						toolName: "categorizeConversation",
+						input: { viewId: "view-1" },
+						state: "result",
+						output: {
+							success: true,
+							data: { viewId: "view-1", viewName: "billing" },
+						},
+					},
+				],
+				tool: "categorizeConversation",
+			})
+		);
+
+		expect(html).toContain("Classified as");
+		expect(html).toContain("billing");
 	});
 });

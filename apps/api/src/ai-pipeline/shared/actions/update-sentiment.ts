@@ -25,6 +25,7 @@ type UpdateSentimentParams = {
 	aiAgentId: string;
 	sentiment: "positive" | "negative" | "neutral";
 	confidence: number;
+	emitTimelineEvent?: boolean;
 };
 
 function isSentimentEffectivelyUnchanged(params: {
@@ -47,9 +48,10 @@ function isSentimentEffectivelyUnchanged(params: {
 /**
  * Update conversation sentiment
  */
-export async function updateSentiment(
-	params: UpdateSentimentParams
-): Promise<void> {
+export async function updateSentiment(params: UpdateSentimentParams): Promise<{
+	changed: boolean;
+	reason?: "unchanged";
+}> {
 	const {
 		db,
 		conversation: conv,
@@ -58,6 +60,7 @@ export async function updateSentiment(
 		aiAgentId,
 		sentiment,
 		confidence,
+		emitTimelineEvent = false,
 	} = params;
 
 	if (
@@ -68,7 +71,10 @@ export async function updateSentiment(
 			nextConfidence: confidence,
 		})
 	) {
-		return;
+		return {
+			changed: false,
+			reason: "unchanged",
+		};
 	}
 
 	const now = new Date().toISOString();
@@ -83,22 +89,23 @@ export async function updateSentiment(
 		})
 		.where(eq(conversation.id, conv.id));
 
-	// Create private timeline event (AI_ANALYZED) with proper realtime emission
-	const eventText = `AI analyzed sentiment: ${sentiment} (${Math.round(confidence * 100)}% confidence)`;
-	await createTimelineItem({
-		db,
-		organizationId,
-		websiteId,
-		conversationId: conv.id,
-		conversationOwnerVisitorId: conv.visitorId,
-		item: {
-			type: ConversationTimelineType.EVENT,
-			visibility: TimelineItemVisibility.PRIVATE,
-			text: eventText,
-			parts: [{ type: "text", text: eventText }],
-			aiAgentId,
-		},
-	});
+	if (emitTimelineEvent) {
+		const eventText = `AI analyzed sentiment: ${sentiment} (${Math.round(confidence * 100)}% confidence)`;
+		await createTimelineItem({
+			db,
+			organizationId,
+			websiteId,
+			conversationId: conv.id,
+			conversationOwnerVisitorId: conv.visitorId,
+			item: {
+				type: ConversationTimelineType.EVENT,
+				visibility: TimelineItemVisibility.PRIVATE,
+				text: eventText,
+				parts: [{ type: "text", text: eventText }],
+				aiAgentId,
+			},
+		});
+	}
 
 	// Emit conversationUpdated event for real-time dashboard updates
 	await realtime.emit("conversationUpdated", {
@@ -113,4 +120,8 @@ export async function updateSentiment(
 		},
 		aiAgentId,
 	});
+
+	return {
+		changed: true,
+	};
 }

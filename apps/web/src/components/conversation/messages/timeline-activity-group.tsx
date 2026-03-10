@@ -12,29 +12,23 @@ import type {
 	TimelinePartEvent,
 } from "@cossistant/types/api/timeline-item";
 import { useMemo } from "react";
-import { Avatar } from "@/components/ui/avatar";
-import { Logo } from "@/components/ui/logo";
-import { generateTreePrefix } from "@/components/web-sources/utils";
 import type { ConversationHeader } from "@/contexts/inboxes";
-import { resolveDashboardHumanAgentDisplay } from "@/lib/human-agent-display";
 import { extractEventPart } from "@/lib/timeline-events";
-import { shouldDisplayToolTimelineItem } from "@/lib/tool-timeline-visibility";
-import { cn } from "@/lib/utils";
-import { getVisitorNameWithFallback } from "@/lib/visitors";
-import {
-	renderEventActionIcon,
-	renderToolActionIcon,
-} from "./activity/action-icon-map";
+import { isCustomerFacingToolTimelineItem } from "@/lib/tool-timeline-visibility";
+import type { PublicActivityGroupRenderItem } from "./dashboard-timeline-render-items";
 import { ConversationEvent } from "./event";
+import {
+	resolveDashboardTimelineSender,
+	TimelineGroupSenderAvatar,
+} from "./timeline-group-sender";
 import { ToolCall } from "./tool-call";
 
 type TimelineActivityGroupProps = {
-	group: GroupedActivity;
+	group: GroupedActivity | PublicActivityGroupRenderItem;
 	availableAIAgents: AvailableAIAgent[];
 	teamMembers: RouterOutputs["user"]["getWebsiteMembers"];
 	currentUserId?: string;
 	visitor: ConversationHeader["visitor"];
-	isDeveloperModeEnabled: boolean;
 };
 
 type ActivityRow =
@@ -48,41 +42,7 @@ type ActivityRow =
 			type: "tool";
 			key: string;
 			item: TimelineItem;
-			toolName: string | null;
 	  };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function getToolNameFromTimelineItem(item: TimelineItem): string | null {
-	if (typeof item.tool === "string" && item.tool.length > 0) {
-		return item.tool;
-	}
-
-	for (const part of item.parts) {
-		if (
-			typeof part === "object" &&
-			part !== null &&
-			"type" in part &&
-			"toolName" in part &&
-			typeof part.type === "string" &&
-			part.type.startsWith("tool-") &&
-			typeof part.toolName === "string"
-		) {
-			return part.toolName;
-		}
-	}
-
-	return null;
-}
-
-function formatTimestamp(createdAt: string): string {
-	return new Date(createdAt).toLocaleTimeString([], {
-		hour: "2-digit",
-		minute: "2-digit",
-	});
-}
 
 export function TimelineActivityGroup({
 	group,
@@ -90,41 +50,35 @@ export function TimelineActivityGroup({
 	teamMembers,
 	currentUserId,
 	visitor,
-	isDeveloperModeEnabled,
 }: TimelineActivityGroupProps) {
 	const availableHumanAgents = useMemo(
 		() =>
 			teamMembers.map((member) => {
-				const memberDisplay = resolveDashboardHumanAgentDisplay(member);
+				const memberDisplay = resolveDashboardTimelineSender({
+					availableAIAgents,
+					senderId: member.id,
+					senderType: SenderType.TEAM_MEMBER,
+					teamMembers,
+					visitor,
+				});
 
 				return {
 					id: member.id,
-					name: memberDisplay.displayName,
+					name: memberDisplay.senderDisplayName,
 					image: member.image,
 					lastSeenAt: member.lastSeenAt,
 				};
 			}),
-		[teamMembers]
+		[availableAIAgents, teamMembers, visitor]
 	);
 
-	const humanAgent = teamMembers.find((agent) => agent.id === group.senderId);
-	const humanDisplay =
-		group.senderType === SenderType.TEAM_MEMBER
-			? resolveDashboardHumanAgentDisplay({
-					id: humanAgent?.id ?? group.senderId ?? "unknown-member",
-					name: humanAgent?.name ?? null,
-				})
-			: null;
-	const aiAgent = availableAIAgents.find(
-		(agent) => agent.id === group.senderId
-	);
-	const visitorName = getVisitorNameWithFallback(visitor);
-	const senderDisplayName =
-		group.senderType === SenderType.VISITOR
-			? visitorName
-			: group.senderType === SenderType.AI
-				? aiAgent?.name || "AI Assistant"
-				: (humanDisplay?.displayName ?? "Team member");
+	const { senderDisplayName } = resolveDashboardTimelineSender({
+		senderId: group.senderId,
+		senderType: group.senderType,
+		teamMembers,
+		availableAIAgents,
+		visitor,
+	});
 
 	const activityRows = useMemo(() => {
 		const rows: ActivityRow[] = [];
@@ -151,11 +105,7 @@ export function TimelineActivityGroup({
 			}
 
 			if (item.type === "tool") {
-				if (
-					!shouldDisplayToolTimelineItem(item, {
-						includeInternalLogs: isDeveloperModeEnabled,
-					})
-				) {
+				if (!isCustomerFacingToolTimelineItem(item)) {
 					continue;
 				}
 
@@ -163,22 +113,18 @@ export function TimelineActivityGroup({
 					type: "tool",
 					key: item.id ?? `activity-tool-${item.createdAt}-${index}`,
 					item,
-					toolName: getToolNameFromTimelineItem(item),
 				});
 			}
 		}
 
 		return rows;
-	}, [group.items, isDeveloperModeEnabled]);
+	}, [group.items]);
 
 	if (activityRows.length === 0) {
 		return null;
 	}
 	const hasToolRows = activityRows.some((row) => row.type === "tool");
-	const showTreeLayout =
-		!isDeveloperModeEnabled && activityRows.length > 1 && !hasToolRows;
-	const showRowBullets = isDeveloperModeEnabled && activityRows.length > 1;
-	const showSenderLabel = !isDeveloperModeEnabled && hasToolRows;
+	const showSenderLabel = hasToolRows;
 
 	return (
 		<PrimitiveTimelineItemGroup
@@ -186,96 +132,44 @@ export function TimelineActivityGroup({
 			viewerId={currentUserId}
 			viewerType={SenderType.TEAM_MEMBER}
 		>
-			{({ isVisitor, isAI }) => (
+			{() => (
 				<div className="flex w-full flex-row gap-2">
 					<TimelineItemGroupAvatar className="flex shrink-0 flex-col justify-start pt-0.5">
-						{isVisitor ? (
-							<Avatar
-								className="size-6"
-								fallbackName={visitorName}
-								url={visitor?.contact?.image}
-							/>
-						) : isAI ? (
-							<div className="flex size-6 shrink-0 items-center justify-center">
-								<Logo className="size-5 text-primary/90" />
-							</div>
-						) : (
-							<Avatar
-								className="size-6"
-								facehashSeed={humanDisplay?.facehashSeed}
-								fallbackName={humanDisplay?.displayName ?? "Team member"}
-								url={humanAgent?.image}
-							/>
-						)}
+						<TimelineGroupSenderAvatar
+							availableAIAgents={availableAIAgents}
+							senderId={group.senderId}
+							senderType={group.senderType}
+							teamMembers={teamMembers}
+							visitor={visitor}
+						/>
 					</TimelineItemGroupAvatar>
 
 					<TimelineItemGroupContent className="flex min-w-0 flex-1 flex-col gap-1 pt-1">
 						<div className="flex w-full min-w-0 flex-col gap-1">
-							{showTreeLayout || showSenderLabel ? (
+							{showSenderLabel ? (
 								<div className="px-1 text-muted-foreground text-xs">
 									{senderDisplayName}
 								</div>
 							) : null}
-							{activityRows.map((row, index) => (
-								<div
-									className={cn(
-										"flex w-full min-w-0",
-										showTreeLayout ? "items-stretch" : "items-start",
-										showTreeLayout || showRowBullets ? "gap-2" : "gap-0"
+							{activityRows.map((row) => (
+								<div className="w-full min-w-0" key={row.key}>
+									{row.type === "event" ? (
+										<ConversationEvent
+											availableAIAgents={availableAIAgents}
+											availableHumanAgents={availableHumanAgents}
+											createdAt={row.item.createdAt}
+											event={row.event}
+											showIcon={false}
+											visitor={visitor}
+										/>
+									) : (
+										<ToolCall
+											item={row.item}
+											mode="default"
+											showIcon={false}
+											showTerminalIndicator={true}
+										/>
 									)}
-									key={row.key}
-								>
-									{showTreeLayout ? (
-										<div className="relative min-w-[2.25rem] shrink-0">
-											<span
-												className="block whitespace-pre font-mono text-muted-foreground/70 text-xs leading-6"
-												data-activity-tree-prefix={row.type}
-											>
-												{generateTreePrefix({
-													ancestorsAreLastChild: [],
-													isLast: index === activityRows.length - 1,
-												})}
-											</span>
-											{index < activityRows.length - 1 ? (
-												<span
-													className="-bottom-[1.05rem] pointer-events-none absolute top-[0.29rem] left-[0.3ch] w-px bg-muted-foreground"
-													data-activity-tree-continuation="true"
-												/>
-											) : null}
-										</div>
-									) : showRowBullets ? (
-										<span
-											className="mt-[0.45rem] shrink-0"
-											data-activity-bullet={row.type}
-										>
-											{row.type === "event"
-												? renderEventActionIcon(row.event.eventType)
-												: renderToolActionIcon(row.toolName)}
-										</span>
-									) : null}
-									<div
-										className={cn(
-											"min-w-0",
-											showTreeLayout || showRowBullets ? "flex-1" : "w-full"
-										)}
-									>
-										{row.type === "event" ? (
-											<ConversationEvent
-												availableAIAgents={availableAIAgents}
-												availableHumanAgents={availableHumanAgents}
-												createdAt={row.item.createdAt}
-												event={row.event}
-												showIcon={false}
-												visitor={visitor}
-											/>
-										) : (
-											<ToolCall
-												item={row.item}
-												mode={isDeveloperModeEnabled ? "developer" : "default"}
-												showIcon={false}
-											/>
-										)}
-									</div>
 								</div>
 							))}
 						</div>

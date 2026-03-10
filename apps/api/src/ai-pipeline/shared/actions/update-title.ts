@@ -24,6 +24,7 @@ type UpdateTitleParams = {
 	websiteId: string;
 	aiAgentId: string;
 	title: string;
+	emitTimelineEvent?: boolean;
 };
 
 /**
@@ -46,7 +47,10 @@ function isTitleDifferent(oldTitle: string | null, newTitle: string): boolean {
 /**
  * Update conversation title
  */
-export async function updateTitle(params: UpdateTitleParams): Promise<void> {
+export async function updateTitle(params: UpdateTitleParams): Promise<{
+	changed: boolean;
+	reason?: "unchanged" | "manual_title";
+}> {
 	const {
 		db,
 		conversation: conv,
@@ -54,11 +58,22 @@ export async function updateTitle(params: UpdateTitleParams): Promise<void> {
 		websiteId,
 		aiAgentId,
 		title,
+		emitTimelineEvent = false,
 	} = params;
+
+	if (conv.titleSource === "user") {
+		return {
+			changed: false,
+			reason: "manual_title",
+		};
+	}
 
 	// Skip if title is not meaningfully different
 	if (!isTitleDifferent(conv.title, title)) {
-		return;
+		return {
+			changed: false,
+			reason: "unchanged",
+		};
 	}
 
 	const isUpdate = Boolean(conv.title);
@@ -69,29 +84,31 @@ export async function updateTitle(params: UpdateTitleParams): Promise<void> {
 		.update(conversation)
 		.set({
 			title,
+			titleSource: "ai",
 			updatedAt: now,
 		})
 		.where(eq(conversation.id, conv.id));
 
-	// Create private timeline event (uses createTimelineItem for proper realtime emission)
-	const eventText = isUpdate
-		? `AI updated title: "${title}" (was: "${conv.title}")`
-		: `AI generated title: "${title}"`;
+	if (emitTimelineEvent) {
+		const eventText = isUpdate
+			? `AI updated title: "${title}" (was: "${conv.title}")`
+			: `AI generated title: "${title}"`;
 
-	await createTimelineItem({
-		db,
-		organizationId,
-		websiteId,
-		conversationId: conv.id,
-		conversationOwnerVisitorId: conv.visitorId,
-		item: {
-			type: ConversationTimelineType.EVENT,
-			visibility: TimelineItemVisibility.PRIVATE,
-			text: eventText,
-			parts: [{ type: "text", text: eventText }],
-			aiAgentId,
-		},
-	});
+		await createTimelineItem({
+			db,
+			organizationId,
+			websiteId,
+			conversationId: conv.id,
+			conversationOwnerVisitorId: conv.visitorId,
+			item: {
+				type: ConversationTimelineType.EVENT,
+				visibility: TimelineItemVisibility.PRIVATE,
+				text: eventText,
+				parts: [{ type: "text", text: eventText }],
+				aiAgentId,
+			},
+		});
+	}
 
 	// Emit conversationUpdated event for real-time dashboard and widget updates
 	await realtime.emit("conversationUpdated", {
@@ -105,4 +122,8 @@ export async function updateTitle(params: UpdateTitleParams): Promise<void> {
 		},
 		aiAgentId,
 	});
+
+	return {
+		changed: true,
+	};
 }

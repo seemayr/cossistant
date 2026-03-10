@@ -1,5 +1,5 @@
 import type { RouterOutputs } from "@api/trpc/types";
-import { TimelineItemGroupReadIndicator } from "@cossistant/next/primitives";
+import { resolveTimelineReadReceiptReaders } from "@cossistant/next/primitives";
 import type { AvailableAIAgent } from "@cossistant/types";
 import type { TimelineItem } from "@cossistant/types/api/timeline-item";
 import type { ConversationSeen } from "@cossistant/types/schemas";
@@ -23,10 +23,6 @@ type ReadIndicatorProps = {
 	availableAIAgents: AvailableAIAgent[];
 	visitor: ConversationHeader["visitor"];
 	messages: TimelineItem[];
-	isSentByViewer: boolean;
-	/** Whether the message group is from a visitor (used for positioning) */
-	isVisitor: boolean;
-	/** Seen data for tooltip timestamps */
 	seenData?: ConversationSeen[];
 };
 
@@ -36,21 +32,17 @@ type ReaderInfo =
 			type: "human";
 			name: string | null;
 			image: string | null;
-			email: string | null;
-			lastSeenAt?: string | null;
 	  }
 	| {
 			id: string;
 			type: "ai";
 			name: string | null;
-			lastSeenAt?: string | null;
 	  }
 	| {
 			id: string;
 			type: "visitor";
 			name: string;
 			image: string | undefined;
-			lastSeenAt?: string | null;
 	  };
 
 function formatSeenTime(dateString: string | null | undefined): string {
@@ -64,9 +56,6 @@ function formatSeenTime(dateString: string | null | undefined): string {
 		return "";
 	}
 }
-
-const isReaderInfo = (value: ReaderInfo | null): value is ReaderInfo =>
-	value !== null;
 
 export function ReadIndicator({
 	lastReadMessageIds,
@@ -95,101 +84,72 @@ export function ReadIndicator({
 
 		return ids;
 	}, [messages, visitor?.id]);
-
-	// Build a lookup map for seen timestamps by actor ID
-	const seenTimestampMap = useMemo(() => {
-		const map = new Map<string, string>();
-		for (const seen of seenData) {
-			const actorId = seen.userId || seen.visitorId || seen.aiAgentId;
-			if (actorId && seen.lastSeenAt) {
-				map.set(actorId, seen.lastSeenAt);
+	const { readers } = resolveTimelineReadReceiptReaders({
+		itemId: messageId,
+		lastReadItemIds: lastReadMessageIds,
+		seenData,
+		currentViewerId: currentUserId,
+		senderIds: [
+			firstMessage?.userId ?? "",
+			firstMessage?.visitorId ?? "",
+			firstMessage?.aiAgentId ?? "",
+		],
+		resolveParticipant: ({ actorType, id }) => {
+			if (actorType !== "ai_agent") {
+				const human = teamMembers.find((member) => member.id === id);
+				if (human) {
+					return {
+						id,
+						name: human.name ?? null,
+						image: human.image,
+						type: "human" as const,
+					};
+				}
 			}
-		}
-		return map;
-	}, [seenData]);
+
+			if (actorType !== "user") {
+				const ai = availableAIAgents.find((agent) => agent.id === id);
+				if (ai) {
+					return {
+						id,
+						name: ai.name,
+						type: "ai" as const,
+					};
+				}
+			}
+
+			if (actorType === "visitor" || visitorParticipantIds.has(id)) {
+				return {
+					id,
+					name: visitorName,
+					image: visitor?.contact?.image ?? undefined,
+					type: "visitor" as const,
+				};
+			}
+
+			return null;
+		},
+	});
+
+	if (readers.length === 0) {
+		return null;
+	}
 
 	return (
-		<TimelineItemGroupReadIndicator
-			className="mt-1"
-			itemId={messageId}
-			lastReadItemIds={lastReadMessageIds}
-		>
-			{({ lastReaderIds }) => {
-				// Always position seen indicators on the right end side
-				const containerClassName = cn(
-					"my-3 flex min-h-[1.25rem] items-center justify-end"
-				);
-
-				if (lastReaderIds.length === 0) {
-					return null;
-				}
-
-				// Filter out the current user and the sender
-				const otherReaders = lastReaderIds.filter(
-					(id) =>
-						id !== currentUserId &&
-						id !== firstMessage?.userId &&
-						id !== firstMessage?.visitorId &&
-						id !== firstMessage?.aiAgentId
-				);
-				const uniqueReaderIds = Array.from(new Set(otherReaders));
-
-				if (uniqueReaderIds.length === 0) {
-					return null;
-				}
-
-				// Get names/avatars of people who stopped reading here
-				const readerInfo = uniqueReaderIds
-					.map((id): ReaderInfo | null => {
-						const lastSeenAt = seenTimestampMap.get(id) ?? null;
-						const human = teamMembers.find((a) => a.id === id);
-						if (human) {
-							return {
-								id,
-								name: human.name ?? null,
-								image: human.image,
-								email: human.email,
-								type: "human",
-								lastSeenAt,
-							};
-						}
-
-						const ai = availableAIAgents.find((a) => a.id === id);
-						if (ai) {
-							return { id, name: ai.name, type: "ai", lastSeenAt };
-						}
-
-						if (visitorParticipantIds.has(id)) {
-							return {
-								id,
-								name: visitorName,
-								image: visitor?.contact?.image ?? undefined,
-								type: "visitor",
-								lastSeenAt,
-							};
-						}
-
-						return null;
-					})
-					.filter(isReaderInfo);
-
-				if (readerInfo.length === 0) {
-					return null;
-				}
-
-				// Build tooltip content showing who saw and when
-				const tooltipContent = (
+		<div className={cn("my-3 flex min-h-[1.25rem] items-center justify-end")}>
+			<TooltipOnHover
+				content={
 					<div className="flex flex-col gap-1">
-						{readerInfo.map((reader) => {
+						{readers.map((reader) => {
 							const displayName =
-								reader.type === "human"
+								reader.participant.type === "human"
 									? resolveDashboardHumanAgentDisplay({
-											id: reader.id,
-											name: reader.name,
+											id: reader.participant.id,
+											name: reader.participant.name,
 										}).displayName
-									: reader.type === "ai"
-										? reader.name || "AI Assistant"
-										: reader.name;
+									: reader.participant.type === "ai"
+										? reader.participant.name || "AI Assistant"
+										: reader.participant.name;
 							const seenTime = formatSeenTime(reader.lastSeenAt);
 							return (
 								<div
@@ -197,69 +157,64 @@ export function ReadIndicator({
 									key={reader.id}
 								>
 									<span className="font-medium">{displayName}</span>
-									{seenTime && (
+									{seenTime ? (
 										<span className="text-primary-foreground/70">
 											{seenTime}
 										</span>
-									)}
+									) : null}
 								</div>
 							);
 						})}
 					</div>
-				);
+				}
+				delay={300}
+			>
+				<div className="flex gap-1">
+					{readers.slice(0, 3).map((reader) => (
+						<motion.div
+							className="relative"
+							key={reader.id}
+							layoutId={`read-indicator-${reader.id}`}
+							transition={{
+								type: "tween",
+								duration: 0.12,
+								ease: "easeOut",
+							}}
+						>
+							{reader.participant.type === "human" ? (
+								(() => {
+									const humanDisplay = resolveDashboardHumanAgentDisplay({
+										id: reader.id,
+										name: reader.participant.name,
+									});
 
-				return (
-					<div className={containerClassName}>
-						<TooltipOnHover content={tooltipContent} delay={300}>
-							<div className="flex gap-1">
-								{readerInfo.slice(0, 3).map((reader) => (
-									<motion.div
-										className="relative"
-										key={reader.id}
-										layoutId={`read-indicator-${reader.id}`}
-										transition={{
-											type: "tween",
-											duration: 0.12,
-											ease: "easeOut",
-										}}
-									>
-										{reader.type === "human" ? (
-											(() => {
-												const humanDisplay = resolveDashboardHumanAgentDisplay({
-													id: reader.id,
-													name: reader.name,
-												});
-
-												return (
-													<Avatar
-														className="size-5 rounded border border-background"
-														facehashSeed={humanDisplay.facehashSeed}
-														fallbackName={humanDisplay.displayName}
-														url={reader.image}
-													/>
-												);
-											})()
-										) : reader.type === "ai" ? (
-											<Logo className="size-5 text-primary" />
-										) : (
-											<Avatar
-												className="size-5 rounded border border-background"
-												fallbackName={visitorName}
-												url={reader.image}
-											/>
-										)}
-									</motion.div>
-								))}
-								{readerInfo.length > 3 && (
-									<span className="flex items-center text-[10px] text-muted-foreground">
-										+{readerInfo.length - 3}
-									</span>
-								)}
-							</div>
-						</TooltipOnHover>
-					</div>
-				);
-			}}
-		</TimelineItemGroupReadIndicator>
+									return (
+										<Avatar
+											className="size-5 rounded border border-background"
+											facehashSeed={humanDisplay.facehashSeed}
+											fallbackName={humanDisplay.displayName}
+											url={reader.participant.image}
+										/>
+									);
+								})()
+							) : reader.participant.type === "ai" ? (
+								<Logo className="size-5 text-primary" />
+							) : (
+								<Avatar
+									className="size-5 rounded border border-background"
+									fallbackName={visitorName}
+									url={reader.participant.image}
+								/>
+							)}
+						</motion.div>
+					))}
+					{readers.length > 3 ? (
+						<span className="flex items-center text-[10px] text-muted-foreground">
+							+{readers.length - 3}
+						</span>
+					) : null}
+				</div>
+			</TooltipOnHover>
+		</div>
 	);
 }

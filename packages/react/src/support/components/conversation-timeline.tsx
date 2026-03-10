@@ -4,7 +4,6 @@ import type {
 	TimelinePartEvent,
 } from "@cossistant/types/api/timeline-item";
 import type React from "react";
-import { useCallback, useMemo } from "react";
 import type { DaySeparatorItem } from "../../hooks/private/use-grouped-messages";
 import { useConversationTimeline } from "../../hooks/use-conversation-timeline";
 import { useTypingSound } from "../../hooks/use-typing-sound";
@@ -18,11 +17,8 @@ import {
 	DaySeparatorLine,
 	defaultFormatDate,
 } from "../../primitives/day-separator";
-import { useSupportText } from "../text";
 import { cn } from "../utils";
-import { resolveSupportHumanAgentDisplay } from "../utils/human-agent-display";
 import { ConversationEvent } from "./conversation-event";
-import { filterSeenByIdsForViewer } from "./conversation-timeline-utils";
 import { TimelineActivityGroup } from "./timeline-activity-group";
 import { TimelineMessageGroup } from "./timeline-message-group";
 import { resolveConversationTimelineToolComponent } from "./timeline-tool-registry";
@@ -41,9 +37,6 @@ function extractEventPart(item: TimelineItem): TimelinePartEvent | null {
 
 	return eventPart || null;
 }
-
-const EMPTY_SEEN_BY_IDS: readonly string[] = Object.freeze([]);
-const EMPTY_SEEN_BY_NAMES: readonly string[] = Object.freeze([]);
 
 export type {
 	ConversationTimelineToolDefinition,
@@ -75,7 +68,6 @@ export const ConversationTimelineList: React.FC<ConversationTimelineProps> = ({
 	tools,
 	renderDaySeparator,
 }) => {
-	const text = useSupportText();
 	const timeline = useConversationTimeline({
 		conversationId,
 		items: timelineItems,
@@ -87,56 +79,6 @@ export const ConversationTimelineList: React.FC<ConversationTimelineProps> = ({
 		volume: 1,
 		playbackRate: 1.3,
 	});
-
-	const seenNameLookup = useMemo(() => {
-		const map = new Map<string, string>();
-
-		for (const agent of availableHumanAgents) {
-			map.set(
-				agent.id,
-				resolveSupportHumanAgentDisplay(
-					agent,
-					text("common.fallbacks.supportTeam")
-				).displayName
-			);
-		}
-
-		for (const agent of availableAIAgents) {
-			if (agent.name) {
-				map.set(agent.id, agent.name);
-			}
-		}
-
-		return map;
-	}, [availableHumanAgents, availableAIAgents, text]);
-
-	const getSeenByNames = useCallback(
-		(ids: readonly string[] = EMPTY_SEEN_BY_IDS): readonly string[] => {
-			if (ids.length === 0 || seenNameLookup.size === 0) {
-				return EMPTY_SEEN_BY_NAMES;
-			}
-
-			const uniqueNames = new Set<string>();
-			const names: string[] = [];
-
-			for (const id of ids) {
-				const name = seenNameLookup.get(id);
-				if (!name || uniqueNames.has(name)) {
-					continue;
-				}
-
-				uniqueNames.add(name);
-				names.push(name);
-			}
-
-			if (names.length === 0) {
-				return EMPTY_SEEN_BY_NAMES;
-			}
-
-			return Object.freeze(names);
-		},
-		[seenNameLookup]
-	);
 
 	return (
 		<PrimitiveConversationTimeline
@@ -226,6 +168,7 @@ export const ConversationTimelineList: React.FC<ConversationTimelineProps> = ({
 								conversationId={conversationId}
 								item={item.item}
 								key={toolKey}
+								showTerminalIndicator={false}
 							/>
 						);
 					}
@@ -249,22 +192,6 @@ export const ConversationTimelineList: React.FC<ConversationTimelineProps> = ({
 						);
 					}
 
-					// Only show seen indicator on the LAST message group sent by the visitor
-					const isLastVisitorGroup =
-						index === timeline.lastVisitorMessageGroupIndex;
-					const rawSeenByIds =
-						isLastVisitorGroup && item.lastMessageId
-							? timeline.groupedMessages.getMessageSeenBy(item.lastMessageId)
-							: EMPTY_SEEN_BY_IDS;
-					const seenByIds = filterSeenByIdsForViewer(
-						rawSeenByIds,
-						currentVisitorId
-					);
-					const seenByNames =
-						seenByIds.length > 0
-							? getSeenByNames(seenByIds)
-							: EMPTY_SEEN_BY_NAMES;
-
 					// Use first timeline item ID as stable key
 					const groupKey =
 						item.lastMessageId ??
@@ -278,8 +205,8 @@ export const ConversationTimelineList: React.FC<ConversationTimelineProps> = ({
 							currentVisitorId={currentVisitorId}
 							items={item.items || []}
 							key={groupKey}
-							seenByIds={seenByIds}
-							seenByNames={seenByNames}
+							lastReadMessageIds={timeline.groupedMessages.lastReadMessageMap}
+							seenData={timeline.seenData}
 						/>
 					);
 				})}

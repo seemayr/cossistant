@@ -48,7 +48,7 @@ function createEventItem(id: string, createdAt: string): TimelineItem {
 function createToolItem(params: {
 	id: string;
 	createdAt: string;
-	toolName: "searchKnowledgeBase" | "updateConversationTitle";
+	toolName: "searchKnowledgeBase" | "updateConversationTitle" | "aiDecision";
 	state: "partial" | "result";
 	text: string;
 	output?: unknown;
@@ -84,7 +84,7 @@ const VISITOR = {
 } as unknown as ConversationHeader["visitor"];
 
 describe("FakeDashboard timeline activity grouping", () => {
-	it("uses tree prefixes for grouped activity rows and keeps sender identity visible", () => {
+	it("uses the flat tool row structure for grouped activity rows and keeps sender identity visible", () => {
 		const items = [
 			createEventItem("event-1", "2026-01-01T10:00:00.000Z"),
 			createToolItem({
@@ -105,7 +105,7 @@ describe("FakeDashboard timeline activity grouping", () => {
 		);
 
 		expect(html).toContain("joined the conversation");
-		expect(html).toContain('data-activity-single-tool="true"');
+		expect(html).toContain('data-tool-execution-indicator="spinner"');
 		expect(html).toContain('data-slot="avatar"');
 		expect(html).not.toContain("flex-row-reverse");
 		expect(html).not.toContain("mb-2 px-1 text-muted-foreground text-xs");
@@ -201,10 +201,9 @@ describe("FakeDashboard timeline activity grouping", () => {
 			})
 		);
 
-		expect(html).toContain("Searching knowledge base");
-		expect(html).toContain("Found 2 sources");
-		expect(html).toContain("Changed title to");
-		expect(html).toContain("Custom domain blocked by stale edge allowlist");
+		expect(html).toContain("Searching for &quot;allowlist&quot;...");
+		expect(html).toContain("Allowlist checklist");
+		expect(html).toContain("Cache propagation");
 		expect(html).toContain("Anthony Riera");
 		expect(html).toContain("joined the conversation");
 		expect(html).toContain(
@@ -214,5 +213,39 @@ describe("FakeDashboard timeline activity grouping", () => {
 		expect(html).toContain(
 			"Perfect, I refreshed and checkout events are flowing again."
 		);
+	});
+
+	it("keeps internal tool telemetry out of the fake dashboard public timeline", () => {
+		const items = [
+			createToolItem({
+				id: "tool-log-1",
+				createdAt: "2026-01-01T10:00:00.000Z",
+				toolName: "aiDecision",
+				state: "result",
+				text: "Response action captured",
+			}),
+			createToolItem({
+				id: "tool-public-1",
+				createdAt: "2026-01-01T10:01:00.000Z",
+				toolName: "searchKnowledgeBase",
+				state: "result",
+				text: "Matched knowledge base sources",
+				output: {
+					success: true,
+					data: { totalFound: 1, articles: [{ title: "Allowlist checklist" }] },
+				},
+			}),
+		] as unknown as ConversationTimelineItem[];
+
+		const html = renderToStaticMarkup(
+			React.createElement(FakeConversationTimelineList, {
+				items,
+				visitor: VISITOR,
+				typingActors: [],
+			})
+		);
+
+		expect(html).not.toContain("Response action captured");
+		expect(html).toContain("Searched for &quot;allowlist&quot;");
 	});
 });

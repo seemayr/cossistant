@@ -26,6 +26,7 @@ import {
 
 type ConversationMutationResponse =
 	RouterOutputs["conversation"]["markResolved"];
+type UpdateTitleResponse = RouterOutputs["conversation"]["updateTitle"];
 type BlockVisitorResponse = RouterOutputs["visitor"]["block"];
 
 type BaseConversationMutationVariables =
@@ -34,6 +35,7 @@ type MarkReadVariables = RouterInputs["conversation"]["markRead"];
 type MarkUnreadVariables = RouterInputs["conversation"]["markUnread"];
 type PauseAiVariables = RouterInputs["conversation"]["pauseAi"];
 type ResumeAiVariables = RouterInputs["conversation"]["resumeAi"];
+type UpdateTitleVariables = RouterInputs["conversation"]["updateTitle"];
 type BlockVisitorVariables = RouterInputs["visitor"]["block"];
 type UnblockVisitorVariables = RouterInputs["visitor"]["unblock"];
 
@@ -77,6 +79,7 @@ type UseConversationActionsReturn = {
 	markUnread: () => Promise<ConversationMutationResponse>;
 	pauseAi: (durationMinutes: number) => Promise<ConversationMutationResponse>;
 	resumeAi: () => Promise<ConversationMutationResponse>;
+	updateTitle: (title: string | null) => Promise<UpdateTitleResponse>;
 	joinEscalation: () => Promise<ConversationMutationResponse>;
 	blockVisitor: () => Promise<BlockVisitorResponse>;
 	unblockVisitor: () => Promise<BlockVisitorResponse>;
@@ -92,6 +95,7 @@ type UseConversationActionsReturn = {
 		markUnread: boolean;
 		pauseAi: boolean;
 		resumeAi: boolean;
+		updateTitle: boolean;
 		joinEscalation: boolean;
 		blockVisitor: boolean;
 		unblockVisitor: boolean;
@@ -552,6 +556,36 @@ export function useConversationActions({
 		},
 	});
 
+	const updateTitleMutation = useMutation<
+		UpdateTitleResponse,
+		TRPCError,
+		UpdateTitleVariables,
+		MutationContext
+	>({
+		...trpc.conversation.updateTitle.mutationOptions(),
+		onMutate: async (variables) => {
+			const context = await prepareContext();
+			const now = new Date().toISOString();
+
+			applyOptimisticUpdate((existing) => ({
+				...existing,
+				title: variables.title,
+				titleSource: "user",
+				updatedAt: now,
+			}));
+
+			return context;
+		},
+		onError: (_error, _variables, context) => {
+			restoreContext(context);
+		},
+		onSuccess: (data) => {
+			applyOptimisticUpdate((existing) =>
+				mergeWithServerConversation(existing, data.conversation)
+			);
+		},
+	});
+
 	const joinEscalationMutation = useMutation<
 		ConversationMutationResponse,
 		TRPCError,
@@ -861,6 +895,16 @@ export function useConversationActions({
 		[conversationId, resumeAiMutation, website.slug]
 	);
 
+	const updateTitle = useCallback(
+		(title: string | null) =>
+			updateTitleMutation.mutateAsync({
+				conversationId,
+				websiteSlug: website.slug,
+				title,
+			}),
+		[conversationId, updateTitleMutation, website.slug]
+	);
+
 	const joinEscalation = useCallback(
 		() =>
 			joinEscalationMutation.mutateAsync({
@@ -899,6 +943,7 @@ export function useConversationActions({
 		markUnread,
 		pauseAi,
 		resumeAi,
+		updateTitle,
 		joinEscalation,
 		blockVisitor,
 		unblockVisitor,
@@ -913,6 +958,7 @@ export function useConversationActions({
 			markUnreadMutation.isPending ||
 			pauseAiMutation.isPending ||
 			resumeAiMutation.isPending ||
+			updateTitleMutation.isPending ||
 			joinEscalationMutation.isPending ||
 			blockVisitorMutation.isPending ||
 			unblockVisitorMutation.isPending,
@@ -927,6 +973,7 @@ export function useConversationActions({
 			markUnread: markUnreadMutation.isPending,
 			pauseAi: pauseAiMutation.isPending,
 			resumeAi: resumeAiMutation.isPending,
+			updateTitle: updateTitleMutation.isPending,
 			joinEscalation: joinEscalationMutation.isPending,
 			blockVisitor: blockVisitorMutation.isPending,
 			unblockVisitor: unblockVisitorMutation.isPending,

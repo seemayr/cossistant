@@ -12,6 +12,9 @@ let processor:
 
 const workerWaitUntilReadyMock = mock(async () => {});
 const workerCloseMock = mock(async () => {});
+const queueWaitUntilReadyMock = mock(async () => {});
+const queueCloseMock = mock(async () => {});
+let primaryJobState: "active" | "waiting" | "delayed" | null = null;
 
 class MockWorker<T> {
 	waitUntilReady = workerWaitUntilReadyMock;
@@ -25,6 +28,26 @@ class MockWorker<T> {
 	}
 
 	on(_event: string, _handler: (...args: unknown[]) => void) {}
+}
+
+class MockQueue<T> {
+	waitUntilReady = queueWaitUntilReadyMock;
+	close = queueCloseMock;
+	#queueName: string;
+
+	constructor(queueName: string) {
+		this.#queueName = queueName;
+	}
+
+	async getJob(_jobId: string) {
+		if (this.#queueName !== "ai-agent" || !primaryJobState) {
+			return null;
+		}
+
+		return {
+			getState: async () => primaryJobState,
+		};
+	}
 }
 
 const runBackgroundPipelineMock = mock(
@@ -61,7 +84,7 @@ const runBackgroundPipelineMock = mock(
 
 mock.module("bullmq", () => ({
 	Worker: MockWorker,
-	Queue: class MockQueue {},
+	Queue: MockQueue,
 }));
 
 mock.module("@api/ai-pipeline", () => ({
@@ -116,12 +139,17 @@ async function runJob(data: AiAgentBackgroundJobData) {
 describe("ai-agent background worker", () => {
 	beforeEach(() => {
 		processor = null;
+		primaryJobState = null;
 		workerWaitUntilReadyMock.mockReset();
 		workerCloseMock.mockReset();
+		queueWaitUntilReadyMock.mockReset();
+		queueCloseMock.mockReset();
 		runBackgroundPipelineMock.mockReset();
 
 		workerWaitUntilReadyMock.mockResolvedValue(undefined);
 		workerCloseMock.mockResolvedValue(undefined);
+		queueWaitUntilReadyMock.mockResolvedValue(undefined);
+		queueCloseMock.mockResolvedValue(undefined);
 		runBackgroundPipelineMock.mockResolvedValue({
 			status: "completed",
 			metrics: {
@@ -178,6 +206,24 @@ describe("ai-agent background worker", () => {
 		await worker.start();
 
 		await expect(runJob(buildJobData())).rejects.toThrow("pipeline failed");
+		await worker.stop();
+	});
+
+	it("skips the background pipeline while the primary conversation job is still busy", async () => {
+		const { createAiAgentBackgroundWorker } = await modulePromise;
+		const worker = createAiAgentBackgroundWorker({
+			connectionOptions: {} as never,
+			redisUrl: "redis://localhost:6379",
+		});
+		await worker.start();
+
+		for (const state of ["active", "waiting", "delayed"] as const) {
+			primaryJobState = state;
+			await runJob(buildJobData());
+		}
+
+		expect(runBackgroundPipelineMock).not.toHaveBeenCalled();
+
 		await worker.stop();
 	});
 });

@@ -70,6 +70,27 @@ visitor=${buildVisitorSummary(input)}
 humanCommand=${input.humanCommand?.trim() || "none"}`;
 }
 
+function buildAvailableViewsStage(input: GenerationRuntimeInput): string {
+	if (!(input.availableViews && input.availableViews.length > 0)) {
+		return "";
+	}
+
+	const entries = input.availableViews
+		.map(
+			(view) => `- id=${view.id}
+  name=${view.name}
+  description=${view.description?.trim() || "none"}
+  prompt=${view.prompt?.trim() || "none"}`
+		)
+		.join("\n");
+
+	return `## Available Views
+Use only these saved views when categorizing. Match by intent, not by exact wording.
+If none fit clearly, skip categorization.
+
+${entries}`;
+}
+
 function interpolateTemplate(
 	template: string,
 	values: Record<string, string>
@@ -159,6 +180,7 @@ export function buildGenerationSystemPrompt(params: {
 	const sections = [
 		...buildCorePromptStages(params.promptBundle),
 		buildContextFactsStage(params.input),
+		buildAvailableViewsStage(params.input),
 		buildContinuationStage(params.input),
 		buildToolStage({
 			toolset: params.toolset,

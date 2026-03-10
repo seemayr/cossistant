@@ -3,6 +3,8 @@ import type {
 	AiAgentToolId,
 } from "@cossistant/types";
 import {
+	CATEGORIZE_CONVERSATION_TELEMETRY,
+	createCategorizeConversationTool,
 	createSetPriorityTool,
 	createUpdateConversationTitleTool,
 	createUpdateSentimentTool,
@@ -94,6 +96,13 @@ export const SHARED_PIPELINE_TOOL_CATALOG: readonly PipelineToolDefinition[] = [
 		availability: { primary: false, background: true },
 		behaviorSettingKey: "canSetPriority",
 		telemetry: SET_PRIORITY_TELEMETRY,
+	},
+	{
+		id: "categorizeConversation",
+		factory: createCategorizeConversationTool,
+		availability: { primary: false, background: true },
+		behaviorSettingKey: "autoCategorize",
+		telemetry: CATEGORIZE_CONVERSATION_TELEMETRY,
 	},
 	{
 		id: "sendMessage",

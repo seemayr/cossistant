@@ -7,7 +7,7 @@ import {
 } from "./private/typing";
 import { useGroupedMessages } from "./private/use-grouped-messages";
 import { useConversationProcessing } from "./use-conversation-processing";
-import { useDebouncedConversationSeen } from "./use-conversation-seen";
+import { useConversationSeen } from "./use-conversation-seen";
 import { useConversationTyping } from "./use-conversation-typing";
 
 export type ConversationTimelineTypingParticipant = TimelineTypingParticipant;
@@ -20,11 +20,10 @@ export type UseConversationTimelineOptions = {
 
 export type UseConversationTimelineReturn = {
 	groupedMessages: ReturnType<typeof useGroupedMessages>;
-	seenData: ReturnType<typeof useDebouncedConversationSeen>;
+	seenData: ReturnType<typeof useConversationSeen>;
 	processing: ReturnType<typeof useConversationProcessing>;
 	typingEntries: ReturnType<typeof useConversationTyping>;
 	typingParticipants: ConversationTimelineTypingParticipant[];
-	lastVisitorMessageGroupIndex: number;
 };
 
 /**
@@ -36,7 +35,7 @@ export function useConversationTimeline({
 	items: timelineItems,
 	currentVisitorId,
 }: UseConversationTimelineOptions): UseConversationTimelineReturn {
-	const seenData = useDebouncedConversationSeen(conversationId);
+	const seenData = useConversationSeen(conversationId);
 	const processing = useConversationProcessing(conversationId);
 	const typingEntries = useConversationTyping(conversationId, {
 		excludeVisitorId: currentVisitorId ?? null,
@@ -47,23 +46,6 @@ export function useConversationTimeline({
 		seenData,
 		currentViewerId: currentVisitorId,
 	});
-
-	const lastVisitorMessageGroupIndex = useMemo(() => {
-		for (let index = groupedMessages.items.length - 1; index >= 0; index--) {
-			const item = groupedMessages.items[index];
-
-			if (!item || item.type !== "message_group") {
-				continue;
-			}
-
-			const firstMessage = item.items?.[0];
-			if (firstMessage?.visitorId === currentVisitorId) {
-				return index;
-			}
-		}
-
-		return -1;
-	}, [groupedMessages.items, currentVisitorId]);
 
 	const typingParticipants = useMemo(
 		() => mapTypingEntriesToParticipants(typingEntries),
@@ -76,6 +58,5 @@ export function useConversationTimeline({
 		processing,
 		typingEntries,
 		typingParticipants,
-		lastVisitorMessageGroupIndex,
 	};
 }

@@ -166,6 +166,9 @@ const createConversation = (params: {
 		websiteId: WEBSITE_ID,
 		channel: "widget",
 		title: params.title,
+		titleSource: null,
+		sentiment: null,
+		sentimentConfidence: null,
 		resolutionTime:
 			resolvedAt && params.lastTimelineItem
 				? Math.max(

@@ -14,9 +14,7 @@ import type { TimelineItem } from "@cossistant/types/api/timeline-item";
 import type { ConversationSeen } from "@cossistant/types/schemas";
 import { AnimatePresence } from "motion/react";
 import type { RefObject } from "react";
-import { memo, useEffect, useMemo, useRef } from "react";
-import { Avatar } from "@/components/ui/avatar";
-import { Logo } from "@/components/ui/logo";
+import { useEffect, useMemo, useRef } from "react";
 import type { ConversationHeader } from "@/contexts/inboxes";
 import { useVisitorPresenceById } from "@/contexts/visitor-presence";
 import { useWebsite } from "@/contexts/website";
@@ -25,13 +23,16 @@ import { useDashboardTypingSound } from "@/hooks/use-dashboard-typing-sound";
 import { useSoundPreferences } from "@/hooks/use-sound-preferences";
 import { resolveDashboardHumanAgentDisplay } from "@/lib/human-agent-display";
 import { extractEventPart } from "@/lib/timeline-events";
-import { shouldDisplayToolTimelineItem } from "@/lib/tool-timeline-visibility";
+import { isCustomerFacingToolTimelineItem } from "@/lib/tool-timeline-visibility";
 import { cn } from "@/lib/utils";
-import { getVisitorNameWithFallback } from "@/lib/visitors";
+import {
+	buildDashboardTimelineRenderItems,
+	buildPublicActivityGroupFromTool,
+} from "./dashboard-timeline-render-items";
+import { DeveloperLogGroup } from "./developer-log-group";
 import { ConversationEvent } from "./event";
 import { TimelineActivityGroup } from "./timeline-activity-group";
 import { TimelineMessageGroup } from "./timeline-message-group";
-import { ToolCall } from "./tool-call";
 import { TypingIndicator, type TypingParticipant } from "./typing-indicator";
 
 const EMPTY_TIMELINE_ITEMS: TimelineItem[] = [];
@@ -53,48 +54,6 @@ type ConversationTimelineListProps = {
 	/** Height of the input/escalation panel for dynamic bottom padding */
 	inputHeight?: number;
 };
-
-function StandaloneToolAvatar({
-	item,
-	teamMembers,
-	visitor,
-}: {
-	item: TimelineItem;
-	teamMembers: RouterOutputs["user"]["getWebsiteMembers"];
-	visitor: ConversationHeader["visitor"];
-}) {
-	if (item.userId) {
-		const member = teamMembers.find((m) => m.id === item.userId);
-		const memberDisplay = resolveDashboardHumanAgentDisplay({
-			id: member?.id ?? item.userId,
-			name: member?.name ?? null,
-		});
-
-		return (
-			<Avatar
-				className="size-6"
-				facehashSeed={memberDisplay.facehashSeed}
-				fallbackName={memberDisplay.displayName}
-				url={member?.image}
-			/>
-		);
-	}
-	if (item.aiAgentId) {
-		return (
-			<div className="flex size-6 shrink-0 items-center justify-center">
-				<Logo className="size-5 text-primary/90" />
-			</div>
-		);
-	}
-	const visitorName = getVisitorNameWithFallback(visitor);
-	return (
-		<Avatar
-			className="size-6"
-			fallbackName={visitorName}
-			url={visitor?.contact?.image}
-		/>
-	);
-}
 
 export function ConversationTimelineList({
 	ref,
@@ -122,34 +81,27 @@ export function ConversationTimelineList({
 		(state) => state.isDeveloperModeEnabled
 	);
 
-	// Filter out non-visible tool items BEFORE grouping so they don't break
-	// message groups. Without this, invisible internal tool calls (e.g. AI
-	// decision logs) interleaved between messages from the same sender cause
-	// the grouping algorithm to flush and split what should be a single group.
-	const visibleTimelineItems = useMemo(() => {
+	const groupedTimelineItems = useMemo(() => {
 		if (isDeveloperModeEnabled) {
 			return timelineItems;
 		}
 
 		return timelineItems.filter(
-			(item) =>
-				item.type !== "tool" ||
-				shouldDisplayToolTimelineItem(item, {
-					includeInternalLogs: false,
-				})
+			(item) => item.type !== "tool" || isCustomerFacingToolTimelineItem(item)
 		);
-	}, [timelineItems, isDeveloperModeEnabled]);
+	}, [isDeveloperModeEnabled, timelineItems]);
 
-	const {
-		items,
-		lastReadMessageMap,
-		getLastReadMessageId,
-		isMessageSeenByViewer,
-	} = useGroupedMessages({
-		items: visibleTimelineItems,
+	const { items: groupedItems, lastReadMessageMap } = useGroupedMessages({
+		items: groupedTimelineItems,
 		seenData,
 		currentViewerId: currentUserId,
 	});
+
+	const renderItems = useMemo(
+		() =>
+			buildDashboardTimelineRenderItems(groupedItems, isDeveloperModeEnabled),
+		[groupedItems, isDeveloperModeEnabled]
+	);
 
 	const typingEntries = useConversationTyping(conversationId, {
 		excludeUserId: currentUserId,
@@ -233,7 +185,7 @@ export function ConversationTimelineList({
 			<div className="mx-auto pr-4 pl-4 xl:max-w-xl 2xl:max-w-2xl">
 				<ConversationTimelineContainer className="flex min-h-full w-full flex-col gap-5">
 					<AnimatePresence initial={false} mode="popLayout">
-						{items.map((item, index) => {
+						{renderItems.map((item, index) => {
 							if (item.type === "day_separator") {
 								// Render day separator using the primitive
 								return (
@@ -254,6 +206,42 @@ export function ConversationTimelineList({
 											</>
 										)}
 									</DaySeparator>
+								);
+							}
+
+							if (item.type === "public_activity_group") {
+								const activityGroupKey =
+									item.firstItemId ||
+									item.items[0]?.id ||
+									`activity-group-${index}`;
+
+								return (
+									<TimelineActivityGroup
+										availableAIAgents={availableAIAgents}
+										currentUserId={currentUserId}
+										group={item}
+										key={activityGroupKey}
+										teamMembers={teamMembers}
+										visitor={visitor}
+									/>
+								);
+							}
+
+							if (item.type === "developer_log_group") {
+								const developerGroupKey =
+									item.firstItemId ||
+									item.items[0]?.id ||
+									`developer-log-group-${index}`;
+
+								return (
+									<DeveloperLogGroup
+										availableAIAgents={availableAIAgents}
+										currentUserId={currentUserId}
+										group={item}
+										key={developerGroupKey}
+										teamMembers={teamMembers}
+										visitor={visitor}
+									/>
 								);
 							}
 
@@ -278,50 +266,14 @@ export function ConversationTimelineList({
 								);
 							}
 
-							if (item.type === "timeline_tool") {
-								const timelineItem = item.item;
-								if (
-									!shouldDisplayToolTimelineItem(timelineItem, {
-										includeInternalLogs: isDeveloperModeEnabled,
-									})
-								) {
-									return null;
-								}
-								const key = timelineItem.id ?? `timeline-tool-${index}`;
-
-								return (
-									<div className="flex w-full flex-row gap-2" key={key}>
-										<div className="flex shrink-0 flex-col justify-start pt-0.5">
-											<StandaloneToolAvatar
-												item={timelineItem}
-												teamMembers={teamMembers}
-												visitor={visitor}
-											/>
-										</div>
-										<div className="min-w-0 flex-1">
-											<ToolCall
-												item={timelineItem}
-												mode={isDeveloperModeEnabled ? "developer" : "default"}
-												showIcon={false}
-											/>
-										</div>
-									</div>
-								);
-							}
-
-							if (item.type === "activity_group") {
-								const activityGroupKey =
-									item.firstItemId ||
-									item.items[0]?.id ||
-									`activity-group-${index}`;
-
+							if (item.type === "public_timeline_tool") {
+								const key = item.item.id ?? `timeline-tool-${index}`;
 								return (
 									<TimelineActivityGroup
 										availableAIAgents={availableAIAgents}
 										currentUserId={currentUserId}
-										group={item}
-										isDeveloperModeEnabled={isDeveloperModeEnabled}
-										key={activityGroupKey}
+										group={buildPublicActivityGroupFromTool(item.item)}
+										key={key}
 										teamMembers={teamMembers}
 										visitor={visitor}
 									/>

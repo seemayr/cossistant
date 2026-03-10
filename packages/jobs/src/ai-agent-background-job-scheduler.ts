@@ -2,7 +2,7 @@ import type { JobsOptions, Queue } from "bullmq";
 import type { AiAgentBackgroundJobData } from "./types";
 import { generateAiAgentBackgroundJobId } from "./types";
 
-export const AI_AGENT_BACKGROUND_DELAY_MS = 60_000;
+export const AI_AGENT_BACKGROUND_DELAY_MS = 30_000;
 
 export const AI_AGENT_BACKGROUND_JOB_OPTIONS: JobsOptions = {
 	delay: AI_AGENT_BACKGROUND_DELAY_MS,

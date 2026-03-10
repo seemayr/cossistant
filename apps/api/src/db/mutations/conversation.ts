@@ -193,6 +193,35 @@ export async function setConversationAiPausedUntil(
 	return updated ?? null;
 }
 
+export async function updateConversationTitle(
+	db: Database,
+	params: {
+		conversation: ConversationRecord;
+		title: string | null;
+		titleSource: "ai" | "user";
+	}
+) {
+	const updatedAt = new Date().toISOString();
+
+	const [updated] = await db
+		.update(conversation)
+		.set({
+			title: params.title,
+			titleSource: params.titleSource,
+			updatedAt,
+		})
+		.where(
+			and(
+				eq(conversation.id, params.conversation.id),
+				eq(conversation.organizationId, params.conversation.organizationId),
+				eq(conversation.websiteId, params.conversation.websiteId)
+			)
+		)
+		.returning();
+
+	return updated ?? null;
+}
+
 export async function markConversationAsSpam(
 	db: Database,
 	params: {

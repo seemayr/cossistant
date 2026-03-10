@@ -10,6 +10,7 @@ import {
 	TimelineItemGroup as PrimitiveTimelineItemGroup,
 	TimelineItemGroupAvatar,
 	TimelineItemGroupContent,
+	ToolActivityRow,
 } from "@cossistant/react/primitives";
 import { Avatar } from "@cossistant/react/support/components/avatar";
 import { ConversationEvent } from "@cossistant/react/support/components/conversation-event";
@@ -26,10 +27,6 @@ import type {
 	TimelinePartEvent,
 } from "@cossistant/types/api/timeline-item";
 import { useEffect, useMemo, useRef } from "react";
-import {
-	renderEventActionIcon,
-	renderToolActionIcon,
-} from "@/components/conversation/messages/activity/action-icon-map";
 import { shouldDisplayToolTimelineItem } from "@/lib/tool-timeline-visibility";
 import type { FakeSupportTypingActor } from "./types";
 
@@ -197,8 +194,7 @@ function FakeTimelineActivityGroup({
 	if (activityRows.length === 0) {
 		return null;
 	}
-
-	const showRowBullets = activityRows.length > 1;
+	const toolRowCount = activityRows.filter((row) => row.type === "tool").length;
 	const humanAgent = availableHumanAgents.find(
 		(agent) => agent.id === group.senderId
 	);
@@ -241,55 +237,27 @@ function FakeTimelineActivityGroup({
 					<TimelineItemGroupContent className="flex min-w-0 flex-1 flex-col gap-1">
 						<div className="flex w-full min-w-0 flex-col gap-1.5">
 							{activityRows.map((row) => (
-								<div
-									className={cn(
-										"flex w-full min-w-0 items-start",
-										showRowBullets ? "gap-2" : "gap-0"
+								<div className="w-full min-w-0" key={row.key}>
+									{row.type === "event" ? (
+										<ConversationEvent
+											availableAIAgents={availableAIAgents}
+											availableHumanAgents={availableHumanAgents}
+											className="w-full"
+											compact
+											createdAt={row.item.createdAt}
+											event={row.event}
+											showAvatar={false}
+										/>
+									) : (
+										<ToolActivityRow
+											showTerminalIndicator={toolRowCount > 1}
+											state={extractToolDetails(row.item).state}
+											text={row.summary}
+											timestamp={formatTimestamp(row.item.createdAt)}
+											timestampClassName="opacity-100"
+											tone="widget"
+										/>
 									)}
-									key={row.key}
-								>
-									{showRowBullets ? (
-										<span
-											className="mt-[0.3rem] shrink-0"
-											data-activity-bullet={row.type}
-										>
-											{row.type === "event"
-												? renderEventActionIcon(
-														row.event.eventType,
-														"size-3 text-co-muted-foreground"
-													)
-												: renderToolActionIcon(
-														row.toolName,
-														"size-3 text-co-muted-foreground"
-													)}
-										</span>
-									) : null}
-
-									<div
-										className={cn(
-											"min-w-0",
-											showRowBullets ? "flex-1" : "w-full"
-										)}
-									>
-										{row.type === "event" ? (
-											<ConversationEvent
-												availableAIAgents={availableAIAgents}
-												availableHumanAgents={availableHumanAgents}
-												className="w-full"
-												compact
-												createdAt={row.item.createdAt}
-												event={row.event}
-												showAvatar={false}
-											/>
-										) : (
-											<div className="flex min-h-5 items-center gap-2 text-co-muted-foreground text-xs">
-												<span className="break-words">{row.summary}</span>
-												<time className="text-[10px]">
-													{formatTimestamp(row.item.createdAt)}
-												</time>
-											</div>
-										)}
-									</div>
 								</div>
 							))}
 						</div>
@@ -299,9 +267,6 @@ function FakeTimelineActivityGroup({
 		</PrimitiveTimelineItemGroup>
 	);
 }
-
-const EMPTY_SEEN_BY_IDS: readonly string[] = Object.freeze([]);
-const EMPTY_SEEN_BY_NAMES: readonly string[] = Object.freeze([]);
 
 type FakeConversationTimelineListProps = {
 	conversationId: string;
@@ -324,7 +289,7 @@ export function FakeConversationTimelineList({
 }: FakeConversationTimelineListProps) {
 	const messageListRef = useRef<HTMLDivElement | null>(null);
 
-	const { items: groupedMessages } = useGroupedMessages({
+	const groupedMessages = useGroupedMessages({
 		items: timelineItems,
 		seenData: [],
 		currentViewerId: currentVisitorId,
@@ -364,7 +329,7 @@ export function FakeConversationTimelineList({
 			style={{ scrollbarGutter: "stable" }}
 		>
 			<ConversationTimelineContainer className="flex min-h-full w-full flex-col gap-5">
-				{groupedMessages.map((item, index) => {
+				{groupedMessages.items.map((item, index) => {
 					if (item.type === "timeline_event") {
 						const eventPart = extractEventPart(item.item);
 						if (!eventPart) {
@@ -407,9 +372,6 @@ export function FakeConversationTimelineList({
 						return null;
 					}
 
-					const seenByIds = EMPTY_SEEN_BY_IDS;
-					const seenByNames = EMPTY_SEEN_BY_NAMES;
-
 					const groupKey =
 						item.lastMessageId ??
 						item.items[0]?.id ??
@@ -422,8 +384,8 @@ export function FakeConversationTimelineList({
 							currentVisitorId={currentVisitorId}
 							items={item.items}
 							key={groupKey}
-							seenByIds={seenByIds}
-							seenByNames={seenByNames}
+							lastReadMessageIds={groupedMessages.lastReadMessageMap}
+							seenData={[]}
 						/>
 					);
 				})}

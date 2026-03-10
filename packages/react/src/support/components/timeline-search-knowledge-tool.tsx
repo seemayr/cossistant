@@ -91,6 +91,7 @@ function getKnowledgeSearchText(params: {
 
 export function SearchKnowledgeTimelineTool({
 	item,
+	showTerminalIndicator = true,
 }: ConversationTimelineToolProps) {
 	const toolPart = extractToolPart(item);
 	const rawState = toolPart?.state ?? "partial";
@@ -114,6 +115,7 @@ export function SearchKnowledgeTimelineTool({
 	return (
 		<WidgetToolActivityRow
 			detailLabels={sourceLabels}
+			showTerminalIndicator={showTerminalIndicator}
 			state={displayState}
 			text={text}
 		/>

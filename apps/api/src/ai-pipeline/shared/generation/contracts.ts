@@ -10,6 +10,7 @@ import type {
 	VisitorContext,
 } from "../../primary-pipeline/contracts";
 import type {
+	PipelineAvailableView,
 	PipelineToolLogger,
 	ToolTracePayloadMode,
 } from "../tools/contracts";
@@ -62,6 +63,7 @@ export type GenerationRuntimeInput = {
 	triggerSenderType?: "visitor" | "human_agent" | "ai_agent";
 	triggerVisibility?: "public" | "private";
 	allowPublicMessages: boolean;
+	availableViews?: PipelineAvailableView[];
 	stopTyping?: () => Promise<void>;
 	abortSignal?: AbortSignal;
 	debugLogger?: PipelineToolLogger;
@@ -75,6 +77,7 @@ export type GenerationRuntimeResult = {
 	action: CapturedFinalAction;
 	publicMessagesSent: number;
 	toolCallsByName: Record<string, number>;
+	mutationToolCallsByName?: Record<string, number>;
 	chargeableToolCallsByName?: Record<string, number>;
 	totalToolCalls: number;
 	usage?: {

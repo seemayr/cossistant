@@ -1,4 +1,5 @@
 import { generateVisitorName } from "@cossistant/core";
+import { getBehaviorSettings } from "../../settings";
 import type {
 	PipelineToolContext,
 	ToolRuntimeState,
@@ -111,6 +112,7 @@ export function createToolRuntimeState(): ToolRuntimeState {
 		finalAction: null,
 		publicMessagesSent: 0,
 		toolCallCounts: {},
+		mutationToolCallCounts: {},
 		successfulToolCallCounts: {},
 		failedToolCallCounts: {},
 		chargeableToolCallCounts: {},
@@ -129,6 +131,7 @@ export function buildToolContext(params: {
 	const visitorName =
 		input.visitorContext?.name?.trim() ||
 		generateVisitorName(input.conversation.visitorId);
+	const behaviorSettings = getBehaviorSettings(input.aiAgent);
 
 	return {
 		db: input.db,
@@ -149,6 +152,8 @@ export function buildToolContext(params: {
 		pipelineKind: input.pipelineKind,
 		mode: input.mode,
 		isEscalated: input.conversationState.isEscalated,
+		canCategorize: behaviorSettings.canCategorize,
+		availableViews: input.availableViews ?? [],
 		stopTyping: input.stopTyping,
 		runtimeState,
 		debugLogger: input.debugLogger,

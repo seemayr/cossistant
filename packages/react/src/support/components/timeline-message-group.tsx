@@ -1,18 +1,19 @@
 import type { AvailableAIAgent, AvailableHumanAgent } from "@cossistant/types";
 import { SenderType } from "@cossistant/types";
 import type { TimelineItem } from "@cossistant/types/api/timeline-item";
+import type { ConversationSeen } from "@cossistant/types/schemas";
 import type React from "react";
 import {
 	TimelineItemGroup as PrimitiveTimelineItemGroup,
 	TimelineItemGroupAvatar,
 	TimelineItemGroupContent,
 	TimelineItemGroupHeader,
-	TimelineItemGroupSeenIndicator,
 } from "../../primitives/timeline-item-group";
 import { useSupportText } from "../text";
 import { cn } from "../utils";
 import { resolveSupportHumanAgentDisplay } from "../utils/human-agent-display";
 import { Avatar } from "./avatar";
+import { ReadIndicator } from "./read-indicator";
 import { TimelineMessageItem } from "./timeline-message-item";
 
 export type TimelineMessageGroupProps = {
@@ -20,20 +21,17 @@ export type TimelineMessageGroupProps = {
 	availableAIAgents: AvailableAIAgent[];
 	availableHumanAgents: AvailableHumanAgent[];
 	currentVisitorId?: string;
-	seenByIds?: readonly string[];
-	seenByNames?: readonly string[];
+	lastReadMessageIds?: Map<string, string>;
+	seenData?: ConversationSeen[];
 };
-
-const EMPTY_SEEN_BY_IDS: readonly string[] = Object.freeze([]);
-const EMPTY_SEEN_BY_NAMES: readonly string[] = Object.freeze([]);
 
 export const TimelineMessageGroup: React.FC<TimelineMessageGroupProps> = ({
 	items,
 	availableAIAgents,
 	availableHumanAgents,
 	currentVisitorId,
-	seenByIds = EMPTY_SEEN_BY_IDS,
-	seenByNames = EMPTY_SEEN_BY_NAMES,
+	lastReadMessageIds,
+	seenData = [],
 }) => {
 	const text = useSupportText();
 	// Get agent info for the sender
@@ -53,94 +51,87 @@ export const TimelineMessageGroup: React.FC<TimelineMessageGroupProps> = ({
 		humanAgent,
 		text("common.fallbacks.supportTeam")
 	);
-	const hasSeenIndicator = seenByIds.length > 0;
+	const lastItem = items.at(-1);
 
 	return (
 		<PrimitiveTimelineItemGroup
 			items={items}
-			seenByIds={seenByIds}
+			lastReadItemIds={lastReadMessageIds}
 			viewerId={currentVisitorId}
 			viewerType={SenderType.VISITOR}
 		>
 			{({ isSentByViewer, isReceivedByViewer, isAI }) => (
-				<div
-					className={cn(
-						"flex w-full gap-2",
-						// Support widget POV: visitor messages are sent (right side)
-						// Agent messages are received (left side)
-						isSentByViewer && "flex-row-reverse",
-						isReceivedByViewer && "flex-row"
-					)}
-				>
-					{/* Avatar - only show for received messages (agents) */}
-					{isReceivedByViewer && (
-						<TimelineItemGroupAvatar className="flex flex-shrink-0 flex-col justify-end">
-							{isAI ? (
-								<Avatar
-									className="size-6"
-									image={aiAgent?.image}
-									isAI
-									name={aiAgent?.name || "AI Assistant"}
-									showBackground={!!aiAgent?.image}
-								/>
-							) : (
-								<Avatar
-									className="size-6"
-									facehashSeed={humanDisplay.facehashSeed}
-									image={humanAgent?.image}
-									name={humanDisplay.displayName}
-								/>
-							)}
-						</TimelineItemGroupAvatar>
-					)}
-
-					<TimelineItemGroupContent
+				<>
+					<div
 						className={cn(
-							"flex min-w-0 flex-1 flex-col gap-1",
-							isSentByViewer && "items-end"
+							"flex w-full gap-2",
+							// Support widget POV: visitor messages are sent (right side)
+							// Agent messages are received (left side)
+							isSentByViewer && "flex-row-reverse",
+							isReceivedByViewer && "flex-row"
 						)}
 					>
-						{/* Header - show sender name for received messages (agents) */}
+						{/* Avatar - only show for received messages (agents) */}
 						{isReceivedByViewer && (
-							<TimelineItemGroupHeader className="px-1 text-co-muted-foreground text-xs">
-								{isAI
-									? aiAgent?.name || "AI Assistant"
-									: humanDisplay.displayName}
-							</TimelineItemGroupHeader>
+							<TimelineItemGroupAvatar className="flex flex-shrink-0 flex-col justify-end">
+								{isAI ? (
+									<Avatar
+										className="size-6"
+										image={aiAgent?.image}
+										isAI
+										name={aiAgent?.name || "AI Assistant"}
+										showBackground={!!aiAgent?.image}
+									/>
+								) : (
+									<Avatar
+										className="size-6"
+										facehashSeed={humanDisplay.facehashSeed}
+										image={humanAgent?.image}
+										name={humanDisplay.displayName}
+									/>
+								)}
+							</TimelineItemGroupAvatar>
 						)}
 
-						{items.map((item, index) => (
-							<div className="co-animate-slide-up-fade w-full" key={item.id}>
-								<TimelineMessageItem
-									isLast={index === items.length - 1}
-									isSentByViewer={isSentByViewer}
-									item={item}
-								/>
-							</div>
-						))}
+						<TimelineItemGroupContent
+							className={cn(
+								"flex min-w-0 flex-1 flex-col gap-1",
+								isSentByViewer && "items-end"
+							)}
+						>
+							{/* Header - show sender name for received messages (agents) */}
+							{isReceivedByViewer && (
+								<TimelineItemGroupHeader className="px-1 text-co-muted-foreground text-xs">
+									{isAI
+										? aiAgent?.name || "AI Assistant"
+										: humanDisplay.displayName}
+								</TimelineItemGroupHeader>
+							)}
 
-						{isSentByViewer && (
-							<div className={cn("", hasSeenIndicator && "mt-2")}>
-								<div className="min-h-[1.25rem]">
-									{hasSeenIndicator && (
-										<div className="co-animate-fade-in">
-											<TimelineItemGroupSeenIndicator
-												className="px-1 text-co-muted-foreground text-xs"
-												seenByIds={seenByIds}
-											>
-												{() =>
-													seenByNames.length > 0
-														? `Seen by ${seenByNames.join(", ")}`
-														: "Seen"
-												}
-											</TimelineItemGroupSeenIndicator>
-										</div>
-									)}
+							{items.map((item, index) => (
+								<div className="co-animate-slide-up-fade w-full" key={item.id}>
+									<TimelineMessageItem
+										isLast={index === items.length - 1}
+										isSentByViewer={isSentByViewer}
+										item={item}
+									/>
 								</div>
-							</div>
-						)}
-					</TimelineItemGroupContent>
-				</div>
+							))}
+						</TimelineItemGroupContent>
+					</div>
+
+					{lastItem?.id ? (
+						<ReadIndicator
+							availableAIAgents={availableAIAgents}
+							availableHumanAgents={availableHumanAgents}
+							currentVisitorId={currentVisitorId}
+							firstMessage={firstItem}
+							lastReadMessageIds={lastReadMessageIds}
+							messageId={lastItem.id}
+							seenData={seenData}
+						/>
+					) : null}
+				</>
 			)}
 		</PrimitiveTimelineItemGroup>
 	);

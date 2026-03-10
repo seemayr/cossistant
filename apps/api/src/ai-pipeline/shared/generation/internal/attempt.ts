@@ -176,6 +176,9 @@ export async function runGenerationAttempt(params: {
 
 		const durationMs = Date.now() - startedAt;
 		const toolCallsByName = { ...params.runtimeState.toolCallCounts };
+		const mutationToolCallsByName = {
+			...params.runtimeState.mutationToolCallCounts,
+		};
 		const chargeableToolCallsByName = {
 			...params.runtimeState.chargeableToolCallCounts,
 		};
@@ -197,6 +200,7 @@ export async function runGenerationAttempt(params: {
 				failureCode: "runtime_error",
 				publicMessagesSent: params.runtimeState.publicMessagesSent,
 				toolCallsByName,
+				mutationToolCallsByName,
 				chargeableToolCallsByName,
 				totalToolCalls,
 				usage: toUsage(result.usage),
@@ -232,6 +236,7 @@ export async function runGenerationAttempt(params: {
 				failureCode: "missing_finish_action",
 				publicMessagesSent: params.runtimeState.publicMessagesSent,
 				toolCallsByName,
+				mutationToolCallsByName,
 				chargeableToolCallsByName,
 				totalToolCalls,
 				usage: toUsage(result.usage),
@@ -251,6 +256,7 @@ export async function runGenerationAttempt(params: {
 			action: params.runtimeState.finalAction,
 			publicMessagesSent: params.runtimeState.publicMessagesSent,
 			toolCallsByName,
+			mutationToolCallsByName,
 			chargeableToolCallsByName,
 			totalToolCalls,
 			usage: toUsage(result.usage),
@@ -258,6 +264,9 @@ export async function runGenerationAttempt(params: {
 	} catch (error) {
 		const durationMs = Date.now() - startedAt;
 		const toolCallsByName = { ...params.runtimeState.toolCallCounts };
+		const mutationToolCallsByName = {
+			...params.runtimeState.mutationToolCallCounts,
+		};
 		const chargeableToolCallsByName = {
 			...params.runtimeState.chargeableToolCallCounts,
 		};
@@ -306,6 +315,7 @@ export async function runGenerationAttempt(params: {
 					failureCode,
 					publicMessagesSent: params.runtimeState.publicMessagesSent,
 					toolCallsByName,
+					mutationToolCallsByName,
 					chargeableToolCallsByName,
 					totalToolCalls,
 				};
@@ -324,6 +334,7 @@ export async function runGenerationAttempt(params: {
 				failureCode,
 				publicMessagesSent: params.runtimeState.publicMessagesSent,
 				toolCallsByName,
+				mutationToolCallsByName,
 				chargeableToolCallsByName,
 				totalToolCalls,
 			};
@@ -347,6 +358,7 @@ export async function runGenerationAttempt(params: {
 			failureCode: "runtime_error",
 			publicMessagesSent: params.runtimeState.publicMessagesSent,
 			toolCallsByName,
+			mutationToolCallsByName,
 			chargeableToolCallsByName,
 			totalToolCalls,
 		};

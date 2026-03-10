@@ -89,7 +89,7 @@ function renderTimeline(options: {
 }
 
 describe("FakeSupportWidget timeline activity grouping", () => {
-	it("renders grouped activity bullets with action icons for visible AI tool rows", () => {
+	it("renders visible AI tool rows with the shared tool structure", () => {
 		const html = renderTimeline({
 			items: [
 				createToolItem(
@@ -100,19 +100,20 @@ describe("FakeSupportWidget timeline activity grouping", () => {
 				createToolItem(
 					"tool-2",
 					"2026-01-01T10:01:00.000Z",
-					"updateConversationTitle"
+					"searchKnowledgeBase"
 				),
 			],
 		});
 
-		expect(html).toContain('data-activity-bullet="tool"');
-		expect(html).toContain('data-tool-action-icon="searchKnowledgeBase"');
-		expect(html).toContain('data-tool-action-icon="updateConversationTitle"');
+		expect(html).toContain('data-tool-execution-indicator="arrow"');
+		expect(html).toContain(
+			"Checked the Cinematic preset troubleshooting runbook."
+		);
 		expect(html).not.toContain("flex-row-reverse");
 		expect(html).not.toContain("px-1 text-co-muted-foreground text-xs");
 	});
 
-	it("keeps single-row activity groups icon-free", () => {
+	it("keeps single-row activity groups on the same shared tool structure", () => {
 		const html = renderTimeline({
 			items: [
 				createToolItem(
@@ -123,33 +124,9 @@ describe("FakeSupportWidget timeline activity grouping", () => {
 			],
 		});
 
+		expect(html).not.toContain('data-tool-execution-indicator="arrow"');
+		expect(html).not.toContain('data-tool-execution-indicator-slot="true"');
 		expect(html).not.toContain("data-activity-bullet=");
-		expect(html).not.toContain("data-tool-action-icon=");
-		expect(html).not.toContain("data-event-action-icon=");
-	});
-
-	it("renders typing indicator for mixed AI and human typing actors", () => {
-		const html = renderTimeline({
-			items: [],
-			typingActors: [
-				{
-					conversationId: "conv-1",
-					actorId: "ai-1",
-					actorType: "ai",
-					preview: "Working on this...",
-				},
-				{
-					conversationId: "conv-1",
-					actorId: "human-1",
-					actorType: "team_member",
-					preview: "Happy to help.",
-				},
-			],
-		});
-
-		expect(html).toContain("dot-bounce-1");
-		const avatarMarkers = html.match(/data-facehash=/g) ?? [];
-		expect(avatarMarkers.length).toBe(2);
 	});
 
 	it("does not render typing indicator when actor matches current visitor", () => {

@@ -35,6 +35,7 @@ export function UpdateSentimentActivity({
 	timestamp,
 	showIcon = true,
 	showStateIndicator = false,
+	showTerminalIndicator = true,
 	icon,
 }: ToolActivityProps) {
 	const { state, output, summaryText } = toolCall;
@@ -45,6 +46,7 @@ export function UpdateSentimentActivity({
 				icon={icon}
 				showIcon={showIcon}
 				showStateIndicator={showStateIndicator}
+				showTerminalIndicator={showTerminalIndicator}
 				state="partial"
 				text="Analyzing sentiment..."
 				timestamp={timestamp}
@@ -58,6 +60,7 @@ export function UpdateSentimentActivity({
 				icon={icon}
 				showIcon={showIcon}
 				showStateIndicator={showStateIndicator}
+				showTerminalIndicator={showTerminalIndicator}
 				state="error"
 				text="Failed to update sentiment"
 				timestamp={timestamp}
@@ -87,6 +90,7 @@ export function UpdateSentimentActivity({
 			icon={icon}
 			showIcon={showIcon}
 			showStateIndicator={showStateIndicator}
+			showTerminalIndicator={showTerminalIndicator}
 			state="result"
 			text={resultText}
 			timestamp={timestamp}

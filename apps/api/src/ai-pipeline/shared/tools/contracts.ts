@@ -25,6 +25,8 @@ export type ToolRuntimeState = {
 	publicMessagesSent: number;
 	/** Total tool attempts (includes failed/throwing calls). */
 	toolCallCounts: Record<string, number>;
+	/** Successful tool calls that changed durable conversation state. */
+	mutationToolCallCounts: Record<string, number>;
 	/** Successful tool calls (result state). */
 	successfulToolCallCounts: Record<string, number>;
 	/** Failed tool calls (error state or thrown). */
@@ -75,6 +77,13 @@ export type ToolTelemetrySpec = {
 	sanitizeOutput?: (output: unknown) => unknown;
 };
 
+export type PipelineAvailableView = {
+	id: string;
+	name: string;
+	description: string | null;
+	prompt: string | null;
+};
+
 export type PipelineToolContext = {
 	db: import("@api/db").Database;
 	conversation: ConversationSelect;
@@ -94,6 +103,8 @@ export type PipelineToolContext = {
 	pipelineKind: PipelineKind;
 	mode: GenerationMode;
 	isEscalated: boolean;
+	canCategorize: boolean;
+	availableViews: PipelineAvailableView[];
 	stopTyping?: () => Promise<void>;
 	runtimeState: ToolRuntimeState;
 	debugLogger?: PipelineToolLogger;

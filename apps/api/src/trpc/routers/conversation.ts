@@ -13,6 +13,7 @@ import {
 	reopenConversation,
 	resolveConversation,
 	unarchiveConversation,
+	updateConversationTitle,
 } from "@api/db/mutations/conversation";
 import {
 	getConversationById,
@@ -78,6 +79,26 @@ async function emitConversationStatusUpdate(
 		status?: ConversationRecord["status"];
 		deletedAt?: string | null;
 		aiPausedUntil?: string | null;
+	}
+) {
+	await realtime.emit("conversationUpdated", {
+		websiteId: conversation.websiteId,
+		organizationId: conversation.organizationId,
+		visitorId: conversation.visitorId ?? null,
+		userId: null,
+		conversationId: conversation.id,
+		updates,
+		aiAgentId: null,
+	});
+}
+
+async function emitConversationMetadataUpdate(
+	conversation: ConversationRecord,
+	updates: {
+		title?: string | null;
+		viewIds?: string[];
+		sentiment?: ConversationRecord["sentiment"];
+		sentimentConfidence?: number | null;
 	}
 ) {
 	await realtime.emit("conversationUpdated", {
@@ -675,6 +696,42 @@ export const conversationRouter = createTRPCRouter({
 			const updatedConversation = await markConversationAsUnread(db, {
 				conversation,
 				actorUserId: user.id,
+			});
+
+			return { conversation: toConversationOutput(updatedConversation) };
+		}),
+
+	updateTitle: protectedProcedure
+		.input(
+			z.object({
+				conversationId: z.string(),
+				websiteSlug: z.string(),
+				title: z.string().nullable(),
+			})
+		)
+		.output(conversationMutationResponseSchema)
+		.mutation(async ({ ctx: { db, user }, input }) => {
+			const { conversation } = await loadConversationContext(
+				db,
+				user.id,
+				input
+			);
+			const normalizedTitle = input.title?.trim() || null;
+			const updatedConversation = await updateConversationTitle(db, {
+				conversation,
+				title: normalizedTitle,
+				titleSource: "user",
+			});
+
+			if (!updatedConversation) {
+				throw new TRPCError({
+					code: "INTERNAL_SERVER_ERROR",
+					message: "Unable to update conversation title",
+				});
+			}
+
+			await emitConversationMetadataUpdate(updatedConversation, {
+				title: updatedConversation.title,
 			});
 
 			return { conversation: toConversationOutput(updatedConversation) };

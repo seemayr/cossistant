@@ -80,6 +80,8 @@ function createContext(): PipelineToolContext {
 		pipelineKind: "primary",
 		mode: "respond_to_visitor",
 		isEscalated: false,
+		canCategorize: false,
+		availableViews: [],
 		runtimeState: {
 			finalAction: null,
 			publicMessagesSent: 0,
@@ -87,6 +89,7 @@ function createContext(): PipelineToolContext {
 			successfulToolCallCounts: {},
 			failedToolCallCounts: {},
 			chargeableToolCallCounts: {},
+			mutationToolCallCounts: {},
 			publicSendSequence: 0,
 			privateSendSequence: 0,
 			sentPublicMessageIds: new Set<string>(),

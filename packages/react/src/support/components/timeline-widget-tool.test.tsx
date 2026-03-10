@@ -100,4 +100,29 @@ describe("GenericWidgetToolTimelineTool", () => {
 		expect(html).toContain("-&gt;");
 		expect(html).not.toContain('data-co-spinner="true"');
 	});
+
+	it("omits the terminal arrow when single-tool rendering disables it", () => {
+		const html = renderToStaticMarkup(
+			<GenericWidgetToolTimelineTool
+				conversationId="conv-1"
+				item={createToolTimelineItem({
+					text: "Finished knowledge base search",
+					parts: [
+						{
+							type: "tool-searchKnowledgeBase",
+							toolCallId: "call-1",
+							toolName: "searchKnowledgeBase",
+							input: { query: "pricing" },
+							state: "result",
+						},
+					],
+				})}
+				showTerminalIndicator={false}
+			/>
+		);
+
+		expect(html).toContain('data-tool-display-state="result"');
+		expect(html).not.toContain('data-tool-execution-indicator="arrow"');
+		expect(html).not.toContain('data-tool-execution-indicator-slot="true"');
+	});
 });

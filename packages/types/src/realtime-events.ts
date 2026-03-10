@@ -152,6 +152,7 @@ export const realtimeSchema = {
 			resolutionTime: z.number().nullable().optional(),
 			deletedAt: z.string().nullable().optional(),
 			aiPausedUntil: z.string().nullable().optional(),
+			viewIds: z.array(z.string()).optional(),
 		}),
 		aiAgentId: z.string().nullable(),
 	}),

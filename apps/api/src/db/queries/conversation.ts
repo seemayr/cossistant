@@ -830,6 +830,29 @@ export async function getConversationById(
 	return _conversation;
 }
 
+export async function listConversationViewIds(
+	db: Database,
+	params: {
+		organizationId: string;
+		conversationId: string;
+	}
+) {
+	const viewRows = await db
+		.select({
+			viewId: conversationView.viewId,
+		})
+		.from(conversationView)
+		.where(
+			and(
+				eq(conversationView.organizationId, params.organizationId),
+				eq(conversationView.conversationId, params.conversationId),
+				isNull(conversationView.deletedAt)
+			)
+		);
+
+	return viewRows.map((view) => view.viewId);
+}
+
 export async function getConversationSeenData(
 	db: Database,
 	params: {

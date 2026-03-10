@@ -163,10 +163,12 @@ export function ToolCall({
 	item,
 	mode = "default",
 	showIcon = true,
+	showTerminalIndicator = true,
 }: {
 	item: TimelineItem;
 	mode?: ToolCallMode;
 	showIcon?: boolean;
+	showTerminalIndicator?: boolean;
 }) {
 	const strictPart = extractToolPart(item);
 	const toolCall = buildNormalizedToolCall(item, strictPart);
@@ -181,20 +183,7 @@ export function ToolCall({
 			: toolCall;
 	const timestamp = formatTimestamp(item.createdAt);
 	const icon = resolveToolActivityIcon(toolCall.toolName);
-	const showStateIndicator = mode === "default" && !showIcon;
-
 	if (mode === "developer") {
-		const CustomRenderer = TOOL_RENDERER_MAP[toolCall.toolName];
-		if (CustomRenderer) {
-			return (
-				<CustomRenderer
-					icon={icon}
-					showIcon={showIcon}
-					timestamp={timestamp}
-					toolCall={toolCall}
-				/>
-			);
-		}
 		return (
 			<DeveloperToolView
 				icon={icon}
@@ -205,12 +194,14 @@ export function ToolCall({
 		);
 	}
 
-	const Renderer = TOOL_RENDERER_MAP[toolCall.toolName] ?? FallbackToolActivity;
+	const Renderer =
+		TOOL_RENDERER_MAP[renderedToolCall.toolName] ?? FallbackToolActivity;
 	return (
 		<Renderer
 			icon={icon}
 			showIcon={showIcon}
-			showStateIndicator={showStateIndicator}
+			showStateIndicator={true}
+			showTerminalIndicator={showTerminalIndicator}
 			timestamp={timestamp}
 			toolCall={renderedToolCall}
 		/>

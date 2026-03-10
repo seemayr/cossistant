@@ -67,6 +67,19 @@ export {
 } from "./timeline-item-group";
 export { hasExpandedTimelineContent } from "./timeline-message-layout";
 export {
+	getTimelineLastReaderIds,
+	type ResolveTimelineReadReceiptParticipant,
+	resolveTimelineReadReceiptReaders,
+	type TimelineReadReceiptReaderMeta,
+	type TimelineResolvedReadReceipt,
+} from "./timeline-read-receipts";
+export {
+	ToolActivityRow,
+	type ToolActivityRowProps,
+	type ToolActivityRowState,
+	type ToolActivityRowTone,
+} from "./tool-activity-row";
+export {
 	SupportTrigger as Trigger,
 	type TriggerProps,
 	type TriggerRenderProps,

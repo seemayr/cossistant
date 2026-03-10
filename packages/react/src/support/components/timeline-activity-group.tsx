@@ -44,6 +44,7 @@ type ActivityRow =
 			ToolComponent: React.ComponentType<{
 				item: TimelineItem;
 				conversationId: string;
+				showTerminalIndicator?: boolean;
 			}>;
 	  };
 
@@ -121,6 +122,7 @@ export const TimelineActivityGroup: React.FC<TimelineActivityGroupProps> = ({
 	if (activityRows.length === 0) {
 		return null;
 	}
+	const toolRowCount = activityRows.filter((row) => row.type === "tool").length;
 
 	const humanAgent = availableHumanAgents.find(
 		(agent) => agent.id === group.senderId
@@ -184,6 +186,7 @@ export const TimelineActivityGroup: React.FC<TimelineActivityGroupProps> = ({
 										<ToolComponent
 											conversationId={conversationId}
 											item={row.item}
+											showTerminalIndicator={toolRowCount > 1}
 										/>
 									</div>
 								);

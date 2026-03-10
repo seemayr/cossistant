@@ -23,14 +23,16 @@ type UpdatePriorityParams = {
 	websiteId: string;
 	aiAgentId: string;
 	newPriority: "low" | "normal" | "high" | "urgent";
+	emitTimelineEvent?: boolean;
 };
 
 /**
  * Update conversation priority
  */
-export async function updatePriority(
-	params: UpdatePriorityParams
-): Promise<void> {
+export async function updatePriority(params: UpdatePriorityParams): Promise<{
+	changed: boolean;
+	reason?: "unchanged";
+}> {
 	const {
 		db,
 		conversation: conv,
@@ -38,11 +40,15 @@ export async function updatePriority(
 		websiteId,
 		aiAgentId,
 		newPriority,
+		emitTimelineEvent = true,
 	} = params;
 
 	// Skip if already at desired priority
 	if (conv.priority === newPriority) {
-		return;
+		return {
+			changed: false,
+			reason: "unchanged",
+		};
 	}
 
 	const now = new Date();
@@ -58,28 +64,32 @@ export async function updatePriority(
 		.returning();
 
 	if (!updatedConversation) {
-		return;
+		return {
+			changed: false,
+		};
 	}
 
-	await createConversationEvent({
-		db,
-		context: {
-			conversationId: conv.id,
-			organizationId,
-			websiteId,
-			visitorId: conv.visitorId,
-		},
-		event: {
-			type: ConversationEventType.PRIORITY_CHANGED,
-			actorAiAgentId: aiAgentId,
-			metadata: {
-				previousPriority: conv.priority,
-				newPriority,
+	if (emitTimelineEvent) {
+		await createConversationEvent({
+			db,
+			context: {
+				conversationId: conv.id,
+				organizationId,
+				websiteId,
+				visitorId: conv.visitorId,
 			},
-			createdAt: now,
-			visibility: TimelineItemVisibility.PRIVATE,
-		},
-	});
+			event: {
+				type: ConversationEventType.PRIORITY_CHANGED,
+				actorAiAgentId: aiAgentId,
+				metadata: {
+					previousPriority: conv.priority,
+					newPriority,
+				},
+				createdAt: now,
+				visibility: TimelineItemVisibility.PRIVATE,
+			},
+		});
+	}
 
 	await realtime.emit("conversationUpdated", {
 		websiteId,
@@ -92,4 +102,8 @@ export async function updatePriority(
 		},
 		aiAgentId,
 	});
+
+	return {
+		changed: true,
+	};
 }

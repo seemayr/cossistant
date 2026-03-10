@@ -48,7 +48,8 @@ function hasBackgroundAnalysisEnabled(
 	return (
 		settings.autoGenerateTitle ||
 		settings.autoAnalyzeSentiment ||
-		settings.canSetPriority
+		settings.canSetPriority ||
+		(settings.autoCategorize && settings.canCategorize)
 	);
 }
 

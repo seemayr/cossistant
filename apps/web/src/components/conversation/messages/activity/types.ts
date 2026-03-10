@@ -22,6 +22,7 @@ export type ToolActivityProps = {
 	timestamp: string;
 	showIcon?: boolean;
 	showStateIndicator?: boolean;
+	showTerminalIndicator?: boolean;
 	icon?: ActivityIcon;
 };
 

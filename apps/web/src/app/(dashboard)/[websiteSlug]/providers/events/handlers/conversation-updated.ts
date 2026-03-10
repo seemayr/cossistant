@@ -101,6 +101,18 @@ function createHeaderUpdaterFromUpdates(
 			updatedHeader.priority = updates.priority;
 		}
 
+		if (updates.viewIds !== undefined) {
+			updatedHeader.viewIds = updates.viewIds;
+		}
+
+		if (updates.sentiment !== undefined) {
+			updatedHeader.sentiment = updates.sentiment;
+		}
+
+		if (updates.sentimentConfidence !== undefined) {
+			updatedHeader.sentimentConfidence = updates.sentimentConfidence;
+		}
+
 		if (updates.resolvedAt !== undefined) {
 			updatedHeader.resolvedAt = updates.resolvedAt;
 		}

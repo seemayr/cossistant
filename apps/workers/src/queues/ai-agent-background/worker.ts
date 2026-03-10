@@ -1,9 +1,14 @@
 import { runBackgroundPipeline } from "@api/ai-pipeline";
-import { type AiAgentBackgroundJobData, QUEUE_NAMES } from "@cossistant/jobs";
+import {
+	type AiAgentBackgroundJobData,
+	type AiAgentJobData,
+	generateAiAgentJobId,
+	QUEUE_NAMES,
+} from "@cossistant/jobs";
 import { getSafeRedisUrl, type RedisOptions } from "@cossistant/redis";
 import { db } from "@workers/db";
 import { env } from "@workers/env";
-import { type Job, Worker } from "bullmq";
+import { type Job, Queue, Worker } from "bullmq";
 
 type WorkerConfig = {
 	connectionOptions: RedisOptions;
@@ -17,15 +22,41 @@ export function createAiAgentBackgroundWorker({
 	const queueName = QUEUE_NAMES.AI_AGENT_BACKGROUND;
 	const safeRedisUrl = getSafeRedisUrl(redisUrl);
 	let worker: Worker<AiAgentBackgroundJobData> | null = null;
+	let primaryQueue: Queue<AiAgentJobData> | null = null;
 
 	const buildConnectionOptions = (): RedisOptions => ({
 		...connectionOptions,
 		tls: connectionOptions.tls ? { ...connectionOptions.tls } : undefined,
 	});
 
+	async function isPrimaryPipelineBusy(
+		conversationId: string
+	): Promise<boolean> {
+		if (!primaryQueue) {
+			return false;
+		}
+
+		const primaryJob = await primaryQueue.getJob(
+			generateAiAgentJobId(conversationId)
+		);
+		if (!primaryJob) {
+			return false;
+		}
+
+		const state = await primaryJob.getState();
+		return state === "active" || state === "waiting" || state === "delayed";
+	}
+
 	async function processBackgroundJob(
 		job: Job<AiAgentBackgroundJobData>
 	): Promise<void> {
+		if (await isPrimaryPipelineBusy(job.data.conversationId)) {
+			console.log(
+				`[worker:ai-agent-background] Skipping ${job.id ?? "unknown-job"}: primary_pipeline_busy`
+			);
+			return;
+		}
+
 		const result = await runBackgroundPipeline({
 			db,
 			input: {
@@ -49,6 +80,12 @@ export function createAiAgentBackgroundWorker({
 			console.log(
 				`[worker:ai-agent-background] Using queue=${queueName} redis=${safeRedisUrl}`
 			);
+
+			primaryQueue = new Queue<AiAgentJobData>(QUEUE_NAMES.AI_AGENT, {
+				connection: buildConnectionOptions(),
+			});
+
+			await primaryQueue.waitUntilReady();
 
 			worker = new Worker<AiAgentBackgroundJobData>(
 				queueName,
@@ -76,12 +113,23 @@ export function createAiAgentBackgroundWorker({
 			);
 		},
 		stop: async () => {
-			if (!worker) {
-				return;
-			}
-			await worker.close();
-			worker = null;
-			console.log("[worker:ai-agent-background] Worker stopped");
+			await Promise.all([
+				(async () => {
+					if (!worker) {
+						return;
+					}
+					await worker.close();
+					worker = null;
+					console.log("[worker:ai-agent-background] Worker stopped");
+				})(),
+				(async () => {
+					if (!primaryQueue) {
+						return;
+					}
+					await primaryQueue.close();
+					primaryQueue = null;
+				})(),
+			]);
 		},
 	};
 }

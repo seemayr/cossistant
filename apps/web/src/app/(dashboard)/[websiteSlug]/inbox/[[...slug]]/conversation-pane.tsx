@@ -251,12 +251,18 @@ export function ConversationPane({
 		[navigateAwayIfNeeded, conversationId]
 	);
 
-	const { markRead, joinEscalation, pauseAi, resumeAi, pendingAction } =
-		useConversationActions({
-			conversationId,
-			visitorId,
-			onNavigateAway: handleNavigateAway,
-		});
+	const {
+		markRead,
+		joinEscalation,
+		pauseAi,
+		resumeAi,
+		updateTitle,
+		pendingAction,
+	} = useConversationActions({
+		conversationId,
+		visitorId,
+		onNavigateAway: handleNavigateAway,
+	});
 
 	const handleAiPauseAction = useCallback(
 		(action: AiPauseAction) => {
@@ -495,6 +501,9 @@ export function ConversationPane({
 			status: selectedConversation?.status,
 			deletedAt: selectedConversation?.deletedAt ?? null,
 			visitorIsBlocked: selectedConversation?.visitor.isBlocked ?? null,
+			title: selectedConversation?.title ?? null,
+			titleSource: selectedConversation?.titleSource ?? null,
+			onUpdateTitle: updateTitle,
 		},
 		timeline: {
 			availableAIAgents,

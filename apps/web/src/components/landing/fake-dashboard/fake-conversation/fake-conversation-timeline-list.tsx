@@ -11,17 +11,21 @@ import type {
 } from "@cossistant/types/api/timeline-item";
 import { AnimatePresence } from "motion/react";
 import { useEffect, useMemo, useRef } from "react";
+import {
+	buildDashboardTimelineRenderItems,
+	buildPublicActivityGroupFromTool,
+} from "@/components/conversation/messages/dashboard-timeline-render-items";
+import { DeveloperLogGroup } from "@/components/conversation/messages/developer-log-group";
 import { ConversationEvent } from "@/components/conversation/messages/event";
 import { TimelineActivityGroup } from "@/components/conversation/messages/timeline-activity-group";
 import { TimelineMessageGroup } from "@/components/conversation/messages/timeline-message-group";
-import { ToolCall } from "@/components/conversation/messages/tool-call";
 import {
 	TypingIndicator,
 	type TypingParticipant,
 } from "@/components/conversation/messages/typing-indicator";
 import type { ConversationHeader } from "@/contexts/inboxes";
 import type { ConversationTimelineItem } from "@/data/conversation-message-cache";
-import { shouldDisplayToolTimelineItem } from "@/lib/tool-timeline-visibility";
+import { isCustomerFacingToolTimelineItem } from "@/lib/tool-timeline-visibility";
 import { cn } from "@/lib/utils";
 import { type FakeTypingActor, fakeAIAgent } from "../data";
 
@@ -79,11 +83,24 @@ export function FakeConversationTimelineList({
 }: FakeConversationTimelineListProps) {
 	const messageListRef = useRef<HTMLDivElement | null>(null);
 
-	const { items } = useGroupedMessages({
-		items: timelineItems as unknown as TimelineItem[],
+	const visibleTimelineItems = useMemo(
+		() =>
+			(timelineItems as unknown as TimelineItem[]).filter(
+				(item) => item.type !== "tool" || isCustomerFacingToolTimelineItem(item)
+			),
+		[timelineItems]
+	);
+
+	const { items: groupedItems } = useGroupedMessages({
+		items: visibleTimelineItems,
 		seenData: [],
 		currentViewerId: ANTHONY_RIERA_ID,
 	});
+
+	const renderItems = useMemo(
+		() => buildDashboardTimelineRenderItems(groupedItems, false),
+		[groupedItems]
+	);
 
 	const activeTypingEntities = useMemo<TypingParticipant[]>(
 		() =>
@@ -134,7 +151,39 @@ export function FakeConversationTimelineList({
 			<div className="mx-auto pr-4 pl-6 xl:max-w-xl 2xl:max-w-2xl">
 				<ConversationTimelineContainer className="flex min-h-full w-full flex-col gap-5">
 					<AnimatePresence initial={false} mode="popLayout">
-						{items.map((item, index) => {
+						{renderItems.map((item, index) => {
+							if (item.type === "public_activity_group") {
+								const key =
+									item.firstItemId || item.items[0]?.id || `activity-${index}`;
+
+								return (
+									<TimelineActivityGroup
+										availableAIAgents={fakeAvailableAIAgents}
+										currentUserId={ANTHONY_RIERA_ID}
+										group={item}
+										key={key}
+										teamMembers={fakeTeamMembers}
+										visitor={visitor}
+									/>
+								);
+							}
+
+							if (item.type === "developer_log_group") {
+								const key =
+									item.firstItemId || item.items[0]?.id || `dev-log-${index}`;
+
+								return (
+									<DeveloperLogGroup
+										availableAIAgents={fakeAvailableAIAgents}
+										currentUserId={ANTHONY_RIERA_ID}
+										group={item}
+										key={key}
+										teamMembers={fakeTeamMembers}
+										visitor={visitor}
+									/>
+								);
+							}
+
 							if (item.type === "timeline_event") {
 								const eventPart = extractEventPart(item.item);
 								if (!eventPart) {
@@ -153,25 +202,13 @@ export function FakeConversationTimelineList({
 								);
 							}
 
-							if (item.type === "timeline_tool") {
-								const timelineItem = item.item;
-								if (!shouldDisplayToolTimelineItem(timelineItem)) {
-									return null;
-								}
-								const key = timelineItem.id ?? `timeline-tool-${index}`;
-								return <ToolCall item={timelineItem} key={key} />;
-							}
-
-							if (item.type === "activity_group") {
-								const key =
-									item.firstItemId || item.items[0]?.id || `activity-${index}`;
-
+							if (item.type === "public_timeline_tool") {
+								const key = item.item.id ?? `timeline-tool-${index}`;
 								return (
 									<TimelineActivityGroup
 										availableAIAgents={fakeAvailableAIAgents}
 										currentUserId={ANTHONY_RIERA_ID}
-										group={item}
-										isDeveloperModeEnabled={false}
+										group={buildPublicActivityGroupFromTool(item.item)}
 										key={key}
 										teamMembers={fakeTeamMembers}
 										visitor={visitor}

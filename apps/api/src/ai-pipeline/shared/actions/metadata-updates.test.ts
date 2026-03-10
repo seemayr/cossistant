@@ -82,6 +82,33 @@ describe("metadata update actions", () => {
 		expect(realtimeEmitMock).not.toHaveBeenCalled();
 	});
 
+	it("does not let AI overwrite a manually owned title", async () => {
+		const [{ updateTitle }] = await modulePromise;
+		const { db, updateMock } = createDbMock();
+
+		const result = await updateTitle({
+			db: db as never,
+			conversation: {
+				id: "conv-1",
+				visitorId: "visitor-1",
+				title: "Manual title",
+				titleSource: "user",
+			} as never,
+			organizationId: "org-1",
+			websiteId: "site-1",
+			aiAgentId: "ai-1",
+			title: "AI title",
+		});
+
+		expect(result).toEqual({
+			changed: false,
+			reason: "manual_title",
+		});
+		expect(updateMock).not.toHaveBeenCalled();
+		expect(createTimelineItemMock).not.toHaveBeenCalled();
+		expect(realtimeEmitMock).not.toHaveBeenCalled();
+	});
+
 	it("does not rewrite the priority when it already matches", async () => {
 		const [, { updatePriority }] = await modulePromise;
 		const { db, updateMock } = createDbMock();

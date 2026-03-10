@@ -165,6 +165,7 @@ export function AiCreditUsageActivity({
 	timestamp,
 	showIcon = true,
 	showStateIndicator = false,
+	showTerminalIndicator = true,
 }: ToolActivityProps) {
 	const [expanded, setExpanded] = useState(false);
 	const { state, output } = toolCall;
@@ -175,6 +176,7 @@ export function AiCreditUsageActivity({
 				icon={{ type: "custom", content: <CreditIcon /> }}
 				showIcon={showIcon}
 				showStateIndicator={showStateIndicator}
+				showTerminalIndicator={showTerminalIndicator}
 				state="partial"
 				text="Calculating credits..."
 				timestamp={timestamp}
@@ -190,6 +192,7 @@ export function AiCreditUsageActivity({
 				icon={{ type: "custom", content: <CreditIcon /> }}
 				showIcon={showIcon}
 				showStateIndicator={showStateIndicator}
+				showTerminalIndicator={showTerminalIndicator}
 				state={state}
 				text={toolCall.summaryText}
 				timestamp={timestamp}
@@ -203,6 +206,7 @@ export function AiCreditUsageActivity({
 				icon={{ type: "custom", content: <CreditIcon /> }}
 				showIcon={showIcon}
 				showStateIndicator={showStateIndicator}
+				showTerminalIndicator={showTerminalIndicator}
 				state="error"
 				text={
 					<span className="text-destructive/80">
@@ -247,6 +251,7 @@ export function AiCreditUsageActivity({
 			icon={{ type: "custom", content: <CreditIcon /> }}
 			showIcon={showIcon}
 			showStateIndicator={showStateIndicator}
+			showTerminalIndicator={showTerminalIndicator}
 			state="result"
 			text={summaryText}
 			timestamp={timestamp}

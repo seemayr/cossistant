@@ -2,6 +2,8 @@ import { describe, expect, it } from "bun:test";
 import type { TimelineItem } from "@cossistant/types/api/timeline-item";
 import {
 	getToolTimelineLogType,
+	isCustomerFacingToolTimelineItem,
+	isInternalToolTimelineItem,
 	shouldDisplayToolTimelineItem,
 } from "./tool-timeline-visibility";
 
@@ -88,6 +90,95 @@ describe("tool timeline visibility", () => {
 
 		expect(getToolTimelineLogType(hiddenItem)).toBe("log");
 		expect(shouldDisplayToolTimelineItem(hiddenItem)).toBe(false);
+	});
+
+	it("classifies public and internal tool rows explicitly", () => {
+		const publicItem = createToolItem(
+			{ tool: "searchKnowledgeBase" },
+			{
+				type: "tool-searchKnowledgeBase",
+				toolName: "searchKnowledgeBase",
+			}
+		);
+		const logItem = createToolItem();
+		const creditItem = createToolItem(
+			{ tool: "aiCreditUsage", text: "Credits calculated" },
+			{
+				type: "tool-aiCreditUsage",
+				toolName: "aiCreditUsage",
+			}
+		);
+		const decisionItem = createToolItem(
+			{ tool: "aiDecision", text: "Decision log" },
+			{
+				type: "tool-aiDecision",
+				toolName: "aiDecision",
+			}
+		);
+		const titleItem = createToolItem(
+			{ tool: "updateConversationTitle", text: 'Changed title to "Billing"' },
+			{
+				type: "tool-updateConversationTitle",
+				toolName: "updateConversationTitle",
+			}
+		);
+		const sentimentItem = createToolItem(
+			{ tool: "updateSentiment", text: "Updated sentiment to positive" },
+			{
+				type: "tool-updateSentiment",
+				toolName: "updateSentiment",
+			}
+		);
+		const priorityItem = createToolItem(
+			{ tool: "setPriority", text: "Priority set to high" },
+			{
+				type: "tool-setPriority",
+				toolName: "setPriority",
+			}
+		);
+
+		expect(isCustomerFacingToolTimelineItem(publicItem)).toBe(true);
+		expect(isInternalToolTimelineItem(publicItem)).toBe(false);
+
+		expect(isCustomerFacingToolTimelineItem(titleItem)).toBe(true);
+		expect(isInternalToolTimelineItem(titleItem)).toBe(false);
+
+		expect(isCustomerFacingToolTimelineItem(sentimentItem)).toBe(true);
+		expect(isInternalToolTimelineItem(sentimentItem)).toBe(false);
+
+		expect(isCustomerFacingToolTimelineItem(priorityItem)).toBe(true);
+		expect(isInternalToolTimelineItem(priorityItem)).toBe(false);
+
+		expect(isCustomerFacingToolTimelineItem(logItem)).toBe(false);
+		expect(isInternalToolTimelineItem(logItem)).toBe(true);
+
+		expect(isCustomerFacingToolTimelineItem(creditItem)).toBe(false);
+		expect(isInternalToolTimelineItem(creditItem)).toBe(true);
+
+		expect(isCustomerFacingToolTimelineItem(decisionItem)).toBe(false);
+		expect(isInternalToolTimelineItem(decisionItem)).toBe(true);
+	});
+
+	it("keeps telemetry-only tool summaries hidden from normal mode", () => {
+		const messageSentItem = createToolItem(
+			{ tool: "sendMessage", text: "Message sent" },
+			{
+				type: "tool-sendMessage",
+				toolName: "sendMessage",
+				state: "result",
+			}
+		);
+		const responseCapturedItem = createToolItem(
+			{ tool: "respond", text: "Response action captured" },
+			{
+				type: "tool-respond",
+				toolName: "respond",
+				state: "result",
+			}
+		);
+
+		expect(shouldDisplayToolTimelineItem(messageSentItem)).toBe(false);
+		expect(shouldDisplayToolTimelineItem(responseCapturedItem)).toBe(false);
 	});
 
 	it("shows all tool timeline rows when internal logs are enabled", () => {

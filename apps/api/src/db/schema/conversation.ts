@@ -57,6 +57,11 @@ export const conversationSentimentEnum = pgEnum(
 	enumToPgEnum(ConversationSentiment)
 );
 
+export const conversationTitleSourceEnum = pgEnum("conversation_title_source", [
+	"ai",
+	"user",
+]);
+
 export const itemVisibilityEnum = pgEnum(
 	"item_visibility",
 	enumToPgEnum(TimelineItemVisibility)
@@ -160,6 +165,7 @@ export const conversation = pgTable(
 		sentimentConfidence: real("sentiment_confidence"),
 		channel: text("channel").notNull().default("widget"),
 		title: text("title"),
+		titleSource: conversationTitleSourceEnum("title_source"),
 		resolutionTime: integer("resolution_time"), // in seconds
 		visitorRating: integer("visitor_rating"), // 1-5 scale
 		visitorRatingAt: timestamp("visitor_rating_at"),

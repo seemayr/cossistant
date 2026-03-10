@@ -4,6 +4,7 @@ import type React from "react";
 export type ConversationTimelineToolProps = {
 	item: TimelineItem;
 	conversationId: string;
+	showTerminalIndicator?: boolean;
 };
 
 export type ConversationTimelineToolDefinition = {

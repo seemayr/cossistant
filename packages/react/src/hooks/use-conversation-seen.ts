@@ -27,6 +27,17 @@ export function useConversationSeen(
 	const { initialData } = options;
 	const { client } = useSupport();
 	const hydratedKeyRef = useRef<string | null>(null);
+	const hasInitialData = Object.hasOwn(options, "initialData");
+	const hydrationSignature = useMemo(() => {
+		if (!(conversationId && hasInitialData)) {
+			return null;
+		}
+
+		const entries = initialData ?? [];
+		return `${conversationId}:${entries
+			.map((entry) => `${entry.id}:${entry.lastSeenAt}`)
+			.join("|")}`;
+	}, [conversationId, hasInitialData, initialData]);
 
 	useEffect(() => {
 		if (!conversationId) {
@@ -34,19 +45,19 @@ export function useConversationSeen(
 			return;
 		}
 
-		if (!initialData || initialData.length === 0) {
+		if (!hasInitialData) {
 			return;
 		}
 
-		const hydrationKey = conversationId;
+		const hydrationKey = hydrationSignature ?? conversationId;
 
 		if (hydratedKeyRef.current === hydrationKey) {
 			return;
 		}
 
-		client?.seenStore.hydrate(conversationId, initialData);
+		client?.seenStore.hydrate(conversationId, initialData ?? []);
 		hydratedKeyRef.current = hydrationKey;
-	}, [conversationId, client]);
+	}, [conversationId, client, hasInitialData, hydrationSignature, initialData]);
 
 	const conversationSeen = useStoreSelector(
 		client?.seenStore ?? null,

@@ -139,7 +139,6 @@ const VISITOR = {
 
 function renderActivityGroup(
 	group: GroupedActivity,
-	isDeveloperModeEnabled = false,
 	teamMembers: RouterOutputs["user"]["getWebsiteMembers"] = TEAM_MEMBERS
 ): string {
 	return renderToStaticMarkup(
@@ -149,7 +148,6 @@ function renderActivityGroup(
 			teamMembers,
 			currentUserId: "user-1",
 			visitor: VISITOR,
-			isDeveloperModeEnabled,
 		})
 	);
 }
@@ -192,13 +190,13 @@ describe("TimelineActivityGroup", () => {
 			},
 		] as unknown as RouterOutputs["user"]["getWebsiteMembers"];
 
-		const html = renderActivityGroup(group, false, namelessMembers);
+		const html = renderActivityGroup(group, namelessMembers);
 
 		expect(html).toContain("Team member");
 		expect(html).not.toContain("nameless@example.com");
 	});
 
-	it("renders tree prefixes for multi-row activity groups in normal mode", () => {
+	it("renders flat stacked activity rows in normal mode", () => {
 		const group = createActivityGroup([
 			createEventItem({
 				id: "event-1",
@@ -214,16 +212,12 @@ describe("TimelineActivityGroup", () => {
 
 		const html = renderActivityGroup(group);
 
-		expect(html).toContain('data-activity-tree-prefix="event"');
-		expect(countOccurrences(html, 'data-activity-tree-prefix="event"')).toBe(2);
-		expect(
-			countOccurrences(html, 'data-activity-tree-continuation="true"')
-		).toBe(1);
 		expect(html).toContain("Anthony Riera");
+		expect(html).not.toContain("data-activity-tree-prefix=");
 		expect(html).not.toContain("data-activity-bullet=");
 	});
 
-	it("renders tree continuation markers only for non-last tree rows", () => {
+	it("does not render tree continuation markers anymore", () => {
 		const group = createActivityGroup([
 			createEventItem({
 				id: "event-1",
@@ -243,10 +237,10 @@ describe("TimelineActivityGroup", () => {
 
 		const html = renderActivityGroup(group);
 
-		expect(countOccurrences(html, "data-activity-tree-prefix=")).toBe(3);
+		expect(countOccurrences(html, "data-activity-tree-prefix=")).toBe(0);
 		expect(
 			countOccurrences(html, 'data-activity-tree-continuation="true"')
-		).toBe(2);
+		).toBe(0);
 	});
 
 	it("renders tool groups as flat sender-labeled stacks in normal mode", () => {
@@ -282,7 +276,6 @@ describe("TimelineActivityGroup", () => {
 		expect(html).toContain("Anthony Riera");
 		expect(html).toContain('data-source-pill="true"');
 		expect(html).toContain('data-source-overflow="2"');
-		expect(html).toContain('data-tool-execution-indicator-slot="true"');
 		expect(html).toContain('data-tool-execution-indicator="arrow"');
 		expect(html).toContain("Searched for &quot;pricing&quot;");
 		expect(html).not.toContain("data-activity-tree-prefix=");
@@ -302,14 +295,36 @@ describe("TimelineActivityGroup", () => {
 
 		expect(html).toContain("Anthony Riera");
 		expect(html).toContain("Searched for &quot;pricing&quot;");
-		expect(html).toContain('data-tool-execution-indicator-slot="true"');
 		expect(html).toContain('data-tool-execution-indicator="arrow"');
 		expect(html).not.toContain("data-activity-tree-prefix=");
 		expect(html).not.toContain("data-activity-single-tool=");
 		expect(html).not.toContain("data-activity-bullet=");
 	});
 
-	it("keeps developer mode activity bullets and icons unchanged", () => {
+	it("keeps terminal arrows when an activity group has multiple tool rows", () => {
+		const group = createActivityGroup([
+			createToolItem({
+				id: "tool-1",
+				createdAt: "2026-01-01T10:00:00.000Z",
+				toolName: "searchKnowledgeBase",
+				text: 'Searched for "pricing"',
+			}),
+			createToolItem({
+				id: "tool-2",
+				createdAt: "2026-01-01T10:01:00.000Z",
+				toolName: "searchKnowledgeBase",
+				text: 'Searched for "billing"',
+			}),
+		]);
+
+		const html = renderActivityGroup(group);
+
+		expect(
+			countOccurrences(html, 'data-tool-execution-indicator="arrow"')
+		).toBe(2);
+	});
+
+	it("keeps event rows public while still rendering customer-facing tool rows", () => {
 		const group = createActivityGroup([
 			createEventItem({
 				id: "event-1",
@@ -319,22 +334,20 @@ describe("TimelineActivityGroup", () => {
 			createToolItem({
 				id: "tool-1",
 				createdAt: "2026-01-01T10:01:00.000Z",
-				toolName: "updateSentiment",
-				text: "Updated sentiment to positive",
+				toolName: "searchKnowledgeBase",
+				text: 'Searched for "billing"',
 			}),
 		]);
 
-		const html = renderActivityGroup(group, true);
+		const html = renderActivityGroup(group);
 
-		expect(html).toContain('data-activity-bullet="event"');
-		expect(html).toContain('data-activity-bullet="tool"');
-		expect(html).toContain('data-event-action-icon="participant_joined"');
-		expect(html).toContain('data-tool-action-icon="updateSentiment"');
+		expect(html).toContain("Searched for &quot;billing&quot;");
+		expect(html).toContain('data-tool-execution-indicator="arrow"');
 		expect(html).not.toContain("data-activity-tree-prefix=");
-		expect(html).not.toContain("data-activity-single-tool=");
+		expect(html).not.toContain("data-activity-bullet=");
 	});
 
-	it("hides non-customer-facing tools in non-developer mode", () => {
+	it("does not render internal tool logs in the public activity group", () => {
 		const group = createActivityGroup([
 			createToolItem({
 				id: "tool-log-1",
@@ -344,7 +357,7 @@ describe("TimelineActivityGroup", () => {
 			}),
 		]);
 
-		const html = renderActivityGroup(group, false);
+		const html = renderActivityGroup(group);
 		expect(html).toBe("");
 	});
 });
