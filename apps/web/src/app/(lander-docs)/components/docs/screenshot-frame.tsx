@@ -83,7 +83,7 @@ function ScreenshotMedia({
 				<span
 					className={cn(
 						SHARP_RADIUS_CLASSNAME,
-						"border border-primary/15 border-dashed bg-background/65 px-4 py-2 font-medium text-muted-foreground text-sm backdrop-blur-sm"
+						"border border-primary/15 border-dashed px-4 py-2 font-medium text-muted-foreground text-sm"
 					)}
 				>
 					Replace screenshot
@@ -133,13 +133,11 @@ function BrowserSlide({
 		>
 			<BrowserShell
 				chromeUrl={item.browserUrl}
-				className={cn(
-					"w-full overflow-hidden rounded-md border-primary/10 backdrop-blur-sm"
-				)}
+				className={cn("w-full overflow-hidden rounded-md border-primary/10")}
 				contentClassName="flex-none"
 			>
 				<div
-					className="relative w-full overflow-hidden bg-background-100"
+					className="relative w-full overflow-hidden bg-background-50"
 					data-slot="screenshot-frame-browser-viewport"
 					style={{ aspectRatio: mediaAspectRatio ?? 16 / 10 }}
 				>
@@ -194,7 +192,6 @@ function WidgetSlide({ item }: { item: ScreenshotFrameItem }) {
 							data-slot="screenshot-frame-widget-viewport"
 						>
 							<ScreenshotMedia item={item} />
-							<div className="pointer-events-none absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-co-background/15 to-transparent" />
 						</div>
 						<div
 							className={cn(
@@ -297,7 +294,7 @@ export function ScreenshotFrame({
 			<figure
 				className={cn(
 					SHARP_RADIUS_CLASSNAME,
-					"relative overflow-hidden border border-primary/10 bg-background-200 px-3 py-3 shadow-[0_30px_120px_-48px_rgba(15,23,42,0.45)] sm:px-4 sm:py-4 md:px-5 md:py-5 dark:shadow-black/35"
+					"relative overflow-hidden border border-primary/10 border-dashed px-3 py-3 sm:px-4 sm:py-4 md:px-5 md:py-5"
 				)}
 				style={{ backgroundColor }}
 			>
@@ -312,13 +309,10 @@ export function ScreenshotFrame({
 					aria-hidden="true"
 					className={cn(
 						SHARP_RADIUS_CLASSNAME,
-						"absolute inset-x-[14%] top-[12%] h-[58%] bg-white/65 blur-3xl dark:bg-white/8"
+						"absolute inset-x-[14%] top-[12%] h-[58%]"
 					)}
 				/>
-				<div
-					aria-hidden="true"
-					className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.38),transparent_40%),linear-gradient(180deg,rgba(255,255,255,0.22),transparent_42%,rgba(15,23,42,0.08)_100%)] dark:bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.1),transparent_35%),linear-gradient(180deg,rgba(255,255,255,0.04),transparent_38%,rgba(0,0,0,0.16)_100%)]"
-				/>
+
 				<div className="relative z-10">
 					<div
 						className="relative aspect-[16/10] w-full"
