@@ -1,5 +1,15 @@
 # @cossistant/react
 
+## 0.1.2
+
+### Patch Changes
+
+- A lot of bug fixes, stable AI agent that performs much much better accross the board (better tool caling, better memory + Knowledge base). Widget more stable, AI tools better displayed in the widget too
+
+- Updated dependencies []:
+  - @cossistant/core@0.1.2
+  - @cossistant/types@0.1.2
+
 ## 0.1.1
 
 ### Patch Changes

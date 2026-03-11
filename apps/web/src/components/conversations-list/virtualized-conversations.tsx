@@ -14,6 +14,7 @@ import { ConversationItem } from "@/components/conversations-list/conversation-i
 import type { ConversationHeader } from "@/contexts/inboxes";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { PageContent } from "../ui/layout";
+import { buildConversationListModel, CONVERSATION_LIST_GAP } from "./model";
 import {
 	ANALYTICS_HEIGHT,
 	HEADER_HEIGHT,
@@ -90,6 +91,8 @@ VirtualConversationItem.displayName = "VirtualConversationItem";
 // Memoized category header
 const MemoizedCategoryHeader = memo(CategoryHeader);
 
+const CONVERSATION_LIST_END_PADDING = 240;
+
 export function VirtualizedConversations({
 	basePath,
 	conversations,
@@ -106,7 +109,18 @@ export function VirtualizedConversations({
 
 	const isSmartMode = smartItems != null;
 	const items = isSmartMode ? smartItems : null;
-	const itemCount = isSmartMode && items ? items.length : conversations.length;
+	const listModel = useMemo(
+		() =>
+			buildConversationListModel({
+				conversations,
+				items,
+				itemHeight: ITEM_HEIGHT,
+				headerHeight: HEADER_HEIGHT,
+				analyticsHeight,
+				gap: CONVERSATION_LIST_GAP,
+			}),
+		[analyticsHeight, conversations, items]
+	);
 
 	// Populate viewportRef with the actual scrollable element
 	useEffect(() => {
@@ -118,60 +132,33 @@ export function VirtualizedConversations({
 	// Stable scroll element getter
 	const getScrollElement = useCallback(() => scrollAreaRef.current, []);
 
-	const { focusedIndex, handleMouseEnter } = useConversationKeyboardNavigation({
-		conversations,
-		items,
-		basePath,
-		parentRef: viewportRef,
-		itemHeight: ITEM_HEIGHT,
-		headerHeight: HEADER_HEIGHT,
-		analyticsHeight,
-		enabled: true,
-		onLockedConversationEnter: onLockedConversationActivate,
-	});
+	const { focusedConversationId, handleMouseEnter } =
+		useConversationKeyboardNavigation({
+			model: listModel,
+			basePath,
+			parentRef: viewportRef,
+			enabled: true,
+			onLockedConversationEnter: onLockedConversationActivate,
+		});
 
 	// Memoize estimateSize to prevent virtualizer recalculations
 	const estimateSize = useCallback(
-		(index: number) => {
-			if (isSmartMode && items) {
-				const item = items[index];
-				if (item?.type === "header") {
-					return HEADER_HEIGHT;
-				}
-				if (item?.type === "analytics") {
-					return analyticsHeight;
-				}
-				return ITEM_HEIGHT;
-			}
-			return ITEM_HEIGHT;
-		},
-		[analyticsHeight, isSmartMode, items]
+		(index: number) => listModel.itemSizes[index] ?? ITEM_HEIGHT,
+		[listModel.itemSizes]
 	);
 
 	// Use conversation IDs as keys to ensure proper React reconciliation when list reorders
 	const getItemKey = useCallback(
-		(index: number) => {
-			if (isSmartMode && items) {
-				const item = items[index];
-				if (item?.type === "header") {
-					return `header-${item.category}`;
-				}
-				if (item?.type === "analytics") {
-					return "analytics";
-				}
-				return item?.conversation.id ?? index;
-			}
-			return conversations[index]?.id ?? index;
-		},
-		[isSmartMode, items, conversations]
+		(index: number) => listModel.itemKeys[index] ?? index,
+		[listModel.itemKeys]
 	);
 
 	const virtualizer = useVirtualizer({
-		count: itemCount,
+		count: listModel.itemCount,
 		getScrollElement,
 		estimateSize,
 		getItemKey,
-		gap: 4,
+		gap: CONVERSATION_LIST_GAP,
 		overscan: 4,
 	});
 
@@ -180,42 +167,79 @@ export function VirtualizedConversations({
 	}, [analyticsHeight, virtualizer]);
 
 	const virtualItems = virtualizer.getVirtualItems();
-	const totalSize = virtualizer.getTotalSize();
-
-	// Pre-compute mouse enter handlers to avoid creating functions in render
-	const mouseEnterHandlers = useMemo(() => {
-		const handlers = new Map<number, () => void>();
-		for (const virtualItem of virtualItems) {
-			handlers.set(virtualItem.index, () =>
-				handleMouseEnter(virtualItem.index)
-			);
-		}
-		return handlers;
-	}, [virtualItems, handleMouseEnter]);
+	const measuredSize = virtualizer.getTotalSize();
 
 	return (
 		<PageContent className="h-full pr-3 contain-strict" ref={scrollAreaRef}>
 			<div
+				data-slot="conversation-list-content"
 				style={{
-					height: `${totalSize}px`,
+					paddingBottom: `${CONVERSATION_LIST_END_PADDING}px`,
 					width: "100%",
-					position: "relative",
 				}}
 			>
-				{virtualItems.map((virtualItem) => {
-					const mouseEnterHandler = mouseEnterHandlers.get(virtualItem.index);
+				<div
+					style={{
+						height: `${measuredSize}px`,
+						width: "100%",
+						position: "relative",
+					}}
+				>
+					{virtualItems.map((virtualItem) => {
+						if (isSmartMode && items) {
+							const item = items[virtualItem.index];
 
-					if (isSmartMode && items) {
-						const item = items[virtualItem.index];
+							if (!item) {
+								return null;
+							}
 
-						if (!item) {
-							return null;
-						}
+							if (item.type === "header") {
+								return (
+									<div
+										key={`header-${item.category}`}
+										style={{
+											position: "absolute",
+											top: 0,
+											left: 0,
+											width: "100%",
+											height: `${virtualItem.size}px`,
+											transform: `translateY(${virtualItem.start}px)`,
+										}}
+									>
+										<MemoizedCategoryHeader
+											category={item.category}
+											count={item.count}
+											label={item.label}
+										/>
+									</div>
+								);
+							}
 
-						if (item.type === "header") {
+							if (item.type === "analytics") {
+								return (
+									<div
+										key="analytics"
+										style={{
+											position: "absolute",
+											top: 0,
+											left: 0,
+											width: "100%",
+											height: `${virtualItem.size}px`,
+											transform: `translateY(${virtualItem.start}px)`,
+										}}
+									>
+										{analyticsSlot ?? null}
+									</div>
+								);
+							}
+
+							// It's a conversation item
+							const conversation = item.conversation;
+							const href = `${basePath}/${conversation.id}`;
+
 							return (
 								<div
-									key={`header-${item.category}`}
+									key={conversation.id}
 									style={{
 										position: "absolute",
 										top: 0,
@@ -225,35 +249,23 @@ export function VirtualizedConversations({
 										transform: `translateY(${virtualItem.start}px)`,
 									}}
 								>
-									<MemoizedCategoryHeader
-										category={item.category}
-										count={item.count}
-										label={item.label}
+									<VirtualConversationItem
+										conversation={conversation}
+										focused={focusedConversationId === conversation.id}
+										href={href}
+										isSmartMode
+										onLockedActivate={onLockedConversationActivate}
+										onMouseEnter={() => handleMouseEnter(conversation.id)}
+										showWaitingForReplyPill={showWaitingForReplyPill}
+										websiteSlug={websiteSlug}
 									/>
 								</div>
 							);
 						}
 
-						if (item.type === "analytics") {
-							return (
-								<div
-									key="analytics"
-									style={{
-										position: "absolute",
-										top: 0,
-										left: 0,
-										width: "100%",
-										height: `${virtualItem.size}px`,
-										transform: `translateY(${virtualItem.start}px)`,
-									}}
-								>
-									{analyticsSlot ?? null}
-								</div>
-							);
-						}
-
-						// It's a conversation item
-						const conversation = item.conversation;
+						// Classic mode - just conversations
+						// biome-ignore lint/style/noNonNullAssertion: should never happen
+						const conversation = conversations[virtualItem.index]!;
 						const href = `${basePath}/${conversation.id}`;
 
 						return (
@@ -270,48 +282,18 @@ export function VirtualizedConversations({
 							>
 								<VirtualConversationItem
 									conversation={conversation}
-									focused={focusedIndex === virtualItem.index}
+									focused={focusedConversationId === conversation.id}
 									href={href}
-									isSmartMode
+									isSmartMode={false}
 									onLockedActivate={onLockedConversationActivate}
-									onMouseEnter={mouseEnterHandler ?? (() => {})}
+									onMouseEnter={() => handleMouseEnter(conversation.id)}
 									showWaitingForReplyPill={showWaitingForReplyPill}
 									websiteSlug={websiteSlug}
 								/>
 							</div>
 						);
-					}
-
-					// Classic mode - just conversations
-					// biome-ignore lint/style/noNonNullAssertion: should never happen
-					const conversation = conversations[virtualItem.index]!;
-					const href = `${basePath}/${conversation.id}`;
-
-					return (
-						<div
-							key={conversation.id}
-							style={{
-								position: "absolute",
-								top: 0,
-								left: 0,
-								width: "100%",
-								height: `${virtualItem.size}px`,
-								transform: `translateY(${virtualItem.start}px)`,
-							}}
-						>
-							<VirtualConversationItem
-								conversation={conversation}
-								focused={focusedIndex === virtualItem.index}
-								href={href}
-								isSmartMode={false}
-								onLockedActivate={onLockedConversationActivate}
-								onMouseEnter={mouseEnterHandler ?? (() => {})}
-								showWaitingForReplyPill={showWaitingForReplyPill}
-								websiteSlug={websiteSlug}
-							/>
-						</div>
-					);
-				})}
+					})}
+				</div>
 			</div>
 		</PageContent>
 	);

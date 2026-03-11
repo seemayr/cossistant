@@ -52,7 +52,7 @@ mock.module("@/components/conversations-list/conversation-item", () => ({
 
 mock.module("./use-conversation-keyboard-navigation", () => ({
 	useConversationKeyboardNavigation: () => ({
-		focusedIndex: 0,
+		focusedConversationId: "conv-1",
 		handleMouseEnter: () => {},
 	}),
 }));
@@ -88,7 +88,9 @@ describe("VirtualizedConversations analytics height", () => {
 		const html = await renderVirtualizedList();
 
 		expect(html).toContain("analytics-slot");
-		expect(html).toContain("height:76px");
+		expect(html).toContain('data-slot="conversation-list-content"');
+		expect(html).toContain("padding-bottom:240px");
+		expect(html).toContain("height:128px");
 	});
 
 	it("collapses the analytics slot on mobile", async () => {
@@ -97,6 +99,7 @@ describe("VirtualizedConversations analytics height", () => {
 		const html = await renderVirtualizedList();
 
 		expect(html).toContain("analytics-slot");
-		expect(html).toContain("height:0px");
+		expect(html).toContain("padding-bottom:240px");
+		expect(html).toContain("height:52px");
 	});
 });

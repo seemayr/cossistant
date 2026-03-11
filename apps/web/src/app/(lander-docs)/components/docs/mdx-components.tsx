@@ -32,6 +32,7 @@ import { cn } from "@/lib/utils";
 import { HighlightLine } from "../highlight-line";
 import { ImageZoom } from "./image-zoom";
 import { QuickstartAIPrompt } from "./quickstart-ai-prompt";
+import { ScreenshotFrame } from "./screenshot-frame";
 import StyleTokenCascade from "./style-token-cascade";
 
 export const mdxComponents = {
@@ -366,6 +367,7 @@ export const mdxComponents = {
 	TypeTable,
 	StyleTokenCascade,
 	QuickstartAIPrompt,
+	ScreenshotFrame,
 	Icon,
 	// TODO: Uncomment when OpenAPI docs are needed (requires fumadocs-openapi v10 migration)
 	// APIPage,

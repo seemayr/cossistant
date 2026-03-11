@@ -3,9 +3,16 @@ import { ConversationStatus } from "@cossistant/types";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo } from "react";
 import {
+	buildConversationListModel,
+	CONVERSATION_LIST_GAP,
+} from "@/components/conversations-list/model";
+import {
+	ANALYTICS_HEIGHT,
 	CATEGORY_LABELS,
 	type CategoryType,
 	type ConversationItem,
+	HEADER_HEIGHT,
+	ITEM_HEIGHT,
 	PRIORITY_WEIGHTS,
 	type VirtualListItem,
 	WAITING_THRESHOLD_MS,
@@ -13,6 +20,7 @@ import {
 import { useWebsite } from "@/contexts/website";
 import { useConversationHeaders } from "@/data/use-conversation-headers";
 import { isInboundVisitorMessage } from "@/lib/conversation-messages";
+import { useConversationFocusStore } from "./conversation-focus-store";
 
 type ConversationStatusFilter = ConversationStatus | "archived" | null;
 
@@ -399,11 +407,15 @@ export function useFilteredConversations({
 }) {
 	const website = useWebsite();
 	const router = useRouter();
+	const storeFocusedConversationId = useConversationFocusStore(
+		(state) => state.setFocusedConversationId
+	);
+	const clearFocus = useConversationFocusStore((state) => state.clearFocus);
 
 	const { conversations: unfilteredConversations, isLoading } =
 		useConversationHeaders(website.slug);
 
-	const { conversations, conversationMap, indexMap, statusCounts } = useMemo(
+	const { conversations, conversationMap, statusCounts } = useMemo(
 		() =>
 			filterAndProcessConversations(
 				unfilteredConversations,
@@ -430,17 +442,23 @@ export function useFilteredConversations({
 		return buildSmartOrderedList(conversations);
 	}, [conversations, isSmartModeActive]);
 
-	// Get the appropriate index map based on sort mode
-	const activeIndexMap = useMemo(() => {
-		if (smartOrderResult) {
-			return smartOrderResult.conversationIndexMap;
-		}
-
-		return indexMap;
-	}, [smartOrderResult, indexMap]);
+	const activeConversationModel = useMemo(
+		() =>
+			buildConversationListModel({
+				conversations,
+				items: smartOrderResult?.items ?? null,
+				itemHeight: ITEM_HEIGHT,
+				headerHeight: HEADER_HEIGHT,
+				analyticsHeight: ANALYTICS_HEIGHT,
+				gap: CONVERSATION_LIST_GAP,
+			}),
+		[conversations, smartOrderResult]
+	);
 
 	const currentIndex = selectedConversationId
-		? (activeIndexMap.get(selectedConversationId) ?? -1)
+		? (activeConversationModel.conversationIdToOrderIndex.get(
+				selectedConversationId
+			) ?? -1)
 		: -1;
 
 	const selectedConversation = useMemo(() => {
@@ -460,34 +478,44 @@ export function useFilteredConversations({
 	);
 
 	const nextConversation =
-		currentIndex >= 0 && currentIndex < conversations.length - 1
-			? conversations[currentIndex + 1] || null
+		currentIndex >= 0 &&
+		currentIndex < activeConversationModel.orderedConversations.length - 1
+			? activeConversationModel.orderedConversations[currentIndex + 1] || null
 			: null;
 
 	const previousConversation =
-		currentIndex > 0 ? conversations[currentIndex - 1] || null : null;
+		currentIndex > 0
+			? activeConversationModel.orderedConversations[currentIndex - 1] || null
+			: null;
+
+	const conversationPath = useMemo(
+		() => basePath.split("/").slice(0, -1).join("/"),
+		[basePath]
+	);
+
+	const navigateToConversation = useCallback(
+		(conversationId: string) => {
+			storeFocusedConversationId(conversationId);
+			router.push(`${conversationPath}/${conversationId}`);
+		},
+		[conversationPath, router, storeFocusedConversationId]
+	);
 
 	const navigateToNextConversation = useCallback(() => {
 		if (nextConversation) {
-			const path = basePath.split("/").slice(0, -1).join("/");
-
-			router.push(`${path}/${nextConversation.id}`);
+			navigateToConversation(nextConversation.id);
 		}
-	}, [nextConversation, router, basePath]);
+	}, [navigateToConversation, nextConversation]);
 
 	const navigateToPreviousConversation = useCallback(() => {
 		if (previousConversation) {
-			const path = basePath.split("/").slice(0, -1).join("/");
-
-			router.push(`${path}/${previousConversation.id}`);
+			navigateToConversation(previousConversation.id);
 		}
-	}, [previousConversation, router, basePath]);
+	}, [navigateToConversation, previousConversation]);
 
 	const goBack = useCallback(() => {
-		const path = basePath.split("/").slice(0, -1).join("/");
-
-		router.push(`${path}`);
-	}, [router, basePath]);
+		router.push(`${conversationPath}`);
+	}, [conversationPath, router]);
 
 	const isConversationInCurrentFilter = useCallback(
 		(conversationId: string) => conversationMap.has(conversationId),
@@ -520,35 +548,34 @@ export function useFilteredConversations({
 
 			// Navigate to next, or previous, or go back to list
 			if (nextConversation) {
-				const path = basePath.split("/").slice(0, -1).join("/");
-				router.push(`${path}/${nextConversation.id}`);
+				navigateToConversation(nextConversation.id);
 				return true;
 			}
 
 			if (previousConversation) {
-				const path = basePath.split("/").slice(0, -1).join("/");
-				router.push(`${path}/${previousConversation.id}`);
+				navigateToConversation(previousConversation.id);
 				return true;
 			}
 
 			// No other conversations, go back to list
+			clearFocus();
 			goBack();
 			return true;
 		},
 		[
+			clearFocus,
+			goBack,
+			navigateToConversation,
 			selectedConversationId,
 			nextConversation,
 			previousConversation,
-			basePath,
-			router,
-			goBack,
 		]
 	);
 
 	return {
 		conversations,
 		conversationMap,
-		indexMap: activeIndexMap,
+		indexMap: activeConversationModel.conversationIdToOrderIndex,
 		statusCounts,
 		selectedConversationIndex: currentIndex,
 		selectedConversation,

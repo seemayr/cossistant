@@ -1,22 +1,22 @@
 const COSSISTANT_FACEHASH_PALETTE = [
 	{
-		className: "dark:bg-cossistant-pink/90 bg-cossistant-pink/20",
+		className: "dark:bg-cossistant-pink/90 bg-cossistant-pink/40",
 		routeColor: "hsla(314, 100%, 85%, 1)",
 	},
 	{
-		className: "dark:bg-cossistant-yellow/90 bg-cossistant-yellow/20",
+		className: "dark:bg-cossistant-yellow/90 bg-cossistant-yellow/40",
 		routeColor: "hsla(58, 92%, 79%, 1)",
 	},
 	{
-		className: "dark:bg-cossistant-blue/90 bg-cossistant-blue/20",
+		className: "dark:bg-cossistant-blue/90 bg-cossistant-blue/40",
 		routeColor: "hsla(218, 91%, 78%, 1)",
 	},
 	{
-		className: "dark:bg-cossistant-orange/90 bg-cossistant-orange/20",
+		className: "dark:bg-cossistant-orange/90 bg-cossistant-orange/40",
 		routeColor: "hsla(19, 99%, 50%, 1)",
 	},
 	{
-		className: "dark:bg-cossistant-green/90 bg-cossistant-green/20",
+		className: "dark:bg-cossistant-green/90 bg-cossistant-green/40",
 		routeColor: "hsla(156, 86%, 64%, 1)",
 	},
 ] as const;

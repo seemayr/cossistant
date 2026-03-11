@@ -10,6 +10,7 @@ import { Watermark } from "@cossistant/react/support/components/watermark";
 import { ConversationStatus } from "@cossistant/types";
 import type { TimelineItem } from "@cossistant/types/api/timeline-item";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { WidgetShell } from "@/components/showcase/widget-shell";
 import { useViewportVisibility } from "@/hooks/use-viewport-visibility";
 import { cn } from "@/lib/utils";
 import { useWidgetAnimationStore } from "@/stores/widget-animation-store";
@@ -345,9 +346,19 @@ export function FakeSupportWidget({ className }: { className?: string }) {
 						initialPage={currentView === "home" ? "HOME" : "CONVERSATION"}
 						onNavigate={handleNavigate}
 					>
-						<div className="relative flex flex-col items-end gap-4 py-10">
+						<WidgetShell
+							bubble={
+								<FakeBubble
+									className="opacity-20"
+									isOpen={true}
+									isTyping={false}
+								/>
+							}
+							className="py-10"
+							frameClassName="h-[620px] min-h-[620px] w-[420px]"
+						>
 							<div
-								className="relative flex h-[620px] min-h-[620px] w-[420px] flex-col overflow-hidden rounded border border-co-border bg-co-background shadow-2xl dark:shadow-primary/10"
+								className="relative flex h-full flex-col"
 								data-fake-widget-container="true"
 							>
 								{currentView === "home" ? (
@@ -376,12 +387,7 @@ export function FakeSupportWidget({ className }: { className?: string }) {
 									/>
 								)}
 							</div>
-							<FakeBubble
-								className="opacity-20"
-								isOpen={true}
-								isTyping={false}
-							/>
-						</div>
+						</WidgetShell>
 					</FakeSupportStoreProvider>
 				</FakeSupportTextProvider>
 			</FakeSupportProvider>
