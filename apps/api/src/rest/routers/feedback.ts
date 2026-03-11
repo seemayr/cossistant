@@ -1,29 +1,32 @@
-import {
-	createFeedback,
-	getFeedbackById,
-	listFeedback,
-} from "@api/db/queries/feedback";
+import { getConversationByIdWithLastMessage } from "@api/db/queries/conversation";
+import { getFeedbackById, listFeedback } from "@api/db/queries/feedback";
+import { getVisitor } from "@api/db/queries/visitor";
 import {
 	safelyExtractRequestData,
 	validateResponse,
 } from "@api/utils/validate";
+import { APIKeyType } from "@cossistant/types";
 import {
 	type Feedback,
-	feedbackSchema,
 	getFeedbackResponseSchema,
-	listFeedbackRequestSchema,
 	listFeedbackResponseSchema,
 	submitFeedbackRequestSchema,
 	submitFeedbackResponseSchema,
 } from "@cossistant/types/api/feedback";
 import { OpenAPIHono, z } from "@hono/zod-openapi";
-import { protectedPrivateApiKeyMiddleware } from "../middleware";
+import {
+	protectedPrivateApiKeyMiddleware,
+	protectedPublicApiKeyMiddleware,
+} from "../middleware";
 import type { RestContext } from "../types";
+import { persistFeedbackSubmission } from "./feedback-shared";
 
 export const feedbackRouter = new OpenAPIHono<RestContext>();
+const feedbackCreateRouter = new OpenAPIHono<RestContext>();
+const feedbackReadRouter = new OpenAPIHono<RestContext>();
 
-// Apply private API key middleware - feedback data is sensitive
-feedbackRouter.use("/*", ...protectedPrivateApiKeyMiddleware);
+feedbackCreateRouter.use("/*", ...protectedPublicApiKeyMiddleware);
+feedbackReadRouter.use("/*", ...protectedPrivateApiKeyMiddleware);
 
 function formatFeedbackResponse(entry: {
 	id: string;
@@ -33,6 +36,7 @@ function formatFeedbackResponse(entry: {
 	visitorId: string | null;
 	contactId: string | null;
 	rating: number;
+	topic: string | null;
 	comment: string | null;
 	trigger: string | null;
 	source: string;
@@ -48,6 +52,7 @@ function formatFeedbackResponse(entry: {
 		visitorId: entry.visitorId,
 		contactId: entry.contactId,
 		rating: entry.rating,
+		topic: entry.topic,
 		comment: entry.comment,
 		trigger: entry.trigger,
 		source: entry.source,
@@ -56,14 +61,13 @@ function formatFeedbackResponse(entry: {
 	};
 }
 
-// POST /feedback - Submit feedback
-feedbackRouter.openapi(
+feedbackCreateRouter.openapi(
 	{
 		method: "post",
 		path: "/",
 		summary: "Submit feedback",
 		description:
-			"Submit feedback with a rating and optional comment. Can be tied to a conversation or standalone.",
+			"Submit feedback with a rating, optional topic, and optional comment. Can be tied to a conversation or standalone.",
 		request: {
 			body: {
 				content: {
@@ -94,7 +98,7 @@ feedbackRouter.openapi(
 				},
 			},
 			401: {
-				description: "Unauthorized - Invalid or missing private API key",
+				description: "Unauthorized - Invalid or missing API key",
 				content: {
 					"application/json": {
 						schema: z.object({
@@ -105,7 +109,18 @@ feedbackRouter.openapi(
 				},
 			},
 			403: {
-				description: "Forbidden - Private API key required",
+				description: "Forbidden - API key required",
+				content: {
+					"application/json": {
+						schema: z.object({
+							error: z.string(),
+							message: z.string(),
+						}),
+					},
+				},
+			},
+			404: {
+				description: "Conversation not found",
 				content: {
 					"application/json": {
 						schema: z.object({
@@ -129,29 +144,91 @@ feedbackRouter.openapi(
 		},
 		security: [
 			{
-				"Private API Key": [],
+				"Public API Key": [],
 			},
 		],
 		tags: ["Feedback"],
 	},
 	async (c) => {
 		try {
-			const { db, website, body } = await safelyExtractRequestData(
-				c,
-				submitFeedbackRequestSchema
-			);
+			const { apiKey, db, organization, website, body, visitorIdHeader } =
+				await safelyExtractRequestData(c, submitFeedbackRequestSchema);
 
-			if (!(website?.id && website.organizationId)) {
+			if (!(website?.id && website.organizationId && organization?.id)) {
 				return c.json(
 					{ error: "UNAUTHORIZED", message: "Invalid API key" },
 					401
 				);
 			}
 
-			const entry = await createFeedback(db, {
+			if (apiKey?.keyType === APIKeyType.PUBLIC) {
+				const visitor = await getVisitor(db, {
+					visitorId: body.visitorId || visitorIdHeader,
+				});
+
+				if (!visitor || visitor.websiteId !== website.id) {
+					return c.json(
+						{
+							error: "BAD_REQUEST",
+							message: "Visitor not found, please pass a valid visitorId",
+						},
+						400
+					);
+				}
+
+				if (body.conversationId) {
+					const conversationRecord = await getConversationByIdWithLastMessage(
+						db,
+						{
+							organizationId: organization.id,
+							websiteId: website.id,
+							conversationId: body.conversationId,
+						}
+					);
+
+					if (
+						!conversationRecord ||
+						conversationRecord.visitorId !== visitor.id
+					) {
+						return c.json(
+							{
+								error: "NOT_FOUND",
+								message: "Conversation not found",
+							},
+							404
+						);
+					}
+				}
+
+				const { entry: authenticatedEntry } = await persistFeedbackSubmission({
+					db,
+					organizationId: organization.id,
+					websiteId: website.id,
+					conversationId: body.conversationId,
+					visitorId: visitor.id,
+					contactId: visitor.contactId,
+					rating: body.rating,
+					topic: body.topic,
+					comment: body.comment,
+					trigger: body.trigger,
+					source: body.source ?? "widget",
+				});
+
+				return c.json(
+					validateResponse(
+						{ feedback: formatFeedbackResponse(authenticatedEntry) },
+						submitFeedbackResponseSchema
+					),
+					201
+				);
+			}
+
+			const { entry } = await persistFeedbackSubmission({
+				db,
 				organizationId: website.organizationId,
 				websiteId: website.id,
 				rating: body.rating,
+				topic: body.topic,
 				comment: body.comment,
 				trigger: body.trigger,
 				source: body.source ?? "widget",
@@ -180,8 +257,7 @@ feedbackRouter.openapi(
 	}
 );
 
-// GET /feedback - List feedback
-feedbackRouter.openapi(
+feedbackReadRouter.openapi(
 	{
 		method: "get",
 		path: "/",
@@ -189,7 +265,14 @@ feedbackRouter.openapi(
 		description:
 			"Returns a paginated list of feedback for the website. Supports filtering by trigger, source, conversation, and visitor.",
 		request: {
-			query: listFeedbackRequestSchema,
+			query: z.object({
+				trigger: z.string().optional(),
+				source: z.string().optional(),
+				conversationId: z.string().optional(),
+				visitorId: z.string().optional(),
+				page: z.string().optional(),
+				limit: z.string().optional(),
+			}),
 		},
 		responses: {
 			200: {
@@ -293,8 +376,7 @@ feedbackRouter.openapi(
 	}
 );
 
-// GET /feedback/:id - Get a single feedback entry
-feedbackRouter.openapi(
+feedbackReadRouter.openapi(
 	{
 		method: "get",
 		path: "/:id",
@@ -422,3 +504,6 @@ feedbackRouter.openapi(
 		}
 	}
 );
+
+feedbackRouter.route("/", feedbackCreateRouter);
+feedbackRouter.route("/", feedbackReadRouter);

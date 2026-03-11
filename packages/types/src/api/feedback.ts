@@ -25,6 +25,9 @@ export const feedbackSchema = z
 			description: "Rating from 1 to 5",
 			example: 5,
 		}),
+		topic: z.string().nullable().openapi({
+			description: "Optional structured topic selected by the visitor",
+		}),
 		comment: z.string().nullable().openapi({
 			description: "Optional written feedback",
 		}),
@@ -55,6 +58,9 @@ export const submitFeedbackRequestSchema = z
 		rating: z.number().int().min(1).max(5).openapi({
 			description: "Rating from 1 to 5",
 			example: 5,
+		}),
+		topic: z.string().optional().openapi({
+			description: "Optional structured topic selected by the visitor",
 		}),
 		comment: z.string().optional().openapi({
 			description: "Optional written feedback",

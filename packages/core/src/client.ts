@@ -18,6 +18,10 @@ import type {
 	SubmitConversationRatingResponseBody,
 } from "@cossistant/types/api/conversation";
 import type {
+	SubmitFeedbackRequest,
+	SubmitFeedbackResponse,
+} from "@cossistant/types/api/feedback";
+import type {
 	GetConversationTimelineItemsRequest,
 	GetConversationTimelineItemsResponse,
 	SendTimelineItemRequest,
@@ -346,6 +350,12 @@ export class CossistantClient {
 		}
 
 		return response;
+	}
+
+	async submitFeedback(
+		params: SubmitFeedbackRequest
+	): Promise<SubmitFeedbackResponse> {
+		return this.restClient.submitFeedback(params);
 	}
 
 	// Timeline items management

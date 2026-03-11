@@ -7,6 +7,7 @@ export type FeedbackInsert = {
 	organizationId: string;
 	websiteId: string;
 	rating: number;
+	topic?: string;
 	comment?: string;
 	trigger?: string;
 	source?: string;
@@ -43,6 +44,7 @@ export async function createFeedback(
 			visitorId: data.visitorId ?? null,
 			contactId: data.contactId ?? null,
 			rating: data.rating,
+			topic: data.topic ?? null,
 			comment: data.comment ?? null,
 			trigger: data.trigger ?? null,
 			source: data.source ?? "widget",

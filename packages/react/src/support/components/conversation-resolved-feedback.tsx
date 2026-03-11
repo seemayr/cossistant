@@ -1,18 +1,17 @@
 import { ConversationStatus } from "@cossistant/types";
 import { useEffect, useRef, useState } from "react";
+import { FeedbackCommentInput } from "../../primitives/feedback-comment-input";
+import { FeedbackRatingSelector } from "../../primitives/feedback-rating-selector";
 import { Text, useSupportText } from "../text";
 import { cn } from "../utils";
-import Icon from "./icons";
 
 type ConversationResolvedFeedbackProps = {
 	status: ConversationStatus | null;
 	rating: number | null;
-	onRate?: (rating: number, comment?: string) => void;
+	onRate?: (rating: number, comment?: string) => void | Promise<void>;
 	isSubmitting?: boolean;
 	className?: string;
 };
-
-const STAR_COUNT = 5;
 
 export function ConversationResolvedFeedback({
 	status,
@@ -24,16 +23,19 @@ export function ConversationResolvedFeedback({
 	const text = useSupportText();
 	const isResolved = status === ConversationStatus.RESOLVED;
 	const isRated = rating != null;
-
-	// Local state for the rating flow
-	const [selectedRating, setSelectedRating] = useState<number | null>(null);
+	const textareaRef = useRef<HTMLTextAreaElement>(null);
+	const [selectedRating, setSelectedRating] = useState<number | null>(rating);
 	const [hoveredRating, setHoveredRating] = useState<number | null>(null);
 	const [comment, setComment] = useState("");
 	const [hasSubmitted, setHasSubmitted] = useState(false);
-	const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-	// Show the rating that was submitted if available, otherwise use local selection
-	const displayRating = hoveredRating ?? (isRated ? rating : selectedRating);
+	useEffect(() => {
+		setSelectedRating(rating);
+		setHoveredRating(null);
+		setComment("");
+		setHasSubmitted(false);
+	}, [rating, status]);
+
 	const showCommentField = selectedRating != null && !isRated && !hasSubmitted;
 	const isInteractive =
 		Boolean(onRate) && !isSubmitting && !isRated && !hasSubmitted;
@@ -51,12 +53,13 @@ export function ConversationResolvedFeedback({
 		setSelectedRating(value);
 	};
 
-	const handleSubmit = () => {
-		if (!(selectedRating && onRate)) {
+	const handleSubmit = async () => {
+		if (!(onRate && selectedRating)) {
 			return;
 		}
+
+		await onRate(selectedRating, comment.trim() || undefined);
 		setHasSubmitted(true);
-		onRate(selectedRating, comment.trim() || undefined);
 	};
 
 	if (!isResolved) {
@@ -93,52 +96,31 @@ export function ConversationResolvedFeedback({
 						: "component.conversationPage.ratingPrompt"
 				}
 			/>
-			<div className="mt-2 flex items-center justify-center gap-1">
-				{Array.from({ length: STAR_COUNT }).map((_, index) => {
-					const value = index + 1;
-					const isFilled = displayRating ? value <= displayRating : false;
-
-					return (
-						<button
-							aria-label={text("component.conversationPage.ratingLabel", {
-								rating: value,
-							})}
-							className={cn(
-								"group inline-flex h-8 w-8 items-center justify-center rounded-md transition-colors",
-								isInteractive
-									? "hover:bg-co-muted"
-									: "cursor-default opacity-70"
-							)}
-							disabled={!isInteractive}
-							key={value}
-							onClick={() => handleRatingSelect(value)}
-							onMouseEnter={() => isInteractive && setHoveredRating(value)}
-							onMouseLeave={() => isInteractive && setHoveredRating(null)}
-							type="button"
-						>
-							<Icon
-								className={cn(
-									"h-4 w-4 transition-transform",
-									isFilled ? "text-co-primary" : "text-co-muted-foreground/40",
-									isInteractive &&
-										hoveredRating &&
-										value <= hoveredRating &&
-										"scale-110"
-								)}
-								name="star"
-								variant={isFilled ? "filled" : "default"}
-							/>
-						</button>
-					);
-				})}
-			</div>
+			<FeedbackRatingSelector
+				buttonClassName={cn(
+					"rounded-md",
+					isInteractive ? "hover:bg-co-muted" : "opacity-70"
+				)}
+				className="mt-2 justify-center"
+				disabled={!isInteractive}
+				hoveredValue={hoveredRating}
+				labelForRating={(value) =>
+					text("component.conversationPage.ratingLabel", {
+						rating: value,
+					})
+				}
+				onHoverChange={(value) => isInteractive && setHoveredRating(value)}
+				onSelect={handleRatingSelect}
+				size="sm"
+				value={selectedRating}
+			/>
 
 			{showCommentField && (
 				<div className="mt-3 space-y-2">
-					<textarea
+					<FeedbackCommentInput
 						className="w-full resize-none rounded-md border border-co-border bg-co-background px-3 py-2 text-co-foreground text-sm placeholder:text-co-muted-foreground focus:border-co-primary focus:outline-none focus:ring-1 focus:ring-co-primary"
 						disabled={isSubmitting}
-						onChange={(e) => setComment(e.target.value)}
+						onValueChange={setComment}
 						placeholder={text("component.conversationPage.commentPlaceholder")}
 						ref={textareaRef}
 						rows={3}
@@ -152,7 +134,11 @@ export function ConversationResolvedFeedback({
 								: "hover:bg-co-primary/90"
 						)}
 						disabled={isSubmitting}
-						onClick={handleSubmit}
+						onClick={() => {
+							void handleSubmit().catch(() => {
+								// The parent handles error reporting and optimistic state rollback.
+							});
+						}}
 						type="button"
 					>
 						{text("component.conversationPage.submitFeedback")}

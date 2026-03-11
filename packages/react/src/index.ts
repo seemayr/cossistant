@@ -1,3 +1,4 @@
+export * from "./feedback";
 export * from "./hooks";
 export * from "./identify-visitor";
 export * as Primitives from "./primitives";

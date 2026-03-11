@@ -30,6 +30,19 @@ export {
 	defaultFormatDate,
 } from "./day-separator";
 export {
+	FeedbackCommentInput,
+	type FeedbackCommentInputProps,
+} from "./feedback-comment-input";
+export {
+	FeedbackRatingSelector,
+	type FeedbackRatingSelectorProps,
+	type FeedbackRatingSelectorSize,
+} from "./feedback-rating-selector";
+export {
+	FeedbackTopicSelect,
+	type FeedbackTopicSelectProps,
+} from "./feedback-topic-select";
+export {
 	FileInput,
 	MultimodalInput,
 	SupportInput as Input,

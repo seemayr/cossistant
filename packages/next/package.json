@@ -32,6 +32,7 @@
   "homepage": "https://cossistant.com",
   "exports": {
     ".": "./src/index.ts",
+    "./feedback": "./src/feedback/index.tsx",
     "./primitives": "./src/primitives/index.ts",
     "./support": "./src/support/index.tsx",
     "./hooks": "./src/hooks/index.ts",

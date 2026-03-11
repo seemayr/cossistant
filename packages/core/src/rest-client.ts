@@ -15,6 +15,10 @@ import type {
 	SubmitConversationRatingResponseBody,
 } from "@cossistant/types/api/conversation";
 import type {
+	SubmitFeedbackRequest,
+	SubmitFeedbackResponse,
+} from "@cossistant/types/api/feedback";
+import type {
 	GetConversationTimelineItemsRequest,
 	GetConversationTimelineItemsResponse,
 	SendTimelineItemRequest,
@@ -391,7 +395,7 @@ export class CossistantRestClient {
 		const storedVisitorId = this.websiteId
 			? getVisitorId(this.websiteId)
 			: undefined;
-		const visitorId = params.visitorId || storedVisitorId;
+		const visitorId = params.visitorId || this.visitorId || storedVisitorId;
 
 		if (!visitorId) {
 			throw new Error("Visitor ID is required");
@@ -462,7 +466,7 @@ export class CossistantRestClient {
 		const storedVisitorId = this.websiteId
 			? getVisitorId(this.websiteId)
 			: undefined;
-		const visitorId = params.visitorId || storedVisitorId;
+		const visitorId = params.visitorId || this.visitorId || storedVisitorId;
 
 		if (!visitorId) {
 			throw new Error("Visitor ID is required");
@@ -525,7 +529,9 @@ export class CossistantRestClient {
 		params: GetConversationRequest
 	): Promise<GetConversationResponse> {
 		// Get visitor ID from storage if we have the website ID
-		const visitorId = this.websiteId ? getVisitorId(this.websiteId) : undefined;
+		const visitorId =
+			this.visitorId ||
+			(this.websiteId ? getVisitorId(this.websiteId) : undefined);
 
 		// Add visitor ID header if available
 		const headers: Record<string, string> = {};
@@ -560,7 +566,7 @@ export class CossistantRestClient {
 		const storedVisitorId = this.websiteId
 			? getVisitorId(this.websiteId)
 			: undefined;
-		const visitorId = params.visitorId || storedVisitorId;
+		const visitorId = params.visitorId || this.visitorId || storedVisitorId;
 
 		if (!visitorId) {
 			throw new Error("Visitor ID is required to mark a conversation as seen");
@@ -632,7 +638,7 @@ export class CossistantRestClient {
 		const storedVisitorId = this.websiteId
 			? getVisitorId(this.websiteId)
 			: undefined;
-		const visitorId = params.visitorId || storedVisitorId;
+		const visitorId = params.visitorId || this.visitorId || storedVisitorId;
 
 		if (!visitorId) {
 			throw new Error("Visitor ID is required to report typing state");
@@ -680,7 +686,7 @@ export class CossistantRestClient {
 		const storedVisitorId = this.websiteId
 			? getVisitorId(this.websiteId)
 			: undefined;
-		const visitorId = params.visitorId || storedVisitorId;
+		const visitorId = params.visitorId || this.visitorId || storedVisitorId;
 
 		if (!visitorId) {
 			throw new Error("Visitor ID is required to submit a rating");
@@ -719,11 +725,65 @@ export class CossistantRestClient {
 		};
 	}
 
+	async submitFeedback(
+		params: SubmitFeedbackRequest
+	): Promise<SubmitFeedbackResponse> {
+		const storedVisitorId = this.websiteId
+			? getVisitorId(this.websiteId)
+			: undefined;
+		const visitorId = params.visitorId || this.visitorId || storedVisitorId;
+
+		if (!visitorId) {
+			throw new Error("Visitor ID is required to submit feedback");
+		}
+
+		const headers: Record<string, string> = {
+			"X-Visitor-Id": visitorId,
+		};
+
+		const body: SubmitFeedbackRequest = {
+			rating: params.rating,
+			source: params.source ?? "widget",
+		};
+
+		if (params.comment) {
+			body.comment = params.comment;
+		}
+
+		if (params.topic) {
+			body.topic = params.topic;
+		}
+
+		if (params.trigger) {
+			body.trigger = params.trigger;
+		}
+
+		if (params.conversationId) {
+			body.conversationId = params.conversationId;
+		}
+
+		if (params.visitorId) {
+			body.visitorId = params.visitorId;
+		}
+
+		if (params.contactId) {
+			body.contactId = params.contactId;
+		}
+
+		return this.request<SubmitFeedbackResponse>("/feedback", {
+			method: "POST",
+			body: JSON.stringify(body),
+			headers,
+		});
+	}
+
 	async sendMessage(
 		params: SendTimelineItemRequest
 	): Promise<SendTimelineItemResponse> {
 		// Get visitor ID from storage if we have the website ID
-		const visitorId = this.websiteId ? getVisitorId(this.websiteId) : undefined;
+		const visitorId =
+			this.visitorId ||
+			(this.websiteId ? getVisitorId(this.websiteId) : undefined);
 
 		// Add visitor ID header if available
 		const headers: Record<string, string> = {};
@@ -746,7 +806,9 @@ export class CossistantRestClient {
 		params: GetConversationTimelineItemsRequest & { conversationId: string }
 	): Promise<GetConversationTimelineItemsResponse> {
 		// Get visitor ID from storage if we have the website ID
-		const visitorId = this.websiteId ? getVisitorId(this.websiteId) : undefined;
+		const visitorId =
+			this.visitorId ||
+			(this.websiteId ? getVisitorId(this.websiteId) : undefined);
 
 		// Create query parameters
 		const queryParams = new URLSearchParams();

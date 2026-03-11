@@ -55,6 +55,7 @@ export const feedback = pgTable(
 		),
 		// Feedback data
 		rating: integer("rating").notNull(), // 1-5 scale
+		topic: text("topic"), // Optional structured topic selected by the visitor
 		comment: text("comment"), // Optional written feedback
 		trigger: text("trigger"), // What triggered this feedback (e.g., "churn", "conversation_resolved")
 		source: text("source").notNull().default("widget"), // Where feedback was collected

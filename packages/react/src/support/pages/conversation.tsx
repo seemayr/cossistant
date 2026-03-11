@@ -220,6 +220,7 @@ export const ConversationPage: ConversationPageComponent = ({
 			{isConversationClosed ? (
 				<ConversationResolvedFeedback
 					isSubmitting={isSubmittingRating}
+					key={activeConversation?.id ?? conversation.conversationId}
 					onRate={handleRateConversation}
 					rating={resolvedRating}
 					status={activeConversation?.status ?? null}

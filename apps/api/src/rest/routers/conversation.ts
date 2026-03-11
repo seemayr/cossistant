@@ -8,9 +8,8 @@ import {
 	listConversations,
 	upsertConversation,
 } from "@api/db/queries/conversation";
-import { createFeedback } from "@api/db/queries/feedback";
 import {
-	conversation,
+	type conversation,
 	conversationTimelineItem,
 } from "@api/db/schema/conversation";
 import {
@@ -19,7 +18,6 @@ import {
 	resolveDashboardHardLimitPolicy,
 } from "@api/lib/hard-limits/dashboard";
 import { getPlanForWebsite } from "@api/lib/plans/access";
-import { trackConversationMetric } from "@api/lib/tinybird-sdk";
 import { markVisitorPresence } from "@api/services/presence";
 import {
 	emitConversationCreatedEvent,
@@ -76,6 +74,7 @@ import { and, eq } from "drizzle-orm";
 import { protectedPublicApiKeyMiddleware } from "../middleware";
 import type { RestContext } from "../types";
 import { mapDefaultTimelineItemForCreation } from "./conversation-default-timeline-item";
+import { persistFeedbackSubmission } from "./feedback-shared";
 
 type ConversationRow = typeof conversation.$inferSelect;
 type ConversationTimelineItemRow = typeof conversationTimelineItem.$inferSelect;
@@ -1185,37 +1184,19 @@ conversationRouter.openapi(
 			);
 		}
 
-		const ratedAt = new Date().toISOString();
-
-		// Update conversation with rating (legacy field for backward compatibility)
-		await db
-			.update(conversation)
-			.set({
-				visitorRating: body.rating,
-				visitorRatingAt: ratedAt,
-				updatedAt: ratedAt,
-			})
-			.where(eq(conversation.id, conversationRecord.id));
-
-		// Also create a feedback record in the new feedback table
-		await createFeedback(db, {
+		const { ratedAt } = await persistFeedbackSubmission({
+			db,
 			organizationId: organization.id,
 			websiteId: website.id,
 			conversationId: conversationRecord.id,
 			visitorId: visitor.id,
-			contactId: visitor.contactId ?? undefined,
+			contactId: visitor.contactId,
 			rating: body.rating,
+			topic: undefined,
 			comment: body.comment,
 			trigger: "conversation_resolved",
 			source: "widget",
-		});
-
-		// Track feedback metric
-		trackConversationMetric({
-			website_id: website.id,
-			visitor_id: visitor.id,
-			conversation_id: conversationRecord.id,
-			event_type: "feedback_submitted",
+			syncConversationRating: true,
 		});
 
 		const response = {

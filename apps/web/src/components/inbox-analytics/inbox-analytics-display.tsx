@@ -183,9 +183,12 @@ const getDeltaClassName = (trendPositive: boolean | null) => {
 
 function LivePresenceDot() {
 	return (
-		<span aria-hidden="true" className="relative flex size-2 shrink-0">
+		<span
+			aria-hidden="true"
+			className="relative flex size-2 shrink-0 items-center justify-center"
+		>
 			<span
-				className="absolute inset-0 animate-ping rounded-full bg-emerald-600/45"
+				className="absolute inset-[1px] animate-ping rounded-full bg-emerald-600/45 delay-200 duration-300"
 				data-slot="inbox-analytics-live-dot-pulse"
 			/>
 			<span
@@ -302,7 +305,7 @@ function SheetLivePresenceMetric({
 	return (
 		<section
 			aria-label="Live visitors"
-			className="flex flex-col gap-2 rounded-[10px] border border-primary/10 bg-background-100/70 px-3 py-3"
+			className="flex flex-col gap-2 overflow-hidden rounded-[10px] border border-primary/10 bg-background-100/70 px-3 py-3"
 			data-slot="inbox-analytics-live-presence"
 		>
 			<p className="text-primary/60 text-xs">Live visitors</p>
