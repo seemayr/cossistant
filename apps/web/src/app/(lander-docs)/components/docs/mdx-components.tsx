@@ -30,6 +30,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { XEmbed } from "@/components/x-embed";
 import { cn } from "@/lib/utils";
 import { HighlightLine } from "../highlight-line";
+import { FrameworkInstallCommandTabs } from "../install/framework-install-command-tabs";
 import { ImageZoom } from "./image-zoom";
 import { QuickstartAIPrompt } from "./quickstart-ai-prompt";
 import { ScreenshotFrame } from "./screenshot-frame";
@@ -369,6 +370,7 @@ export const mdxComponents = {
 	QuickstartAIPrompt,
 	ScreenshotFrame,
 	Icon,
+	FrameworkInstallCommandTabs,
 	// TODO: Uncomment when OpenAPI docs are needed (requires fumadocs-openapi v10 migration)
 	// APIPage,
 	HighlightLine,

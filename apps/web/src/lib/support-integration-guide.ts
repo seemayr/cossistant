@@ -5,23 +5,39 @@ import {
 
 export type SupportIntegrationFramework = "nextjs" | "react";
 export type SupportPackageManager = "bun" | "npm" | "pnpm" | "yarn";
+type SupportPackageName = "@cossistant/next" | "@cossistant/react";
+
+function getSupportPackageSpecifier(
+	packageName: SupportPackageName,
+	version?: string
+): string {
+	if (!version) {
+		return packageName;
+	}
+
+	return `${packageName}@${version}`;
+}
+
+function buildSupportInstallCommands(
+	packageName: SupportPackageName,
+	version?: string
+): Record<SupportPackageManager, string> {
+	const packageSpecifier = getSupportPackageSpecifier(packageName, version);
+
+	return {
+		bun: `bun add ${packageSpecifier}`,
+		npm: `npm install ${packageSpecifier}`,
+		pnpm: `pnpm add ${packageSpecifier}`,
+		yarn: `yarn add ${packageSpecifier}`,
+	};
+}
 
 const INSTALL_COMMANDS: Record<
 	SupportIntegrationFramework,
 	Record<SupportPackageManager, string>
 > = {
-	nextjs: {
-		bun: "bun add @cossistant/next",
-		npm: "npm install @cossistant/next",
-		pnpm: "pnpm add @cossistant/next",
-		yarn: "yarn add @cossistant/next",
-	},
-	react: {
-		bun: "bun add @cossistant/react",
-		npm: "npm install @cossistant/react",
-		pnpm: "pnpm add @cossistant/react",
-		yarn: "yarn add @cossistant/react",
-	},
+	nextjs: buildSupportInstallCommands("@cossistant/next"),
+	react: buildSupportInstallCommands("@cossistant/react"),
 };
 
 export type SupportIntegrationGuide = {
@@ -294,21 +310,31 @@ export function getSupportIntegrationGuide(
 }
 
 export function getSupportInstallCommands(
-	installationTarget: WebsiteInstallationTargetValue | string | undefined
+	installationTarget: WebsiteInstallationTargetValue | string | undefined,
+	version?: string
 ): Record<SupportPackageManager, string> {
 	const framework = resolveSupportIntegrationFramework(installationTarget);
-	return INSTALL_COMMANDS[framework];
+
+	if (!version) {
+		return INSTALL_COMMANDS[framework];
+	}
+
+	return buildSupportInstallCommands(
+		SUPPORT_GUIDES[framework].packageName,
+		version
+	);
 }
 
 export function getSupportInstallCommand({
 	installationTarget,
 	packageManager,
+	version,
 }: {
 	installationTarget: WebsiteInstallationTargetValue | string | undefined;
 	packageManager: string | undefined;
+	version?: string;
 }): string {
-	const framework = resolveSupportIntegrationFramework(installationTarget);
-	const commands = INSTALL_COMMANDS[framework];
+	const commands = getSupportInstallCommands(installationTarget, version);
 
 	if (!packageManager) {
 		return commands.pnpm;

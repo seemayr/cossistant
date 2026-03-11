@@ -32,13 +32,19 @@ const FRAMEWORK_OPTIONS: {
 	},
 ];
 
-export function FrameworkInstallCommandTabs() {
+type FrameworkInstallCommandTabsProps = {
+	version?: string;
+};
+
+export function FrameworkInstallCommandTabs({
+	version,
+}: FrameworkInstallCommandTabsProps) {
 	const [framework, setFramework] =
 		React.useState<SupportIntegrationFramework>("nextjs");
 
 	const installCommands = React.useMemo(
-		() => getSupportInstallCommands(framework),
-		[framework]
+		() => getSupportInstallCommands(framework, version),
+		[framework, version]
 	);
 
 	return (
