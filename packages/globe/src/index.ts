@@ -11,6 +11,7 @@ export type {
 	GlobeCluster,
 	GlobeClusteringOptions,
 	GlobeConfig,
+	GlobeFocusTarget,
 	GlobeMarker,
 	GlobePinProps,
 	GlobeProps,

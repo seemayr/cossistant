@@ -112,10 +112,8 @@ export default async function Layout({ children, params }: LayoutProps) {
 										changelogContent={changelogContent}
 										latestRelease={latestRelease}
 									/>
-									<CentralContainer>
-										{children}
-										<ContactVisitorDetailOverlay />
-									</CentralContainer>
+									<CentralContainer>{children}</CentralContainer>
+									<ContactVisitorDetailOverlay />
 									<ModalsAndSheets />
 								</div>
 							</InboxesProvider>

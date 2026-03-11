@@ -9,6 +9,7 @@ import {
 import { ensureWebsiteAccess } from "@/lib/auth/website-access";
 import { getPlanPricing } from "@/lib/plan-pricing";
 import { getQueryClient, prefetch, trpc } from "@/lib/trpc/server";
+import { getAiCreditUsageView } from "./ai-credit-usage";
 import { PlanPageClient } from "./plan-page-client";
 import { UpgradeButton } from "./upgrade-button";
 
@@ -69,7 +70,8 @@ async function PlanInfoContent({ websiteSlug }: { websiteSlug: string }) {
 		trpc.plan.getPlanInfo.queryOptions({ websiteSlug })
 	);
 
-	const { plan, usage } = planInfo;
+	const { plan, usage, aiCredits } = planInfo;
+	const aiCreditUsage = getAiCreditUsageView(aiCredits);
 	const pricing = getPlanPricing(plan.name);
 	const effectiveMonthlyPrice =
 		typeof plan.price === "number" ? plan.price : pricing.price;
@@ -134,21 +136,14 @@ async function PlanInfoContent({ websiteSlug }: { websiteSlug: string }) {
 				title="Usage & Limits"
 			>
 				<div className="space-y-6 p-4">
-					{/* Conversations */}
-					<UsageBar
-						current={usage.conversations}
-						formatValue={formatRollingWindowUsage}
-						label="Conversations (Rolling 30 Days)"
-						limit={plan.features.conversations}
-					/>
-
-					{/* Messages */}
-					<UsageBar
-						current={usage.messages}
-						formatValue={formatRollingWindowUsage}
-						label="Messages (Rolling 30 Days)"
-						limit={plan.features.messages}
-					/>
+					{aiCreditUsage && (
+						<UsageBar
+							current={aiCreditUsage.current}
+							formatValue={() => aiCreditUsage.usageLabel}
+							label="AI Credits (Current Billing Cycle)"
+							limit={aiCreditUsage.limit}
+						/>
+					)}
 
 					{/* Contacts */}
 					<UsageBar
@@ -172,6 +167,22 @@ async function PlanInfoContent({ websiteSlug }: { websiteSlug: string }) {
 						}}
 						label="Team Members"
 						limit={plan.features["team-members"]}
+					/>
+
+					{/* Conversations */}
+					<UsageBar
+						current={usage.conversations}
+						formatValue={formatRollingWindowUsage}
+						label="Conversations"
+						limit={plan.features.conversations}
+					/>
+
+					{/* Messages */}
+					<UsageBar
+						current={usage.messages}
+						formatValue={formatRollingWindowUsage}
+						label="Messages"
+						limit={plan.features.messages}
 					/>
 
 					{/* Conversation Retention - at the bottom */}

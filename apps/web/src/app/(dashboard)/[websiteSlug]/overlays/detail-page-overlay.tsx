@@ -7,6 +7,7 @@ import { useQueryNormalizer } from "@normy/react-query";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { Monitor, Smartphone } from "lucide-react";
 import { useMemo } from "react";
+import { LivePresenceGlobe } from "@/components/inbox-analytics/live-presence-globe";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Avatar } from "@/components/ui/avatar";
 import {
@@ -24,6 +25,7 @@ import { useWebsite } from "@/contexts/website";
 import { useContactVisitorDetailState } from "@/hooks/use-contact-visitor-detail-state";
 import { formatFullDateTime, formatLastSeenAt } from "@/lib/date";
 import { useTRPC } from "@/lib/trpc/client";
+import { cn } from "@/lib/utils";
 import { getVisitorNameWithFallback } from "@/lib/visitors";
 
 type ContactDetail = RouterOutputs["contact"]["get"];
@@ -51,6 +53,7 @@ type ContactVisitorDetailViewProps = {
 	isLoading: boolean;
 	leadVisitorSummary: LeadVisitorSummary | null;
 	visitors: ContactDetailResponse["visitors"];
+	websiteSlug: string;
 };
 
 function isContactDetailResponse(value: unknown): value is ContactDetail {
@@ -409,7 +412,7 @@ function DetailOverlayShell({
 }) {
 	return (
 		<div
-			className="absolute inset-0 z-20 flex h-full flex-col overflow-hidden bg-background dark:bg-background-50"
+			className="absolute inset-x-0 top-15 bottom-0 z-20 flex flex-col overflow-hidden bg-background"
 			data-mode={mode}
 			data-slot="contact-visitor-detail-overlay"
 		>
@@ -515,6 +518,7 @@ function DetailPrimaryPanel({
 	leadVisitorSummary,
 	mode,
 	visitors,
+	websiteSlug,
 }: {
 	contact: DetailContact | null;
 	hero: HeroDetails;
@@ -522,6 +526,7 @@ function DetailPrimaryPanel({
 	leadVisitorSummary: LeadVisitorSummary | null;
 	mode: "contact" | "visitor";
 	visitors: ContactDetailResponse["visitors"];
+	websiteSlug: string;
 }) {
 	const localTimeLabel =
 		hero.localTime?.time && hero.localTime.offset
@@ -537,87 +542,123 @@ function DetailPrimaryPanel({
 	const hasIdentifiers = Boolean(
 		contact?.email || contact?.externalId || contact?.contactOrganizationId
 	);
+	const globeLocations =
+		heroVisitor?.latitude != null && heroVisitor.longitude != null
+			? [
+					{
+						avatarUrl: hero.avatarUrl,
+						fallbackName: hero.title,
+						id: heroVisitor.id,
+						latitude: heroVisitor.latitude,
+						longitude: heroVisitor.longitude,
+					},
+				]
+			: null;
 
 	return (
-		<ScrollArea
-			className="h-full border-primary/10 border-b px-5 py-6 lg:border-r lg:border-b-0 lg:px-8 lg:py-8"
-			maskHeight="120px"
-			scrollMask
-		>
-			<div
-				className="mx-auto flex w-full max-w-sm flex-col gap-8"
-				data-slot="contact-visitor-detail-primary-panel"
+		<div className="relative h-full border-primary/10 border-b lg:border-r lg:border-b-0">
+			<ScrollArea
+				className="relative h-full px-5 py-6 lg:px-8 lg:py-8"
+				maskHeight="120px"
+				scrollMask
 			>
-				<div className="flex flex-col gap-4">
-					<Avatar
-						className="size-10 rounded-[2px] ring-0 ring-offset-0"
-						fallbackName={hero.title}
-						lastOnlineAt={
-							heroVisitor?.lastSeenAt ?? leadVisitorSummary?.lastSeenAt
-						}
-						url={hero.avatarUrl}
-					/>
-					<div className="min-w-0">
-						<h2 className="truncate font-semibold text-xl tracking-tight">
-							{hero.title}
-						</h2>
+				<div
+					className={cn(
+						"mx-auto flex w-full max-w-sm flex-col gap-8",
+						globeLocations ? "pb-8 lg:pb-64" : undefined
+					)}
+					data-slot="contact-visitor-detail-primary-panel"
+				>
+					<div className="flex flex-col gap-4">
+						<Avatar
+							className="size-10 rounded-[2px] ring-0 ring-offset-0"
+							fallbackName={hero.title}
+							lastOnlineAt={
+								heroVisitor?.lastSeenAt ?? leadVisitorSummary?.lastSeenAt
+							}
+							url={hero.avatarUrl}
+						/>
+						<div className="min-w-0">
+							<h2 className="truncate font-semibold text-xl tracking-tight">
+								{hero.title}
+							</h2>
+						</div>
+						{hero.isBlocked ? (
+							<div className="flex flex-wrap items-center gap-3 text-primary/60 text-sm">
+								<span className="text-rose-600">Blocked</span>
+							</div>
+						) : null}
 					</div>
-					{hero.isBlocked ? (
-						<div className="flex flex-wrap items-center gap-3 text-primary/60 text-sm">
-							<span className="text-rose-600">Blocked</span>
+
+					<div className="grid gap-x-6 gap-y-5 sm:grid-cols-2">
+						<DetailMetric
+							label="Last seen"
+							tooltip={hero.lastSeen.tooltip}
+							value={hero.lastSeen.value}
+						/>
+						<DetailMetric
+							label="First seen"
+							tooltip={hero.firstSeen.tooltip}
+							value={hero.firstSeen.value}
+						/>
+						<DetailMetric
+							label={mode === "contact" ? "Devices" : "Identity"}
+							value={summaryLabel}
+						/>
+						<DetailMetric
+							label="Local time"
+							value={localTimeLabel ?? "Unknown"}
+						/>
+					</div>
+
+					{hasIdentifiers && (
+						<ValueGroup className="mt-0 px-0">
+							<ValueDisplay
+								title="Email"
+								value={contact?.email ?? "Not set"}
+								withPaddingLeft={false}
+							/>
+							<ValueDisplay
+								title="External ID"
+								value={contact?.externalId ?? "Not set"}
+								withPaddingLeft={false}
+							/>
+							<ValueDisplay
+								title="Organization ID"
+								value={contact?.contactOrganizationId ?? "Not set"}
+								withPaddingLeft={false}
+							/>
+						</ValueGroup>
+					)}
+
+					<p
+						className="text-pretty text-primary/70 text-sm leading-6"
+						data-slot="contact-visitor-summary-copy"
+					>
+						{visitorInsight}
+					</p>
+
+					{globeLocations ? (
+						<div
+							className="lg:hidden"
+							data-slot="contact-visitor-detail-mobile-globe-wrapper"
+						>
+							<LivePresenceGlobe
+								className="pointer-events-none rounded-none"
+								globeProps={{
+									config: {
+										offset: [0, 28],
+									},
+								}}
+								showSummaryBadge={false}
+								staticLocations={globeLocations}
+								websiteSlug={websiteSlug}
+							/>
 						</div>
 					) : null}
 				</div>
-
-				<div className="grid gap-x-6 gap-y-5 sm:grid-cols-2">
-					<DetailMetric
-						label="Last seen"
-						tooltip={hero.lastSeen.tooltip}
-						value={hero.lastSeen.value}
-					/>
-					<DetailMetric
-						label="First seen"
-						tooltip={hero.firstSeen.tooltip}
-						value={hero.firstSeen.value}
-					/>
-					<DetailMetric
-						label={mode === "contact" ? "Devices" : "Identity"}
-						value={summaryLabel}
-					/>
-					<DetailMetric
-						label="Local time"
-						value={localTimeLabel ?? "Unknown"}
-					/>
-				</div>
-
-				{hasIdentifiers && (
-					<ValueGroup className="mt-0 px-0">
-						<ValueDisplay
-							title="Email"
-							value={contact?.email ?? "Not set"}
-							withPaddingLeft={false}
-						/>
-						<ValueDisplay
-							title="External ID"
-							value={contact?.externalId ?? "Not set"}
-							withPaddingLeft={false}
-						/>
-						<ValueDisplay
-							title="Organization ID"
-							value={contact?.contactOrganizationId ?? "Not set"}
-							withPaddingLeft={false}
-						/>
-					</ValueGroup>
-				)}
-
-				<p
-					className="text-pretty text-primary/70 text-sm leading-6"
-					data-slot="contact-visitor-summary-copy"
-				>
-					{visitorInsight}
-				</p>
-			</div>
-		</ScrollArea>
+			</ScrollArea>
+		</div>
 	);
 }
 
@@ -769,6 +810,7 @@ export function ContactVisitorDetailView({
 	leadVisitorSummary,
 	mode,
 	visitors,
+	websiteSlug,
 }: ContactVisitorDetailViewProps) {
 	const hero = buildHeroDetails({
 		contact,
@@ -828,6 +870,7 @@ export function ContactVisitorDetailView({
 					leadVisitorSummary={leadVisitorSummary}
 					mode={mode}
 					visitors={visitors}
+					websiteSlug={websiteSlug}
 				/>
 				<DetailSecondaryPanel
 					contact={contact}
@@ -965,6 +1008,7 @@ export function ContactVisitorDetailOverlay() {
 			leadVisitorSummary={leadVisitorSummary}
 			mode={activeDetail.type}
 			visitors={contactQuery.data?.visitors ?? []}
+			websiteSlug={website.slug}
 		/>
 	);
 }

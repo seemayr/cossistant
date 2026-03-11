@@ -10,12 +10,16 @@ import {
 import { resolveRenderItems } from "./internal/clustering";
 import { createCobeRenderer } from "./internal/create-cobe-renderer";
 import { extractPins } from "./internal/pins";
-import { projectGlobePoint } from "./internal/projection";
+import {
+	projectGlobePoint,
+	resolveGlobeFocusOrientation,
+} from "./internal/projection";
 import { GlobePin } from "./pin";
 import type {
 	GlobeCluster,
 	GlobeClusteringOptions,
 	GlobeConfig,
+	GlobeFocusTarget,
 	GlobeProps,
 } from "./types";
 
@@ -39,6 +43,7 @@ function GlobeBase({
 	overlayClassName,
 	style,
 	config,
+	focusOn,
 	clustering,
 	autoRotateSpeed = DEFAULT_AUTO_ROTATE_SPEED,
 	dragSensitivity = DEFAULT_DRAG_SENSITIVITY,
@@ -48,8 +53,9 @@ function GlobeBase({
 	const overlayItemRefs = useRef(new Map<string, HTMLDivElement>());
 	const sizeRef = useRef({ width: 0, height: 0 });
 	const dragStateRef = useRef({ active: false, lastClientX: 0 });
-	const phiRef = useRef(config?.phi ?? DEFAULT_GLOBE_CONFIG.phi);
-	const configRef = useRef(resolveConfig(config));
+	const initialConfig = resolveConfig(config, focusOn);
+	const phiRef = useRef(initialConfig.phi);
+	const configRef = useRef(initialConfig);
 	const renderItemsRef = useRef(
 		resolveRenderItems(extractPins(children), resolveClustering(clustering))
 	);
@@ -59,7 +65,7 @@ function GlobeBase({
 	const [hasMeasuredSize, setHasMeasuredSize] = useState(false);
 	const [isReady, setIsReady] = useState(false);
 
-	const resolvedConfig = resolveConfig(config);
+	const resolvedConfig = resolveConfig(config, focusOn);
 	const resolvedClustering = resolveClustering(clustering);
 	const pins = extractPins(children);
 	const renderItems = resolveRenderItems(pins, resolvedClustering);
@@ -354,16 +360,23 @@ function defaultRenderCluster(cluster: GlobeCluster) {
 	);
 }
 
-function resolveConfig(config: GlobeProps["config"]): GlobeConfig {
+function resolveConfig(
+	config: GlobeProps["config"],
+	focusOn: GlobeFocusTarget | undefined
+): GlobeConfig {
 	const devicePixelRatio =
 		typeof config?.devicePixelRatio === "number"
 			? config.devicePixelRatio
 			: typeof window === "undefined"
 				? DEFAULT_GLOBE_CONFIG.devicePixelRatio
 				: Math.min(window.devicePixelRatio || 1, 2);
+	const focusOrientation = focusOn
+		? resolveGlobeFocusOrientation(focusOn)
+		: null;
 
 	return {
 		...DEFAULT_GLOBE_CONFIG,
+		...(focusOrientation ?? {}),
 		...config,
 		baseColor: config?.baseColor ?? DEFAULT_GLOBE_CONFIG.baseColor,
 		markerColor: config?.markerColor ?? DEFAULT_GLOBE_CONFIG.markerColor,

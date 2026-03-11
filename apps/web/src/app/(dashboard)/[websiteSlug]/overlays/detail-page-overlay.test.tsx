@@ -8,9 +8,71 @@ mock.module("facehash", () => ({
 	),
 }));
 
+mock.module("@/components/ui/avatar", () => ({
+	Avatar: ({
+		className,
+		fallbackName,
+		url,
+	}: {
+		className?: string;
+		fallbackName: string;
+		url?: string | null;
+	}) => (
+		<div
+			className={className}
+			data-fallback-name={fallbackName}
+			data-slot="mock-avatar"
+			data-url={url ?? ""}
+		/>
+	),
+}));
+
 mock.module("@/components/ui/tooltip", () => ({
 	TooltipOnHover: ({ children }: { children: React.ReactNode }) => (
 		<>{children}</>
+	),
+}));
+
+mock.module("@/components/inbox-analytics/live-presence-globe", () => ({
+	LivePresenceGlobe: ({
+		className,
+		globeProps,
+		showSummaryBadge,
+		staticLocations,
+	}: {
+		className?: string;
+		globeProps?: {
+			config?: {
+				offset?: [number, number];
+			};
+		};
+		showSummaryBadge?: boolean;
+		staticLocations?: Array<{
+			avatarUrl?: string | null;
+			fallbackName?: string;
+			id: string;
+			latitude: number;
+			longitude: number;
+		}>;
+	}) => (
+		<div
+			className={className}
+			data-globe-config={JSON.stringify(globeProps?.config ?? null)}
+			data-show-summary-badge={String(showSummaryBadge ?? true)}
+			data-slot="mock-live-presence-globe"
+		>
+			{staticLocations?.map((location) => (
+				<div
+					data-avatar-url={location.avatarUrl ?? ""}
+					data-fallback-name={location.fallbackName ?? ""}
+					data-id={location.id}
+					data-latitude={String(location.latitude)}
+					data-longitude={String(location.longitude)}
+					data-slot="mock-live-presence-globe-location"
+					key={location.id}
+				/>
+			))}
+		</div>
 	),
 }));
 
@@ -125,6 +187,7 @@ async function renderView(props: Record<string, unknown>) {
 			leadVisitorSummary={visitors[0] ?? null}
 			mode="contact"
 			visitors={visitors}
+			websiteSlug="website-1"
 			{...props}
 		/>
 	);
@@ -155,6 +218,24 @@ describe("ContactVisitorDetailView", () => {
 		expect(html).toContain("wolf@example.com");
 		expect(html).toContain("crm_123");
 		expect(html).toContain("org-1");
+		expect(html).toContain(
+			'data-slot="contact-visitor-detail-desktop-globe-wrapper"'
+		);
+		expect(html).toContain(
+			'data-slot="contact-visitor-detail-mobile-globe-wrapper"'
+		);
+		expect(html).toContain(
+			'data-slot="contact-visitor-detail-globe-bottom-fade"'
+		);
+		expect(html).toContain(
+			'data-slot="contact-visitor-detail-globe-left-fade"'
+		);
+		expect(html).toContain('data-slot="mock-live-presence-globe"');
+		expect(html).toContain('data-slot="mock-live-presence-globe-location"');
+		expect(html).toContain('data-avatar-url="https://example.com/wolf.png"');
+		expect(html).toContain('data-fallback-name="Gorgeous Wolf"');
+		expect(html).toContain('data-globe-config="{&quot;offset&quot;:[0,28]}"');
+		expect(html).toContain('data-show-summary-badge="false"');
 		expect(html).toContain('data-slot="contact-visitor-detail-device-list"');
 		expect(html).toContain('data-slot="contact-visitor-detail-metadata-panel"');
 		expect(html).toContain("Devices (2)");
@@ -164,6 +245,7 @@ describe("ContactVisitorDetailView", () => {
 		expect(html).not.toContain("Contact details");
 		expect(html).not.toContain("Overview");
 		expect(html).not.toContain(">Back<");
+		expect(html).not.toContain("translate-y-12");
 		expect(html).toContain("Anthony");
 		expect(html).toContain("pro");
 	});
@@ -195,6 +277,24 @@ describe("ContactVisitorDetailView", () => {
 		expect(html).not.toContain(
 			"No contact is associated with this visitor yet."
 		);
+	});
+
+	it("omits the globe when the hero visitor has no coordinates", async () => {
+		const html = await renderView({
+			heroVisitor: {
+				...heroVisitor,
+				latitude: null,
+				longitude: null,
+			},
+		});
+
+		expect(html).not.toContain(
+			'data-slot="contact-visitor-detail-desktop-globe-wrapper"'
+		);
+		expect(html).not.toContain(
+			'data-slot="contact-visitor-detail-mobile-globe-wrapper"'
+		);
+		expect(html).not.toContain('data-slot="mock-live-presence-globe"');
 	});
 
 	it("renders loading, error, and empty states", async () => {

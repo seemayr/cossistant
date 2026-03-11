@@ -1,4 +1,4 @@
-const { PI, sin, cos } = Math;
+const { PI, atan2, sin, cos } = Math;
 
 const GLOBE_RADIUS = 0.8;
 
@@ -20,6 +20,10 @@ export type ProjectedGlobePoint = {
 	depth: number;
 	visible: boolean;
 };
+
+const FOCUS_TARGET_LATITUDE_DEGREES = 18;
+const MIN_FOCUS_THETA = -0.45;
+const MAX_FOCUS_THETA = 0.55;
 
 export function projectGlobePoint({
 	latitude,
@@ -46,6 +50,27 @@ export function projectGlobePoint({
 	return { x, y, depth, visible };
 }
 
+export function resolveGlobeFocusOrientation(params: {
+	latitude: number;
+	longitude: number;
+}) {
+	const targetLatitude = (FOCUS_TARGET_LATITUDE_DEGREES * PI) / 180;
+	const latitude = (params.latitude * PI) / 180;
+	const theta = clamp(
+		targetLatitude - latitude,
+		MIN_FOCUS_THETA,
+		MAX_FOCUS_THETA
+	);
+	const point = latLngToCartesian(params.latitude, params.longitude);
+	const tiltedPoint = rotateAroundX(point, -theta);
+	const phi = normalizeAngle(atan2(-tiltedPoint[0], tiltedPoint[2]));
+
+	return {
+		phi,
+		theta,
+	};
+}
+
 export function latLngToCartesian(latitude: number, longitude: number) {
 	const lat = (latitude * PI) / 180;
 	const lng = (longitude * PI) / 180 - PI;
@@ -59,7 +84,9 @@ export function rotatePointToScreen(
 	theta: number
 ) {
 	const rotatedX = rotateAroundX(point, -theta);
-	return rotateAroundY(rotatedX, -phi);
+	// The WebGL globe rotates positive phi to the viewer's right, so the DOM
+	// overlay must use the same sign convention to avoid mirrored motion.
+	return rotateAroundY(rotatedX, phi);
 }
 
 function rotateAroundX(
@@ -86,4 +113,13 @@ function rotateAroundY(
 
 function clamp(value: number, min: number, max: number) {
 	return Math.min(max, Math.max(min, value));
+}
+
+function normalizeAngle(angle: number) {
+	if (!Number.isFinite(angle)) {
+		return 0;
+	}
+
+	const fullTurn = PI * 2;
+	return ((((angle + PI) % fullTurn) + fullTurn) % fullTurn) - PI;
 }

@@ -8,6 +8,11 @@ export type GlobeMarker = {
 	color?: GlobeRgbColor;
 };
 
+export type GlobeFocusTarget = {
+	latitude: number;
+	longitude: number;
+};
+
 export type GlobeConfig = {
 	phi: number;
 	theta: number;
@@ -69,6 +74,7 @@ export type GlobeProps = {
 	overlayClassName?: string;
 	style?: CSSProperties;
 	config?: Partial<GlobeConfig>;
+	focusOn?: GlobeFocusTarget;
 	clustering?: false | GlobeClusteringOptions;
 	autoRotateSpeed?: number;
 	dragSensitivity?: number;

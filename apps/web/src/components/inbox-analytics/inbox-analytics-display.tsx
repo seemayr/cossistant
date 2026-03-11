@@ -189,7 +189,7 @@ function LivePresenceDot() {
 				data-slot="inbox-analytics-live-dot-pulse"
 			/>
 			<span
-				className="relative size-2 rounded-full bg-emerald-600"
+				className="relative size-1.5 rounded-full bg-emerald-600"
 				data-slot="inbox-analytics-live-dot"
 			/>
 		</span>
