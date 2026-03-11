@@ -24,8 +24,8 @@ export function BrowserShell({
 			)}
 			data-slot="browser-shell"
 		>
-			<div className="flex h-full w-full flex-col overflow-hidden bg-background dark:bg-background-100">
-				<div className="flex items-center justify-between gap-2 border-primary/5 border-b px-4 py-1 dark:bg-background-100">
+			<div className="flex h-full w-full flex-col overflow-hidden bg-black dark:bg-background-100">
+				<div className="flex items-center justify-between gap-2 border-primary/5 border-b px-4 py-1">
 					<div
 						className="flex w-20 gap-2"
 						data-slot="browser-shell-traffic-lights"
