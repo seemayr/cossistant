@@ -41,6 +41,174 @@ export type PublicContact = z.infer<typeof publicContactResponseSchema>;
 
 export type VisitorMetadata = z.infer<typeof visitorMetadataSchema>;
 
+export const attributionChannelSchema = z.enum([
+	"direct",
+	"email",
+	"paid",
+	"organic_search",
+	"social",
+	"referral",
+]);
+
+const nullableStringSchema = z.string().nullable();
+const nullableUrlSchema = z.string().url().nullable();
+
+export const visitorAttributionReferrerSchema = z.object({
+	url: nullableUrlSchema.openapi({
+		description:
+			"Sanitized external referrer URL without arbitrary query data.",
+		example: "https://news.ycombinator.com/item?id=123",
+	}),
+	domain: nullableStringSchema.openapi({
+		description: "Normalized referrer hostname.",
+		example: "news.ycombinator.com",
+	}),
+});
+
+export const visitorAttributionLandingSchema = z.object({
+	url: nullableUrlSchema.openapi({
+		description:
+			"Sanitized landing page URL including only supported attribution params.",
+		example:
+			"https://app.example.com/pricing?utm_source=hn&utm_medium=community",
+	}),
+	path: nullableStringSchema.openapi({
+		description: "Landing page path.",
+		example: "/pricing",
+	}),
+	title: nullableStringSchema.openapi({
+		description: "Document title captured on the landing page.",
+		example: "Pricing | Example",
+	}),
+});
+
+export const visitorAttributionUtmSchema = z.object({
+	source: nullableStringSchema.openapi({
+		description: "UTM source value.",
+		example: "hn",
+	}),
+	medium: nullableStringSchema.openapi({
+		description: "UTM medium value.",
+		example: "community",
+	}),
+	campaign: nullableStringSchema.openapi({
+		description: "UTM campaign value.",
+		example: "launch_week",
+	}),
+	content: nullableStringSchema.openapi({
+		description: "UTM content value.",
+		example: "hero_cta",
+	}),
+	term: nullableStringSchema.openapi({
+		description: "UTM term value.",
+		example: "ai support",
+	}),
+});
+
+export const visitorAttributionClickIdsSchema = z.object({
+	gclid: nullableStringSchema.openapi({
+		description: "Google Ads click identifier.",
+		example: "gclid_123",
+	}),
+	gbraid: nullableStringSchema.openapi({
+		description: "Google iOS app click identifier.",
+		example: "gbraid_123",
+	}),
+	wbraid: nullableStringSchema.openapi({
+		description: "Google web-to-app click identifier.",
+		example: "wbraid_123",
+	}),
+	fbclid: nullableStringSchema.openapi({
+		description: "Meta click identifier.",
+		example: "fbclid_123",
+	}),
+	msclkid: nullableStringSchema.openapi({
+		description: "Microsoft Ads click identifier.",
+		example: "msclkid_123",
+	}),
+	ttclid: nullableStringSchema.openapi({
+		description: "TikTok click identifier.",
+		example: "ttclid_123",
+	}),
+	li_fat_id: nullableStringSchema.openapi({
+		description: "LinkedIn click identifier.",
+		example: "li_fat_id_123",
+	}),
+	twclid: nullableStringSchema.openapi({
+		description: "X/Twitter click identifier.",
+		example: "twclid_123",
+	}),
+});
+
+export const visitorAttributionFirstTouchSchema = z.object({
+	channel: attributionChannelSchema.openapi({
+		description: "Derived acquisition channel.",
+		example: "referral",
+	}),
+	isDirect: z.boolean().openapi({
+		description: "Whether the visit should be treated as direct traffic.",
+		example: false,
+	}),
+	referrer: visitorAttributionReferrerSchema,
+	landing: visitorAttributionLandingSchema,
+	utm: visitorAttributionUtmSchema,
+	clickIds: visitorAttributionClickIdsSchema,
+	capturedAt: z.string().openapi({
+		description: "When the first-touch attribution snapshot was captured.",
+		example: "2026-03-12T10:00:00.000Z",
+	}),
+});
+
+export const visitorAttributionSchema = z.object({
+	version: z.literal(1).openapi({
+		description: "Schema version for the attribution payload.",
+		example: 1,
+	}),
+	firstTouch: visitorAttributionFirstTouchSchema,
+});
+
+export const visitorCurrentPageSchema = z.object({
+	url: nullableUrlSchema.openapi({
+		description:
+			"Sanitized current page URL including only supported attribution params.",
+		example: "https://app.example.com/pricing",
+	}),
+	path: nullableStringSchema.openapi({
+		description: "Current page path.",
+		example: "/pricing",
+	}),
+	title: nullableStringSchema.openapi({
+		description: "Current document title.",
+		example: "Pricing | Example",
+	}),
+	referrerUrl: nullableUrlSchema.openapi({
+		description:
+			"Sanitized document referrer URL for the current page context.",
+		example: "https://news.ycombinator.com/item?id=123",
+	}),
+	updatedAt: z.string().openapi({
+		description: "When the current page context was last updated.",
+		example: "2026-03-12T10:00:05.000Z",
+	}),
+});
+
+export type AttributionChannel = z.infer<typeof attributionChannelSchema>;
+export type VisitorAttributionReferrer = z.infer<
+	typeof visitorAttributionReferrerSchema
+>;
+export type VisitorAttributionLanding = z.infer<
+	typeof visitorAttributionLandingSchema
+>;
+export type VisitorAttributionUtm = z.infer<typeof visitorAttributionUtmSchema>;
+export type VisitorAttributionClickIds = z.infer<
+	typeof visitorAttributionClickIdsSchema
+>;
+export type VisitorAttributionFirstTouch = z.infer<
+	typeof visitorAttributionFirstTouchSchema
+>;
+export type VisitorAttribution = z.infer<typeof visitorAttributionSchema>;
+export type VisitorCurrentPage = z.infer<typeof visitorCurrentPageSchema>;
+
 /**
  * Visitor data update request schema
  */
@@ -186,6 +354,16 @@ export const updateVisitorRequestSchema = z.object({
 		.openapi({
 			description: "The visitor's viewport size.",
 			example: "1920x900",
+		})
+		.optional(),
+	attribution: visitorAttributionSchema
+		.openapi({
+			description: "Normalized acquisition data captured for this visitor.",
+		})
+		.optional(),
+	currentPage: visitorCurrentPageSchema
+		.openapi({
+			description: "Latest page context captured for this visitor.",
 		})
 		.optional(),
 	metadata: visitorMetadataSchema
@@ -341,6 +519,12 @@ export const visitorResponseSchema = z.object({
 	isBlocked: z.boolean().openapi({
 		description: "Whether the visitor is currently blocked.",
 		example: true,
+	}),
+	attribution: visitorAttributionSchema.nullable().openapi({
+		description: "Normalized acquisition data captured for this visitor.",
+	}),
+	currentPage: visitorCurrentPageSchema.nullable().openapi({
+		description: "Latest page context captured for this visitor.",
 	}),
 	contact: contactResponseSchema.nullable(),
 });

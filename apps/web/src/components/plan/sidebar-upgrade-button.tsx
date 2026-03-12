@@ -2,6 +2,7 @@
 
 import type { RouterOutputs } from "@cossistant/api/types";
 import { useMemo, useState } from "react";
+import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { UpgradeModal } from "./upgrade-modal";
 
@@ -31,7 +32,6 @@ function HardLimitRow({
 	enforced,
 }: HardLimitRowProps) {
 	const percentage = getUsagePercentage(limit, used);
-	const barWidth = percentage === 0 ? 0 : Math.max(percentage, 2);
 
 	return (
 		<div className="space-y-1.5">
@@ -46,15 +46,16 @@ function HardLimitRow({
 				</span>
 			</div>
 			{limit !== null ? (
-				<div className="h-1.5 w-full overflow-hidden rounded-full bg-background-200 dark:bg-background-800">
-					<div
-						className={cn(
-							"h-full min-w-1 rounded-r-full transition-all",
-							reached ? "bg-cossistant-orange" : "bg-primary/50"
-						)}
-						style={{ width: `${barWidth}%` }}
-					/>
-				</div>
+				<Progress
+					className={cn(
+						"h-1.5 bg-background-200/80 dark:bg-background-800",
+						reached && "bg-cossistant-orange/10"
+					)}
+					indicatorClassName={
+						reached ? "text-cossistant-orange" : "text-primary/55"
+					}
+					value={percentage}
+				/>
 			) : null}
 			{reached ? (
 				<div className="text-[11px] text-cossistant-orange">

@@ -8,6 +8,7 @@ import { useQueryNormalizer } from "@normy/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { toast } from "sonner";
+import type { TrainingControls } from "@/hooks/use-training-controls";
 import { useTRPC } from "@/lib/trpc/client";
 
 // Regex for removing file extensions
@@ -32,7 +33,7 @@ type UseFileMutationsOptions = {
 	onCreateSuccess?: () => void;
 	onUpdateSuccess?: () => void;
 	onUploadSuccess?: () => void;
-	onTrainRequested?: () => void;
+	trainingControls?: TrainingControls;
 };
 
 export function useFileMutations({
@@ -41,7 +42,7 @@ export function useFileMutations({
 	onCreateSuccess,
 	onUpdateSuccess,
 	onUploadSuccess,
-	onTrainRequested,
+	trainingControls,
 }: UseFileMutationsOptions) {
 	const trpc = useTRPC();
 	const queryClient = useQueryClient();
@@ -129,16 +130,25 @@ export function useFileMutations({
 				}
 				toast.error(_error.message || "Failed to add file");
 			},
-			onSuccess: () => {
-				toast.success("File added", {
-					...(onTrainRequested && {
-						action: {
-							label: "Train Agent",
-							onClick: onTrainRequested,
-						},
-					}),
-				});
+			onSuccess: async () => {
 				onCreateSuccess?.();
+
+				const autoStarted = trainingControls?.canAutoStartTraining
+					? await trainingControls.startTrainingIfAllowed()
+					: false;
+
+				if (!autoStarted) {
+					toast.success("File added", {
+						...(trainingControls?.canRequestTraining && {
+							action: {
+								label: "Train Agent",
+								onClick: () => {
+									void trainingControls.requestTraining();
+								},
+							},
+						}),
+					});
+				}
 			},
 			onSettled: () => {
 				// Refetch after mutation
@@ -248,16 +258,25 @@ export function useFileMutations({
 				}
 				toast.error(_error.message || "Failed to upload file");
 			},
-			onSuccess: (data) => {
-				toast.success(`File uploaded: ${data.sourceTitle}`, {
-					...(onTrainRequested && {
-						action: {
-							label: "Train Agent",
-							onClick: onTrainRequested,
-						},
-					}),
-				});
+			onSuccess: async (data) => {
 				onUploadSuccess?.();
+
+				const autoStarted = trainingControls?.canAutoStartTraining
+					? await trainingControls.startTrainingIfAllowed()
+					: false;
+
+				if (!autoStarted) {
+					toast.success(`File uploaded: ${data.sourceTitle}`, {
+						...(trainingControls?.canRequestTraining && {
+							action: {
+								label: "Train Agent",
+								onClick: () => {
+									void trainingControls.requestTraining();
+								},
+							},
+						}),
+					});
+				}
 			},
 			onSettled: () => {
 				// Refetch after mutation

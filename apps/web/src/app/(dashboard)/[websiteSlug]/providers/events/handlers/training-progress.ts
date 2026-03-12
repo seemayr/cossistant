@@ -1,5 +1,6 @@
 import type { RealtimeEvent } from "@cossistant/types/realtime-events";
 import { toast } from "sonner";
+import { showProgressToast } from "@/components/ui/sonner";
 import type { DashboardRealtimeContext } from "../types";
 
 type TrainingStartedEvent = RealtimeEvent<"trainingStarted">;
@@ -12,6 +13,14 @@ type TrainingFailedEvent = RealtimeEvent<"trainingFailed">;
  */
 function getTrainingToastId(aiAgentId: string): string {
 	return `training-${aiAgentId}`;
+}
+
+function getTrainingProgressToastId(aiAgentId: string): string {
+	return `${getTrainingToastId(aiAgentId)}-progress`;
+}
+
+function getTrainingResultToastId(aiAgentId: string): string {
+	return `${getTrainingToastId(aiAgentId)}-result`;
 }
 
 /**
@@ -51,9 +60,12 @@ export function handleTrainingStarted({
 		});
 
 	// Show loading toast
-	toast.loading("Training AI agent...", {
-		id: getTrainingToastId(payload.aiAgentId),
-		description: "Processing knowledge base",
+	toast.dismiss(getTrainingResultToastId(payload.aiAgentId));
+	showProgressToast({
+		id: getTrainingProgressToastId(payload.aiAgentId),
+		indeterminate: true,
+		status: "Processing knowledge base",
+		title: "Training AI agent...",
 	});
 
 	console.log(
@@ -97,9 +109,13 @@ export function handleTrainingProgress({
 	);
 
 	// Update toast with progress (keep stable shape - no item details)
-	toast.loading("Training AI agent...", {
-		id: getTrainingToastId(payload.aiAgentId),
-		description: `${payload.processedItems}/${payload.totalItems} items (${payload.percentage}%)`,
+	toast.dismiss(getTrainingResultToastId(payload.aiAgentId));
+	showProgressToast({
+		id: getTrainingProgressToastId(payload.aiAgentId),
+		status: `${payload.processedItems} of ${payload.totalItems} items processed`,
+		title: "Training AI agent...",
+		value: payload.percentage,
+		valueLabel: `${payload.percentage}%`,
 	});
 
 	console.log(
@@ -177,8 +193,10 @@ export function handleTrainingCompleted({
 		});
 
 	// Show success toast
+	toast.dismiss(getTrainingProgressToastId(payload.aiAgentId));
+	toast.dismiss(getTrainingResultToastId(payload.aiAgentId));
 	toast.success("Training complete!", {
-		id: getTrainingToastId(payload.aiAgentId),
+		id: getTrainingResultToastId(payload.aiAgentId),
 		description: `${payload.totalItems} items processed, ${payload.totalChunks} chunks created in ${durationText}`,
 	});
 
@@ -224,8 +242,10 @@ export function handleTrainingFailed({
 		});
 
 	// Show error toast
+	toast.dismiss(getTrainingProgressToastId(payload.aiAgentId));
+	toast.dismiss(getTrainingResultToastId(payload.aiAgentId));
 	toast.error("Training failed", {
-		id: getTrainingToastId(payload.aiAgentId),
+		id: getTrainingResultToastId(payload.aiAgentId),
 		description: payload.error || "An unexpected error occurred",
 	});
 

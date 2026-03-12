@@ -1,0 +1,17 @@
+import { cn } from "@/lib/utils";
+
+type FullWidthBorderProps = {
+	className?: string;
+};
+
+export function FullWidthBorder({ className }: FullWidthBorderProps) {
+	return (
+		<div
+			aria-hidden="true"
+			className={cn(
+				"-translate-x-1/2 pointer-events-none absolute left-1/2 z-20 h-px w-screen border-primary/10 border-t border-dashed",
+				className
+			)}
+		/>
+	);
+}

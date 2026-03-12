@@ -1,6 +1,6 @@
 import type { Database } from "@api/db";
 import { conversation, conversationSeen } from "@api/db/schema";
-import { trackConversationMetric } from "@api/lib/tinybird-sdk";
+import { trackConversationMetricForVisitor } from "@api/lib/tinybird-sdk";
 import { createConversationEvent } from "@api/utils/conversation-event";
 import { generateULID } from "@api/utils/db/ids";
 import {
@@ -77,7 +77,7 @@ export async function resolveConversation(
 	});
 
 	// Track conversation_resolved event in Tinybird for analytics
-	trackConversationMetric({
+	void trackConversationMetricForVisitor(db, {
 		website_id: params.conversation.websiteId,
 		visitor_id: params.conversation.visitorId,
 		conversation_id: params.conversation.id,

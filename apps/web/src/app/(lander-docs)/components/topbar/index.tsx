@@ -24,6 +24,7 @@ import {
 } from "@/lib/search/search-metadata";
 import { blog, changelog, source } from "@/lib/source";
 import { cn } from "@/lib/utils";
+import { FullWidthBorder } from "../full-width-border";
 import { SearchBar } from "./search-bar";
 
 type SearchablePage = {
@@ -154,7 +155,7 @@ export function TopBar({
 			className={cn("fixed top-0 right-0 left-0 z-50 border-grid-x", className)}
 		>
 			<div className="container-wrapper relative mx-auto">
-				<div className="container absolute top-0 right-0 left-0 z-50 mx-auto flex items-center border-primary/10 border-b border-dashed bg-background py-4 lg:justify-between">
+				<div className="container absolute top-0 right-0 left-0 z-50 mx-auto flex items-center bg-background py-4 lg:justify-between">
 					<div className="flex items-center gap-3 sm:gap-6">
 						<Sheet>
 							<SheetTrigger asChild>
@@ -217,6 +218,7 @@ export function TopBar({
 						<SearchBar catalog={searchCatalog} />
 						<div className="hidden items-center gap-2 md:flex">{children}</div>
 					</div>
+					<FullWidthBorder className="bottom-0" />
 				</div>
 				<div className="pointer-events-none absolute top-0 right-0 left-0 z-10 h-20 bg-linear-to-b from-background to-transparent" />
 				<div className="pointer-events-none absolute top-0 right-0 left-0 z-10 h-24 bg-linear-to-b from-background to-transparent" />

@@ -97,7 +97,7 @@ export type WebCrawlJobData = {
 	includePaths?: string[] | null;
 	excludePaths?: string[] | null;
 	// Firecrawl v2 parameters
-	/** Maximum depth of links to follow from the starting URL - default: 5 */
+	/** Maximum depth of links to follow from the starting URL. Link source create flows default to 1. */
 	maxDepth?: number;
 };
 

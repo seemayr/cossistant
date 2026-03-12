@@ -96,7 +96,7 @@
       "outputs": []
     },
     "check-types": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["^check-types"],
       "outputs": []
     },
     "@cossistant/example-nextjs-tailwind#check-types": {

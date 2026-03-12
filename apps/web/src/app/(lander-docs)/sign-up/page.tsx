@@ -1,6 +1,6 @@
 import { SignupForm } from "@/app/(lander-docs)/components/signup-form";
 import { FakeSupportWidget } from "@/components/landing/fake-support-widget";
-import { BackgroundImage } from "@/components/ui/background-image";
+import { Background } from "@/components/ui/background";
 import { utilityNoindex } from "@/lib/metadata";
 
 export const dynamic = "force-dynamic";
@@ -17,13 +17,7 @@ export default function SignupPage() {
 				<SignupForm />
 			</div>
 			<div className="cossistant relative hidden h-full w-1/2 items-center justify-center border-primary/10 border-l border-dashed lg:flex">
-				<BackgroundImage
-					alt="Cossistant Background"
-					largeSrc="https://cdn.cossistant.com/landing/secondary-large.jpg"
-					mediumSrc="https://cdn.cossistant.com/landing/secondary-medium.jpg"
-					portraitOnMobile
-					smallSrc="https://cdn.cossistant.com/landing/secondary-small.jpg"
-				/>
+				<Background />
 				<FakeSupportWidget />
 			</div>
 		</div>

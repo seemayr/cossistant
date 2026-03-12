@@ -133,6 +133,47 @@ const heroVisitor = {
 	blockedAt: null,
 	blockedByUserId: null,
 	isBlocked: false,
+	attribution: {
+		version: 1 as const,
+		firstTouch: {
+			channel: "email" as const,
+			isDirect: false,
+			referrer: {
+				url: "https://news.ycombinator.com/item",
+				domain: "news.ycombinator.com",
+			},
+			landing: {
+				url: "https://app.example.com/pricing?utm_source=launch_list&utm_medium=email&utm_campaign=april_launch&ttclid=ttclid_123",
+				path: "/pricing",
+				title: "Pricing | Cossistant",
+			},
+			utm: {
+				source: "launch_list",
+				medium: "email",
+				campaign: "april_launch",
+				content: null,
+				term: null,
+			},
+			clickIds: {
+				gclid: null,
+				gbraid: null,
+				wbraid: null,
+				fbclid: null,
+				msclkid: null,
+				ttclid: "ttclid_123",
+				li_fat_id: null,
+				twclid: null,
+			},
+			capturedAt: "2026-03-01T09:30:00.000Z",
+		},
+	},
+	currentPage: {
+		url: "https://app.example.com/pricing?utm_source=launch_list&utm_medium=email&utm_campaign=april_launch&ttclid=ttclid_123",
+		path: "/pricing",
+		title: "Pricing | Cossistant",
+		referrerUrl: "https://news.ycombinator.com/item",
+		updatedAt: "2026-03-05T14:45:00.000Z",
+	},
 	contact,
 };
 
@@ -214,33 +255,21 @@ describe("ContactVisitorDetailView", () => {
 		expect(html).toContain(">afternoon<");
 		expect(html).toContain(">14:30<");
 		expect(html).toContain("for them");
+		expect(html).toContain('data-slot="visitor-source-badge"');
+		expect(html).toContain("news.ycombinator.com");
 		expect(html).toContain("Email");
 		expect(html).toContain("wolf@example.com");
 		expect(html).toContain("crm_123");
 		expect(html).toContain("org-1");
-		expect(html).toContain(
-			'data-slot="contact-visitor-detail-desktop-globe-wrapper"'
-		);
-		expect(html).toContain(
-			'data-slot="contact-visitor-detail-mobile-globe-wrapper"'
-		);
-		expect(html).toContain(
-			'data-slot="contact-visitor-detail-globe-bottom-fade"'
-		);
-		expect(html).toContain(
-			'data-slot="contact-visitor-detail-globe-left-fade"'
-		);
-		expect(html).toContain('data-slot="mock-live-presence-globe"');
-		expect(html).toContain('data-slot="mock-live-presence-globe-location"');
-		expect(html).toContain('data-avatar-url="https://example.com/wolf.png"');
-		expect(html).toContain('data-fallback-name="Gorgeous Wolf"');
-		expect(html).toContain('data-globe-config="{&quot;offset&quot;:[0,28]}"');
-		expect(html).toContain('data-show-summary-badge="false"');
 		expect(html).toContain('data-slot="contact-visitor-detail-device-list"');
 		expect(html).toContain('data-slot="contact-visitor-detail-metadata-panel"');
 		expect(html).toContain("Devices (2)");
 		expect(html).toContain("MacBook Pro • Chrome • 127.0.0.1");
 		expect(html).toContain("iPhone • Safari • 127.0.0.2");
+		expect(html).toContain('data-slot="visitor-attribution-group"');
+		expect(html).toContain(">Hacker News<");
+		expect(html).not.toContain(">Campaign<");
+		expect(html).not.toContain(">Ad IDs<");
 		expect(html).not.toContain("Lead device");
 		expect(html).not.toContain("Contact details");
 		expect(html).not.toContain("Overview");

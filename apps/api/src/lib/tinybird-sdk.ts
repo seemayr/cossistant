@@ -8,7 +8,13 @@
  * - Type-safe query functions
  */
 
+import type { Database } from "@api/db";
+import { findVisitorForWebsite } from "@api/db/queries/visitor";
 import { env } from "@api/env";
+import {
+	type FlattenedVisitorTrackingContext,
+	flattenVisitorTrackingContext,
+} from "@api/lib/visitor-attribution";
 import { createTinybirdApi } from "@tinybirdco/sdk";
 
 // ============================================================================
@@ -41,9 +47,16 @@ export type ConversationMetricEvent = {
 		| "feedback_submitted";
 	conversation_id: string;
 	duration_seconds: number;
-};
+} & FlattenedVisitorTrackingContext;
 
-type TinybirdEvent = PresenceEvent | ConversationMetricEvent;
+export type VisitorEvent = {
+	timestamp: Date;
+	website_id: string;
+	visitor_id: string;
+	event_type: "page_view";
+} & FlattenedVisitorTrackingContext;
+
+type TinybirdEvent = PresenceEvent | ConversationMetricEvent | VisitorEvent;
 
 // ============================================================================
 // Configuration
@@ -232,9 +245,11 @@ export async function ingestEvent<T extends TinybirdEvent>(
 // ============================================================================
 
 const presenceEventBuffer = new EventBuffer<PresenceEvent>("presence_events");
+const visitorEventBuffer = new EventBuffer<VisitorEvent>("visitor_events");
 const conversationMetricBuffer = new EventBuffer<ConversationMetricEvent>(
 	"conversation_metrics"
 );
+const EMPTY_TRACKING_CONTEXT = flattenVisitorTrackingContext({});
 
 /**
  * Track a presence heartbeat for a visitor or user.
@@ -271,6 +286,16 @@ export function trackPresence(
 	});
 }
 
+export function trackVisitorEvent(
+	event: Omit<VisitorEvent, "timestamp">
+): void {
+	visitorEventBuffer.add({
+		...EMPTY_TRACKING_CONTEXT,
+		...event,
+		timestamp: new Date(),
+	});
+}
+
 /**
  * Track a conversation metric event.
  * Events are batched and flushed every 5 seconds or when 100 events are buffered.
@@ -281,10 +306,44 @@ export function trackConversationMetric(
 	}
 ): void {
 	conversationMetricBuffer.add({
+		...EMPTY_TRACKING_CONTEXT,
 		...event,
 		timestamp: new Date(),
 		duration_seconds: event.duration_seconds ?? 0,
 	});
+}
+
+export async function trackConversationMetricForVisitor(
+	db: Database,
+	event: Omit<
+		ConversationMetricEvent,
+		"timestamp" | "duration_seconds" | keyof FlattenedVisitorTrackingContext
+	> & {
+		duration_seconds?: number;
+	}
+): Promise<void> {
+	try {
+		const visitor = await findVisitorForWebsite(db, {
+			visitorId: event.visitor_id,
+			websiteId: event.website_id,
+		});
+
+		trackConversationMetric({
+			...event,
+			...flattenVisitorTrackingContext({
+				attribution: visitor?.attribution ?? null,
+				currentPage: visitor?.currentPage ?? null,
+			}),
+			duration_seconds: event.duration_seconds,
+		});
+	} catch (error) {
+		console.error("[Tinybird] Failed to enrich visitor attribution", error);
+		trackConversationMetric({
+			...EMPTY_TRACKING_CONTEXT,
+			...event,
+			duration_seconds: event.duration_seconds,
+		});
+	}
 }
 
 // ============================================================================
@@ -340,6 +399,7 @@ export async function queryInboxAnalytics(
 export async function flushAllEvents(): Promise<void> {
 	await Promise.all([
 		presenceEventBuffer.destroy(),
+		visitorEventBuffer.destroy(),
 		conversationMetricBuffer.destroy(),
 	]);
 }

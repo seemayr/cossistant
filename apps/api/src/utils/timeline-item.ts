@@ -1,7 +1,7 @@
 import type { Database } from "@api/db";
 import { getConversationById } from "@api/db/queries/conversation";
 import { conversation, conversationTimelineItem } from "@api/db/schema";
-import { trackConversationMetric } from "@api/lib/tinybird-sdk";
+import { trackConversationMetricForVisitor } from "@api/lib/tinybird-sdk";
 import { realtime } from "@api/realtime/emitter";
 import { generateULID } from "@api/utils/db/ids";
 import {
@@ -367,7 +367,7 @@ export async function createMessageTimelineItem(
 				)
 			);
 
-			trackConversationMetric({
+			void trackConversationMetricForVisitor(db, {
 				website_id: websiteId,
 				visitor_id: updated.visitorId,
 				conversation_id: conversationId,

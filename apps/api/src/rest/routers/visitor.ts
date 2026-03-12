@@ -7,6 +7,11 @@ import {
 	findVisitorForWebsite,
 	updateVisitorForWebsite,
 } from "@api/db/queries/visitor";
+import { trackVisitorEvent } from "@api/lib/tinybird-sdk";
+import {
+	flattenVisitorTrackingContext,
+	resolveFirstTouchAttribution,
+} from "@api/lib/visitor-attribution";
 import {
 	safelyExtractRequestData,
 	validateResponse,
@@ -56,6 +61,8 @@ function formatVisitorResponse(record: VisitorRecord): VisitorResponse {
 		blockedAt: record.blockedAt ?? null,
 		blockedByUserId: record.blockedByUserId,
 		isBlocked: Boolean(record.blockedAt),
+		attribution: record.attribution ?? null,
+		currentPage: record.currentPage ?? null,
 		contact: null,
 	};
 }
@@ -383,6 +390,18 @@ visitorRouter.openapi(
 				);
 			}
 
+			const existingVisitor = await findVisitorForWebsite(db, {
+				visitorId,
+				websiteId: website.id,
+			});
+
+			if (!existingVisitor) {
+				return c.json(
+					{ error: "NOT_FOUND", message: "Visitor not found" },
+					404
+				);
+			}
+
 			const normalizedBodyCountryCode = normalizeCountryCode(body.countryCode);
 			if (
 				typeof body.countryCode === "string" &&
@@ -402,6 +421,8 @@ visitorRouter.openapi(
 				...(normalizedBodyCountryCode
 					? { countryCode: normalizedBodyCountryCode }
 					: {}),
+				attribution: body.attribution,
+				currentPage: body.currentPage,
 			};
 
 			const now = new Date();
@@ -462,6 +483,12 @@ visitorRouter.openapi(
 					...networkContext,
 					...normalizedBody,
 					...derivedCountryUpdate,
+					attribution: resolveFirstTouchAttribution({
+						existingAttribution: existingVisitor.attribution,
+						incomingAttribution: normalizedBody.attribution,
+					}),
+					currentPage:
+						normalizedBody.currentPage ?? existingVisitor.currentPage,
 					lastSeenAt: now.toISOString(),
 					updatedAt: now.toISOString(),
 				},
@@ -472,6 +499,18 @@ visitorRouter.openapi(
 					{ error: "NOT_FOUND", message: "Visitor not found" },
 					404
 				);
+			}
+
+			if (normalizedBody.currentPage) {
+				trackVisitorEvent({
+					website_id: website.id,
+					visitor_id: visitorId,
+					event_type: "page_view",
+					...flattenVisitorTrackingContext({
+						attribution: updatedVisitor.attribution,
+						currentPage: updatedVisitor.currentPage,
+					}),
+				});
 			}
 
 			const response = formatVisitorResponse(updatedVisitor);

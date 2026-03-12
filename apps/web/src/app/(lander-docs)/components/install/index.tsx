@@ -2,13 +2,16 @@ import Link from "next/link";
 import { ComponentPreview } from "@/components/component-preview";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { FullWidthBorder } from "../full-width-border";
 import { FrameworkInstallCommandTabs } from "./framework-install-command-tabs";
 
 export const Install = () => (
 	<section
-		className="flex flex-col gap-6 border-primary/10 border-y border-dashed md:h-[calc(100vh-20px)] md:gap-12"
+		className="relative flex flex-col gap-6 md:h-[calc(100vh-20px)] md:gap-12"
 		suppressHydrationWarning
 	>
+		<FullWidthBorder className="top-0" />
+
 		<div className="flex w-full flex-1 flex-col-reverse justify-stretch gap-0 lg:flex-row">
 			<div
 				className={cn(
@@ -50,5 +53,6 @@ export const Install = () => (
 				/>
 			</div>
 		</div>
+		<FullWidthBorder className="bottom-0" />
 	</section>
 );

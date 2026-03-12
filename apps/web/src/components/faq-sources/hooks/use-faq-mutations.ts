@@ -5,6 +5,7 @@ import { useQueryNormalizer } from "@normy/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { toast } from "sonner";
+import type { TrainingControls } from "@/hooks/use-training-controls";
 import { useTRPC } from "@/lib/trpc/client";
 
 // Type for Normy's normalized data - derived from the hook return type
@@ -25,7 +26,7 @@ type UseFaqMutationsOptions = {
 	aiAgentId: string | null;
 	onCreateSuccess?: () => void;
 	onUpdateSuccess?: () => void;
-	onTrainRequested?: () => void;
+	trainingControls?: TrainingControls;
 };
 
 export function useFaqMutations({
@@ -33,7 +34,7 @@ export function useFaqMutations({
 	aiAgentId,
 	onCreateSuccess,
 	onUpdateSuccess,
-	onTrainRequested,
+	trainingControls,
 }: UseFaqMutationsOptions) {
 	const trpc = useTRPC();
 	const queryClient = useQueryClient();
@@ -121,16 +122,25 @@ export function useFaqMutations({
 				}
 				toast.error(_error.message || "Failed to add FAQ");
 			},
-			onSuccess: () => {
-				toast.success("FAQ added", {
-					...(onTrainRequested && {
-						action: {
-							label: "Train Agent",
-							onClick: onTrainRequested,
-						},
-					}),
-				});
+			onSuccess: async () => {
 				onCreateSuccess?.();
+
+				const autoStarted = trainingControls?.canAutoStartTraining
+					? await trainingControls.startTrainingIfAllowed()
+					: false;
+
+				if (!autoStarted) {
+					toast.success("FAQ added", {
+						...(trainingControls?.canRequestTraining && {
+							action: {
+								label: "Train Agent",
+								onClick: () => {
+									void trainingControls.requestTraining();
+								},
+							},
+						}),
+					});
+				}
 			},
 			onSettled: () => {
 				// Refetch after mutation

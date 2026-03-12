@@ -10,7 +10,7 @@ import {
 	conversationView,
 	visitor,
 } from "@api/db/schema";
-import { trackConversationMetric } from "@api/lib/tinybird-sdk";
+import { trackConversationMetricForVisitor } from "@api/lib/tinybird-sdk";
 import { generateShortPrimaryId } from "@api/utils/db/ids";
 
 import {
@@ -150,7 +150,7 @@ export async function upsertConversation(
 
 	// Track conversation_started event in Tinybird for analytics (only if actually inserted)
 	if (insertedConversation) {
-		trackConversationMetric({
+		void trackConversationMetricForVisitor(db, {
 			website_id: params.websiteId,
 			visitor_id: params.visitorId,
 			conversation_id: newConversationId,

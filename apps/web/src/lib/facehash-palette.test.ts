@@ -7,11 +7,11 @@ import {
 describe("facehash palette", () => {
 	it("keeps avatar classes and route colors aligned to the dark brand palette", () => {
 		expect(COSSISTANT_FACEHASH_COLOR_CLASSES).toEqual([
-			"dark:bg-cossistant-pink/90 bg-cossistant-pink/20",
-			"dark:bg-cossistant-yellow/90 bg-cossistant-yellow/20",
-			"dark:bg-cossistant-blue/90 bg-cossistant-blue/20",
-			"dark:bg-cossistant-orange/90 bg-cossistant-orange/20",
-			"dark:bg-cossistant-green/90 bg-cossistant-green/20",
+			"dark:bg-cossistant-pink/90 bg-cossistant-pink/40",
+			"dark:bg-cossistant-yellow/90 bg-cossistant-yellow/40",
+			"dark:bg-cossistant-blue/90 bg-cossistant-blue/40",
+			"dark:bg-cossistant-orange/90 bg-cossistant-orange/40",
+			"dark:bg-cossistant-green/90 bg-cossistant-green/40",
 		]);
 		expect(COSSISTANT_FACEHASH_ROUTE_COLORS_DARK).toEqual([
 			"hsla(314, 100%, 85%, 1)",

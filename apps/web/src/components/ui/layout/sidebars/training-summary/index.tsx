@@ -244,8 +244,8 @@ export function TrainingSummarySidebar({
 										isNearLimit && !isAtLimit && "bg-warning/20"
 									)}
 									indicatorClassName={cn(
-										isAtLimit && "bg-destructive",
-										isNearLimit && !isAtLimit && "bg-warning"
+										isAtLimit && "text-destructive",
+										isNearLimit && !isAtLimit && "text-warning"
 									)}
 									value={usagePercentage}
 								/>

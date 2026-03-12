@@ -1,5 +1,6 @@
 import type { useQueryNormalizer } from "@normy/react-query";
 import type { QueryClient } from "@tanstack/react-query";
+import type { TrainingControls } from "@/hooks/use-training-controls";
 
 type WebsiteContext = {
 	id: string;
@@ -13,5 +14,5 @@ export type DashboardRealtimeContext = {
 	queryNormalizer: QueryNormalizer;
 	website: WebsiteContext;
 	userId: string | null;
-	startTraining?: () => void;
+	training?: TrainingControls;
 };

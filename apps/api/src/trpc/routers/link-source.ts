@@ -265,7 +265,7 @@ export const linkSourceRouter = createTRPCRouter({
 					createdBy: user.id,
 					includePaths: input.includePaths,
 					excludePaths: input.excludePaths,
-					maxDepth: input.maxDepth ?? 5,
+					maxDepth: input.maxDepth,
 				});
 			} catch (error) {
 				// If queueing fails, mark the link source as failed

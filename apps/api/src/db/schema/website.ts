@@ -1,5 +1,7 @@
 import {
 	type ContactNotificationSettings,
+	type VisitorAttribution,
+	type VisitorCurrentPage,
 	WebsiteInstallationTarget,
 	WebsiteStatus,
 } from "@cossistant/types";
@@ -221,6 +223,9 @@ export const visitor = pgTable(
 		// Screen Information
 		screenResolution: varchar("screen_resolution", { length: 20 }),
 		viewport: varchar("viewport", { length: 20 }),
+		// Tracking Information
+		attribution: jsonb("attribution").$type<VisitorAttribution | null>(),
+		currentPage: jsonb("current_page").$type<VisitorCurrentPage | null>(),
 		// Reference Fields
 		contactId: ulidNullableReference("contact_id").references(
 			() => contact.id,

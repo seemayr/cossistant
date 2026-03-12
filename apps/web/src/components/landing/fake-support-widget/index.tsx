@@ -334,7 +334,7 @@ export function FakeSupportWidget({ className }: { className?: string }) {
 	return (
 		<div
 			className={cn(
-				"flex h-full w-full items-center justify-center",
+				"pointer-events-none flex h-full w-full items-center justify-center",
 				className
 			)}
 			ref={widgetRef}
@@ -349,7 +349,7 @@ export function FakeSupportWidget({ className }: { className?: string }) {
 						<WidgetShell
 							bubble={
 								<FakeBubble
-									className="opacity-20"
+									className="opacity-90"
 									isOpen={true}
 									isTyping={false}
 								/>

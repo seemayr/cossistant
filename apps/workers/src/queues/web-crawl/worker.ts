@@ -7,7 +7,7 @@ import {
 import { getWebsiteById } from "@api/db/queries/website";
 import { knowledge } from "@api/db/schema/knowledge";
 import { getPlanForWebsite } from "@api/lib/plans/access";
-import { FirecrawlService } from "@api/services/firecrawl";
+import { type CrawlStatus, FirecrawlService } from "@api/services/firecrawl";
 import { QUEUE_NAMES, type WebCrawlJobData } from "@cossistant/jobs";
 import { getSafeRedisUrl, type RedisOptions } from "@cossistant/redis";
 import { db } from "@workers/db";
@@ -23,6 +23,13 @@ const LEADING_SLASH_REGEX = /^\//;
 // Polling configuration
 const POLL_INTERVAL_MS = 5000; // 5 seconds
 const MAX_POLL_ATTEMPTS = 360; // 30 minutes max (360 * 5s)
+const STALL_THRESHOLD_MS = 60_000; // Fail fast after 60s with no visible progress
+const LINK_SOURCE_CHECK_INTERVAL_POLLS = 3;
+const PROGRESS_LOG_INTERVAL_POLLS = 10;
+const ACTIVE_CRAWL_STATUSES = new Set<CrawlStatus["status"]>([
+	"pending",
+	"crawling",
+]);
 
 const WORKER_CONFIG = {
 	concurrency: 3,
@@ -37,6 +44,25 @@ const MB_TO_BYTES = 1024 * 1024;
 type WorkerConfig = {
 	connectionOptions: RedisOptions;
 	redisUrl: string;
+};
+
+type FirecrawlJobClient = Pick<
+	FirecrawlService,
+	| "isConfigured"
+	| "startCrawl"
+	| "getCrawlStatus"
+	| "cancelCrawl"
+	| "getCrawlErrors"
+>;
+
+export type WebCrawlWorkerRuntime = {
+	now: () => number;
+	sleep: (ms: number) => Promise<void>;
+	pollIntervalMs: number;
+	maxPollAttempts: number;
+	stallThresholdMs: number;
+	linkSourceCheckIntervalPolls: number;
+	progressLogIntervalPolls: number;
 };
 
 /**
@@ -57,6 +83,79 @@ function toNumericLimit(value: number | boolean | null): number | null {
  */
 function sleep(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+const DEFAULT_WEB_CRAWL_RUNTIME: WebCrawlWorkerRuntime = {
+	now: () => Date.now(),
+	sleep,
+	pollIntervalMs: POLL_INTERVAL_MS,
+	maxPollAttempts: MAX_POLL_ATTEMPTS,
+	stallThresholdMs: STALL_THRESHOLD_MS,
+	linkSourceCheckIntervalPolls: LINK_SOURCE_CHECK_INTERVAL_POLLS,
+	progressLogIntervalPolls: PROGRESS_LOG_INTERVAL_POLLS,
+};
+
+function isActiveCrawlStatus(status: CrawlStatus["status"]): boolean {
+	return ACTIVE_CRAWL_STATUSES.has(status);
+}
+
+function hasReachedReportedCompletion(crawlStatus: CrawlStatus): boolean {
+	const progress = crawlStatus.progress;
+	return Boolean(
+		progress && progress.total > 0 && progress.completed >= progress.total
+	);
+}
+
+function canTreatCrawlAsCompleted(crawlStatus: CrawlStatus): boolean {
+	if (crawlStatus.status === "completed") {
+		return true;
+	}
+
+	return (
+		isActiveCrawlStatus(crawlStatus.status) &&
+		hasReachedReportedCompletion(crawlStatus) &&
+		Boolean(crawlStatus.pages?.length)
+	);
+}
+
+function asCompletedCrawlStatus(crawlStatus: CrawlStatus): CrawlStatus {
+	if (crawlStatus.status === "completed") {
+		return crawlStatus;
+	}
+
+	return {
+		...crawlStatus,
+		status: "completed",
+	};
+}
+
+function getProgressSnapshot(
+	crawlStatus: CrawlStatus,
+	discoveredPagesCount: number
+): string {
+	const completed = crawlStatus.progress?.completed ?? 0;
+	const total = crawlStatus.progress?.total ?? 0;
+	return `${completed}:${total}:${discoveredPagesCount}`;
+}
+
+async function cancelRemoteCrawl(
+	firecrawlService: FirecrawlJobClient,
+	jobId: string,
+	reason: string
+): Promise<void> {
+	try {
+		const result = await firecrawlService.cancelCrawl(jobId);
+		if (!result.success) {
+			console.warn(
+				`[worker:web-crawl] Failed to cancel Firecrawl job ${jobId} after ${reason}: ${result.error ?? "unknown error"}`
+			);
+		}
+	} catch (error) {
+		console.error(
+			`[worker:web-crawl] Error cancelling Firecrawl job ${jobId} after ${reason}`,
+			error
+		);
+	}
 }
 
 export function createWebCrawlWorker({
@@ -166,9 +265,10 @@ export function createWebCrawlWorker({
 	};
 }
 
-async function processWebCrawlJob(
-	firecrawlService: FirecrawlService,
-	job: Job<WebCrawlJobData>
+export async function processWebCrawlJob(
+	firecrawlService: FirecrawlJobClient,
+	job: Job<WebCrawlJobData>,
+	runtime: WebCrawlWorkerRuntime = DEFAULT_WEB_CRAWL_RUNTIME
 ): Promise<void> {
 	const {
 		linkSourceId,
@@ -182,6 +282,16 @@ async function processWebCrawlJob(
 		excludePaths,
 		maxDepth = 5,
 	} = job.data;
+
+	let lastJobProgress = -1;
+	const updateJobProgress = async (progress: number): Promise<void> => {
+		if (progress === lastJobProgress) {
+			return;
+		}
+
+		lastJobProgress = progress;
+		await job.updateProgress(progress);
+	};
 
 	// 1. Get the link source and validate it exists
 	const linkSource = await getLinkSourceById(db, {
@@ -230,13 +340,9 @@ async function processWebCrawlJob(
 		linkSourceId,
 		status: "crawling",
 	});
-	await job.updateProgress(5);
+	await updateJobProgress(5);
 
 	// 4. Start crawl using v2 API
-	console.log(
-		`[worker:web-crawl] Starting crawl: ${url} | limit=${crawlLimit} depth=${maxDepth}`
-	);
-
 	const crawlResult = await firecrawlService.startCrawl(url, {
 		limit: crawlLimit,
 		maxDepth,
@@ -261,6 +367,10 @@ async function processWebCrawlJob(
 		throw new Error(crawlResult.error ?? "Failed to start crawl");
 	}
 
+	console.log(
+		`[worker:web-crawl] Starting crawl: ${url} | job=${crawlResult.jobId} | limit=${crawlLimit} depth=${maxDepth}`
+	);
+
 	// 5. Store the Firecrawl job ID
 	await updateLinkSource(db, {
 		id: linkSourceId,
@@ -280,172 +390,302 @@ async function processWebCrawlJob(
 		totalPagesCount: crawlLimit,
 	});
 
-	await job.updateProgress(10);
+	await updateJobProgress(10);
 
 	// 6. Poll for completion with incremental page updates
 	let pollAttempts = 0;
 	let crawlStatus = await firecrawlService.getCrawlStatus(crawlResult.jobId);
 	let lastCompletedCount = 0;
+	let lastPersistedDiscoveredPagesCount = linkSource.discoveredPagesCount ?? 0;
+	let crawlStatusIncludesAllPages = false;
+	let consecutiveReadyToFinalizePolls = hasReachedReportedCompletion(
+		crawlStatus
+	)
+		? 1
+		: 0;
+	const crawlStartedAt = runtime.now();
+	let lastProgressChangeAt = crawlStartedAt;
 	// Track which pages we've already emitted events for (by URL)
 	const emittedPageUrls = new Set<string>();
+	let lastProgressSnapshot = getProgressSnapshot(crawlStatus, 0);
 
-	while (
-		crawlStatus.status === "crawling" &&
-		pollAttempts < MAX_POLL_ATTEMPTS
-	) {
-		await sleep(POLL_INTERVAL_MS);
-		pollAttempts++;
+	const applyIncrementalStatusUpdate = async (
+		currentStatus: CrawlStatus
+	): Promise<void> => {
+		const progress = currentStatus.progress;
 
-		// Check if the link source was deleted/cancelled during crawling
-		const currentLinkSource = await getLinkSourceById(db, {
-			id: linkSourceId,
-			websiteId,
-		});
-
-		// If link source was deleted, abort the crawl
-		if (!currentLinkSource || currentLinkSource.deletedAt) {
-			console.log(
-				`[worker:web-crawl] Aborting: link source ${linkSourceId} deleted`
-			);
-			// Cancel the Firecrawl crawl job
-			await firecrawlService.cancelCrawl(crawlResult.jobId);
-			return; // Exit early - no need to process results
-		}
-
-		crawlStatus = await firecrawlService.getCrawlStatus(crawlResult.jobId);
-
-		// Update progress based on Firecrawl progress
-		if (crawlStatus.progress) {
+		if (progress && progress.total > 0) {
 			const progressPercent =
-				10 +
-				Math.floor(
-					(crawlStatus.progress.completed / crawlStatus.progress.total) * 70
-				);
-			await job.updateProgress(Math.min(progressPercent, 80));
+				10 + Math.floor((progress.completed / progress.total) * 70);
+			await updateJobProgress(Math.min(progressPercent, 80));
 
-			// Update discovered pages count
-			if (crawlStatus.progress.total > 0) {
+			if (progress.total !== lastPersistedDiscoveredPagesCount) {
 				await updateLinkSource(db, {
 					id: linkSourceId,
 					websiteId,
-					discoveredPagesCount: crawlStatus.progress.total,
+					discoveredPagesCount: progress.total,
 				});
+				lastPersistedDiscoveredPagesCount = progress.total;
+			}
+		}
+
+		const newPages: NonNullable<CrawlStatus["pages"]> = [];
+		if (currentStatus.pages && currentStatus.pages.length > 0) {
+			for (const page of currentStatus.pages) {
+				if (emittedPageUrls.has(page.url)) {
+					continue;
+				}
+
+				emittedPageUrls.add(page.url);
+				newPages.push(page);
 			}
 
-			// Check for newly completed pages in partial results
-			if (crawlStatus.pages && crawlStatus.pages.length > 0) {
-				// Emit crawlPagesDiscovered for real-time tree display
-				const newPages = crawlStatus.pages.filter(
-					(page) => !emittedPageUrls.has(page.url)
-				);
-				if (newPages.length > 0) {
-					const pagesForDiscoveryEvent = newPages.map((page) => {
-						try {
-							const parsedUrl = new URL(page.url);
-							return {
-								url: page.url,
-								path: parsedUrl.pathname,
-								depth: calculateDepth(url, page.url),
-							};
-						} catch {
-							return {
-								url: page.url,
-								path: page.url,
-								depth: 0,
-							};
-						}
-					});
-
-					await emitToWebsite(websiteId, "crawlPagesDiscovered", {
-						websiteId,
-						organizationId,
-						visitorId: null,
-						userId: createdBy,
-						linkSourceId,
-						pages: pagesForDiscoveryEvent,
-					});
-				}
-
-				for (const page of crawlStatus.pages) {
-					if (!emittedPageUrls.has(page.url)) {
-						emittedPageUrls.add(page.url);
-						// Emit progress for this specific page
-						await emitToWebsite(websiteId, "crawlProgress", {
-							websiteId,
-							organizationId,
-							visitorId: null,
-							userId: createdBy,
-							linkSourceId,
-							url,
-							page: {
-								url: page.url,
-								title: page.title,
-								status: "completed",
-								sizeBytes: page.sizeBytes,
-							},
-							completedCount: emittedPageUrls.size,
-							totalCount: crawlStatus.progress?.total ?? crawlLimit,
-						});
+			if (newPages.length > 0) {
+				const pagesForDiscoveryEvent = newPages.map((page) => {
+					try {
+						const parsedUrl = new URL(page.url);
+						return {
+							url: page.url,
+							path: parsedUrl.pathname,
+							depth: calculateDepth(url, page.url),
+						};
+					} catch {
+						return {
+							url: page.url,
+							path: page.url,
+							depth: 0,
+						};
 					}
-				}
-			} else if (crawlStatus.progress.completed > lastCompletedCount) {
-				// Fallback: emit generic progress if no partial results available
-				await emitToWebsite(websiteId, "crawlProgress", {
+				});
+
+				await emitToWebsite(websiteId, "crawlPagesDiscovered", {
 					websiteId,
 					organizationId,
 					visitorId: null,
 					userId: createdBy,
 					linkSourceId,
-					url,
-					page: {
-						url,
-						title: null,
-						status: "crawling",
-					},
-					completedCount: crawlStatus.progress.completed,
-					totalCount: crawlStatus.progress.total,
+					pages: pagesForDiscoveryEvent,
 				});
+
+				const completedCountBeforeNewPages =
+					emittedPageUrls.size - newPages.length;
+				for (const [index, page] of newPages.entries()) {
+					await emitToWebsite(websiteId, "crawlProgress", {
+						websiteId,
+						organizationId,
+						visitorId: null,
+						userId: createdBy,
+						linkSourceId,
+						url,
+						page: {
+							url: page.url,
+							title: page.title,
+							status: "completed",
+							sizeBytes: page.sizeBytes,
+						},
+						completedCount: completedCountBeforeNewPages + index + 1,
+						totalCount: progress?.total ?? crawlLimit,
+					});
+				}
 			}
-			lastCompletedCount = crawlStatus.progress.completed;
+		} else if (progress && progress.completed > lastCompletedCount) {
+			await emitToWebsite(websiteId, "crawlProgress", {
+				websiteId,
+				organizationId,
+				visitorId: null,
+				userId: createdBy,
+				linkSourceId,
+				url,
+				page: {
+					url,
+					title: null,
+					status: "crawling",
+				},
+				completedCount: progress.completed,
+				totalCount: progress.total,
+			});
 		}
 
-		// Log every 10th poll to reduce noise
-		if (pollAttempts % 10 === 0) {
+		if (progress) {
+			lastCompletedCount = progress.completed;
+		}
+	};
+
+	await applyIncrementalStatusUpdate(crawlStatus);
+	lastProgressSnapshot = getProgressSnapshot(crawlStatus, emittedPageUrls.size);
+
+	while (
+		isActiveCrawlStatus(crawlStatus.status) &&
+		pollAttempts < runtime.maxPollAttempts
+	) {
+		await runtime.sleep(runtime.pollIntervalMs);
+		pollAttempts++;
+
+		if (pollAttempts % runtime.linkSourceCheckIntervalPolls === 0) {
+			const currentLinkSource = await getLinkSourceById(db, {
+				id: linkSourceId,
+				websiteId,
+			});
+
+			if (!currentLinkSource) {
+				console.log(
+					`[worker:web-crawl] Aborting crawl ${crawlResult.jobId}: link source ${linkSourceId} deleted`
+				);
+				await cancelRemoteCrawl(
+					firecrawlService,
+					crawlResult.jobId,
+					"link source deleted"
+				);
+				return;
+			}
+
+			if (
+				currentLinkSource.status !== "pending" &&
+				currentLinkSource.status !== "crawling"
+			) {
+				console.log(
+					`[worker:web-crawl] Aborting crawl ${crawlResult.jobId}: link source ${linkSourceId} is ${currentLinkSource.status}`
+				);
+				await cancelRemoteCrawl(
+					firecrawlService,
+					crawlResult.jobId,
+					`link source status changed to ${currentLinkSource.status}`
+				);
+				return;
+			}
+		}
+
+		crawlStatus = await firecrawlService.getCrawlStatus(crawlResult.jobId);
+		await applyIncrementalStatusUpdate(crawlStatus);
+
+		const progressSnapshot = getProgressSnapshot(
+			crawlStatus,
+			emittedPageUrls.size
+		);
+		const now = runtime.now();
+		if (progressSnapshot !== lastProgressSnapshot) {
+			lastProgressSnapshot = progressSnapshot;
+			lastProgressChangeAt = now;
+		}
+
+		if (hasReachedReportedCompletion(crawlStatus)) {
+			consecutiveReadyToFinalizePolls++;
+		} else {
+			consecutiveReadyToFinalizePolls = 0;
+		}
+
+		let finalStatusForThisPoll: CrawlStatus | null = null;
+		if (
+			isActiveCrawlStatus(crawlStatus.status) &&
+			consecutiveReadyToFinalizePolls >= 2
+		) {
+			finalStatusForThisPoll = await firecrawlService.getCrawlStatus(
+				crawlResult.jobId,
+				{
+					includeAllPages: true,
+				}
+			);
+
+			if (canTreatCrawlAsCompleted(finalStatusForThisPoll)) {
+				crawlStatus = asCompletedCrawlStatus(finalStatusForThisPoll);
+				crawlStatusIncludesAllPages = true;
+				break;
+			}
+		}
+
+		const idleMs = now - lastProgressChangeAt;
+		if (
+			isActiveCrawlStatus(crawlStatus.status) &&
+			idleMs >= runtime.stallThresholdMs
+		) {
+			const stallStatus =
+				finalStatusForThisPoll ??
+				(await firecrawlService.getCrawlStatus(crawlResult.jobId, {
+					includeAllPages: true,
+				}));
+
+			if (canTreatCrawlAsCompleted(stallStatus)) {
+				crawlStatus = asCompletedCrawlStatus(stallStatus);
+				crawlStatusIncludesAllPages = true;
+				break;
+			}
+
+			const stallThresholdSeconds = Math.round(runtime.stallThresholdMs / 1000);
+			const stallMessage = `Crawl stalled with no progress for ${stallThresholdSeconds}s`;
+			console.error(
+				`[worker:web-crawl] Stalled ${url} | job=${crawlResult.jobId} status=${crawlStatus.status} raw=${crawlStatus.rawStatus ?? "unknown"} progress=${crawlStatus.progress?.completed ?? 0}/${crawlStatus.progress?.total ?? 0} pages=${emittedPageUrls.size} idle=${Math.round(idleMs / 1000)}s`
+			);
+			await cancelRemoteCrawl(
+				firecrawlService,
+				crawlResult.jobId,
+				`stall threshold reached for ${url}`
+			);
+			await updateLinkSource(db, {
+				id: linkSourceId,
+				websiteId,
+				status: "failed",
+				errorMessage: stallMessage,
+			});
+			await emitCrawlFailed({
+				websiteId,
+				organizationId,
+				linkSourceId,
+				url,
+				error: stallMessage,
+			});
+			throw new Error(stallMessage);
+		}
+
+		if (pollAttempts % runtime.progressLogIntervalPolls === 0) {
+			const elapsedMs = now - crawlStartedAt;
 			console.log(
-				`[worker:web-crawl] Crawling ${url} | pages=${emittedPageUrls.size} | poll=${pollAttempts}`
+				`[worker:web-crawl] Crawling ${url} | job=${crawlResult.jobId} status=${crawlStatus.status} raw=${crawlStatus.rawStatus ?? "unknown"} progress=${crawlStatus.progress?.completed ?? 0}/${crawlStatus.progress?.total ?? 0} pages=${emittedPageUrls.size} poll=${pollAttempts} elapsed=${Math.round(elapsedMs / 1000)}s idle=${Math.round(idleMs / 1000)}s`
 			);
 		}
 	}
 
 	// Fetch all paginated results once the crawl is marked completed.
 	// Firecrawl can paginate status data when payloads are large.
-	if (crawlStatus.status === "completed") {
+	if (crawlStatus.status === "completed" && !crawlStatusIncludesAllPages) {
 		crawlStatus = await firecrawlService.getCrawlStatus(crawlResult.jobId, {
 			includeAllPages: true,
 		});
+		crawlStatusIncludesAllPages = true;
 	}
 
 	// 7. Handle poll timeout
-	if (crawlStatus.status === "crawling") {
+	if (isActiveCrawlStatus(crawlStatus.status)) {
+		const timeoutMessage = "Crawl timed out after 30 minutes";
+		console.error(
+			`[worker:web-crawl] Timed out ${url} | job=${crawlResult.jobId} status=${crawlStatus.status} raw=${crawlStatus.rawStatus ?? "unknown"} progress=${crawlStatus.progress?.completed ?? 0}/${crawlStatus.progress?.total ?? 0} pages=${emittedPageUrls.size} polls=${pollAttempts}`
+		);
+		await cancelRemoteCrawl(
+			firecrawlService,
+			crawlResult.jobId,
+			`timeout after ${runtime.maxPollAttempts} polls`
+		);
 		await updateLinkSource(db, {
 			id: linkSourceId,
 			websiteId,
 			status: "failed",
-			errorMessage: "Crawl timed out after 30 minutes",
+			errorMessage: timeoutMessage,
 		});
 		await emitCrawlFailed({
 			websiteId,
 			organizationId,
 			linkSourceId,
 			url,
-			error: "Crawl timed out after 30 minutes",
+			error: timeoutMessage,
 		});
-		throw new Error("Crawl timed out after 30 minutes");
+		throw new Error(timeoutMessage);
 	}
 
 	// 8. Handle failure
 	if (crawlStatus.status === "failed") {
 		let errorMessage = crawlStatus.error ?? "Crawl failed";
+		console.error(
+			`[worker:web-crawl] Upstream failure ${url} | job=${crawlResult.jobId} status=${crawlStatus.status} raw=${crawlStatus.rawStatus ?? "unknown"} progress=${crawlStatus.progress?.completed ?? 0}/${crawlStatus.progress?.total ?? 0} pages=${emittedPageUrls.size}`
+		);
 
 		// Enrich failure diagnostics with page-level Firecrawl crawl errors.
 		const crawlErrorsResult = await firecrawlService.getCrawlErrors(
@@ -484,7 +724,7 @@ async function processWebCrawlJob(
 		throw new Error(errorMessage);
 	}
 
-	await job.updateProgress(85);
+	await updateJobProgress(85);
 
 	// 9. Process results
 	if (crawlStatus.status === "completed" && crawlStatus.pages) {
@@ -618,7 +858,7 @@ async function processWebCrawlJob(
 			}
 		}
 
-		await job.updateProgress(95);
+		await updateJobProgress(95);
 
 		// 10. Update link source with results
 		const now = new Date().toISOString();
@@ -694,7 +934,7 @@ async function processWebCrawlJob(
 		console.log("[worker:web-crawl] Crawl completed with no pages");
 	}
 
-	await job.updateProgress(100);
+	await updateJobProgress(100);
 }
 
 /**

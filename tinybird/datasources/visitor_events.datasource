@@ -1,0 +1,38 @@
+DESCRIPTION >
+	Pageview analytics with flattened visitor attribution snapshots. 30-day TTL.
+
+SCHEMA >
+	`timestamp` DateTime `json:$.timestamp`,
+	`website_id` String `json:$.website_id`,
+	`visitor_id` String `json:$.visitor_id`,
+	`event_type` LowCardinality(String) `json:$.event_type`,
+	`page_url` String `json:$.page_url` DEFAULT '',
+	`page_path` String `json:$.page_path` DEFAULT '',
+	`page_title` String `json:$.page_title` DEFAULT '',
+	`page_referrer_url` String `json:$.page_referrer_url` DEFAULT '',
+	`attribution_channel` LowCardinality(String) `json:$.attribution_channel` DEFAULT '',
+	`attribution_is_direct` UInt8 `json:$.attribution_is_direct` DEFAULT 0,
+	`attribution_referrer_url` String `json:$.attribution_referrer_url` DEFAULT '',
+	`attribution_referrer_domain` LowCardinality(String) `json:$.attribution_referrer_domain` DEFAULT '',
+	`attribution_landing_url` String `json:$.attribution_landing_url` DEFAULT '',
+	`attribution_landing_path` String `json:$.attribution_landing_path` DEFAULT '',
+	`attribution_landing_title` String `json:$.attribution_landing_title` DEFAULT '',
+	`attribution_utm_source` LowCardinality(String) `json:$.attribution_utm_source` DEFAULT '',
+	`attribution_utm_medium` LowCardinality(String) `json:$.attribution_utm_medium` DEFAULT '',
+	`attribution_utm_campaign` String `json:$.attribution_utm_campaign` DEFAULT '',
+	`attribution_utm_content` String `json:$.attribution_utm_content` DEFAULT '',
+	`attribution_utm_term` String `json:$.attribution_utm_term` DEFAULT '',
+	`attribution_gclid` String `json:$.attribution_gclid` DEFAULT '',
+	`attribution_gbraid` String `json:$.attribution_gbraid` DEFAULT '',
+	`attribution_wbraid` String `json:$.attribution_wbraid` DEFAULT '',
+	`attribution_fbclid` String `json:$.attribution_fbclid` DEFAULT '',
+	`attribution_msclkid` String `json:$.attribution_msclkid` DEFAULT '',
+	`attribution_ttclid` String `json:$.attribution_ttclid` DEFAULT '',
+	`attribution_li_fat_id` String `json:$.attribution_li_fat_id` DEFAULT '',
+	`attribution_twclid` String `json:$.attribution_twclid` DEFAULT '',
+	`attribution_captured_at` String `json:$.attribution_captured_at` DEFAULT ''
+
+ENGINE "MergeTree"
+ENGINE_PARTITION_KEY "toYYYYMM(timestamp)"
+ENGINE_SORTING_KEY "website_id, toDate(timestamp), visitor_id, event_type"
+ENGINE_TTL "timestamp + toIntervalDay(30)"

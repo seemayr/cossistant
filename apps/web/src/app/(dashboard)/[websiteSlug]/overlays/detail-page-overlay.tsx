@@ -21,6 +21,8 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
 import { TooltipOnHover } from "@/components/ui/tooltip";
+import { VisitorAttributionGroup } from "@/components/ui/visitor-attribution-group";
+import { VisitorSourceBadge } from "@/components/ui/visitor-source-badge";
 import { useWebsite } from "@/contexts/website";
 import { useContactVisitorDetailState } from "@/hooks/use-contact-visitor-detail-state";
 import { formatFullDateTime, formatLastSeenAt } from "@/lib/date";
@@ -219,6 +221,7 @@ function buildHeroDetails(params: {
 	);
 
 	return {
+		attribution: heroVisitor?.attribution ?? null,
 		avatarUrl,
 		browserLabel,
 		countryCode: countryDetails?.code ?? null,
@@ -556,7 +559,7 @@ function DetailPrimaryPanel({
 			: null;
 
 	return (
-		<div className="relative h-full border-primary/10 border-b lg:border-r lg:border-b-0">
+		<div className="relative h-full border-primary/5 border-b lg:border-r lg:border-b-0">
 			<ScrollArea
 				className="relative h-full px-5 py-6 lg:px-8 lg:py-8"
 				maskHeight="120px"
@@ -579,9 +582,15 @@ function DetailPrimaryPanel({
 							url={hero.avatarUrl}
 						/>
 						<div className="min-w-0">
-							<h2 className="truncate font-semibold text-xl tracking-tight">
-								{hero.title}
-							</h2>
+							<div className="flex flex-wrap items-center gap-2">
+								<h2 className="truncate font-semibold text-xl tracking-tight">
+									{hero.title}
+								</h2>
+								<VisitorSourceBadge
+									attribution={hero.attribution}
+									prependText="from"
+								/>
+							</div>
 						</div>
 						{hero.isBlocked ? (
 							<div className="flex flex-wrap items-center gap-3 text-primary/60 text-sm">
@@ -687,6 +696,10 @@ function DetailSecondaryPanel({
 					heroVisitor={heroVisitor}
 					mode={mode}
 					visitors={visitors}
+				/>
+				<VisitorAttributionGroup
+					attribution={hero.attribution}
+					className="mt-0 px-0"
 				/>
 
 				{contact ? (

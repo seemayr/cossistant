@@ -53,6 +53,8 @@ export function formatVisitorWithContactResponse(
 		blockedAt: record.blockedAt ?? null,
 		blockedByUserId: record.blockedByUserId,
 		isBlocked: Boolean(record.blockedAt),
+		attribution: record.attribution ?? null,
+		currentPage: record.currentPage ?? null,
 		contact: record.contact ? formatContactResponse(record.contact) : null,
 	} satisfies VisitorResponse;
 }

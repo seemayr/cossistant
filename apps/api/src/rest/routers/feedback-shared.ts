@@ -1,7 +1,7 @@
 import type { Database } from "@api/db";
 import { createFeedback } from "@api/db/queries/feedback";
 import { conversation } from "@api/db/schema/conversation";
-import { trackConversationMetric } from "@api/lib/tinybird-sdk";
+import { trackConversationMetricForVisitor } from "@api/lib/tinybird-sdk";
 import { eq } from "drizzle-orm";
 
 type PersistFeedbackSubmissionParams = {
@@ -63,7 +63,7 @@ export async function persistFeedbackSubmission({
 	});
 
 	if (conversationId && visitorId) {
-		trackConversationMetric({
+		void trackConversationMetricForVisitor(db, {
 			website_id: websiteId,
 			visitor_id: visitorId,
 			conversation_id: conversationId,

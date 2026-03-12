@@ -12,7 +12,6 @@ import {
 	Trash2Icon,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import {
 	DropdownMenu,
@@ -23,7 +22,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
-import { formatBytes } from "../utils";
+import { formatBytes, getPathDisplayName } from "../utils";
 
 type PageTreeItemViewProps = {
 	// Content
@@ -89,8 +88,6 @@ export function PageTreeItemView({
 	rightContent,
 	className,
 }: PageTreeItemViewProps) {
-	const displayPath = useMemo(() => (path === "/" ? "/" : path), [path]);
-
 	const isAnyActionPending =
 		isToggling || isReindexing || isDeleting || isIgnoring;
 
@@ -117,7 +114,7 @@ export function PageTreeItemView({
 				type="button"
 			>
 				<span className="shrink-0 font-mono text-sm" title={url}>
-					{displayPath}
+					{getPathDisplayName(path)}
 				</span>
 				{title && (
 					<span

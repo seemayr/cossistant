@@ -5,12 +5,13 @@ import {
 	useRealtime,
 } from "@cossistant/next/realtime";
 import { useQueryNormalizer } from "@normy/react-query";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import * as ReactQuery from "@tanstack/react-query";
 import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { UpgradeModal } from "@/components/plan/upgrade-modal";
 import { useUserSession, useWebsite } from "@/contexts/website";
 import { getOnlineNowQueryKeyPrefix } from "@/data/use-online-now";
 import { getVisitorPresenceQueryKeyPrefix } from "@/data/use-visitor-presence";
+import { useTrainingControls } from "@/hooks/use-training-controls";
 import { useTRPC } from "@/lib/trpc/client";
 import { handleConversationCreated } from "./events/handlers/conversation-created";
 import { handleConversationSeen } from "./events/handlers/conversation-seen";
@@ -37,7 +38,7 @@ import { handleVisitorIdentified } from "./events/handlers/visitor-identified";
 import type { DashboardRealtimeContext } from "./events/types";
 
 export function Realtime({ children }: { children: ReactNode }) {
-	const queryClient = useQueryClient();
+	const queryClient = ReactQuery.useQueryClient();
 	const queryNormalizer = useQueryNormalizer();
 	const website = useWebsite();
 	const { user } = useUserSession();
@@ -46,51 +47,20 @@ export function Realtime({ children }: { children: ReactNode }) {
 	const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
 
 	// Fetch data needed for training from toasts
-	const { data: agent } = useQuery(
+	const { data: agent } = ReactQuery.useQuery(
 		trpc.aiAgent.get.queryOptions({ websiteSlug: website.slug })
 	);
-	const { data: readiness } = useQuery(
-		trpc.aiAgent.getTrainingReadiness.queryOptions({
-			websiteSlug: website.slug,
-		})
-	);
-	const { data: planInfo } = useQuery(
+	const { data: planInfo } = ReactQuery.useQuery(
 		trpc.plan.getPlanInfo.queryOptions({ websiteSlug: website.slug })
 	);
 
-	const startTrainingMutation = useMutation(
-		trpc.aiAgent.startTraining.mutationOptions({
-			onSuccess: () => {
-				queryClient.invalidateQueries({
-					queryKey: trpc.aiAgent.getTrainingStatus.queryKey({
-						websiteSlug: website.slug,
-					}),
-				});
-				queryClient.invalidateQueries({
-					queryKey: trpc.aiAgent.getTrainingReadiness.queryKey({
-						websiteSlug: website.slug,
-					}),
-				});
-			},
-		})
-	);
-
-	const startTraining = useCallback(() => {
-		if (!agent?.id) {
-			return;
-		}
-
-		const isOnCooldown = readiness?.canTrainAt != null;
-		if (isOnCooldown) {
+	const training = useTrainingControls({
+		aiAgentId: agent?.id ?? null,
+		onBlocked: () => {
 			setIsUpgradeModalOpen(true);
-			return;
-		}
-
-		startTrainingMutation.mutate({
-			websiteSlug: website.slug,
-			aiAgentId: agent.id,
-		});
-	}, [agent?.id, readiness?.canTrainAt, startTrainingMutation, website.slug]);
+		},
+		websiteSlug: website.slug,
+	});
 
 	const presenceQueryKeyPrefix = useMemo(
 		() => getVisitorPresenceQueryKeyPrefix(website.slug),
@@ -118,17 +88,10 @@ export function Realtime({ children }: { children: ReactNode }) {
 				id: website.id,
 				slug: website.slug,
 			},
+			training,
 			userId: user?.id ?? null,
-			startTraining,
 		}),
-		[
-			queryClient,
-			queryNormalizer,
-			website.id,
-			website.slug,
-			user?.id,
-			startTraining,
-		]
+		[queryClient, queryNormalizer, training, website.id, website.slug, user?.id]
 	);
 
 	const events = useMemo<RealtimeEventHandlersMap<DashboardRealtimeContext>>(
@@ -227,12 +190,11 @@ export function Realtime({ children }: { children: ReactNode }) {
 				},
 			],
 			crawlCompleted: [
-				(_data, meta) => {
+				(_data, meta) =>
 					handleCrawlCompleted({
 						event: meta.event,
 						context: meta.context,
-					});
-				},
+					}),
 			],
 			crawlFailed: [
 				(_data, meta) => {

@@ -682,6 +682,7 @@ export class CossistantClient {
 
 	// Cleanup method
 	destroy(): void {
+		this.restClient.destroy();
 		this.realtime.destroy();
 	}
 }

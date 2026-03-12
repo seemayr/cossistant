@@ -143,6 +143,7 @@ export type CrawlResult = {
 
 export type CrawlStatus = {
 	status: "pending" | "crawling" | "completed" | "failed";
+	rawStatus?: string | null;
 	progress?: {
 		completed: number;
 		total: number;
@@ -743,6 +744,7 @@ export class FirecrawlService {
 			const normalizedPages = normalizePages(allPages);
 			const result: CrawlStatus = {
 				status,
+				rawStatus: data.status ?? null,
 				progress:
 					data.completed !== undefined && data.total !== undefined
 						? {

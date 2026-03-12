@@ -70,7 +70,7 @@ export function UsageBar({
 		: "0%";
 	const progressValue = hasFiniteLimit ? Math.min(current, limit) : undefined;
 	const meterClasses =
-		"relative h-3.5 w-full overflow-hidden rounded-[3px] bg-background-200/80 dark:bg-background-800";
+		"relative h-3.5 w-full overflow-hidden rounded-[2px] bg-background-200/80 dark:bg-background-800";
 
 	return (
 		<div>

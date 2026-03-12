@@ -106,6 +106,8 @@ const createFakeVisitor = (partial: {
 		blockedAt: null,
 		blockedByUserId: null,
 		isBlocked: false,
+		attribution: null,
+		currentPage: null,
 		contact: partial.contact ?? null,
 		userId: null,
 		isTest: false,

@@ -5,37 +5,125 @@ import type { RouterOutputs } from "@cossistant/api/types";
 import { useState } from "react";
 import { UpgradeModal } from "@/components/plan/upgrade-modal";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { cn } from "@/lib/utils";
 
 type PlanInfo = RouterOutputs["plan"]["getPlanInfo"];
 
 type UpgradeButtonProps = {
-	currentPlan: PlanInfo["plan"];
+	planInfo: PlanInfo;
 	websiteSlug: string;
 };
 
-export function UpgradeButton({
-	currentPlan,
-	websiteSlug,
-}: UpgradeButtonProps) {
+function getUsagePercentage(limit: number | null, used: number): number {
+	if (limit === null || limit <= 0) {
+		return 0;
+	}
+
+	return Math.min(100, Math.round((used / limit) * 100));
+}
+
+function UsagePreviewRow({
+	label,
+	used,
+	limit,
+	reached,
+}: {
+	label: string;
+	used: number;
+	limit: number | null;
+	reached: boolean;
+}) {
+	const percentage = getUsagePercentage(limit, used);
+
+	return (
+		<div className="space-y-1.5">
+			<div className="flex items-center justify-between gap-3 text-[11px]">
+				<span className="font-medium text-primary/85">{label}</span>
+				<span
+					className={cn("text-primary/65", reached && "text-cossistant-orange")}
+				>
+					{limit === null
+						? `${used.toLocaleString()} / Unlimited`
+						: `${used.toLocaleString()} / ${limit.toLocaleString()}`}
+				</span>
+			</div>
+			{limit !== null ? (
+				<Progress
+					className={cn(
+						"h-1.5 bg-background-200/80 dark:bg-background-800",
+						reached && "bg-cossistant-orange/10"
+					)}
+					indicatorClassName={
+						reached ? "text-cossistant-orange" : "text-primary/55"
+					}
+					value={percentage}
+				/>
+			) : null}
+		</div>
+	);
+}
+
+export function UpgradeButton({ planInfo, websiteSlug }: UpgradeButtonProps) {
 	const [isModalOpen, setIsModalOpen] = useState(false);
+	const { plan, hardLimitStatus } = planInfo;
 
 	const proPlan = PLAN_CONFIG.pro;
 	const nextPlanName: PlanName | null =
-		currentPlan.name === "pro" || !proPlan ? null : "pro";
+		plan.name === "pro" || !proPlan ? null : "pro";
 
 	const buttonLabel = nextPlanName
 		? `Upgrade to ${PLAN_CONFIG[nextPlanName].displayName}`
 		: "Change plan";
 
-	const initialPlanName = nextPlanName ?? currentPlan.name;
+	const initialPlanName = nextPlanName ?? plan.name;
 
 	return (
 		<>
-			<Button onClick={() => setIsModalOpen(true)} type="button">
-				{buttonLabel}
-			</Button>
+			{plan.name === "free" ? (
+				<button
+					className="relative flex h-auto min-w-[260px] flex-col gap-3 overflow-hidden rounded-[2px] border border-cossistant-orange/60 border-dashed bg-cossistant-orange/[0.02] p-4 text-left hover:bg-cossistant-orange/5 dark:border-cossistant-orange/20"
+					onClick={() => setIsModalOpen(true)}
+					type="button"
+				>
+					<div className="flex items-start justify-between gap-3">
+						<div className="font-medium text-cossistant-orange text-sm">
+							{buttonLabel}
+						</div>
+						<div className="text-[11px] text-primary/60">
+							Rolling {hardLimitStatus.rollingWindowDays}-day window
+						</div>
+					</div>
+
+					{!hardLimitStatus.enforced && (
+						<div className="rounded border border-cossistant-orange/30 bg-cossistant-orange/5 px-2 py-1 text-[11px] text-cossistant-orange">
+							Hard-limit checks are temporarily unavailable while billing sync
+							recovers.
+						</div>
+					)}
+
+					<div className="space-y-3">
+						<UsagePreviewRow
+							label="Messages"
+							limit={hardLimitStatus.messages.limit}
+							reached={hardLimitStatus.messages.reached}
+							used={hardLimitStatus.messages.used}
+						/>
+						<UsagePreviewRow
+							label="Conversations"
+							limit={hardLimitStatus.conversations.limit}
+							reached={hardLimitStatus.conversations.reached}
+							used={hardLimitStatus.conversations.used}
+						/>
+					</div>
+				</button>
+			) : (
+				<Button onClick={() => setIsModalOpen(true)} type="button">
+					{buttonLabel}
+				</Button>
+			)}
 			<UpgradeModal
-				currentPlan={currentPlan}
+				currentPlan={plan}
 				initialPlanName={initialPlanName}
 				onOpenChange={setIsModalOpen}
 				open={isModalOpen}

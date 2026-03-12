@@ -58,6 +58,8 @@ export class CossistantRestClient {
 	private websiteId: string | null = null;
 	private visitorId: string | null = null;
 	private visitorBlocked = false;
+	private lastTrackedPageUrl: string | null = null;
+	private stopVisitorTracking: (() => void) | null = null;
 
 	constructor(config: CossistantConfig) {
 		this.config = config;
@@ -101,6 +103,8 @@ export class CossistantRestClient {
 			updatedAt: payload.updatedAt,
 			lastSeenAt: payload.lastSeenAt ? payload.lastSeenAt : null,
 			blockedAt: payload.blockedAt ? payload.blockedAt : null,
+			attribution: payload.attribution ?? null,
+			currentPage: payload.currentPage ?? null,
 			contact: payload.contact ? payload.contact : null,
 		};
 	}
@@ -121,10 +125,24 @@ export class CossistantRestClient {
 		throw new Error("Visitor ID is required");
 	}
 
-	private async syncVisitorSnapshot(visitorId: string): Promise<void> {
+	private async syncVisitorSnapshot(
+		visitorId: string,
+		options: {
+			force?: boolean;
+		} = {}
+	): Promise<void> {
 		try {
 			const visitorData = await collectVisitorData();
 			if (!visitorData) {
+				return;
+			}
+
+			const nextPageUrl = visitorData.currentPage?.url ?? null;
+			if (
+				!options.force &&
+				nextPageUrl &&
+				nextPageUrl === this.lastTrackedPageUrl
+			) {
 				return;
 			}
 
@@ -149,9 +167,63 @@ export class CossistantRestClient {
 					"X-Visitor-Id": visitorId,
 				},
 			});
+
+			if (nextPageUrl) {
+				this.lastTrackedPageUrl = nextPageUrl;
+			}
 		} catch (error) {
 			logger.warn("Failed to sync visitor data", error);
 		}
+	}
+
+	private stopTracking(): void {
+		this.stopVisitorTracking?.();
+		this.stopVisitorTracking = null;
+		this.lastTrackedPageUrl = null;
+	}
+
+	private startVisitorTracking(visitorId: string): void {
+		if (typeof window === "undefined") {
+			return;
+		}
+
+		this.stopTracking();
+
+		void this.syncVisitorSnapshot(visitorId, { force: true });
+
+		const sync = () => {
+			void this.syncVisitorSnapshot(visitorId);
+		};
+
+		const historyObject = window.history;
+		const originalPushState = historyObject.pushState.bind(historyObject);
+		const originalReplaceState = historyObject.replaceState.bind(historyObject);
+
+		const scheduleSync = () => {
+			setTimeout(sync, 0);
+		};
+
+		historyObject.pushState = ((...args: Parameters<History["pushState"]>) => {
+			originalPushState(...args);
+			scheduleSync();
+		}) as History["pushState"];
+
+		historyObject.replaceState = ((
+			...args: Parameters<History["replaceState"]>
+		) => {
+			originalReplaceState(...args);
+			scheduleSync();
+		}) as History["replaceState"];
+
+		window.addEventListener("popstate", sync);
+		window.addEventListener("hashchange", sync);
+
+		this.stopVisitorTracking = () => {
+			historyObject.pushState = originalPushState;
+			historyObject.replaceState = originalReplaceState;
+			window.removeEventListener("popstate", sync);
+			window.removeEventListener("hashchange", sync);
+		};
 	}
 
 	private async request<T>(
@@ -273,12 +345,13 @@ export class CossistantRestClient {
 			if (this.visitorBlocked) {
 				this.visitorId = response.visitor.id;
 				setVisitorId(response.id, response.visitor.id);
+				this.stopTracking();
 				return response;
 			}
 
 			this.visitorId = response.visitor.id;
 			setVisitorId(response.id, response.visitor.id);
-			this.syncVisitorSnapshot(response.visitor.id);
+			this.startVisitorTracking(response.visitor.id);
 		}
 
 		return response;
@@ -295,6 +368,9 @@ export class CossistantRestClient {
 
 	setVisitorBlocked(isBlocked: boolean): void {
 		this.visitorBlocked = isBlocked;
+		if (isBlocked) {
+			this.stopTracking();
+		}
 	}
 
 	getCurrentWebsiteId(): string | null {
@@ -457,6 +533,10 @@ export class CossistantRestClient {
 		}
 
 		this.config = { ...this.config, ...config };
+	}
+
+	destroy(): void {
+		this.stopTracking();
 	}
 
 	async listConversations(

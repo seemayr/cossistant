@@ -48,9 +48,26 @@ mock.module("./hooks", () => ({
 }));
 
 mock.module("./visitor-sidebar-header", () => ({
-	VisitorSidebarHeader: ({ onOpenDetail }: { onOpenDetail?: () => void }) => {
+	VisitorSidebarHeader: ({
+		attribution,
+		onOpenDetail,
+	}: {
+		attribution?: {
+			firstTouch?: {
+				referrer?: {
+					domain?: string | null;
+				};
+			};
+		} | null;
+		onOpenDetail?: () => void;
+	}) => {
 		onOpenDetail?.();
-		return <div data-slot="mock-visitor-sidebar-header" />;
+		return (
+			<div
+				data-slot="mock-visitor-sidebar-header"
+				data-source-domain={attribution?.firstTouch?.referrer?.domain ?? ""}
+			/>
+		);
 	},
 }));
 
@@ -67,7 +84,20 @@ mock.module("../resizable-sidebar", () => ({
 }));
 
 mock.module("../shared", () => ({
-	ValueDisplay: () => null,
+	ValueDisplay: ({
+		placeholder,
+		title,
+		value,
+	}: {
+		placeholder?: string;
+		title?: string;
+		value?: React.ReactNode;
+	}) => (
+		<div data-slot="mock-value-display">
+			<span>{title}</span>
+			<span>{value ?? placeholder ?? ""}</span>
+		</div>
+	),
 	ValueGroup: ({ children }: { children: React.ReactNode }) => (
 		<div>{children}</div>
 	),
@@ -117,6 +147,47 @@ describe("VisitorSidebar", () => {
 					blockedAt: null,
 					blockedByUserId: null,
 					isBlocked: false,
+					attribution: {
+						version: 1,
+						firstTouch: {
+							channel: "referral",
+							isDirect: false,
+							referrer: {
+								url: "https://news.ycombinator.com/item",
+								domain: "news.ycombinator.com",
+							},
+							landing: {
+								url: "https://app.example.com/pricing?utm_source=hn&utm_medium=referral&utm_campaign=launch&utm_content=hero&fbclid=fbclid_123",
+								path: "/pricing",
+								title: "Pricing | Cossistant",
+							},
+							utm: {
+								source: "hn",
+								medium: "referral",
+								campaign: "launch",
+								content: "hero",
+								term: null,
+							},
+							clickIds: {
+								gclid: null,
+								gbraid: null,
+								wbraid: null,
+								fbclid: "fbclid_123",
+								msclkid: null,
+								ttclid: null,
+								li_fat_id: null,
+								twclid: null,
+							},
+							capturedAt: "2026-03-01T09:30:00.000Z",
+						},
+					},
+					currentPage: {
+						url: "https://app.example.com/pricing?utm_source=hn&utm_medium=referral&utm_campaign=launch&utm_content=hero&fbclid=fbclid_123",
+						path: "/pricing",
+						title: "Pricing | Cossistant",
+						referrerUrl: "https://news.ycombinator.com/item",
+						updatedAt: "2026-03-05T14:45:00.000Z",
+					},
 					contact: {
 						id: "contact-1",
 						externalId: "crm_123",
@@ -137,6 +208,10 @@ describe("VisitorSidebar", () => {
 		);
 
 		expect(html).toContain('data-slot="mock-visitor-sidebar-header"');
+		expect(html).toContain('data-source-domain="news.ycombinator.com"');
+		expect(html).toContain('data-slot="visitor-attribution-group"');
+		expect(html).toContain(">Hacker News<");
+		expect(html).not.toContain(">Channel<");
 		expect(openVisitorDetailCalls).toEqual(["visitor-1"]);
 	});
 });

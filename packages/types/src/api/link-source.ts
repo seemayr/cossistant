@@ -247,7 +247,8 @@ export const createLinkSourceRequestSchema = z
 				example: ["/admin", "/api"],
 			}),
 		maxDepth: z.number().int().nonnegative().default(1).optional().openapi({
-			description: "Maximum crawl depth (1 = direct subpages only)",
+			description:
+				"Maximum crawl depth for new link sources. Defaults to 1 (direct subpages only).",
 			example: 1,
 		}),
 	})

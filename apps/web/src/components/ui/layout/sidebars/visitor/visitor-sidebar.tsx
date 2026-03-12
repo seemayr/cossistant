@@ -6,6 +6,7 @@ import { useConversationActionRunner } from "@/components/conversation/actions/u
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { VisitorAttributionGroup } from "@/components/ui/visitor-attribution-group";
 import { useContactVisitorDetailState } from "@/hooks/use-contact-visitor-detail-state";
 import { SidebarContainer } from "../container";
 import { ResizableSidebar } from "../resizable-sidebar";
@@ -74,6 +75,7 @@ export function VisitorSidebar({
 		>
 			<SidebarContainer>
 				<VisitorSidebarHeader
+					attribution={visitor.attribution}
 					avatarUrl={visitor.contact?.image}
 					contact={visitor.contact}
 					email={visitor.contact?.email}
@@ -106,7 +108,7 @@ export function VisitorSidebar({
 							</AlertDescription>
 						</Alert>
 					) : null}
-					<ValueGroup>
+					<ValueGroup header="Location">
 						<ValueDisplay
 							placeholder="Unknown"
 							title="Country"
@@ -145,6 +147,7 @@ export function VisitorSidebar({
 							withPaddingLeft={false}
 						/>
 					</ValueGroup>
+					<VisitorAttributionGroup attribution={visitor.attribution} />
 					<ValueGroup>
 						{visitor.browser && (
 							<ValueDisplay

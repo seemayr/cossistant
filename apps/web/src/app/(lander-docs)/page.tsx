@@ -15,6 +15,7 @@ import { AnimationControls } from "./components/animation-controls";
 import { Benefits } from "./components/benefits";
 import { BrowserWithBackground } from "./components/browser-with-background";
 import CossistantIs from "./components/cossistant-is";
+import { FullWidthBorder } from "./components/full-width-border";
 import { Install } from "./components/install";
 
 export const dynamic = "force-dynamic";
@@ -79,11 +80,15 @@ export default async function Landing() {
 							</Button>
 						</div>
 					</div>
-					<BrowserWithBackground containerClassName="w-full border-primary/10 border-y border-dashed hidden lg:block">
-						<div className="fake-dashboard-container">
-							<FakeDashboard />
-						</div>
-					</BrowserWithBackground>
+					<div className="relative hidden w-full lg:block">
+						<FullWidthBorder className="top-0" />
+						<BrowserWithBackground containerClassName="w-full">
+							<div className="fake-dashboard-container">
+								<FakeDashboard />
+							</div>
+						</BrowserWithBackground>
+						<FullWidthBorder className="bottom-0" />
+					</div>
 					<div className="mt-10 mb-6 flex w-full flex-col-reverse items-center justify-center gap-10 px-6 lg:mt-auto lg:flex-row lg:justify-between lg:px-4">
 						<div className="flex items-center gap-2">
 							<p className="font-mono text-foreground/60 text-xs">

@@ -262,7 +262,7 @@ export function useLinkSourceMutations({
 				toast.error(_error.message || "Failed to start recrawl");
 			},
 			onSuccess: () => {
-				toast.success("Recrawl started");
+				// Realtime crawl events will drive the visible progress toast.
 			},
 			onSettled: () => {
 				void queryClient.invalidateQueries({

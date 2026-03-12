@@ -123,7 +123,7 @@ async function PlanInfoContent({ websiteSlug }: { websiteSlug: string }) {
 						)}
 					</div>
 					<div className="flex flex-wrap items-center gap-2">
-						<UpgradeButton currentPlan={plan} websiteSlug={websiteSlug} />
+						<UpgradeButton planInfo={planInfo} websiteSlug={websiteSlug} />
 						<Button asChild variant="outline">
 							<Link href={`/${websiteSlug}/billing`}>View billing</Link>
 						</Button>

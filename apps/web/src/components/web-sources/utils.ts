@@ -192,12 +192,13 @@ export function calculateDomainSummary(
 }
 
 /**
- * Get display name from URL path (last segment or "Home" for root)
+ * Get the tree label for a URL path.
+ * Root paths stay as "/", while nested paths use only their final segment.
  */
 export function getPathDisplayName(path: string): string {
 	const segments = path.split("/").filter(Boolean);
 	if (segments.length === 0) {
-		return "Home";
+		return "/";
 	}
 	return segments.at(-1) ?? path;
 }

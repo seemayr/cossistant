@@ -1,7 +1,7 @@
 "use client";
 
 import type { KnowledgeResponse } from "@cossistant/types";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 import {
 	AddFileDialog,
@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/layout/settings-layout";
 import { TooltipOnHover } from "@/components/ui/tooltip";
 import { useWebsite } from "@/contexts/website";
+import { useTrainingControls } from "@/hooks/use-training-controls";
 import { useTRPC } from "@/lib/trpc/client";
 
 export default function FilesPage() {
@@ -50,46 +51,13 @@ export default function FilesPage() {
 		})
 	);
 
-	const queryClient = useQueryClient();
-
-	// Fetch training readiness for train action
-	const { data: readiness } = useQuery(
-		trpc.aiAgent.getTrainingReadiness.queryOptions({
-			websiteSlug: website.slug,
-		})
-	);
-
-	const startTrainingMutation = useMutation(
-		trpc.aiAgent.startTraining.mutationOptions({
-			onSuccess: () => {
-				queryClient.invalidateQueries({
-					queryKey: trpc.aiAgent.getTrainingStatus.queryKey({
-						websiteSlug: website.slug,
-					}),
-				});
-				queryClient.invalidateQueries({
-					queryKey: trpc.aiAgent.getTrainingReadiness.queryKey({
-						websiteSlug: website.slug,
-					}),
-				});
-			},
-		})
-	);
-
-	const handleTrainRequested = useCallback(() => {
-		if (!aiAgent?.id) {
-			return;
-		}
-		const isOnCooldown = readiness?.canTrainAt != null;
-		if (isOnCooldown) {
+	const trainingControls = useTrainingControls({
+		aiAgentId: aiAgent?.id ?? null,
+		onBlocked: () => {
 			setShowUpgradeModal(true);
-			return;
-		}
-		startTrainingMutation.mutate({
-			websiteSlug: website.slug,
-			aiAgentId: aiAgent.id,
-		});
-	}, [aiAgent?.id, readiness?.canTrainAt, startTrainingMutation, website.slug]);
+		},
+		websiteSlug: website.slug,
+	});
 
 	const isFreePlan = planInfo?.plan.name === "free";
 
@@ -123,7 +91,7 @@ export default function FilesPage() {
 		onUpdateSuccess: () => {
 			setEditingFile(null);
 		},
-		onTrainRequested: handleTrainRequested,
+		trainingControls,
 	});
 
 	const handleAddFile = useCallback(

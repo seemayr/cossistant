@@ -1,5 +1,6 @@
 import type { RealtimeEvent } from "@cossistant/types/realtime-events";
 import { toast } from "sonner";
+import { showProgressToast } from "@/components/ui/sonner";
 import type { DashboardRealtimeContext } from "../types";
 
 /**
@@ -19,6 +20,14 @@ function getDomainFromUrl(url: string): string {
  */
 function getCrawlToastId(linkSourceId: string): string {
 	return `crawl-${linkSourceId}`;
+}
+
+function getCrawlProgressToastId(linkSourceId: string): string {
+	return `${getCrawlToastId(linkSourceId)}-progress`;
+}
+
+function getCrawlResultToastId(linkSourceId: string): string {
+	return `${getCrawlToastId(linkSourceId)}-result`;
 }
 
 type CrawlStartedEvent = RealtimeEvent<"crawlStarted">;
@@ -70,9 +79,12 @@ export function handleCrawlStarted({
 
 	// Show loading toast for crawl start
 	const domain = getDomainFromUrl(payload.url);
-	toast.loading(`Crawling ${domain}...`, {
-		id: getCrawlToastId(payload.linkSourceId),
-		description: "Discovering pages",
+	toast.dismiss(getCrawlResultToastId(payload.linkSourceId));
+	showProgressToast({
+		id: getCrawlProgressToastId(payload.linkSourceId),
+		indeterminate: true,
+		status: "Discovering pages",
+		title: `Crawling ${domain}...`,
 	});
 
 	console.log(
@@ -123,9 +135,16 @@ export function handleCrawlProgress({
 
 	// Update toast with progress (throttled by the worker - every 5 seconds)
 	const domain = getDomainFromUrl(payload.url);
-	toast.loading(`Crawling ${domain}...`, {
-		id: getCrawlToastId(payload.linkSourceId),
-		description: `${payload.completedCount}/${payload.totalCount} pages`,
+	toast.dismiss(getCrawlResultToastId(payload.linkSourceId));
+	showProgressToast({
+		id: getCrawlProgressToastId(payload.linkSourceId),
+		status: `${payload.completedCount} of ${payload.totalCount} pages crawled`,
+		title: `Crawling ${domain}...`,
+		value:
+			payload.totalCount > 0
+				? (payload.completedCount / payload.totalCount) * 100
+				: undefined,
+		valueLabel: `${payload.completedCount}/${payload.totalCount}`,
 	});
 
 	console.log(
@@ -136,7 +155,7 @@ export function handleCrawlProgress({
 /**
  * Handle crawl completed event - final results
  */
-export function handleCrawlCompleted({
+export async function handleCrawlCompleted({
 	event,
 	context,
 }: {
@@ -216,18 +235,31 @@ export function handleCrawlCompleted({
 			console.error("Failed to invalidate training readiness:", error);
 		});
 
-	// Show success toast with optional Train action
-	const domain = getDomainFromUrl(payload.url);
-	toast.success(`Crawl complete for ${domain}`, {
-		id: getCrawlToastId(payload.linkSourceId),
-		description: `${payload.crawledPagesCount} pages added to knowledge base`,
-		...(context.startTraining && {
-			action: {
-				label: "Train Agent",
-				onClick: context.startTraining,
-			},
-		}),
-	});
+	const progressToastId = getCrawlProgressToastId(payload.linkSourceId);
+	const resultToastId = getCrawlResultToastId(payload.linkSourceId);
+	toast.dismiss(progressToastId);
+	toast.dismiss(resultToastId);
+
+	const autoStarted = context.training?.canAutoStartTraining
+		? await context.training.startTrainingIfAllowed()
+		: false;
+
+	if (!autoStarted) {
+		toast.success(
+			`${payload.crawledPagesCount} pages added to knowledge base`,
+			{
+				id: resultToastId,
+				...(context.training?.canRequestTraining && {
+					action: {
+						label: "Train Agent",
+						onClick: () => {
+							void context.training?.requestTraining();
+						},
+					},
+				}),
+			}
+		);
+	}
 
 	console.log(
 		`[crawl-progress] Crawl completed for ${payload.url}: ${payload.crawledPagesCount} pages, ${payload.totalSizeBytes} bytes`
@@ -274,8 +306,10 @@ export function handleCrawlFailed({
 
 	// Show error toast
 	const domain = getDomainFromUrl(payload.url);
+	toast.dismiss(getCrawlProgressToastId(payload.linkSourceId));
+	toast.dismiss(getCrawlResultToastId(payload.linkSourceId));
 	toast.error(`Crawl failed for ${domain}`, {
-		id: getCrawlToastId(payload.linkSourceId),
+		id: getCrawlResultToastId(payload.linkSourceId),
 		description: payload.error || "An unexpected error occurred",
 	});
 

@@ -1,8 +1,81 @@
 /**
- * Utilities for collecting visitor data including browser, device, and location information
- * Moved from packages/react for better separation of concerns
+ * Utilities for collecting visitor data including browser, device, location,
+ * and acquisition tracking information.
  */
 /** biome-ignore-all lint/complexity/useOptionalChain: ok */
+
+import type {
+	AttributionChannel,
+	VisitorAttribution,
+	VisitorAttributionClickIds,
+	VisitorAttributionUtm,
+	VisitorCurrentPage,
+} from "./types";
+
+const TRACKED_QUERY_PARAM_KEYS = [
+	"utm_source",
+	"utm_medium",
+	"utm_campaign",
+	"utm_content",
+	"utm_term",
+	"gclid",
+	"gbraid",
+	"wbraid",
+	"fbclid",
+	"msclkid",
+	"ttclid",
+	"li_fat_id",
+	"twclid",
+] as const;
+
+const SOCIAL_MEDIUMS = new Set([
+	"social",
+	"social_media",
+	"social-network",
+	"organic_social",
+	"paid_social",
+]);
+
+const PAID_MEDIUMS = new Set([
+	"paid",
+	"cpc",
+	"ppc",
+	"paid_social",
+	"display",
+	"retargeting",
+	"remarketing",
+	"affiliate",
+]);
+
+const EMAIL_MEDIUMS = new Set([
+	"email",
+	"e-mail",
+	"newsletter",
+	"email_marketing",
+]);
+
+const SEARCH_ENGINES = [
+	"google.",
+	"bing.com",
+	"search.yahoo.com",
+	"duckduckgo.com",
+	"ecosia.org",
+	"baidu.com",
+	"yandex.",
+] as const;
+
+const SOCIAL_DOMAINS = [
+	"facebook.com",
+	"instagram.com",
+	"linkedin.com",
+	"twitter.com",
+	"x.com",
+	"tiktok.com",
+	"reddit.com",
+	"youtube.com",
+	"threads.net",
+	"pinterest.com",
+] as const;
 
 type VisitorData = {
 	browser: string | null;
@@ -22,6 +95,8 @@ type VisitorData = {
 	countryCode: string | null;
 	latitude: number | null;
 	longitude: number | null;
+	attribution: VisitorAttribution | null;
+	currentPage: VisitorCurrentPage | null;
 };
 
 // Browser detection patterns
@@ -84,7 +159,6 @@ function parseOS(userAgent: string): {
 	os: string | null;
 	version: string | null;
 } {
-	// Check Windows
 	const windowsMatch = userAgent.match(WINDOWS_PATTERN);
 	if (windowsMatch) {
 		const rawVersion = windowsMatch[1];
@@ -95,27 +169,23 @@ function parseOS(userAgent: string): {
 		return { os: "Windows", version };
 	}
 
-	// Check macOS
 	const macMatch = userAgent.match(MACOS_PATTERN);
 	if (macMatch) {
 		const version = macMatch[1] ? transformVersion(macMatch[1]) : null;
 		return { os: "macOS", version };
 	}
 
-	// Check iOS
 	const iosMatch = userAgent.match(IOS_PATTERN);
 	if (iosMatch) {
 		const version = iosMatch[1] ? transformVersion(iosMatch[1]) : null;
 		return { os: "iOS", version };
 	}
 
-	// Check Android
 	const androidMatch = userAgent.match(ANDROID_PATTERN);
 	if (androidMatch) {
 		return { os: "Android", version: androidMatch[1] || null };
 	}
 
-	// Check Linux
 	if (LINUX_PATTERN.test(userAgent)) {
 		return { os: "Linux", version: null };
 	}
@@ -204,9 +274,246 @@ function inferCityFromTimezone(timezone: string | null): string | null {
 	return city ? city.replace(/_/g, " ") : null;
 }
 
+function toNullableString(value: string | null | undefined): string | null {
+	if (typeof value !== "string") {
+		return null;
+	}
+
+	const trimmed = value.trim();
+	return trimmed.length > 0 ? trimmed : null;
+}
+
+function normalizeHostname(hostname: string | null | undefined): string | null {
+	const normalized = toNullableString(hostname)?.toLowerCase() ?? null;
+	if (!normalized) {
+		return null;
+	}
+
+	return normalized.replace(/^www\./, "");
+}
+
+function sanitizeReferrerUrl(url: URL): string {
+	const sanitized = new URL(url.toString());
+	sanitized.search = "";
+	sanitized.hash = "";
+	return sanitized.toString();
+}
+
+function sanitizePageUrl(url: URL): string {
+	const sanitized = new URL(url.toString());
+	const params = new URLSearchParams();
+
+	for (const key of TRACKED_QUERY_PARAM_KEYS) {
+		const value = sanitized.searchParams.get(key);
+		if (value) {
+			params.set(key, value);
+		}
+	}
+
+	sanitized.search = params.toString();
+	sanitized.hash = "";
+	return sanitized.toString();
+}
+
+function buildTrackedPath(url: URL): string {
+	return url.pathname || "/";
+}
+
+function extractTrackedQueryValue(
+	searchParams: URLSearchParams,
+	key: string
+): string | null {
+	return toNullableString(searchParams.get(key));
+}
+
+function extractUtmValues(
+	searchParams: URLSearchParams
+): VisitorAttributionUtm {
+	return {
+		source: extractTrackedQueryValue(searchParams, "utm_source"),
+		medium: extractTrackedQueryValue(searchParams, "utm_medium"),
+		campaign: extractTrackedQueryValue(searchParams, "utm_campaign"),
+		content: extractTrackedQueryValue(searchParams, "utm_content"),
+		term: extractTrackedQueryValue(searchParams, "utm_term"),
+	};
+}
+
+function extractClickIds(
+	searchParams: URLSearchParams
+): VisitorAttributionClickIds {
+	return {
+		gclid: extractTrackedQueryValue(searchParams, "gclid"),
+		gbraid: extractTrackedQueryValue(searchParams, "gbraid"),
+		wbraid: extractTrackedQueryValue(searchParams, "wbraid"),
+		fbclid: extractTrackedQueryValue(searchParams, "fbclid"),
+		msclkid: extractTrackedQueryValue(searchParams, "msclkid"),
+		ttclid: extractTrackedQueryValue(searchParams, "ttclid"),
+		li_fat_id: extractTrackedQueryValue(searchParams, "li_fat_id"),
+		twclid: extractTrackedQueryValue(searchParams, "twclid"),
+	};
+}
+
+function hasClickIds(clickIds: VisitorAttributionClickIds): boolean {
+	return Object.values(clickIds).some((value) => Boolean(value));
+}
+
+function matchesKnownDomain(
+	domain: string,
+	domains: readonly string[]
+): boolean {
+	return domains.some((candidate) => {
+		if (candidate.endsWith(".")) {
+			return domain.startsWith(candidate);
+		}
+
+		return domain === candidate || domain.endsWith(`.${candidate}`);
+	});
+}
+
+function deriveChannel(params: {
+	isDirect: boolean;
+	referrerDomain: string | null;
+	utmMedium: string | null;
+	clickIds: VisitorAttributionClickIds;
+}): AttributionChannel {
+	const medium = params.utmMedium?.toLowerCase() ?? null;
+
+	if (medium && EMAIL_MEDIUMS.has(medium)) {
+		return "email";
+	}
+
+	if ((medium && PAID_MEDIUMS.has(medium)) || hasClickIds(params.clickIds)) {
+		return "paid";
+	}
+
+	if (medium && (SOCIAL_MEDIUMS.has(medium) || medium.includes("social"))) {
+		return "social";
+	}
+
+	if (
+		params.referrerDomain &&
+		matchesKnownDomain(params.referrerDomain, SEARCH_ENGINES)
+	) {
+		return "organic_search";
+	}
+
+	if (
+		params.referrerDomain &&
+		matchesKnownDomain(params.referrerDomain, SOCIAL_DOMAINS)
+	) {
+		return "social";
+	}
+
+	if (params.isDirect) {
+		return "direct";
+	}
+
+	return "referral";
+}
+
+function resolveExternalReferrer(currentUrl: URL): URL | null {
+	const referrer = toNullableString(document.referrer);
+	if (!referrer) {
+		return null;
+	}
+
+	try {
+		const parsed = new URL(referrer);
+		const currentHost = normalizeHostname(currentUrl.hostname);
+		const referrerHost = normalizeHostname(parsed.hostname);
+
+		if (!referrerHost || referrerHost === currentHost) {
+			return null;
+		}
+
+		return parsed;
+	} catch {
+		return null;
+	}
+}
+
+function buildCurrentPage(params: {
+	currentUrl: URL;
+	externalReferrer: URL | null;
+	timestamp: string;
+}): VisitorCurrentPage {
+	return {
+		url: sanitizePageUrl(params.currentUrl),
+		path: buildTrackedPath(params.currentUrl),
+		title: toNullableString(document.title),
+		referrerUrl: params.externalReferrer
+			? sanitizeReferrerUrl(params.externalReferrer)
+			: null,
+		updatedAt: params.timestamp,
+	};
+}
+
+export function buildAttributionSnapshot(
+	timestamp = new Date().toISOString()
+): {
+	attribution: VisitorAttribution;
+	currentPage: VisitorCurrentPage;
+} | null {
+	if (typeof window === "undefined" || typeof document === "undefined") {
+		return null;
+	}
+
+	let currentUrl: URL;
+	try {
+		currentUrl = new URL(window.location.href);
+	} catch {
+		return null;
+	}
+
+	const externalReferrer = resolveExternalReferrer(currentUrl);
+	const utm = extractUtmValues(currentUrl.searchParams);
+	const clickIds = extractClickIds(currentUrl.searchParams);
+	const referrerDomain = externalReferrer
+		? normalizeHostname(externalReferrer.hostname)
+		: null;
+	const hasCampaignSignals =
+		Boolean(
+			utm.source || utm.medium || utm.campaign || utm.content || utm.term
+		) || hasClickIds(clickIds);
+	const isDirect = !(referrerDomain || hasCampaignSignals);
+	const currentPage = buildCurrentPage({
+		currentUrl,
+		externalReferrer,
+		timestamp,
+	});
+
+	return {
+		attribution: {
+			version: 1,
+			firstTouch: {
+				channel: deriveChannel({
+					isDirect,
+					referrerDomain,
+					utmMedium: utm.medium,
+					clickIds,
+				}),
+				isDirect,
+				referrer: {
+					url: externalReferrer ? sanitizeReferrerUrl(externalReferrer) : null,
+					domain: referrerDomain,
+				},
+				landing: {
+					url: currentPage.url,
+					path: currentPage.path,
+					title: currentPage.title,
+				},
+				utm,
+				clickIds,
+				capturedAt: timestamp,
+			},
+		},
+		currentPage,
+	};
+}
+
 /**
- * Collect visitor data from the browser environment
- * Returns null if not in browser environment
+ * Collect visitor data from the browser environment.
+ * Returns null if not in browser environment.
  */
 export async function collectVisitorData(): Promise<VisitorData | null> {
 	if (!isBrowser()) {
@@ -219,6 +526,8 @@ export async function collectVisitorData(): Promise<VisitorData | null> {
 	const language = navigator.language || null;
 	const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || null;
 	const inferredCity = inferCityFromTimezone(timezone);
+	const timestamp = new Date().toISOString();
+	const trackingSnapshot = buildAttributionSnapshot(timestamp);
 
 	return {
 		browser,
@@ -244,10 +553,9 @@ export async function collectVisitorData(): Promise<VisitorData | null> {
 		countryCode: null,
 		latitude: null,
 		longitude: null,
+		attribution: trackingSnapshot?.attribution ?? null,
+		currentPage: trackingSnapshot?.currentPage ?? null,
 	};
 }
 
-/**
- * Export the interface for use by consumers
- */
 export type { VisitorData };
