@@ -1,0 +1,259 @@
+---
+title: "How to Add a Support Widget to a Next.js App"
+description: "Add a support widget to your Next.js app with Cossistant in a few steps. Install the package, add SupportProvider, import styles, and launch your first support experience."
+date: "2026-03-12"
+author: "Anthony Riera"
+tags: ["nextjs", "react", "support", "tutorial", "open-source"]
+image: "https://cdn.cossistant.com/landing/main-large.jpg"
+top: false
+related: []
+published: true
+---
+
+If you're building a SaaS with Next.js, support usually gets bolted on late.
+
+You focus on auth. Billing. Onboarding. The dashboard. Then users start showing up and asking real questions.
+
+Now you need support.
+
+Not a giant helpdesk migration. Not a bloated setup project. Just a support widget that fits your product and gets out of the way.
+
+Here's how to add one to a Next.js app with Cossistant.
+
+## Why this matters
+
+For small engineering-led teams, support is not some separate department.
+
+It's product work.
+
+A bug report, a confused onboarding step, a pricing question, a feature request — all of that is product signal. If support feels disconnected from your app, your team ends up learning slower and your users feel the gap.
+
+The goal here is simple:
+- add support fast
+- keep it inside your product
+- stay in control of the experience
+
+## What you'll build
+
+By the end, you'll have:
+- the Cossistant widget running in your Next.js app
+- your public API key configured
+- styles loaded
+- a support launcher rendered
+- optional visitor identification for logged-in users
+
+## 1. Install the package
+
+```bash
+npm install @cossistant/next
+```
+
+## 2. Add your public API key
+
+Create or update `.env.local`:
+
+```bash title=".env.local"
+NEXT_PUBLIC_COSSISTANT_API_KEY=pk_test_xxxx
+```
+
+Use a **public** key here.
+Do not put a private key in browser code.
+
+## 3. Add `SupportProvider` to your app
+
+In the App Router, the cleanest place is your root layout:
+
+```tsx title="app/layout.tsx"
+import { SupportProvider } from "@cossistant/next";
+
+import "./globals.css";
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="en">
+      <body>
+        <SupportProvider>{children}</SupportProvider>
+      </body>
+    </html>
+  );
+}
+```
+
+This gives the widget the context it needs across your app.
+
+## 4. Import the styles
+
+You have two options.
+
+### Tailwind v4
+
+```css title="app/globals.css"
+@import "tailwindcss";
+
+@import "@cossistant/next/support.css";
+```
+
+### Plain CSS
+
+```tsx title="app/layout.tsx"
+import { SupportProvider } from "@cossistant/next";
+import "@cossistant/next/styles.css";
+import "./globals.css";
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="en">
+      <body>
+        <SupportProvider>{children}</SupportProvider>
+      </body>
+    </html>
+  );
+}
+```
+
+If you're already using Tailwind v4, use the first option.
+If not, plain CSS is fine.
+
+## 5. Render the widget
+
+Now drop the widget into a page:
+
+```tsx title="app/page.tsx"
+import { Support } from "@cossistant/next";
+
+export default function Page() {
+  return (
+    <main>
+      <h1>You are ready to chat</h1>
+      <Support />
+    </main>
+  );
+}
+```
+
+That is enough to get the widget running.
+
+## 6. Identify logged-in users
+
+If your app has authentication, identify users so support stays tied to the right person across sessions and devices.
+
+```tsx title="app/(app)/layout.tsx"
+import { IdentifySupportVisitor } from "@cossistant/next";
+
+export default function AppLayout({ children }: { children: React.ReactNode }) {
+  const user = {
+    id: "user_123",
+    email: "jane@acme.com",
+    name: "Jane Doe",
+  };
+
+  return (
+    <>
+      <IdentifySupportVisitor
+        externalId={user.id}
+        email={user.email}
+        name={user.name}
+      />
+      {children}
+    </>
+  );
+}
+```
+
+This is optional, but if you're building a real SaaS, you probably want it.
+
+## 7. Add default messages and quick options
+
+If you want the widget to feel less empty on first open, configure a default message and a few quick actions.
+
+```tsx title="app/page.tsx"
+import { Support, SupportConfig } from "@cossistant/next";
+import { type DefaultMessage, SenderType } from "@cossistant/next";
+
+const user: { name: string | null } = {
+  name: "Jane Doe",
+};
+
+const defaultMessages: DefaultMessage[] = [
+  {
+    content: `Hi ${user.name ?? "there"}, anything I can help with?`,
+    senderType: SenderType.TEAM_MEMBER,
+  },
+];
+
+const quickOptions: string[] = ["How do I identify a visitor?"];
+
+export default function Page() {
+  return (
+    <>
+      <SupportConfig
+        defaultMessages={defaultMessages}
+        quickOptions={quickOptions}
+      />
+      <Support />
+    </>
+  );
+}
+```
+
+Small detail, better first impression.
+
+## Full setup in order
+
+<Steps className="mt-10">
+  <Step>
+    Install `@cossistant/next`
+  </Step>
+  <Step>
+    Add `NEXT_PUBLIC_COSSISTANT_API_KEY` to `.env.local`
+  </Step>
+  <Step>
+    Wrap your app with `SupportProvider`
+  </Step>
+  <Step>
+    Import either `support.css` or `styles.css`
+  </Step>
+  <Step>
+    Render `<Support />`
+  </Step>
+  <Step>
+    Optionally identify users and add default messages
+  </Step>
+</Steps>
+
+## Why this setup works well for Next.js teams
+
+The main reason this setup is useful is not that it's "AI-powered" or "modern" or whatever buzzword people are stuffing into landing pages this week.
+
+It's useful because it is simple.
+
+You install the package.
+You wrap your app.
+You render the widget.
+Then you keep going.
+
+And if you want more control later, you can keep customizing behavior in the [Support component guide](/docs/support-component).
+
+That matters for small teams.
+You do not need another giant system to manage just to stay close to your users.
+
+## Final thought
+
+If you're already building in Next.js, your support experience should not feel like a foreign object taped onto your app.
+
+It should feel like part of the product.
+
+This gets you there fast.
+
+<SignUpCTA
+  title="Add support to your Next.js app without the black-box mess"
+  description="Cossistant is an open-source, code-first support framework for React and Next.js. Start simple, then customize as much as you want."
+/>
