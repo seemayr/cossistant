@@ -1,0 +1,323 @@
+---
+title: "How to Add a Support Widget to a React App"
+description: "Add a support widget to your React app with Cossistant in a few steps. Install the package, configure the public key, launch the widget, and customize the chat bubble when you want more control."
+date: "2026-03-13"
+author: "Anthony Riera"
+tags: ["react", "support", "tutorial", "open-source", "widget"]
+image: "https://cdn.cossistant.com/landing/main-large.jpg"
+top: false
+related: ["how-to-add-a-support-widget-to-a-nextjs-app"]
+published: true
+---
+
+If you're building a React app, support usually starts as "we'll figure it out later."
+
+Later becomes real pretty fast.
+
+Users hit bugs. They ask onboarding questions. They want help before they churn. And suddenly you're wiring a support tool into a product that was never designed around it.
+
+So let's keep this simple.
+
+Here's how to add a support widget to a React app with Cossistant.
+
+And because this is one of the first things people want to change, I'll also show you how to replace the default chat bubble with your own custom trigger.
+
+## Why this matters
+
+For small engineering-led teams, support is part of the product.
+
+Not a separate universe. Not a tab someone checks once a day. Part of the product.
+
+If your users run into friction, support is where you see it first. If your widget feels bolted on, that friction gets worse.
+
+The goal here is simple:
+- add support fast
+- keep the setup clean
+- keep the option to customize later
+
+## What you'll build
+
+By the end, you'll have:
+- the Cossistant widget running in your React app
+- the public API key configured
+- styles loaded
+- the default widget working
+- an optional custom chat bubble trigger
+
+## 1. Install the package
+
+```bash
+npm install @cossistant/react
+```
+
+## 2. Add your public API key
+
+Cossistant supports a few different env conventions depending on your setup.
+
+### Vite
+
+```bash title=".env"
+VITE_COSSISTANT_API_KEY=pk_test_xxxx
+```
+
+### Next.js
+
+```bash title=".env.local"
+NEXT_PUBLIC_COSSISTANT_API_KEY=pk_test_xxxx
+```
+
+### Other frameworks
+
+```bash title=".env"
+COSSISTANT_API_KEY=pk_test_xxxx
+```
+
+You can also pass the key directly with `publicKey` if your setup needs it.
+
+Use a **public** key only.
+Do not put a private key in browser code.
+
+## 3. Add `SupportProvider`
+
+Wrap your app at the entry point:
+
+```tsx title="src/main.tsx"
+import React from "react";
+import ReactDOM from "react-dom/client";
+import { SupportProvider } from "@cossistant/react";
+import App from "./App";
+import "./index.css";
+
+ReactDOM.createRoot(document.getElementById("root")!).render(
+  <React.StrictMode>
+    <SupportProvider>
+      <App />
+    </SupportProvider>
+  </React.StrictMode>,
+);
+```
+
+If you need to pass the key explicitly, you can:
+
+```tsx
+<SupportProvider publicKey={import.meta.env.VITE_COSSISTANT_API_KEY}>
+```
+
+## 4. Import styles
+
+### Tailwind v4
+
+```css title="src/index.css"
+@import "tailwindcss";
+
+@import "@cossistant/react/support.css";
+```
+
+### Plain CSS
+
+```tsx title="src/main.tsx"
+import React from "react";
+import ReactDOM from "react-dom/client";
+import { SupportProvider } from "@cossistant/react";
+import "@cossistant/react/styles.css";
+import App from "./App";
+import "./index.css";
+
+ReactDOM.createRoot(document.getElementById("root")!).render(
+  <React.StrictMode>
+    <SupportProvider>
+      <App />
+    </SupportProvider>
+  </React.StrictMode>,
+);
+```
+
+If you're already using Tailwind v4, use the support stylesheet import.
+If not, plain CSS is enough.
+
+## 5. Render the widget
+
+Now render it in your app:
+
+```tsx title="src/App.tsx"
+import { Support } from "@cossistant/react";
+
+export default function App() {
+  return (
+    <main>
+      <h1>You are ready to chat</h1>
+      <Support />
+    </main>
+  );
+}
+```
+
+That is enough to get the default support widget on screen.
+
+## 6. Identify logged-in users
+
+If your app has auth, identify the visitor so support stays tied to the right person.
+
+```tsx title="src/App.tsx"
+import { IdentifySupportVisitor, Support } from "@cossistant/react";
+
+export default function App() {
+  const user = {
+    id: "user_123",
+    email: "jane@acme.com",
+    name: "Jane Doe",
+  };
+
+  return (
+    <>
+      <IdentifySupportVisitor
+        externalId={user.id}
+        email={user.email}
+        name={user.name}
+      />
+      <Support />
+    </>
+  );
+}
+```
+
+Optional, but if you're building a SaaS, this is usually the right move.
+
+## 7. Add default messages and quick options
+
+If you want the widget to feel less blank the first time someone opens it, add some starter context.
+
+```tsx title="src/App.tsx"
+import { Support, SupportConfig } from "@cossistant/react";
+import { Support, SupportConfig } from "@cossistant/react";
+import { type DefaultMessage, SenderType } from "@cossistant/types";
+
+const user: { name: string | null } = {
+  name: "Jane Doe",
+};
+
+const defaultMessages: DefaultMessage[] = [
+  {
+    content: `Hi ${user.name ?? "there"}, anything I can help with?`,
+    senderType: SenderType.TEAM_MEMBER,
+  },
+];
+
+const quickOptions: string[] = ["How do I identify a visitor?"];
+
+export default function App() {
+  return (
+    <>
+      <SupportConfig
+        defaultMessages={defaultMessages}
+        quickOptions={quickOptions}
+      />
+      <Support />
+    </>
+  );
+}
+```
+
+Not required. But it makes the first interaction feel more intentional.
+
+## 8. Add a custom support widget chat bubble
+
+This is the part a lot of people care about.
+
+The default floating trigger is useful, but most teams eventually want something that feels more like *their* app.
+
+Cossistant supports a custom trigger through `Support.Trigger`.
+That means you can replace the default chat bubble with your own button, your own label, your own layout, and your own unread badge logic.
+
+Here's a simple custom chat bubble:
+
+```tsx title="src/App.tsx"
+import { Support, type TriggerRenderProps } from "@cossistant/react";
+
+export default function App() {
+  return (
+    <Support side="bottom" align="end">
+      <Support.Trigger className="fixed bottom-6 right-6 flex items-center gap-2 rounded-full bg-black px-4 py-3 text-sm font-medium text-white shadow-lg">
+        {({ isOpen, unreadCount }: TriggerRenderProps) => (
+          <>
+            <span>{isOpen ? "Close" : "Chat with us"}</span>
+            {unreadCount > 0 && (
+              <span className="rounded-full bg-white px-2 py-0.5 text-xs text-black">
+                {unreadCount}
+              </span>
+            )}
+          </>
+        )}
+      </Support.Trigger>
+    </Support>
+  );
+}
+```
+
+That already gets you most of the way there.
+
+You can change:
+- the label
+- the colors
+- the shape
+- the position
+- the unread badge treatment
+
+If you want more control, the customization guide also supports `Support.Content`, `Support.Root`, and deeper composition patterns.
+
+## Full setup in order
+
+<Steps className="mt-10">
+  <Step>
+    Install `@cossistant/react`
+  </Step>
+  <Step>
+    Configure your public API key
+  </Step>
+  <Step>
+    Wrap the app with `SupportProvider`
+  </Step>
+  <Step>
+    Import styles
+  </Step>
+  <Step>
+    Render `<Support />`
+  </Step>
+  <Step>
+    Optionally identify users and add default messages
+  </Step>
+  <Step>
+    Replace the default chat bubble with `Support.Trigger` if you want a custom trigger
+  </Step>
+</Steps>
+
+## Why this setup works for React teams
+
+The point is not just that you can get a widget running.
+
+The point is that you can start simple and still keep control.
+
+That matters.
+
+A lot of support tools are fine until you want them to feel native to your product. Then you hit the wall. Weird config panels. Limited styling. No real composability.
+
+This setup avoids that trap.
+
+You can install it fast.
+Then you can shape it into your app instead of shaping your app around it.
+
+## Final thought
+
+If you are building in React, adding support should not turn into a side quest.
+
+Start with the default widget.
+Then customize the bubble when you're ready.
+
+That is the right sequence.
+
+If you want more control after that, keep going in the [Support component guide](/docs/support-component).
+
+<SignUpCTA
+  title="Add a support widget to your React app without giving up control"
+  description="Cossistant is an open-source, code-first support framework for React and Next.js. Start simple, then customize the chat bubble and the rest of the support experience when you need it."
+/>
