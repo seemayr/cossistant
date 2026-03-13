@@ -1,21 +1,27 @@
 ---
-title: Contributors Guide
-description: Complete guide for setting up Cossistant locally and contributing to the project.
+title: Contribute to Cossistant
+description: Set up the Cossistant monorepo locally, understand the repo layout, and ship contribution-ready pull requests.
+keywords:
+  - contribute to Cossistant
+  - Cossistant contributor guide
+  - Cossistant local setup
+  - Cossistant monorepo
 ---
 
-Welcome to Cossistant! This guide will help you get the project running locally and understand how to contribute effectively.
+Use this guide if you want to contribute code, docs, or examples to Cossistant. It walks through the local setup, the services that should be running, the parts of the monorepo you will touch most often, and the checks to run before you open a pull request.
 
 ## Prerequisites
 
-Before you begin, make sure you have the following installed:
+Before you start, make sure your machine has:
 
 - **Docker Desktop** - Required for running Postgres and Redis locally
 - **Bun v1.2+** - Our package manager and runtime ([install Bun](https://bun.sh))
 - **Git** - For version control
+- **Node-compatible shell tooling** - Helpful for local debugging and scripts
 
 ## Quick Start
 
-Get up and running in three commands:
+Clone the monorepo, install dependencies, and start the local stack:
 
 ```bash
 git clone https://github.com/cossistantcom/cossistant.git
@@ -36,19 +42,19 @@ That's it! The `bun dev` command will:
   credentials don't change between restarts.
 </Callout>
 
-## What's Running
+## Local Services At A Glance
 
-After `bun dev` completes, you'll have:
+After `bun dev` finishes, you should have:
 
-- **API Server**: `http://localhost:3001` (Hono + tRPC + WebSocket)
-- **Web App**: `http://localhost:3000` (Next.js dashboard, docs, landing)
-- **Postgres**: `localhost:5432` (via Docker)
-- **Redis**: `localhost:6379` (via Docker)
-- **Upstash Workflow**: Local mode (credentials in console)
+- **Web app**: `http://localhost:3000` for the landing site, docs, and dashboard
+- **API server**: `http://localhost:3001` for REST, tRPC, WebSocket, and auth flows
+- **Postgres**: `localhost:5432` for relational data
+- **Redis**: `localhost:6379` for queues, caching, and real-time support
+- **Upstash Workflow local mode**: credentials printed in the API console output
 
 ## Database Setup
 
-### Default Connection
+### Default connection
 
 The local database connection string is:
 
@@ -58,7 +64,7 @@ postgresql://postgres:postgres@localhost:5432/cossistant
 
 This is automatically configured when you run `bun dev`.
 
-### Running Migrations
+### Run migrations
 
 After starting the services for the first time, run the database migrations:
 
@@ -67,7 +73,7 @@ cd apps/api
 bun db:migrate
 ```
 
-### Seeding Data (Optional)
+### Seed data (optional)
 
 To populate the database with sample data for development:
 
@@ -76,7 +82,7 @@ cd apps/api
 bun db:seed
 ```
 
-### Making Schema Changes
+### Make schema changes
 
 When you need to modify the database schema:
 
@@ -91,7 +97,7 @@ When you need to modify the database schema:
    bun db:migrate
    ```
 
-### Database Studio
+### Open Database Studio
 
 To explore the database with Drizzle Studio:
 
@@ -100,7 +106,7 @@ cd apps/api
 bun db:studio
 ```
 
-## Optional: S3 Setup
+## Optional S3 Setup
 
 S3 file storage is **only needed if you're testing file uploads**. For most development work, you can skip this.
 
@@ -113,9 +119,9 @@ If you do need S3:
 2. Follow the instructions in the [S3 Setup README](/infra/aws/s3-public-setup/README.md)
 3. The Terraform configuration will create the necessary AWS resources
 
-## Project Structure
+## Repo Map For Contributors
 
-Understanding the monorepo layout:
+These are the directories most contributors touch:
 
 ### Apps
 
@@ -159,32 +165,11 @@ Understanding the monorepo layout:
   - Country and timezone data
   - Geolocation helpers
 
-## Tech Stack Details
+## Contributor Workflow
 
-### Core Technologies
+### Root commands
 
-- **Monorepo**: Turborepo for efficient builds and caching
-- **Runtime**: Bun for fast package management and execution
-- **Backend**: Hono (lightweight, fast API framework)
-- **Frontend**: React 19 + Next.js 15
-- **Type Safety**: TypeScript throughout
-- **Database**: PostgreSQL via Drizzle ORM
-- **Authentication**: Better Auth
-- **Real-time**: WebSockets for live updates
-- **Background Jobs**: Upstash Workflow (runs locally in dev)
-- **Styling**: TailwindCSS v4
-
-### Development Tools
-
-- **Linting**: Biome (via Ultracite)
-- **Testing**: Bun's built-in test runner
-- **Documentation**: Fumadocs (Markdown-based)
-
-## Development Workflow
-
-### Common Commands
-
-Run these from the project root:
+Run these from the repo root:
 
 ```bash
 # Start all services
@@ -206,7 +191,7 @@ bun run check-types
 bun run docs:links
 ```
 
-### API-Specific Commands
+### API-specific commands
 
 Run these from `apps/api`:
 
@@ -227,23 +212,39 @@ bun run db:studio
 bun run better-auth:generate-schema
 ```
 
-### Before Committing
+## Quality Checks Before A Pull Request
 
-Always run these commands before committing:
+Run the smallest set of checks that matches your change:
 
 ```bash
-# Auto-fix linting issues
+# Auto-fix linting issues across the repo
 bun run fix
 
 # Verify TypeScript types
 bun run check-types
 
-# Run tests (in relevant package)
+# Run docs link checks for documentation edits
+bun run docs:links
+
+# Run tests in the package or app you changed
 cd packages/react
 bun test
 ```
 
-### Testing
+If you changed the API, run tests from `apps/api`. If you changed docs or marketing pages, make sure the affected pages still build and render cleanly.
+
+## Pull Request Checklist
+
+Before you open or merge a PR:
+
+1. Use a clear Conventional Commits title such as `fix: tighten llms route indexing headers`.
+2. Explain what changed, why it changed, and any follow-up work still pending.
+3. Link the related issue, discussion, or support thread when there is one.
+4. Add screenshots or recordings for UI changes.
+5. Add a changeset when you touch published packages such as `@cossistant/react` or `@cossistant/next`.
+6. Mention any environment variables, migrations, or manual QA steps reviewers need.
+
+## Testing Notes
 
 Cossistant uses Bun's built-in test runner. Tests are colocated with source files using the `*.test.ts` naming convention.
 
@@ -259,43 +260,15 @@ bun test --watch
 bun test --coverage
 ```
 
-## Project Philosophy
+## Troubleshooting
 
-Cossistant is built with these core principles:
+- **`bun dev` fails immediately**: confirm Docker Desktop is running and ports `3000`, `3001`, `5432`, and `6379` are not already taken.
+- **Database errors after pulling main**: rerun `bun db:migrate` from `apps/api` to catch up with schema changes.
+- **Missing dependencies or stale lockfile state**: rerun `bun install --workspaces` from the repo root.
+- **Docs pages render but links fail**: run `bun run docs:links` before opening the PR.
+- **You only need package-level tests**: run `bun test` inside the package you changed instead of the entire monorepo.
 
-### Code-First, Not Clicks
-
-We prefer programmatic solutions over UI configuration. Our documentation includes code examples you can copy and paste, not screenshots of admin panels.
-
-### API-First Design
-
-Every feature is accessible via API before it gets a UI. This ensures flexibility and enables headless usage patterns.
-
-### Headless Components
-
-Our React components are unstyled and composable, giving you complete control over the look and feel while we handle the complex state management and real-time synchronization.
-
-### TypeScript-First
-
-Type safety isn't optional—it's built in from the ground up. This catches errors early and provides excellent IntelliSense in your editor.
-
-### Developer Experience is Paramount
-
-We optimize for developer happiness:
-
-- Clear error messages
-- Comprehensive documentation
-- Fast build times
-- Minimal configuration
-- AI-friendly docs that are easy to search and reference
-
-### Open & Transparent
-
-Everything is in the open. Our development happens on GitHub, our roadmap is public, and we welcome contributions from the community.
-
-## Contributing Guidelines
-
-### Conventional Commits
+## Commit Message Format
 
 We follow [Conventional Commits](https://www.conventionalcommits.org/) for commit messages:
 
@@ -308,18 +281,7 @@ We follow [Conventional Commits](https://www.conventionalcommits.org/) for commi
 
 Example: `feat: add message reactions to timeline items`
 
-### Pull Requests
-
-When submitting a PR:
-
-1. Create a descriptive title following Conventional Commits
-2. Link related issues
-3. Describe what changed and why
-4. Note any environment or configuration changes
-5. Include screenshots for UI changes
-6. Ensure all tests pass locally
-
-### Changesets
+## Changesets
 
 For changes to published packages (`@cossistant/react`, `@cossistant/next`), add a changeset:
 
@@ -338,5 +300,3 @@ Follow the prompts to describe your changes. This will be used to generate chang
 ## License
 
 Cossistant is licensed under **AGPL-3.0** for non-commercial use. For commercial use, please contact us at [anthony@cossistant.com](mailto:anthony@cossistant.com).
-
-Thank you for contributing to Cossistant! 🎉

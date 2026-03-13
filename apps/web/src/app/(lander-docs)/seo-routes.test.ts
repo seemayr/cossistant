@@ -4,6 +4,9 @@ import { generateMetadata as blogMetadata } from "./blog/page";
 import { generateMetadata as blogTagMetadata } from "./blog/tag/[tag]/page";
 import { generateMetadata as changelogMetadata } from "./changelog/page";
 import { generateMetadata as docsMetadata } from "./docs/[[...slug]]/page";
+import { GET as legacyOpenApiRedirect } from "./docs/openapi/[[...slug]]/route";
+import { GET as llmsRoute } from "./llms.txt/route";
+import { GET as llmsFullRoute } from "./llms-full.txt/route";
 import { metadata as loginMetadata } from "./login/page";
 import { metadata as homeMetadata } from "./page";
 import { metadata as pricingMetadata } from "./pricing/page";
@@ -75,5 +78,35 @@ describe("lander-docs seo routes", () => {
 			index: false,
 			follow: false,
 		});
+	});
+
+	it("redirects legacy openapi docs requests to the API docs", async () => {
+		const response = await legacyOpenApiRedirect();
+
+		expect(response.status).toBe(308);
+		expect(response.headers.get("location")).toBe(
+			"https://api.cossistant.com/docs"
+		);
+		expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+	});
+
+	it("marks machine-readable llms routes as noindex", async () => {
+		const [llmsIndexResponse, llmsFullResponse] = await Promise.all([
+			llmsRoute(),
+			llmsFullRoute(),
+		]);
+
+		expect(llmsIndexResponse.headers.get("x-robots-tag")).toBe(
+			"noindex, nofollow"
+		);
+		expect(llmsFullResponse.headers.get("x-robots-tag")).toBe(
+			"noindex, nofollow"
+		);
+		expect(llmsIndexResponse.headers.get("content-type")).toContain(
+			"text/plain"
+		);
+		expect(llmsFullResponse.headers.get("content-type")).toContain(
+			"text/plain"
+		);
 	});
 });

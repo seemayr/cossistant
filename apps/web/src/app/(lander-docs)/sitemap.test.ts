@@ -14,6 +14,7 @@ describe("lander-docs sitemap", () => {
 		expect(urls).toContain("http://localhost:3000/");
 		expect(urls).toContain("http://localhost:3000/blog");
 		expect(urls).toContain("http://localhost:3000/docs");
+		expect(urls).toContain("http://localhost:3000/docs/others/contributors");
 		expect(urls).toContain("http://localhost:3000/blog/introducing-cossistant");
 		for (const tag of indexableTags) {
 			expect(urls).toContain(
@@ -28,5 +29,8 @@ describe("lander-docs sitemap", () => {
 		expect(urls).not.toContain("http://localhost:3000/login");
 		expect(urls).not.toContain("http://localhost:3000/sign-up");
 		expect(urls).not.toContain("http://localhost:3000/changelog/page/2");
+		expect(urls).not.toContain(
+			"http://localhost:3000/docs/openapi/v1/conversations/conversationid/get"
+		);
 	});
 });

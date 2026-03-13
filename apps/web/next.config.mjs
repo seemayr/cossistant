@@ -1,6 +1,7 @@
 import { createMDX } from "fumadocs-mdx/next";
 
 const withMDX = createMDX();
+const SEARCH_ENGINE_NOINDEX = "noindex, nofollow";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -43,6 +44,15 @@ const nextConfig = {
 	},
 	async headers() {
 		return [
+			{
+				source: "/manifest.json",
+				headers: [
+					{
+						key: "X-Robots-Tag",
+						value: SEARCH_ENGINE_NOINDEX,
+					},
+				],
+			},
 			{
 				// Security headers for the service worker
 				source: "/sw.js",

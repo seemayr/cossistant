@@ -25,6 +25,8 @@ import { resendRouters } from "./resend";
 import { workflowsRouters } from "./workflows";
 import { upgradedWebsocket, websocket } from "./ws/socket";
 
+const SEARCH_ENGINE_NOINDEX = "noindex, nofollow";
+
 const app = new OpenAPIHono<{
 	Variables: {
 		user: typeof auth.$Infer.Session.user | null;
@@ -59,6 +61,12 @@ app.use("*", async (c, next) => {
 
 // Secure headers middleware
 app.use(secureHeaders());
+
+// Keep utility and machine-readable API routes out of search results.
+app.use("*", async (c, next) => {
+	await next();
+	c.header("X-Robots-Tag", SEARCH_ENGINE_NOINDEX);
+});
 
 // Health check endpoint
 app.get("/health", async (c) => {
