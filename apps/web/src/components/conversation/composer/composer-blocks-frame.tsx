@@ -1,12 +1,26 @@
 "use client";
 
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import type React from "react";
 import { cn } from "@/lib/utils";
 
-const SLOT_TRANSITION = {
-	duration: 0.16,
-	ease: "easeOut",
+const COMPOSER_LAYOUT_EASE = [0.25, 0.46, 0.45, 0.94] as const;
+const FRAME_TRANSITION = {
+	duration: 0.12,
+	ease: COMPOSER_LAYOUT_EASE,
+} as const;
+const SLOT_ENTER_TRANSITION = {
+	duration: 0.12,
+	ease: COMPOSER_LAYOUT_EASE,
+} as const;
+const SLOT_EXIT_TRANSITION = {
+	duration: 0.09,
+	ease: COMPOSER_LAYOUT_EASE,
+} as const;
+const SLOT_Y_OFFSET = {
+	above: -4,
+	bottom: 4,
+	central: 0,
 } as const;
 
 type ComposerBlocksFrameProps = {
@@ -35,8 +49,8 @@ export function ComposerBlocksFrame({
 				className
 			)}
 			data-composer-frame={highlighted ? "highlighted" : "default"}
-			layout
-			transition={SLOT_TRANSITION}
+			layout="size"
+			transition={FRAME_TRANSITION}
 		>
 			{children}
 		</motion.div>
@@ -49,32 +63,38 @@ export function ComposerAnimatedSlot({
 	slotKey,
 	className,
 }: ComposerAnimatedSlotProps) {
+	const prefersReducedMotion = useReducedMotion();
+	const yOffset = prefersReducedMotion ? 0 : SLOT_Y_OFFSET[slot];
+
 	return (
-		<AnimatePresence initial={false} mode="sync">
+		<AnimatePresence initial={false} mode="popLayout">
 			{children ? (
 				<motion.div
 					animate={{
 						opacity: 1,
-						scale: 1,
 						y: 0,
-						transition: SLOT_TRANSITION,
 					}}
-					className={className}
+					className={cn("overflow-hidden", className)}
 					data-composer-slot={slot}
 					exit={{
 						opacity: 0,
+						y: slot === "central" ? 0 : yOffset,
 						transition: {
-							duration: 0.08,
-							ease: "easeOut",
+							opacity: SLOT_EXIT_TRANSITION,
+							y: SLOT_EXIT_TRANSITION,
 						},
 					}}
 					initial={{
 						opacity: 0,
-						scale: 0.995,
-						y: 6,
+						y: slot === "central" ? 0 : yOffset,
 					}}
 					key={slotKey}
 					layout="position"
+					transition={{
+						layout: FRAME_TRANSITION,
+						opacity: SLOT_ENTER_TRANSITION,
+						y: SLOT_ENTER_TRANSITION,
+					}}
 				>
 					{children}
 				</motion.div>

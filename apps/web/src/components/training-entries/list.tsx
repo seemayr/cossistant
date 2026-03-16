@@ -1,10 +1,6 @@
 "use client";
 
-import {
-	ChevronRightIcon,
-	type LucideIcon,
-	MoreHorizontalIcon,
-} from "lucide-react";
+import { type LucideIcon, MoreHorizontalIcon } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
@@ -48,7 +44,6 @@ type TrainingEntryRowProps = {
 	onHoverPrefetch?: () => void;
 	icon: ReactNode;
 	primary: string;
-	preview?: ReactNode;
 	rightMeta?: ReactNode;
 	actions?: TrainingEntryMenuAction[];
 	focused?: boolean;
@@ -58,30 +53,21 @@ type TrainingEntryRowProps = {
 function TrainingEntryRowContent({
 	icon,
 	primary,
-	preview,
 	rightMeta,
-}: Pick<TrainingEntryRowProps, "icon" | "primary" | "preview" | "rightMeta">) {
+}: Pick<TrainingEntryRowProps, "icon" | "primary" | "rightMeta">) {
 	return (
 		<>
 			<div className="flex min-w-0 flex-1 items-center gap-3">
 				<div className="flex size-8 shrink-0 items-center justify-center rounded-[8px] bg-background-200 text-primary/70 dark:bg-background-300">
 					{icon}
 				</div>
-				<div className="flex min-w-0 flex-1 flex-col gap-1 md:flex-row md:items-center md:gap-4">
-					<p className="truncate font-medium text-primary md:min-w-[220px] md:max-w-[260px] md:shrink-0">
-						{primary}
-					</p>
-					{preview ? (
-						<div className="min-w-0 flex-1 text-muted-foreground text-sm">
-							<div className="truncate">{preview}</div>
-						</div>
-					) : null}
+				<div className="min-w-0 flex-1">
+					<p className="truncate font-medium text-primary">{primary}</p>
 				</div>
 			</div>
-			<div className="flex shrink-0 items-center gap-2">
-				{rightMeta}
-				<ChevronRightIcon className="hidden size-4 text-primary/30 md:block" />
-			</div>
+			{rightMeta ? (
+				<div className="flex shrink-0 items-center gap-2">{rightMeta}</div>
+			) : null}
 		</>
 	);
 }
@@ -149,7 +135,6 @@ export function TrainingEntryRow({
 	onHoverPrefetch,
 	icon,
 	primary,
-	preview,
 	rightMeta,
 	actions = [],
 	focused = false,
@@ -167,7 +152,6 @@ export function TrainingEntryRow({
 	const content = (
 		<TrainingEntryRowContent
 			icon={icon}
-			preview={preview}
 			primary={primary}
 			rightMeta={rightMeta}
 		/>
@@ -181,7 +165,7 @@ export function TrainingEntryRow({
 					href={href}
 					onFocus={onHoverPrefetch}
 					onMouseEnter={onHoverPrefetch}
-					prefetch="auto"
+					prefetch={false}
 				>
 					{content}
 				</Link>
@@ -200,7 +184,7 @@ export function TrainingEntryRow({
 				<DropdownMenu>
 					<DropdownMenuTrigger asChild>
 						<Button
-							className="h-8 w-8 shrink-0 opacity-0 transition-opacity group-hover/training-entry:opacity-100"
+							className="h-8 w-8 shrink-0 opacity-0 transition-opacity group-focus-within/training-entry:opacity-100 group-hover/training-entry:opacity-100"
 							size="icon"
 							variant="ghost"
 						>

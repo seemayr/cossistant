@@ -24,24 +24,6 @@ import {
 } from "../training-entries";
 import { useFileMutations } from "./hooks/use-file-mutations";
 
-function getFilePreview(payload: ArticleKnowledgePayload): string {
-	if (payload.summary?.trim()) {
-		return payload.summary.trim();
-	}
-
-	return payload.markdown.replace(/\s+/g, " ").trim();
-}
-
-function formatBytes(bytes: number): string {
-	if (bytes === 0) {
-		return "0 B";
-	}
-	const k = 1024;
-	const sizes = ["B", "KB", "MB"];
-	const i = Math.floor(Math.log(bytes) / Math.log(k));
-	return `${Number.parseFloat((bytes / k ** i).toFixed(1))} ${sizes[i]}`;
-}
-
 export function FileListPage() {
 	const router = useRouter();
 	const trpc = useTRPC();
@@ -109,22 +91,13 @@ export function FileListPage() {
 						icon={<FileTextIcon className="size-4" />}
 						key={file.id}
 						onHoverPrefetch={() => prefetchKnowledgeEntry(file.id, href)}
-						preview={getFilePreview(payload)}
 						primary={payload.title}
 						rightMeta={
-							<div className="flex flex-wrap items-center justify-end gap-2 text-xs">
-								<span className="hidden text-primary/40 md:inline">
-									{formatBytes(file.sizeBytes)}
+							file.isIncluded ? null : (
+								<span className="font-medium text-cossistant-orange text-xs">
+									Excluded
 								</span>
-								<span className="hidden text-primary/40 md:inline">
-									{file.origin === "file-upload" ? "Uploaded" : "Manual"}
-								</span>
-								{file.isIncluded ? null : (
-									<span className="font-medium text-cossistant-orange">
-										Excluded
-									</span>
-								)}
-							</div>
+							)
 						}
 					/>
 				);
@@ -189,7 +162,7 @@ export function FileListPage() {
 						) : null}
 
 						<TrainingEntryListSection
-							description="Markdown files and docs your agent can search during training."
+							description="Saved files your agent can search during training."
 							title="Files"
 						>
 							<TrainingEntryList

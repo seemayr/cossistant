@@ -24,9 +24,11 @@ mock.module("motion/react", () => ({
 			<div {...props}>{children}</div>
 		),
 	},
+	useReducedMotion: () => false,
 }));
 
 const composerModulePromise = import(".");
+const composerSlotKeyModulePromise = import("./composer-slot-key");
 
 describe("Composer", () => {
 	it("keeps the default center and frame unhighlighted when no custom slots are passed", async () => {
@@ -106,6 +108,17 @@ describe("Composer", () => {
 		expect(html).toContain('data-central-slot="true"');
 		expect(html).toContain('data-composer-frame="highlighted"');
 		expect(html).not.toContain("Type your message...");
+	});
+
+	it("composes the slot identity with keyed custom children", async () => {
+		const { getComposerAnimatedSlotKey } = await composerSlotKeyModulePromise;
+
+		expect(
+			getComposerAnimatedSlotKey("central-custom", <section key="question" />)
+		).toBe("central-custom:question");
+		expect(getComposerAnimatedSlotKey("central-custom", <section />)).toBe(
+			"central-custom"
+		);
 	});
 
 	it("renders a custom bottom block instead of the default footer", async () => {

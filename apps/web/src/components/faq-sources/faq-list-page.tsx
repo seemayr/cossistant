@@ -25,8 +25,6 @@ import {
 } from "../training-entries";
 import { useFaqMutations } from "./hooks/use-faq-mutations";
 
-const MAX_VISIBLE_CATEGORIES = 2;
-
 export function FaqListPage() {
 	const router = useRouter();
 	const trpc = useTRPC();
@@ -69,10 +67,6 @@ export function FaqListPage() {
 		() =>
 			faqs.map((faq) => {
 				const payload = faq.payload as FaqKnowledgePayload;
-				const visibleCategories = payload.categories.slice(
-					0,
-					MAX_VISIBLE_CATEGORIES
-				);
 				const href = `/${pageState.websiteSlug}/agent/training/faq/${faq.id}`;
 
 				return (
@@ -103,29 +97,13 @@ export function FaqListPage() {
 						icon={<HelpCircleIcon className="size-4" />}
 						key={faq.id}
 						onHoverPrefetch={() => prefetchKnowledgeEntry(faq.id, href)}
-						preview={payload.answer}
 						primary={payload.question}
 						rightMeta={
-							<div className="flex flex-wrap items-center justify-end gap-2">
-								{visibleCategories.map((category) => (
-									<span
-										className="hidden text-primary/40 text-xs md:inline"
-										key={category}
-									>
-										{category}
-									</span>
-								))}
-								{payload.categories.length > visibleCategories.length ? (
-									<span className="hidden text-primary/40 text-xs md:inline">
-										+{payload.categories.length - visibleCategories.length}
-									</span>
-								) : null}
-								{faq.isIncluded ? null : (
-									<span className="font-medium text-cossistant-orange text-xs">
-										Excluded
-									</span>
-								)}
-							</div>
+							faq.isIncluded ? null : (
+								<span className="font-medium text-cossistant-orange text-xs">
+									Excluded
+								</span>
+							)
 						}
 					/>
 				);
@@ -196,7 +174,7 @@ export function FaqListPage() {
 						/>
 
 						<TrainingEntryListSection
-							description="Saved questions and answers your agent can use during training."
+							description="Saved questions your agent can use during training."
 							title="Saved FAQs"
 						>
 							<TrainingEntryList

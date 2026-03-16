@@ -2,17 +2,14 @@
 
 import type { KnowledgeClarificationRequest } from "@cossistant/types";
 import { useQuery } from "@tanstack/react-query";
-import { LoaderCircleIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { SettingsRow } from "@/components/ui/layout/settings-layout";
 import { useWebsite } from "@/contexts/website";
 import { useTRPC } from "@/lib/trpc/client";
-import {
-	TrainingEntryDetailLayout,
-	TrainingEntrySection,
-} from "../training-entries";
+import { TrainingEntryDetailLayout } from "../training-entries";
 import { KnowledgeClarificationFlowContent } from "./flow-content";
 import { useKnowledgeClarificationFlow } from "./use-clarification-flow";
 
@@ -71,14 +68,13 @@ export function KnowledgeClarificationProposalPage({
 	return (
 		<TrainingEntryDetailLayout
 			backHref={`/${website.slug}/agent/training/faq`}
-			sectionLabel="FAQ"
 			title={headerTitle}
 		>
-			<TrainingEntrySection
-				description="Review the AI-generated suggestion, continue the clarification flow, or turn it into a saved FAQ."
-				title="AI Suggestion"
+			<SettingsRow
+				description="Review the AI suggestion, continue the clarification flow, or turn it into a saved FAQ."
+				title="AI suggestion"
 			>
-				<div className="flex flex-wrap items-center gap-2">
+				<div className="flex flex-wrap items-center gap-2 p-4">
 					<Badge variant="secondary">AI Suggestion</Badge>
 					{flow.currentRequest ? (
 						<Badge
@@ -91,15 +87,8 @@ export function KnowledgeClarificationProposalPage({
 							{getStatusLabel(flow.currentRequest)}
 						</Badge>
 					) : null}
-					{flow.currentRequest ? (
-						<Badge variant="secondary">
-							{flow.currentRequest.source === "faq"
-								? "From FAQ"
-								: "From conversation"}
-						</Badge>
-					) : null}
 				</div>
-			</TrainingEntrySection>
+			</SettingsRow>
 			<KnowledgeClarificationFlowContent
 				currentRequest={flow.currentRequest}
 				currentStep={flow.currentStep}

@@ -260,7 +260,7 @@ export function useClarificationComposerFlow({
 		),
 		centralBlock:
 			step?.kind === "question" ? (
-				<ComposerCentralBlock>
+				<ComposerCentralBlock key="question">
 					<div className="p-2" data-clarification-slot="question-flow">
 						<KnowledgeClarificationQuestionContent
 							freeAnswer={answerDraft.freeAnswer}
@@ -276,7 +276,7 @@ export function useClarificationComposerFlow({
 					</div>
 				</ComposerCentralBlock>
 			) : (
-				<ClarificationLoadingBlock />
+				<ClarificationLoadingBlock key="loading" />
 			),
 		bottomBlock: (
 			<ClarificationActionsBlock

@@ -6,8 +6,12 @@ import type {
 	KnowledgeClarificationStepResponse,
 } from "@cossistant/types";
 import { LoaderCircleIcon } from "lucide-react";
-import { TrainingEntrySection } from "@/components/training-entries";
+import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import {
+	SettingsRow,
+	SettingsRowFooter,
+} from "@/components/ui/layout/settings-layout";
 import { KnowledgeClarificationDraftReview } from "./draft-review";
 import { KnowledgeClarificationQuestionCard } from "./question-card";
 
@@ -37,6 +41,29 @@ type KnowledgeClarificationFlowContentProps = {
 	onClose: () => unknown | Promise<unknown>;
 };
 
+function PageMessageRow({
+	title,
+	description,
+	children,
+	footer,
+}: {
+	title: string;
+	description?: string;
+	children: ReactNode;
+	footer?: ReactNode;
+}) {
+	return (
+		<SettingsRow description={description} title={title}>
+			<div className="p-4">{children}</div>
+			{footer ? (
+				<SettingsRowFooter className="flex items-center justify-end gap-2">
+					{footer}
+				</SettingsRowFooter>
+			) : null}
+		</SettingsRow>
+	);
+}
+
 function RetryState({
 	currentRequest,
 	isRetrying = false,
@@ -53,15 +80,9 @@ function RetryState({
 
 	if (variant === "page") {
 		return (
-			<TrainingEntrySection
+			<PageMessageRow
 				description="Retry the flow if the AI did not complete the previous step cleanly."
-				title="Needs attention"
-			>
-				<div className="space-y-4">
-					<p className="text-muted-foreground text-sm">
-						{currentRequest.lastError ??
-							"The AI did not finish the previous step cleanly."}
-					</p>
+				footer={
 					<Button
 						onClick={() => {
 							void onRetry(currentRequest.id);
@@ -74,8 +95,14 @@ function RetryState({
 						/>
 						Retry
 					</Button>
-				</div>
-			</TrainingEntrySection>
+				}
+				title="Needs attention"
+			>
+				<p className="text-muted-foreground text-sm">
+					{currentRequest.lastError ??
+						"The AI did not finish the previous step cleanly."}
+				</p>
+			</PageMessageRow>
 		);
 	}
 
@@ -133,7 +160,7 @@ export function KnowledgeClarificationFlowContent({
 }: KnowledgeClarificationFlowContentProps) {
 	if (isLoading) {
 		return variant === "page" ? (
-			<TrainingEntrySection
+			<PageMessageRow
 				description="Loading this clarification flow."
 				title="Loading"
 			>
@@ -141,7 +168,7 @@ export function KnowledgeClarificationFlowContent({
 					<LoaderCircleIcon className="size-4 animate-spin" />
 					Preparing AI suggestion...
 				</div>
-			</TrainingEntrySection>
+			</PageMessageRow>
 		) : (
 			<div className="flex items-center gap-3 rounded-2xl border border-dashed px-6 py-8 text-muted-foreground text-sm">
 				<LoaderCircleIcon className="size-4 animate-spin" />
@@ -151,6 +178,37 @@ export function KnowledgeClarificationFlowContent({
 	}
 
 	if (currentStep?.kind === "question") {
+		if (variant === "page") {
+			return (
+				<SettingsRow
+					description="Answer the current question now, save it for later, or remove it entirely."
+					title="Clarification"
+				>
+					<div className="p-4">
+						<KnowledgeClarificationQuestionCard
+							description="Answer one short question so the AI can complete the draft."
+							isAnalyzing={isSubmittingAnswer}
+							isSubmitting={isSubmittingAnswer}
+							maxSteps={currentStep.request.maxSteps}
+							onDefer={() => {
+								void onDefer(currentStep.request.id);
+							}}
+							onDismiss={() => {
+								void onDismiss(currentStep.request.id);
+							}}
+							onSubmit={(payload) => {
+								void onAnswer(currentStep.request.id, payload);
+							}}
+							question={currentStep.question}
+							stepIndex={currentStep.request.stepIndex}
+							suggestedAnswers={currentStep.suggestedAnswers}
+							variant="page"
+						/>
+					</div>
+				</SettingsRow>
+			);
+		}
+
 		return (
 			<KnowledgeClarificationQuestionCard
 				description="Answer the current question now, save it for later, or remove it entirely."
@@ -169,6 +227,7 @@ export function KnowledgeClarificationFlowContent({
 				question={currentStep.question}
 				stepIndex={currentStep.request.stepIndex}
 				suggestedAnswers={currentStep.suggestedAnswers}
+				variant="dialog"
 			/>
 		);
 	}
@@ -184,18 +243,45 @@ export function KnowledgeClarificationFlowContent({
 				onDismiss={() => {
 					void onClose();
 				}}
+				variant={variant}
 			/>
 		);
 	}
 
 	if (fallbackStep?.kind === "question") {
+		if (variant === "page") {
+			return (
+				<SettingsRow
+					description="This suggestion is waiting for another answer."
+					title="Clarification"
+				>
+					<div className="p-4">
+						<KnowledgeClarificationQuestionCard
+							description="This suggestion is waiting for another answer."
+							isSubmitting={isSubmittingAnswer}
+							maxSteps={fallbackStep.request.maxSteps}
+							onDefer={() => {
+								void onDefer(fallbackStep.request.id);
+							}}
+							onDismiss={() => {
+								void onDismiss(fallbackStep.request.id);
+							}}
+							onSubmit={(payload) => {
+								void onAnswer(fallbackStep.request.id, payload);
+							}}
+							question={fallbackStep.question}
+							stepIndex={fallbackStep.request.stepIndex}
+							suggestedAnswers={fallbackStep.suggestedAnswers}
+							variant="page"
+						/>
+					</div>
+				</SettingsRow>
+			);
+		}
+
 		return (
 			<KnowledgeClarificationQuestionCard
-				description={
-					variant === "page"
-						? "This suggestion is waiting for another answer."
-						: "This proposal is waiting for another answer."
-				}
+				description="This proposal is waiting for another answer."
 				isSubmitting={isSubmittingAnswer}
 				maxSteps={fallbackStep.request.maxSteps}
 				onDefer={() => {
@@ -210,6 +296,7 @@ export function KnowledgeClarificationFlowContent({
 				question={fallbackStep.question}
 				stepIndex={fallbackStep.request.stepIndex}
 				suggestedAnswers={fallbackStep.suggestedAnswers}
+				variant="dialog"
 			/>
 		);
 	}
@@ -225,6 +312,7 @@ export function KnowledgeClarificationFlowContent({
 				onDismiss={() => {
 					void onClose();
 				}}
+				variant={variant}
 			/>
 		);
 	}
@@ -242,10 +330,14 @@ export function KnowledgeClarificationFlowContent({
 	}
 
 	return variant === "page" ? (
-		<TrainingEntrySection
+		<PageMessageRow
 			description="This AI suggestion no longer exists."
 			title="Unavailable"
-		/>
+		>
+			<div className="text-muted-foreground text-sm">
+				This AI suggestion is no longer available.
+			</div>
+		</PageMessageRow>
 	) : null;
 }
 

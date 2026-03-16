@@ -24,6 +24,7 @@ type KnowledgeClarificationQuestionCardProps = {
 	className?: string;
 	title?: string;
 	description?: string;
+	variant?: "dialog" | "page";
 };
 
 export function KnowledgeClarificationQuestionCard({
@@ -39,6 +40,7 @@ export function KnowledgeClarificationQuestionCard({
 	className,
 	title = "Help sharpen this topic",
 	description = "Answer one short question so the AI can turn this into a stronger FAQ draft.",
+	variant = "dialog",
 }: KnowledgeClarificationQuestionCardProps) {
 	const draft = useKnowledgeClarificationAnswerDraft(question);
 
@@ -53,7 +55,9 @@ export function KnowledgeClarificationQuestionCard({
 	return (
 		<div
 			className={cn(
-				"flex flex-col gap-5 rounded-2xl border bg-background p-5 shadow-sm",
+				"flex flex-col gap-5",
+				variant === "dialog" &&
+					"rounded-2xl border bg-background p-5 shadow-sm",
 				className
 			)}
 		>

@@ -2,16 +2,17 @@
 
 import type { ArticleKnowledgePayload } from "@cossistant/types";
 import { useQuery } from "@tanstack/react-query";
-import { EyeIcon, EyeOffIcon, SaveIcon, Trash2Icon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
+import {
+	SettingsRow,
+	SettingsRowFooter,
+} from "@/components/ui/layout/settings-layout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTRPC } from "@/lib/trpc/client";
 import {
 	TrainingEntryDetailLayout,
-	TrainingEntrySection,
 	useTrainingPageState,
 } from "../training-entries";
 import { FileManualEntryFields } from "./file-manual-entry-fields";
@@ -22,6 +23,37 @@ type FileEditorPageProps = {
 	knowledgeId?: string;
 };
 
+type NormalizedFileDraft = {
+	title: string;
+	summary: string;
+	markdown: string;
+};
+
+const EMPTY_FILE_DRAFT: NormalizedFileDraft = {
+	title: "",
+	summary: "",
+	markdown: "",
+};
+
+function normalizeFileDraft(input: {
+	title: string;
+	summary: string;
+	markdown: string;
+}): NormalizedFileDraft {
+	return {
+		title: input.title.trim(),
+		summary: input.summary.trim(),
+		markdown: input.markdown.trim(),
+	};
+}
+
+function areFileDraftsEqual(
+	left: NormalizedFileDraft,
+	right: NormalizedFileDraft
+): boolean {
+	return JSON.stringify(left) === JSON.stringify(right);
+}
+
 export function FileEditorPage({ knowledgeId }: FileEditorPageProps) {
 	const router = useRouter();
 	const trpc = useTRPC();
@@ -29,6 +61,8 @@ export function FileEditorPage({ knowledgeId }: FileEditorPageProps) {
 	const [title, setTitle] = useState("");
 	const [summary, setSummary] = useState("");
 	const [markdown, setMarkdown] = useState("");
+	const [initialDraft, setInitialDraft] =
+		useState<NormalizedFileDraft>(EMPTY_FILE_DRAFT);
 	const pageState = useTrainingPageState({
 		highlightedFeatureKey: "ai-agent-training-files",
 	});
@@ -66,9 +100,15 @@ export function FileEditorPage({ knowledgeId }: FileEditorPageProps) {
 		}
 
 		const payload = knowledge.payload as ArticleKnowledgePayload;
+		const nextDraft = normalizeFileDraft({
+			title: payload.title,
+			summary: payload.summary ?? "",
+			markdown: payload.markdown,
+		});
 		setTitle(payload.title);
 		setSummary(payload.summary ?? "");
 		setMarkdown(payload.markdown);
+		setInitialDraft(nextDraft);
 	}, [knowledge]);
 
 	const isAtFileLimit =
@@ -77,6 +117,16 @@ export function FileEditorPage({ knowledgeId }: FileEditorPageProps) {
 		pageState.stats.articleKnowledgeCount >=
 			(pageState.stats.planLimitFiles ?? 0);
 	const isSaving = isCreateMode ? isCreating : isUpdating;
+	const currentDraft = useMemo(
+		() =>
+			normalizeFileDraft({
+				title,
+				summary,
+				markdown,
+			}),
+		[markdown, summary, title]
+	);
+	const isDirty = !areFileDraftsEqual(currentDraft, initialDraft);
 	const isValid = title.trim().length > 0 && markdown.trim().length > 0;
 	const isUnavailable =
 		!(isCreateMode || isLoadingKnowledge) &&
@@ -99,14 +149,12 @@ export function FileEditorPage({ knowledgeId }: FileEditorPageProps) {
 			return;
 		}
 
-		const payload = {
-			title: title.trim(),
-			summary: summary.trim() || undefined,
-			markdown: markdown.trim(),
-		};
-
 		if (isCreateMode) {
-			const created = await handleCreate(payload);
+			const created = await handleCreate({
+				title: currentDraft.title,
+				summary: currentDraft.summary || undefined,
+				markdown: currentDraft.markdown,
+			});
 			router.push(
 				`/${pageState.websiteSlug}/agent/training/files/${created.id}`
 			);
@@ -117,7 +165,12 @@ export function FileEditorPage({ knowledgeId }: FileEditorPageProps) {
 			return;
 		}
 
-		await handleUpdate(knowledgeId, payload);
+		await handleUpdate(knowledgeId, {
+			title: currentDraft.title,
+			summary: currentDraft.summary || undefined,
+			markdown: currentDraft.markdown,
+		});
+		setInitialDraft(currentDraft);
 	};
 
 	const handleUploadFiles = async (files: File[]) => {
@@ -159,86 +212,90 @@ export function FileEditorPage({ knowledgeId }: FileEditorPageProps) {
 		await handleToggleIncluded(knowledgeId, !knowledge.isIncluded);
 	};
 
-	const actionButtons = isUnavailable ? null : (
-		<>
-			{!isCreateMode && knowledge ? (
-				<Button
-					disabled={isToggling}
-					onClick={handleToggleEntryIncluded}
-					size="sm"
-					type="button"
-					variant="ghost"
-				>
-					{knowledge.isIncluded ? (
-						<>
-							<EyeOffIcon className="size-4" />
-							Exclude
-						</>
-					) : (
-						<>
-							<EyeIcon className="size-4" />
-							Include
-						</>
-					)}
-				</Button>
-			) : null}
-			{isCreateMode ? null : (
-				<Button
-					disabled={isDeleting}
-					onClick={handleDeleteEntry}
-					size="sm"
-					type="button"
-					variant="ghost"
-				>
-					<Trash2Icon className="size-4" />
-					Delete
-				</Button>
-			)}
-			{activeTab === "manual" ? (
-				<Button
-					disabled={!isValid || isSaving || (isCreateMode && isAtFileLimit)}
-					onClick={handleSave}
-					size="sm"
-					type="button"
-				>
-					{isSaving ? (
-						<Spinner className="size-4" />
-					) : (
-						<SaveIcon className="size-4" />
-					)}
-					{isCreateMode ? "Add file" : "Save changes"}
-				</Button>
-			) : null}
-		</>
-	);
+	const canSave =
+		activeTab === "manual" &&
+		isValid &&
+		isDirty &&
+		!isSaving &&
+		!(isCreateMode && isAtFileLimit);
 
 	return (
 		<>
-			<TrainingEntryDetailLayout
-				actions={actionButtons}
-				backHref={listHref}
-				sectionLabel="Files"
-				title={headerTitle}
-			>
+			<TrainingEntryDetailLayout backHref={listHref} title={headerTitle}>
 				{isUnavailable ? (
-					<TrainingEntrySection
+					<SettingsRow
 						description="This file no longer exists or cannot be edited."
 						title="Unavailable"
-					/>
-				) : isCreateMode ? (
-					<Tabs
-						onValueChange={(value) =>
-							setActiveTab(value as "manual" | "upload")
-						}
-						value={activeTab}
 					>
-						<TabsList className="grid w-full grid-cols-2">
-							<TabsTrigger value="manual">Manual Entry</TabsTrigger>
-							<TabsTrigger value="upload">Upload File</TabsTrigger>
-						</TabsList>
-						<TabsContent className="space-y-6 pt-2" value="manual">
+						<div className="p-4 text-muted-foreground text-sm">
+							The selected file could not be loaded.
+						</div>
+					</SettingsRow>
+				) : isCreateMode ? (
+					<SettingsRow
+						description="Choose how you want to add this training file."
+						title="New file"
+					>
+						<div className="p-4">
+							<Tabs
+								onValueChange={(value) =>
+									setActiveTab(value as "manual" | "upload")
+								}
+								value={activeTab}
+							>
+								<TabsList className="grid w-full grid-cols-2">
+									<TabsTrigger value="manual">Manual entry</TabsTrigger>
+									<TabsTrigger value="upload">Upload file</TabsTrigger>
+								</TabsList>
+								<TabsContent className="pt-4" value="manual">
+									<FileManualEntryFields
+										disabled={isSaving}
+										markdown={markdown}
+										onMarkdownChange={setMarkdown}
+										onSummaryChange={setSummary}
+										onTitleChange={setTitle}
+										summary={summary}
+										title={title}
+									/>
+								</TabsContent>
+								<TabsContent className="pt-4" value="upload">
+									<div className="space-y-2">
+										<p className="text-muted-foreground text-sm">
+											Upload markdown or text files and we will convert them
+											into training entries.
+										</p>
+									</div>
+									<div className="pt-4">
+										<FileUploadZone
+											disabled={isAtFileLimit}
+											isUploading={isUploading}
+											onUpload={handleUploadFiles}
+										/>
+									</div>
+								</TabsContent>
+							</Tabs>
+						</div>
+						{activeTab === "manual" ? (
+							<SettingsRowFooter className="flex items-center justify-end gap-2">
+								<Button
+									disabled={!canSave}
+									onClick={handleSave}
+									size="sm"
+									type="button"
+								>
+									{isSaving ? "Saving..." : "Save"}
+								</Button>
+							</SettingsRowFooter>
+						) : null}
+					</SettingsRow>
+				) : (
+					<SettingsRow
+						description="Edit the file title, summary, and markdown your agent should use."
+						title="File"
+					>
+						<div className="p-4">
 							<FileManualEntryFields
-								disabled={isSaving}
+								disabled={isSaving || isLoadingKnowledge}
 								markdown={markdown}
 								onMarkdownChange={setMarkdown}
 								onSummaryChange={setSummary}
@@ -246,30 +303,40 @@ export function FileEditorPage({ knowledgeId }: FileEditorPageProps) {
 								summary={summary}
 								title={title}
 							/>
-						</TabsContent>
-						<TabsContent className="space-y-6 pt-2" value="upload">
-							<TrainingEntrySection
-								description="Upload markdown or text files and we will convert them into training entries."
-								title="Upload"
+						</div>
+						<SettingsRowFooter className="flex items-center justify-between gap-3">
+							<div className="flex flex-wrap items-center gap-2">
+								{knowledge ? (
+									<Button
+										disabled={isToggling}
+										onClick={handleToggleEntryIncluded}
+										size="sm"
+										type="button"
+										variant="ghost"
+									>
+										{knowledge.isIncluded ? "Exclude" : "Include"}
+									</Button>
+								) : null}
+								<Button
+									disabled={isDeleting}
+									onClick={handleDeleteEntry}
+									size="sm"
+									type="button"
+									variant="ghost"
+								>
+									Delete
+								</Button>
+							</div>
+							<Button
+								disabled={!canSave}
+								onClick={handleSave}
+								size="sm"
+								type="button"
 							>
-								<FileUploadZone
-									disabled={isAtFileLimit}
-									isUploading={isUploading}
-									onUpload={handleUploadFiles}
-								/>
-							</TrainingEntrySection>
-						</TabsContent>
-					</Tabs>
-				) : (
-					<FileManualEntryFields
-						disabled={isSaving || isLoadingKnowledge}
-						markdown={markdown}
-						onMarkdownChange={setMarkdown}
-						onSummaryChange={setSummary}
-						onTitleChange={setTitle}
-						summary={summary}
-						title={title}
-					/>
+								{isSaving ? "Saving..." : "Save"}
+							</Button>
+						</SettingsRowFooter>
+					</SettingsRow>
 				)}
 			</TrainingEntryDetailLayout>
 			{pageState.upgradeModal}

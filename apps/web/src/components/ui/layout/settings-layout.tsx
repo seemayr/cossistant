@@ -5,8 +5,9 @@ import { cn } from "@/lib/utils";
 type SettingsRowProps = {
 	children: React.ReactNode;
 	title: string;
-	description: string;
+	description?: string;
 	variant?: "default" | "danger";
+	className?: string;
 };
 
 type SettingsPageProps = {
@@ -31,11 +32,17 @@ export function SettingsRow({
 	title,
 	description,
 	variant = "default",
+	className,
 }: SettingsRowProps) {
 	const isDanger = variant === "danger";
 
 	return (
-		<section className="mx-auto mb-8 flex w-full max-w-3xl flex-col gap-2 pb-8 last:mb-0last:pb-0">
+		<section
+			className={cn(
+				"mx-auto mb-8 flex w-full max-w-3xl flex-col gap-2 pb-8 last:mb-0 last:pb-0",
+				className
+			)}
+		>
 			<h1
 				className={cn(
 					"font-medium text-base",
@@ -44,7 +51,9 @@ export function SettingsRow({
 			>
 				{title}
 			</h1>
-			<p className="text-primary/60 text-sm">{description}</p>
+			{description ? (
+				<p className="text-primary/60 text-sm">{description}</p>
+			) : null}
 			<div
 				className={cn(
 					"mt-4 flex w-full flex-col overflow-clip rounded-md border",

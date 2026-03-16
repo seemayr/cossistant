@@ -21,6 +21,7 @@ import {
 } from "./composer-blocks-frame";
 import { ComposerDefaultBottomBlock } from "./composer-bottom-block";
 import { ComposerDefaultCentralBlock } from "./composer-central-block";
+import { getComposerAnimatedSlotKey } from "./composer-slot-key";
 import type { MentionStore } from "./mention-store";
 import { useComposerHeightSync } from "./use-composer-height-sync";
 import { useComposerTextareaLayout } from "./use-composer-textarea-layout";
@@ -261,6 +262,15 @@ export const Composer: React.FC<ComposerProps> = ({
 			onAiPauseSelectValueChange={handleAiPauseSelectValueChange}
 		/>
 	);
+	const aboveSlotKey = getComposerAnimatedSlotKey("above-custom", aboveBlock);
+	const centralSlotKey = getComposerAnimatedSlotKey(
+		centralBlock ? "central-custom" : "central-default",
+		resolvedCentralBlock
+	);
+	const bottomSlotKey = getComposerAnimatedSlotKey(
+		bottomBlock ? "bottom-custom" : "bottom-default",
+		resolvedBottomBlock
+	);
 
 	return (
 		<div
@@ -268,21 +278,15 @@ export const Composer: React.FC<ComposerProps> = ({
 			ref={rootContainerRef}
 		>
 			<ComposerBlocksFrame highlighted={hasCustomBlocks}>
-				<ComposerAnimatedSlot slot="above" slotKey="above-custom">
+				<ComposerAnimatedSlot slot="above" slotKey={aboveSlotKey}>
 					{aboveBlock}
 				</ComposerAnimatedSlot>
 
-				<ComposerAnimatedSlot
-					slot="central"
-					slotKey={centralBlock ? "central-custom" : "central-default"}
-				>
+				<ComposerAnimatedSlot slot="central" slotKey={centralSlotKey}>
 					{resolvedCentralBlock}
 				</ComposerAnimatedSlot>
 
-				<ComposerAnimatedSlot
-					slot="bottom"
-					slotKey={bottomBlock ? "bottom-custom" : "bottom-default"}
-				>
+				<ComposerAnimatedSlot slot="bottom" slotKey={bottomSlotKey}>
 					{resolvedBottomBlock}
 				</ComposerAnimatedSlot>
 			</ComposerBlocksFrame>

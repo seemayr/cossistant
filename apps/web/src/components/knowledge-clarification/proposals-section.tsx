@@ -1,9 +1,6 @@
 "use client";
 
 import type { KnowledgeClarificationRequest } from "@cossistant/types";
-import { formatDistanceToNow } from "date-fns";
-import type { LucideIcon } from "lucide-react";
-import { BotIcon, SparklesIcon } from "lucide-react";
 import {
 	TrainingEntryList,
 	TrainingEntryListSection,
@@ -11,6 +8,7 @@ import {
 	useTrainingEntryPrefetch,
 } from "@/components/training-entries";
 import { Badge } from "@/components/ui/badge";
+import { Logo } from "@/components/ui/logo";
 
 type KnowledgeClarificationProposalsSectionProps = {
 	websiteSlug: string;
@@ -21,25 +19,16 @@ type KnowledgeClarificationProposalsSectionProps = {
 type ProposalAppearance = {
 	statusLabel: string;
 	statusVariant: "secondary" | "success";
-	previewLabel: string;
-	previewText: string;
-	Icon: LucideIcon;
 };
 
-function getSourceLabel(
-	source: KnowledgeClarificationRequest["source"]
-): string {
-	return source === "faq" ? "From FAQ" : "From conversation";
-}
-
-function getProposalPreviewText(
+function getProposalPrimaryLabel(
 	proposal: KnowledgeClarificationRequest
 ): string {
 	return (
-		proposal.draftFaqPayload?.question ??
-		proposal.currentQuestion ??
-		proposal.lastError ??
-		"Open this proposal to continue the clarification flow."
+		proposal.topicSummary ||
+		proposal.draftFaqPayload?.question ||
+		proposal.currentQuestion ||
+		"AI Suggestion"
 	);
 }
 
@@ -50,9 +39,6 @@ function getProposalAppearance(
 		return {
 			statusLabel: "Ready for review",
 			statusVariant: "success",
-			previewLabel: "Draft",
-			previewText: getProposalPreviewText(proposal),
-			Icon: SparklesIcon,
 		};
 	}
 
@@ -60,18 +46,12 @@ function getProposalAppearance(
 		return {
 			statusLabel: "AI working",
 			statusVariant: "secondary",
-			previewLabel: "Topic",
-			previewText: proposal.topicSummary,
-			Icon: BotIcon,
 		};
 	}
 
 	return {
 		statusLabel: `Step ${Math.max(proposal.stepIndex, 1)} of ${proposal.maxSteps}`,
 		statusVariant: "secondary",
-		previewLabel: proposal.lastError ? "Issue" : "Question",
-		previewText: getProposalPreviewText(proposal),
-		Icon: BotIcon,
 	};
 }
 
@@ -95,41 +75,21 @@ export function KnowledgeClarificationProposalsSection({
 			<TrainingEntryList>
 				{proposals.map((proposal) => {
 					const appearance = getProposalAppearance(proposal);
-					const updatedLabel = formatDistanceToNow(
-						new Date(proposal.updatedAt),
-						{
-							addSuffix: true,
-						}
-					);
 					const href = `/${websiteSlug}/agent/training/faq/proposals/${proposal.id}`;
 
 					return (
 						<TrainingEntryRow
 							href={href}
-							icon={<appearance.Icon className="size-4" />}
+							icon={<Logo className="size-4 text-cossistant-orange" />}
 							key={proposal.id}
 							onHoverPrefetch={() => prefetchProposal(proposal.id, href)}
-							preview={
-								<span>
-									<span className="font-medium text-primary/70">
-										{appearance.previewLabel}:
-									</span>{" "}
-									{appearance.previewText}
-								</span>
-							}
-							primary={proposal.topicSummary}
+							primary={getProposalPrimaryLabel(proposal)}
 							rightMeta={
 								<div className="flex flex-wrap items-center justify-end gap-2 text-xs">
 									<Badge variant="secondary">AI Suggestion</Badge>
 									<Badge variant={appearance.statusVariant}>
 										{appearance.statusLabel}
 									</Badge>
-									<Badge className="hidden md:inline-flex" variant="secondary">
-										{getSourceLabel(proposal.source)}
-									</Badge>
-									<span className="hidden text-primary/40 md:inline">
-										{updatedLabel}
-									</span>
 								</div>
 							}
 						/>

@@ -96,9 +96,11 @@ describe("KnowledgeClarificationProposalsSection", () => {
 		expect(html).toContain(
 			"Draft FAQs and clarification threads the AI wants you to review."
 		);
+		expect(html).toContain("Cossistant Logo");
 		expect(html).toContain("AI Suggestion");
-		expect(html).toContain("From conversation");
 		expect(html).toContain("Ready for review");
-		expect(html).toContain("Can annual plans get a refund?");
+		expect(html).toContain("Clarify how refunds work for annual plans");
+		expect(html).not.toContain("From conversation");
+		expect(html).not.toContain("Can annual plans get a refund?");
 	});
 });

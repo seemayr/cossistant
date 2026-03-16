@@ -2,31 +2,53 @@
 
 import type { UrlKnowledgePayload } from "@cossistant/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-	ExternalLinkIcon,
-	EyeIcon,
-	EyeOffIcon,
-	RefreshCwIcon,
-	SaveIcon,
-	Trash2Icon,
-} from "lucide-react";
+import { ExternalLinkIcon, RefreshCwIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+	SettingsRow,
+	SettingsRowFooter,
+} from "@/components/ui/layout/settings-layout";
 import { Spinner } from "@/components/ui/spinner";
+import { Textarea } from "@/components/ui/textarea";
 import { useWebsite } from "@/contexts/website";
 import { useTRPC } from "@/lib/trpc/client";
-import {
-	TrainingEntryDetailLayout,
-	TrainingEntryField,
-	TrainingEntryMarkdownField,
-	TrainingEntrySection,
-} from "../training-entries";
+import { TrainingEntryDetailLayout } from "../training-entries";
 
 type WebPageDetailProps = {
 	knowledgeId: string;
 };
+
+type NormalizedWebDraft = {
+	sourceTitle: string;
+	markdown: string;
+};
+
+const EMPTY_WEB_DRAFT: NormalizedWebDraft = {
+	sourceTitle: "",
+	markdown: "",
+};
+
+function normalizeWebDraft(input: {
+	sourceTitle: string;
+	markdown: string;
+}): NormalizedWebDraft {
+	return {
+		sourceTitle: input.sourceTitle.trim(),
+		markdown: input.markdown.trim(),
+	};
+}
+
+function areWebDraftsEqual(
+	left: NormalizedWebDraft,
+	right: NormalizedWebDraft
+): boolean {
+	return JSON.stringify(left) === JSON.stringify(right);
+}
 
 export function WebPageDetail({ knowledgeId }: WebPageDetailProps) {
 	const website = useWebsite();
@@ -35,6 +57,8 @@ export function WebPageDetail({ knowledgeId }: WebPageDetailProps) {
 	const queryClient = useQueryClient();
 	const [sourceTitle, setSourceTitle] = useState("");
 	const [markdown, setMarkdown] = useState("");
+	const [initialDraft, setInitialDraft] =
+		useState<NormalizedWebDraft>(EMPTY_WEB_DRAFT);
 
 	const listHref = `/${website.slug}/agent/training/web`;
 
@@ -183,8 +207,13 @@ export function WebPageDetail({ knowledgeId }: WebPageDetailProps) {
 		}
 
 		const payload = knowledge.payload as UrlKnowledgePayload;
+		const nextDraft = normalizeWebDraft({
+			sourceTitle: knowledge.sourceTitle ?? "",
+			markdown: payload.markdown,
+		});
 		setSourceTitle(knowledge.sourceTitle ?? "");
 		setMarkdown(payload.markdown);
+		setInitialDraft(nextDraft);
 	}, [knowledge]);
 
 	const headerTitle = useMemo(() => {
@@ -195,7 +224,16 @@ export function WebPageDetail({ knowledgeId }: WebPageDetailProps) {
 		return knowledge?.sourceUrl ?? "Web page";
 	}, [knowledge?.sourceUrl, sourceTitle]);
 	const isSaving = saveMutation.isPending;
-	const canSave = markdown.trim().length > 0;
+	const currentDraft = useMemo(
+		() =>
+			normalizeWebDraft({
+				sourceTitle,
+				markdown,
+			}),
+		[markdown, sourceTitle]
+	);
+	const isDirty = !areWebDraftsEqual(currentDraft, initialDraft);
+	const canSave = markdown.trim().length > 0 && isDirty && !isSaving;
 
 	const handleSave = async () => {
 		if (!(knowledge && knowledge.type === "url" && canSave)) {
@@ -206,12 +244,13 @@ export function WebPageDetail({ knowledgeId }: WebPageDetailProps) {
 		await saveMutation.mutateAsync({
 			websiteSlug: website.slug,
 			id: knowledge.id,
-			sourceTitle: sourceTitle.trim() || null,
+			sourceTitle: currentDraft.sourceTitle || null,
 			payload: {
 				...payload,
-				markdown: markdown.trim(),
+				markdown: currentDraft.markdown,
 			},
 		});
+		setInitialDraft(currentDraft);
 	};
 
 	const handleToggleIncluded = async () => {
@@ -247,142 +286,130 @@ export function WebPageDetail({ knowledgeId }: WebPageDetailProps) {
 
 	if (!isLoading && (!knowledge || knowledge.type !== "url")) {
 		return (
-			<TrainingEntryDetailLayout
-				backHref={listHref}
-				sectionLabel="Web Sources"
-				title="Page not found"
-			>
-				<TrainingEntrySection
+			<TrainingEntryDetailLayout backHref={listHref} title="Page not found">
+				<SettingsRow
 					description="This crawled page no longer exists or cannot be opened."
 					title="Unavailable"
-				/>
+				>
+					<div className="p-4 text-muted-foreground text-sm">
+						The selected page could not be loaded.
+					</div>
+				</SettingsRow>
 			</TrainingEntryDetailLayout>
 		);
 	}
 
 	return (
-		<TrainingEntryDetailLayout
-			actions={
-				<>
-					{knowledge ? (
-						<Button
-							disabled={toggleIncludedMutation.isPending}
-							onClick={handleToggleIncluded}
-							size="sm"
-							type="button"
-							variant="ghost"
-						>
-							{knowledge.isIncluded ? (
-								<>
-									<EyeOffIcon className="size-4" />
-									Exclude
-								</>
-							) : (
-								<>
-									<EyeIcon className="size-4" />
-									Include
-								</>
-							)}
-						</Button>
-					) : null}
-					<Button
-						disabled={reindexMutation.isPending || !knowledge?.linkSourceId}
-						onClick={handleReindex}
-						size="sm"
-						type="button"
-						variant="ghost"
-					>
-						{reindexMutation.isPending ? (
-							<Spinner className="size-4" />
-						) : (
-							<RefreshCwIcon className="size-4" />
-						)}
-						Re-index
-					</Button>
-					<Button
-						disabled={deleteMutation.isPending}
-						onClick={handleDelete}
-						size="sm"
-						type="button"
-						variant="ghost"
-					>
-						<Trash2Icon className="size-4" />
-						Delete
-					</Button>
-					<Button
-						disabled={!canSave || isSaving}
-						onClick={handleSave}
-						size="sm"
-						type="button"
-					>
-						{isSaving ? (
-							<Spinner className="size-4" />
-						) : (
-							<SaveIcon className="size-4" />
-						)}
-						Save changes
-					</Button>
-				</>
-			}
-			backHref={listHref}
-			sectionLabel="Web Sources"
-			title={headerTitle}
-		>
-			<TrainingEntrySection
-				description="Edit the page title or open the original source URL."
-				title="Source"
+		<TrainingEntryDetailLayout backHref={listHref} title={headerTitle}>
+			<SettingsRow
+				description="Edit the page title and markdown content your agent should use."
+				title="Page"
 			>
-				<TrainingEntryField
-					disabled={isLoading || isSaving}
-					id="web-source-title"
-					label="Page title"
-					onChange={setSourceTitle}
-					placeholder="Getting Started"
-					value={sourceTitle}
-				/>
-				<div className="space-y-2">
-					<div className="font-medium text-sm">Source URL</div>
-					{knowledge?.sourceUrl ? (
-						<div className="flex flex-wrap items-center gap-3 text-sm">
-							<a
-								className="min-w-0 truncate text-primary underline"
-								href={knowledge.sourceUrl}
-								rel="noopener noreferrer"
-								target="_blank"
-							>
-								{knowledge.sourceUrl}
-							</a>
-							<Button asChild size="sm" variant="ghost">
+				<div className="space-y-4 p-4">
+					<div className="space-y-2">
+						<Label htmlFor="web-source-title">Page title</Label>
+						<Input
+							disabled={isLoading || isSaving}
+							id="web-source-title"
+							onChange={(event) => setSourceTitle(event.target.value)}
+							placeholder="Getting Started"
+							value={sourceTitle}
+						/>
+					</div>
+					<div className="space-y-2">
+						<div className="font-medium text-sm">Source URL</div>
+						{knowledge?.sourceUrl ? (
+							<div className="flex flex-wrap items-center gap-3 text-sm">
 								<a
+									className="min-w-0 truncate text-primary underline"
 									href={knowledge.sourceUrl}
 									rel="noopener noreferrer"
 									target="_blank"
 								>
-									<ExternalLinkIcon className="size-4" />
-									Open original
+									{knowledge.sourceUrl}
 								</a>
-							</Button>
-						</div>
-					) : (
-						<p className="text-muted-foreground text-sm">
-							No source URL saved.
-						</p>
-					)}
+								<Button asChild size="sm" variant="ghost">
+									<a
+										href={knowledge.sourceUrl}
+										rel="noopener noreferrer"
+										target="_blank"
+									>
+										<ExternalLinkIcon className="size-4" />
+										Open original
+									</a>
+								</Button>
+							</div>
+						) : (
+							<p className="text-muted-foreground text-sm">
+								No source URL saved.
+							</p>
+						)}
+					</div>
+					<div className="space-y-2">
+						<Label htmlFor="web-markdown">Markdown</Label>
+						<Textarea
+							className="min-h-[320px] font-mono text-sm"
+							disabled={isLoading || isSaving}
+							id="web-markdown"
+							onChange={(event) => setMarkdown(event.target.value)}
+							placeholder="# Page content"
+							rows={14}
+							value={markdown}
+						/>
+					</div>
 				</div>
-			</TrainingEntrySection>
-			<TrainingEntrySection
-				description="Edit the crawled markdown content directly."
-				title="Content"
-			>
-				<TrainingEntryMarkdownField
-					disabled={isLoading || isSaving}
-					id="web-markdown"
-					label="Markdown"
-					onChange={setMarkdown}
-					placeholder="# Page content"
-					value={markdown}
-				/>
-			</TrainingEntrySection>
+				<SettingsRowFooter className="flex items-center justify-between gap-3">
+					<div className="flex flex-wrap items-center gap-2">
+						{knowledge ? (
+							<Button
+								disabled={toggleIncludedMutation.isPending}
+								onClick={handleToggleIncluded}
+								size="sm"
+								type="button"
+								variant="ghost"
+							>
+								{knowledge.isIncluded ? "Exclude" : "Include"}
+							</Button>
+						) : null}
+						<Button
+							disabled={reindexMutation.isPending || !knowledge?.linkSourceId}
+							onClick={handleReindex}
+							size="sm"
+							type="button"
+							variant="ghost"
+						>
+							{reindexMutation.isPending ? (
+								<>
+									<Spinner className="size-4" />
+									Re-indexing...
+								</>
+							) : (
+								<>
+									<RefreshCwIcon className="size-4" />
+									Re-index
+								</>
+							)}
+						</Button>
+						<Button
+							disabled={deleteMutation.isPending}
+							onClick={handleDelete}
+							size="sm"
+							type="button"
+							variant="ghost"
+						>
+							Delete
+						</Button>
+					</div>
+					<Button
+						disabled={!canSave}
+						onClick={handleSave}
+						size="sm"
+						type="button"
+					>
+						{isSaving ? "Saving..." : "Save"}
+					</Button>
+				</SettingsRowFooter>
+			</SettingsRow>
 		</TrainingEntryDetailLayout>
 	);
 }

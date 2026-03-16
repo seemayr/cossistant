@@ -1,16 +1,16 @@
 "use client";
 
-import {
-	TrainingEntryField,
-	TrainingEntryMarkdownField,
-	TrainingEntrySection,
-} from "@/components/training-entries";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 
 type FileManualEntryFieldsProps = {
 	title: string;
 	summary: string;
 	markdown: string;
 	disabled?: boolean;
+	className?: string;
 	onTitleChange: (value: string) => void;
 	onSummaryChange: (value: string) => void;
 	onMarkdownChange: (value: string) => void;
@@ -21,48 +21,49 @@ export function FileManualEntryFields({
 	summary,
 	markdown,
 	disabled = false,
+	className,
 	onTitleChange,
 	onSummaryChange,
 	onMarkdownChange,
 }: FileManualEntryFieldsProps) {
 	return (
-		<>
-			<TrainingEntrySection
-				description="Set the visible title and short summary for this file."
-				title="Details"
-			>
-				<TrainingEntryField
+		<div className={cn("space-y-4", className)}>
+			<div className="space-y-2">
+				<Label htmlFor="file-title">Title</Label>
+				<Input
 					disabled={disabled}
 					id="file-title"
-					label="Title"
-					onChange={onTitleChange}
+					onChange={(event) => onTitleChange(event.target.value)}
 					placeholder="Getting Started Guide"
 					value={title}
 				/>
-				<TrainingEntryField
-					description="Optional preview shown in the list."
+			</div>
+			<div className="space-y-2">
+				<Label htmlFor="file-summary">Summary</Label>
+				<Input
 					disabled={disabled}
 					id="file-summary"
-					label="Summary"
-					onChange={onSummaryChange}
-					placeholder="A quick overview of how to get started..."
+					onChange={(event) => onSummaryChange(event.target.value)}
+					placeholder="Optional context about what this file covers"
 					value={summary}
 				/>
-			</TrainingEntrySection>
-			<TrainingEntrySection
-				description="Paste the markdown you want this knowledge entry to contain."
-				title="Content"
-			>
-				<TrainingEntryMarkdownField
+				<p className="text-muted-foreground text-xs">
+					Optional short context for this entry.
+				</p>
+			</div>
+			<div className="space-y-2">
+				<Label htmlFor="file-markdown">Markdown</Label>
+				<Textarea
+					className="min-h-[320px] font-mono text-sm"
 					disabled={disabled}
 					id="file-markdown"
-					label="Markdown"
-					onChange={onMarkdownChange}
+					onChange={(event) => onMarkdownChange(event.target.value)}
 					placeholder="# Getting started&#10;&#10;Welcome to our documentation..."
+					rows={14}
 					value={markdown}
 				/>
-			</TrainingEntrySection>
-		</>
+			</div>
+		</div>
 	);
 }
 
