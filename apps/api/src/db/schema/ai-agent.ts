@@ -38,6 +38,7 @@ export type AiAgentBehaviorSettings = {
 	canSetPriority: boolean;
 	canCategorize: boolean;
 	canEscalate: boolean;
+	canRequestKnowledgeClarification: boolean;
 
 	// Escalation config
 	defaultEscalationUserId: string | null;

@@ -47,7 +47,7 @@ export function VisitorSidebarHeader({
 			<div className="flex flex-col gap-0 text-left">
 				<div className="flex flex-wrap items-center gap-2">
 					<p className="font-medium text-sm">{fullName}</p>
-					<VisitorSourceBadge attribution={attribution} />
+					{/* <VisitorSourceBadge attribution={attribution} /> */}
 				</div>
 				{contact ? (
 					<p className="text-muted-foreground text-xs">{email}</p>

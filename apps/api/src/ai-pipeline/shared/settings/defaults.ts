@@ -40,6 +40,7 @@ export function getDefaultBehaviorSettings(): AiAgentBehaviorSettings {
 		canSetPriority: true,
 		canCategorize: true,
 		canEscalate: true,
+		canRequestKnowledgeClarification: true,
 
 		// Escalation config
 		defaultEscalationUserId: null,
@@ -80,6 +81,7 @@ export function getBehaviorSettings(
 		canSetPriority: merged.canSetPriority,
 		canCategorize: merged.canCategorize,
 		canEscalate: merged.canEscalate,
+		canRequestKnowledgeClarification: merged.canRequestKnowledgeClarification,
 		defaultEscalationUserId: merged.defaultEscalationUserId,
 		maxToolInvocationsPerRun: clampToolInvocationBudget(
 			merged.maxToolInvocationsPerRun

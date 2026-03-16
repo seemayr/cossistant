@@ -489,6 +489,7 @@ describe("conversationCreated handler", () => {
 					visitorRatingAt: null,
 					lastTimelineItem: null,
 					lastMessageTimelineItem: null,
+					activeClarification: null,
 					viewIds: [],
 					seenData: [],
 				},
@@ -528,6 +529,44 @@ describe("conversationUpdated handler", () => {
 				visitorId: "visitor-updated",
 				updates: {
 					aiPausedUntil: "2030-01-01T00:00:00.000Z",
+				},
+				aiAgentId: null,
+			},
+		};
+
+		await routeEvent(event, {
+			connectionId: "conn-updated",
+			websiteId: "site-updated",
+			visitorId: "visitor-updated",
+			sendToWebsite,
+			sendToVisitor,
+			sendToConnection,
+		});
+
+		expect(sendToWebsite).toHaveBeenCalledTimes(1);
+		expect(sendToWebsite.mock.calls[0]).toEqual(["site-updated", event]);
+		expect(sendToVisitor).toHaveBeenCalledTimes(0);
+	});
+
+	it("keeps clarification updates private to dashboard connections", async () => {
+		const event: RealtimeEvent<"conversationUpdated"> = {
+			type: "conversationUpdated",
+			payload: {
+				websiteId: "site-updated",
+				organizationId: "org-updated",
+				conversationId: "conv-updated",
+				userId: null,
+				visitorId: "visitor-updated",
+				updates: {
+					activeClarification: {
+						requestId: "01JKCLARIFICATION0000000001",
+						status: "awaiting_answer",
+						topicSummary: "Clarify how credits roll over.",
+						question: "Do credits survive downgrades?",
+						stepIndex: 2,
+						maxSteps: 5,
+						updatedAt: "2030-01-01T00:00:00.000Z",
+					},
 				},
 				aiAgentId: null,
 			},

@@ -7,6 +7,7 @@ import {
 	listKnowledge,
 	updateKnowledge,
 } from "@api/db/queries/knowledge";
+import { syncLinkSourceStatsFromKnowledge } from "@api/db/queries/link-source";
 import { getWebsiteBySlugWithAccess } from "@api/db/queries/website";
 import { getPlanForWebsite } from "@api/lib/plans/access";
 import {
@@ -327,7 +328,7 @@ export const knowledgeRouter = createTRPCRouter({
 		}),
 
 	/**
-	 * Delete a knowledge entry (soft delete)
+	 * Delete a knowledge entry
 	 */
 	delete: protectedProcedure
 		.input(deleteKnowledgeRequestSchema)
@@ -345,6 +346,18 @@ export const knowledgeRouter = createTRPCRouter({
 				});
 			}
 
+			const knowledgeEntry = await getKnowledgeById(db, {
+				id: input.id,
+				websiteId: websiteData.id,
+			});
+
+			if (!knowledgeEntry) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Knowledge entry not found",
+				});
+			}
+
 			const deleted = await deleteKnowledge(db, {
 				id: input.id,
 				websiteId: websiteData.id,
@@ -354,6 +367,13 @@ export const knowledgeRouter = createTRPCRouter({
 				throw new TRPCError({
 					code: "NOT_FOUND",
 					message: "Knowledge entry not found",
+				});
+			}
+
+			if (knowledgeEntry.linkSourceId && knowledgeEntry.type === "url") {
+				await syncLinkSourceStatsFromKnowledge(db, {
+					id: knowledgeEntry.linkSourceId,
+					websiteId: websiteData.id,
 				});
 			}
 

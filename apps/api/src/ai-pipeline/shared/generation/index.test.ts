@@ -58,10 +58,11 @@ const buildPipelineToolsetMock = mock(
 			allowPublicMessages: boolean;
 			runtimeState: {
 				toolCallCounts: Record<string, number>;
+				mutationToolCallCounts: Record<string, number>;
 				publicMessagesSent: number;
 				publicSendSequence: number;
 				finalAction: {
-					action: "respond" | "skip";
+					action: "respond" | "skip" | "escalate";
 					reasoning: string;
 					confidence: number;
 				} | null;
@@ -71,6 +72,10 @@ const buildPipelineToolsetMock = mock(
 		const increment = (toolName: string) => {
 			context.runtimeState.toolCallCounts[toolName] =
 				(context.runtimeState.toolCallCounts[toolName] ?? 0) + 1;
+		};
+		const incrementMutation = (toolName: string) => {
+			context.runtimeState.mutationToolCallCounts[toolName] =
+				(context.runtimeState.mutationToolCallCounts[toolName] ?? 0) + 1;
 		};
 
 		const publicTools = {
@@ -102,6 +107,27 @@ const buildPipelineToolsetMock = mock(
 					return { success: true };
 				},
 			},
+			escalate: {
+				description: "Finish escalate",
+				execute: async (input: unknown) => {
+					const parsed = input as {
+						reason: string;
+						reasoning: string;
+						confidence: number;
+					};
+					increment("escalate");
+					incrementMutation("escalate");
+					context.runtimeState.finalAction = {
+						action: "escalate",
+						reasoning: parsed.reasoning || parsed.reason,
+						confidence: parsed.confidence,
+					};
+					return {
+						success: true,
+						data: { action: "escalate", changed: true },
+					};
+				},
+			},
 		};
 
 		return {
@@ -130,10 +156,10 @@ const buildPipelineToolsetMock = mock(
 				},
 			},
 			toolNames: context.allowPublicMessages
-				? ["searchKnowledgeBase", "sendMessage", "respond", "skip"]
+				? ["searchKnowledgeBase", "sendMessage", "respond", "escalate", "skip"]
 				: ["searchKnowledgeBase", "skip"],
 			finishToolNames: context.allowPublicMessages
-				? ["respond", "skip"]
+				? ["respond", "escalate", "skip"]
 				: ["skip"],
 		};
 	}
@@ -527,6 +553,25 @@ ${secondPrompt}`);
 		expect(result.status).toBe("error");
 		expect(result.failureCode).toBe("runtime_error");
 		expect(result.error).toContain("requires sendMessage");
+	});
+
+	it("allows escalate to complete without an explicit sendMessage", async () => {
+		queuedGenerateHandlers.push(async ({ options }) => {
+			await options.tools.escalate.execute({
+				reason: "Visitor requested a human",
+				reasoning: "Human help requested",
+				confidence: 1,
+			});
+			return { usage: {} };
+		});
+
+		const { runGenerationRuntime } = await modulePromise;
+		const result = await runGenerationRuntime(createInput() as never);
+
+		expect(result.status).toBe("completed");
+		expect(result.action.action).toBe("escalate");
+		expect(result.failureCode).toBeUndefined();
+		expect(result.publicMessagesSent).toBe(0);
 	});
 
 	it("fails completion when no public sendMessage was sent", async () => {

@@ -13,9 +13,19 @@ import {
 
 export const AI_CREDIT_USAGE_TIMELINE_TOOL_NAME = "aiCreditUsage";
 
+export type GenerationUsageSource =
+	| "primary_pipeline"
+	| "knowledge_clarification";
+
+export type GenerationUsagePhase =
+	| "primary_generation"
+	| "clarification_question"
+	| "faq_draft_generation";
+
 export type GenerationUsageTimelinePayload = {
-	workflowRunId: string;
-	triggerMessageId: string;
+	usageEventId?: string;
+	workflowRunId?: string;
+	triggerMessageId?: string;
 	triggerVisibility?: "public" | "private";
 	modelId: string;
 	modelIdOriginal?: string;
@@ -39,6 +49,10 @@ export type GenerationUsageTimelinePayload = {
 		| "skipped_zero";
 	balanceBefore: number | null;
 	balanceAfterEstimate: number | null;
+	source?: GenerationUsageSource;
+	phase?: GenerationUsagePhase;
+	knowledgeClarificationRequestId?: string;
+	knowledgeClarificationStepIndex?: number;
 };
 
 function isUniqueViolationError(error: unknown): boolean {
@@ -69,20 +83,50 @@ function isUniqueViolationError(error: unknown): boolean {
 	return false;
 }
 
-function getTimelineItemId(workflowRunId: string): string {
-	return generateIdempotentULID(`tool:${workflowRunId}:ai-credit-usage`);
+function resolveUsageEventId(payload: GenerationUsageTimelinePayload): string {
+	const usageEventId = payload.usageEventId ?? payload.workflowRunId;
+
+	if (!usageEventId) {
+		throw new Error("AI usage timeline payload is missing a stable event id.");
+	}
+
+	return usageEventId;
+}
+
+function getTimelineItemId(payload: GenerationUsageTimelinePayload): string {
+	return generateIdempotentULID(
+		`tool:${resolveUsageEventId(payload)}:ai-credit-usage`
+	);
 }
 
 function buildToolPart(payload: GenerationUsageTimelinePayload) {
+	const usageEventId = resolveUsageEventId(payload);
+	const workflowRunId = payload.workflowRunId ?? usageEventId;
+	const triggerMessageId = payload.triggerMessageId ?? usageEventId;
 	const providerMetadata = {
 		cossistant: {
 			visibility: TimelineItemVisibility.PRIVATE,
 			toolTimeline: {
 				logType: getToolLogType(AI_CREDIT_USAGE_TIMELINE_TOOL_NAME),
-				workflowRunId: payload.workflowRunId,
-				triggerMessageId: payload.triggerMessageId,
+				usageEventId,
+				workflowRunId,
+				triggerMessageId,
 				...(payload.triggerVisibility
 					? { triggerVisibility: payload.triggerVisibility }
+					: {}),
+				...(payload.source ? { source: payload.source } : {}),
+				...(payload.phase ? { phase: payload.phase } : {}),
+				...(payload.knowledgeClarificationRequestId
+					? {
+							knowledgeClarificationRequestId:
+								payload.knowledgeClarificationRequestId,
+						}
+					: {}),
+				...(typeof payload.knowledgeClarificationStepIndex === "number"
+					? {
+							knowledgeClarificationStepIndex:
+								payload.knowledgeClarificationStepIndex,
+						}
 					: {}),
 			},
 		},
@@ -94,9 +138,16 @@ function buildToolPart(payload: GenerationUsageTimelinePayload) {
 		toolName: AI_CREDIT_USAGE_TIMELINE_TOOL_NAME,
 		state: "result",
 		input: {
-			workflowRunId: payload.workflowRunId,
-			triggerMessageId: payload.triggerMessageId,
+			usageEventId,
+			workflowRunId,
+			triggerMessageId,
 			modelId: payload.modelId,
+			source: payload.source ?? "primary_pipeline",
+			phase: payload.phase ?? "primary_generation",
+			knowledgeClarificationRequestId:
+				payload.knowledgeClarificationRequestId ?? null,
+			knowledgeClarificationStepIndex:
+				payload.knowledgeClarificationStepIndex ?? null,
 		},
 		output: payload,
 		callProviderMetadata: providerMetadata,
@@ -105,6 +156,14 @@ function buildToolPart(payload: GenerationUsageTimelinePayload) {
 }
 
 function buildTimelineText(payload: GenerationUsageTimelinePayload): string {
+	if (payload.source === "knowledge_clarification") {
+		const label =
+			payload.phase === "faq_draft_generation"
+				? "FAQ draft generation"
+				: "Knowledge clarification";
+		return `${label}: ${payload.totalTokens} tokens, ${payload.totalCredits} credits`;
+	}
+
 	return `AI usage: ${payload.totalTokens} tokens, ${payload.totalCredits} credits`;
 }
 
@@ -117,7 +176,7 @@ export async function logGenerationUsageTimeline(params: {
 	aiAgentId: string;
 	payload: GenerationUsageTimelinePayload;
 }): Promise<void> {
-	const itemId = getTimelineItemId(params.payload.workflowRunId);
+	const itemId = getTimelineItemId(params.payload);
 	const part = buildToolPart(params.payload);
 	const text = buildTimelineText(params.payload);
 

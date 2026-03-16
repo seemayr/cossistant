@@ -35,6 +35,10 @@ function categorizeConversation(
 		return "needsHuman";
 	}
 
+	if (conversation.activeClarification) {
+		return "needsClarification";
+	}
+
 	if (isInboundVisitorMessage(conversation.lastTimelineItem)) {
 		const messageTime = Date.parse(conversation.lastTimelineItem.createdAt);
 		if (
@@ -90,6 +94,7 @@ export function buildFakeSmartOrderedList(
 
 	const categorized = new Map<CategoryType, FakeSmartConversationItem[]>([
 		["needsHuman", []],
+		["needsClarification", []],
 		["waiting8Hours", []],
 		["other", []],
 	]);
@@ -104,21 +109,26 @@ export function buildFakeSmartOrderedList(
 	}
 
 	const needsHumanItems = categorized.get("needsHuman") ?? [];
+	const needsClarificationItems = categorized.get("needsClarification") ?? [];
 	const waitingItems = categorized.get("waiting8Hours") ?? [];
 	const otherItems = categorized.get("other") ?? [];
 
 	sortByPriorityThenTime(needsHumanItems);
+	sortByPriorityThenTime(needsClarificationItems);
 	sortByPriorityThenTime(waitingItems);
 	sortByTimeOnly(otherItems);
 
 	const categoryCounts: Record<CategoryType, number> = {
 		needsHuman: needsHumanItems.length,
+		needsClarification: needsClarificationItems.length,
 		waiting8Hours: waitingItems.length,
 		other: otherItems.length,
 	};
 
 	const onlyOther =
-		categoryCounts.needsHuman === 0 && categoryCounts.waiting8Hours === 0;
+		categoryCounts.needsHuman === 0 &&
+		categoryCounts.needsClarification === 0 &&
+		categoryCounts.waiting8Hours === 0;
 
 	const items: FakeSmartListItem[] = [];
 	const addCategory = (category: CategoryType, withHeader: boolean) => {
@@ -140,6 +150,7 @@ export function buildFakeSmartOrderedList(
 	};
 
 	addCategory("needsHuman", true);
+	addCategory("needsClarification", true);
 	addCategory("waiting8Hours", true);
 	addCategory("other", !onlyOther);
 

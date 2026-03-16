@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import { escalate as escalateAction } from "../actions/escalate";
+import { sendMessage as sendPublicMessage } from "../actions/send-message";
 import { updateStatus } from "../actions/update-status";
 import type {
 	PipelineToolContext,
@@ -8,6 +9,9 @@ import type {
 	ToolTelemetrySpec,
 } from "./contracts";
 import { setFinalAction, setToolError } from "./helpers";
+
+const ESCALATION_REASSURANCE_MESSAGE =
+	"I've asked a team member to join the conversation. They'll be with you shortly.";
 
 const respondSchema = z.object({
 	reasoning: z.string().min(1),
@@ -35,6 +39,63 @@ const skipSchema = z.object({
 	reasoning: z.string().min(1),
 });
 
+async function sendEscalationReassurance(
+	ctx: PipelineToolContext
+): Promise<void> {
+	if (!ctx.allowPublicMessages) {
+		return;
+	}
+
+	const slot = ctx.runtimeState.publicSendSequence + 1;
+
+	if (ctx.stopTyping) {
+		try {
+			await ctx.stopTyping();
+		} catch (error) {
+			ctx.debugLogger?.warn(
+				`[ai-pipeline:escalate] conv=${ctx.conversationId} workflowRunId=${ctx.workflowRunId} evt=typing_stop_failed`,
+				error
+			);
+		}
+	}
+
+	try {
+		const result = await sendPublicMessage({
+			db: ctx.db,
+			conversationId: ctx.conversationId,
+			organizationId: ctx.organizationId,
+			websiteId: ctx.websiteId,
+			visitorId: ctx.visitorId,
+			aiAgentId: ctx.aiAgentId,
+			text: ESCALATION_REASSURANCE_MESSAGE,
+			idempotencyKey: `public:${ctx.triggerMessageId}:escalate`,
+			createdAt: new Date(Date.now() + slot),
+		});
+
+		if (result.paused) {
+			ctx.debugLogger?.warn(
+				`[ai-pipeline:escalate] conv=${ctx.conversationId} workflowRunId=${ctx.workflowRunId} evt=confirmation_skipped_paused`
+			);
+			return;
+		}
+
+		ctx.runtimeState.publicSendSequence = slot;
+
+		if (
+			result.messageId &&
+			!ctx.runtimeState.sentPublicMessageIds.has(result.messageId)
+		) {
+			ctx.runtimeState.sentPublicMessageIds.add(result.messageId);
+			ctx.runtimeState.publicMessagesSent += 1;
+		}
+	} catch (error) {
+		ctx.debugLogger?.warn(
+			`[ai-pipeline:escalate] conv=${ctx.conversationId} workflowRunId=${ctx.workflowRunId} evt=confirmation_send_failed`,
+			error
+		);
+	}
+}
+
 export function createRespondTool(ctx: PipelineToolContext) {
 	return tool({
 		description: "Finish the run with a normal response outcome.",
@@ -58,14 +119,20 @@ export function createRespondTool(ctx: PipelineToolContext) {
 
 export function createEscalateTool(ctx: PipelineToolContext) {
 	return tool({
-		description: "Escalate this conversation to human support and finish.",
+		description:
+			"Escalate this conversation to human support and finish. This tool also reassures the visitor and creates the public handoff event automatically.",
 		inputSchema: escalateSchema,
 		execute: async ({
 			reason,
 			reasoning,
 			confidence,
 			urgency,
-		}): Promise<PipelineToolResult<{ action: "escalate" | "respond" }>> => {
+		}): Promise<
+			PipelineToolResult<{
+				action: "escalate" | "respond";
+				changed: boolean;
+			}>
+		> => {
 			if (ctx.isEscalated) {
 				setFinalAction(ctx, {
 					action: "respond",
@@ -75,7 +142,7 @@ export function createEscalateTool(ctx: PipelineToolContext) {
 				});
 				return {
 					success: true,
-					data: { action: "respond" },
+					data: { action: "respond", changed: false },
 				};
 			}
 
@@ -92,6 +159,7 @@ export function createEscalateTool(ctx: PipelineToolContext) {
 					visitorName: ctx.visitorName,
 					urgency: urgency ?? "normal",
 				});
+				await sendEscalationReassurance(ctx);
 
 				setFinalAction(ctx, {
 					action: "escalate",
@@ -105,7 +173,7 @@ export function createEscalateTool(ctx: PipelineToolContext) {
 
 				return {
 					success: true,
-					data: { action: "escalate" },
+					data: { action: "escalate", changed: true },
 				};
 			} catch (error) {
 				const message =

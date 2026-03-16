@@ -90,6 +90,7 @@ function createContext(): PipelineToolContext {
 			failedToolCallCounts: {},
 			chargeableToolCallCounts: {},
 			mutationToolCallCounts: {},
+			toolExecutions: [],
 			publicSendSequence: 0,
 			privateSendSequence: 0,
 			sentPublicMessageIds: new Set<string>(),

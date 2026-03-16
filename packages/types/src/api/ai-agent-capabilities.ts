@@ -18,6 +18,7 @@ export type AiAgentToolGroup = (typeof AI_AGENT_TOOL_GROUPS)[number];
 
 export const AI_AGENT_TOOL_IDS = [
 	"searchKnowledgeBase",
+	"requestKnowledgeClarification",
 	"identifyVisitor",
 	"updateConversationTitle",
 	"updateSentiment",
@@ -39,6 +40,7 @@ export const AI_AGENT_BEHAVIOR_SETTING_KEYS = [
 	"canMarkSpam",
 	"canSetPriority",
 	"canEscalate",
+	"canRequestKnowledgeClarification",
 	"autoCategorize",
 	"autoGenerateTitle",
 	"autoAnalyzeSentiment",
@@ -103,6 +105,29 @@ const AI_AGENT_TOOL_CATALOG_RAW: readonly RawToolCatalogEntry[] = [
 		},
 	},
 	{
+		id: "requestKnowledgeClarification",
+		label: "Request Knowledge Clarification",
+		description:
+			"Start a private teammate clarification flow to deepen the knowledge base without escalating the conversation.",
+		category: "context",
+		group: "behavior",
+		order: 3,
+		isSystem: false,
+		isRequired: false,
+		isToggleable: true,
+		behaviorSettingKey: "canRequestKnowledgeClarification",
+		defaultSkill: {
+			name: "request-knowledge-clarification.md",
+			label: "Request Knowledge Clarification",
+			description: "When and how to deepen unclear knowledge with teammates.",
+			content: `## Clarification Semantics
+
+- Use this when the conversation reveals a knowledge gap or evolving policy.
+- Do not use this for live human takeover; that remains escalate.
+- Prefer concise topic summaries that tell the next teammate question generator what still needs precision.`,
+		},
+	},
+	{
 		id: "identifyVisitor",
 		label: "Identify Visitor",
 		description: "Attach visitor name/email to the conversation record.",
@@ -130,7 +155,7 @@ const AI_AGENT_TOOL_CATALOG_RAW: readonly RawToolCatalogEntry[] = [
 		description: "Set a concise title for the conversation topic.",
 		category: "analysis",
 		group: "behavior",
-		order: 3,
+		order: 4,
 		isSystem: false,
 		isRequired: false,
 		isToggleable: true,
@@ -155,7 +180,7 @@ const AI_AGENT_TOOL_CATALOG_RAW: readonly RawToolCatalogEntry[] = [
 			"Record meaningful sentiment changes for conversation analytics.",
 		category: "analysis",
 		group: "behavior",
-		order: 4,
+		order: 5,
 		isSystem: false,
 		isRequired: false,
 		isToggleable: true,
@@ -177,7 +202,7 @@ const AI_AGENT_TOOL_CATALOG_RAW: readonly RawToolCatalogEntry[] = [
 		description: "Set operational urgency for the conversation.",
 		category: "analysis",
 		group: "behavior",
-		order: 5,
+		order: 6,
 		isSystem: false,
 		isRequired: false,
 		isToggleable: true,
@@ -200,7 +225,7 @@ const AI_AGENT_TOOL_CATALOG_RAW: readonly RawToolCatalogEntry[] = [
 		description: "Add the conversation to one matching saved view.",
 		category: "analysis",
 		group: "behavior",
-		order: 6,
+		order: 7,
 		isSystem: false,
 		isRequired: false,
 		isToggleable: true,
@@ -224,7 +249,7 @@ const AI_AGENT_TOOL_CATALOG_RAW: readonly RawToolCatalogEntry[] = [
 			"Send one short customer-visible chat message. Use up to 3 when shorter bubbles read better.",
 		category: "messaging",
 		group: "behavior",
-		order: 7,
+		order: 8,
 		isSystem: true,
 		isRequired: true,
 		isToggleable: false,
@@ -247,7 +272,7 @@ const AI_AGENT_TOOL_CATALOG_RAW: readonly RawToolCatalogEntry[] = [
 		description: "Send internal notes to teammates that visitors cannot see.",
 		category: "messaging",
 		group: "behavior",
-		order: 8,
+		order: 9,
 		isSystem: true,
 		isRequired: true,
 		isToggleable: false,
@@ -302,7 +327,9 @@ const AI_AGENT_TOOL_CATALOG_RAW: readonly RawToolCatalogEntry[] = [
 			content: `## Finish Semantics
 
 - Choose this when human intervention is required.
-- Include a clear escalation reason payload for teammate routing.`,
+- Include a clear escalation reason payload for teammate routing.
+- This tool already reassures the visitor and creates the public handoff event.
+- Do not send a duplicate confirmation unless the visitor still needs extra context.`,
 		},
 	},
 	{

@@ -1,6 +1,7 @@
 "use client";
 
 import { GlobeIcon } from "lucide-react";
+import type * as React from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMergedDomainTree } from "../hooks/use-merged-domain-tree";
@@ -9,9 +10,14 @@ import { DomainNode } from "./domain-node";
 type DomainTreeProps = {
 	websiteSlug: string;
 	aiAgentId: string | null;
+	emptyState?: React.ReactNode;
 };
 
-export function DomainTree({ websiteSlug, aiAgentId }: DomainTreeProps) {
+export function DomainTree({
+	websiteSlug,
+	aiAgentId,
+	emptyState,
+}: DomainTreeProps) {
 	const { groupedDomainData, isLoading, error, totalDomains } =
 		useMergedDomainTree({
 			websiteSlug,
@@ -41,14 +47,16 @@ export function DomainTree({ websiteSlug, aiAgentId }: DomainTreeProps) {
 
 	if (totalDomains === 0) {
 		return (
-			<Card className="border-dashed">
-				<CardContent className="flex flex-col items-center justify-center py-12">
-					<GlobeIcon className="mb-4 size-6 text-muted-foreground" />
-					<p className="text-center text-muted-foreground text-sm">
-						No link sources yet. Add a website URL above to get started.
-					</p>
-				</CardContent>
-			</Card>
+			emptyState ?? (
+				<Card className="border-dashed">
+					<CardContent className="flex flex-col items-center justify-center py-12">
+						<GlobeIcon className="mb-4 size-6 text-muted-foreground" />
+						<p className="text-center text-muted-foreground text-sm">
+							No link sources yet. Add a website URL above to get started.
+						</p>
+					</CardContent>
+				</Card>
+			)
 		);
 	}
 

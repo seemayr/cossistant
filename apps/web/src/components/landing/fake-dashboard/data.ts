@@ -150,6 +150,7 @@ const createConversation = (params: {
 	escalatedAt?: string | null;
 	escalationHandledAt?: string | null;
 	escalationReason?: string | null;
+	activeClarification?: ConversationHeader["activeClarification"];
 	resolvedAt?: string | null;
 	resolvedByUserId?: string | null;
 	resolvedByAiAgentId?: string | null;
@@ -201,6 +202,7 @@ const createConversation = (params: {
 		visitorRatingAt: null,
 		lastMessageTimelineItem: params.lastTimelineItem,
 		lastTimelineItem: params.lastTimelineItem,
+		activeClarification: params.activeClarification ?? null,
 		viewIds: [],
 		seenData: [],
 	};

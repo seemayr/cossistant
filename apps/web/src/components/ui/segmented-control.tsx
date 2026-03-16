@@ -3,6 +3,7 @@
 import * as ToggleGroupPrimitive from "@radix-ui/react-toggle-group";
 import { cva, type VariantProps } from "class-variance-authority";
 import type * as React from "react";
+import { TooltipOnHover } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 const segmentedControlVariants = cva(
@@ -21,24 +22,58 @@ const segmentedControlVariants = cva(
 );
 
 const segmentedControlItemVariants = cva(
-	"relative z-10 inline-flex h-full min-w-0 items-center justify-center px-2 font-medium text-primary/60 outline-none transition-colors hover:cursor-pointer disabled:pointer-events-none disabled:opacity-50 data-[state=on]:text-primary",
+	"relative z-10 inline-flex h-full w-full min-w-0 items-center justify-center px-2 font-medium outline-none transition-colors hover:cursor-pointer disabled:pointer-events-none disabled:opacity-50",
 	{
 		variants: {
 			size: {
 				default: "text-sm",
 				sm: "px-2.5 text-xs",
 			},
+			colorVariant: {
+				default:
+					"text-primary/60 hover:text-foreground data-[state=on]:text-primary",
+				private:
+					"text-muted-foreground hover:text-foreground data-[state=on]:text-cossistant-yellow-600",
+			},
 		},
 		defaultVariants: {
 			size: "default",
+			colorVariant: "default",
 		},
 	}
 );
+
+const segmentedControlIndicatorVariants = cva(
+	"pointer-events-none absolute rounded-[2px] border bg-background-100 shadow-xs transition-[left,background-color,border-color] duration-100 ease-out dark:bg-background-300",
+	{
+		variants: {
+			colorVariant: {
+				default: "border-primary/10 dark:border-primary/5",
+				private:
+					"border-cossistant-yellow-600/25 dark:border-cossistant-yellow-600/20",
+			},
+		},
+		defaultVariants: {
+			colorVariant: "default",
+		},
+	}
+);
+
+type SegmentedControlColorVariant = NonNullable<
+	VariantProps<typeof segmentedControlItemVariants>["colorVariant"]
+>;
+
+type SegmentedControlTooltipOnHoverProps = Omit<
+	React.ComponentProps<typeof TooltipOnHover>,
+	"children"
+>;
 
 export type SegmentedControlOption<T extends string = string> = {
 	value: T;
 	label: React.ReactNode;
 	disabled?: boolean;
+	colorVariant?: SegmentedControlColorVariant;
+	tooltipOnHover?: SegmentedControlTooltipOnHoverProps;
 };
 
 export type SegmentedControlProps<T extends string = string> = {
@@ -61,6 +96,7 @@ export function SegmentedControl<T extends string = string>({
 	"aria-label": ariaLabel,
 }: SegmentedControlProps<T>) {
 	const activeIndex = options.findIndex((option) => option.value === value);
+	const activeOption = activeIndex >= 0 ? options[activeIndex] : undefined;
 
 	return (
 		<ToggleGroupPrimitive.Root
@@ -82,7 +118,11 @@ export function SegmentedControl<T extends string = string>({
 			{activeIndex >= 0 ? (
 				<div
 					aria-hidden="true"
-					className="pointer-events-none absolute rounded-[2px] border bg-background-100 shadow-xs transition-[left] duration-100 ease-out dark:bg-background-300"
+					className={cn(
+						segmentedControlIndicatorVariants({
+							colorVariant: activeOption?.colorVariant,
+						})
+					)}
 					data-slot="segmented-control-indicator"
 					style={{
 						left: `calc(${activeIndex} * (100% / ${options.length}) - 1px)`,
@@ -90,19 +130,52 @@ export function SegmentedControl<T extends string = string>({
 						bottom: "-2px",
 						width: `calc(100% / ${options.length} + 4px)`,
 					}}
-				/>
-			) : null}
-			{options.map((option) => (
-				<ToggleGroupPrimitive.Item
-					className={cn(segmentedControlItemVariants({ size }))}
-					data-slot="segmented-control-item"
-					disabled={disabled || option.disabled}
-					key={option.value}
-					value={option.value}
 				>
-					{option.label}
-				</ToggleGroupPrimitive.Item>
-			))}
+					{activeOption?.colorVariant === "private" ? (
+						<div
+							aria-hidden="true"
+							className="absolute inset-0 rounded-[inherit] bg-cossistant-yellow-100 dark:bg-cossistant-yellow-100/25"
+						/>
+					) : null}
+				</div>
+			) : null}
+			{options.map((option) => {
+				const itemClassName = cn(
+					segmentedControlItemVariants({
+						size,
+						colorVariant: option.colorVariant,
+					})
+				);
+
+				if (option.tooltipOnHover) {
+					return (
+						<TooltipOnHover key={option.value} {...option.tooltipOnHover}>
+							<span>
+								<ToggleGroupPrimitive.Item
+									className={itemClassName}
+									data-slot="segmented-control-item"
+									disabled={disabled || option.disabled}
+									value={option.value}
+								>
+									{option.label}
+								</ToggleGroupPrimitive.Item>
+							</span>
+						</TooltipOnHover>
+					);
+				}
+
+				return (
+					<ToggleGroupPrimitive.Item
+						className={itemClassName}
+						data-slot="segmented-control-item"
+						disabled={disabled || option.disabled}
+						key={option.value}
+						value={option.value}
+					>
+						{option.label}
+					</ToggleGroupPrimitive.Item>
+				);
+			})}
 		</ToggleGroupPrimitive.Root>
 	);
 }

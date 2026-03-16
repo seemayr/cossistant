@@ -19,9 +19,24 @@ const updateConversationHeaderInCacheMock = mock(
 	) => {}
 );
 
+const invalidateActiveConversationClarificationQueryMock = mock(
+	(
+		_queryClient: unknown,
+		_params: {
+			websiteSlug: string;
+			conversationId: string;
+		}
+	) => {}
+);
+
 mock.module("@/data/conversation-header-cache", () => ({
 	forEachConversationHeadersQuery: forEachConversationHeadersQueryMock,
 	updateConversationHeaderInCache: updateConversationHeaderInCacheMock,
+}));
+
+mock.module("@/data/knowledge-clarification-cache", () => ({
+	invalidateActiveConversationClarificationQuery:
+		invalidateActiveConversationClarificationQueryMock,
 }));
 
 const conversationUpdatedModulePromise = import("./conversation-updated");
@@ -30,6 +45,7 @@ describe("handleConversationUpdated", () => {
 	beforeEach(() => {
 		forEachConversationHeadersQueryMock.mockClear();
 		updateConversationHeaderInCacheMock.mockClear();
+		invalidateActiveConversationClarificationQueryMock.mockClear();
 	});
 
 	it("applies all supported realtime update fields to cached conversation headers", async () => {
@@ -49,6 +65,7 @@ describe("handleConversationUpdated", () => {
 			resolvedByAiAgentId: null,
 			resolutionTime: null,
 			aiPausedUntil: null,
+			activeClarification: null,
 		};
 
 		const setNormalizedDataMock = mock((() => {}) as (value: unknown) => void);
@@ -86,6 +103,15 @@ describe("handleConversationUpdated", () => {
 						resolvedByAiAgentId: "ai-1",
 						resolutionTime: 120,
 						aiPausedUntil: "2025-01-04T00:00:00.000Z",
+						activeClarification: {
+							requestId: "01JKCLARIFICATION0000000001",
+							status: "awaiting_answer",
+							topicSummary: "Clarify seat billing.",
+							question: "Does the billing change immediately?",
+							stepIndex: 2,
+							maxSteps: 5,
+							updatedAt: "2025-01-05T00:00:00.000Z",
+						},
 					},
 					aiAgentId: "ai-1",
 				},
@@ -126,6 +152,15 @@ describe("handleConversationUpdated", () => {
 			resolvedByAiAgentId: "ai-1",
 			resolutionTime: 120,
 			aiPausedUntil: "2025-01-04T00:00:00.000Z",
+			activeClarification: {
+				requestId: "01JKCLARIFICATION0000000001",
+				status: "awaiting_answer",
+				topicSummary: "Clarify seat billing.",
+				question: "Does the billing change immediately?",
+				stepIndex: 2,
+				maxSteps: 5,
+				updatedAt: "2025-01-05T00:00:00.000Z",
+			},
 		});
 
 		expect(setNormalizedDataMock).toHaveBeenCalledTimes(1);
@@ -138,8 +173,26 @@ describe("handleConversationUpdated", () => {
 			sentimentConfidence: 0.93,
 			resolvedByAiAgentId: "ai-1",
 			aiPausedUntil: "2025-01-04T00:00:00.000Z",
+			activeClarification: {
+				requestId: "01JKCLARIFICATION0000000001",
+				status: "awaiting_answer",
+				topicSummary: "Clarify seat billing.",
+				question: "Does the billing change immediately?",
+				stepIndex: 2,
+				maxSteps: 5,
+				updatedAt: "2025-01-05T00:00:00.000Z",
+			},
 		});
 		expect(invalidateQueriesMock).toHaveBeenCalledTimes(0);
+		expect(
+			invalidateActiveConversationClarificationQueryMock
+		).toHaveBeenCalledTimes(1);
+		expect(
+			invalidateActiveConversationClarificationQueryMock.mock.calls[0]?.[1]
+		).toEqual({
+			websiteSlug: "acme",
+			conversationId: "conv-1",
+		});
 	});
 
 	it("invalidates headers queries when the conversation is not in normalized cache", async () => {

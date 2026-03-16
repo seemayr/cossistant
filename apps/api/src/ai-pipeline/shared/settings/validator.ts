@@ -26,6 +26,7 @@ export const behaviorSettingsSchema = z.object({
 	canSetPriority: z.boolean(),
 	canCategorize: z.boolean(),
 	canEscalate: z.boolean(),
+	canRequestKnowledgeClarification: z.boolean(),
 
 	defaultEscalationUserId: z.string().nullable(),
 	maxToolInvocationsPerRun: z.number(),

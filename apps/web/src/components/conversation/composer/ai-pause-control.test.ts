@@ -13,7 +13,9 @@ describe("ai pause control helpers", () => {
 			nowMs + 99 * 365 * 24 * 60 * 60 * 1000
 		).toISOString();
 
-		expect(getAiPauseStatusLabel(null, nowMs)).toBe("Pause AI answers");
+		expect(getAiPauseStatusLabel(null, nowMs)).toBe(
+			"AI can answer to conversation"
+		);
 		expect(getAiPauseStatusLabel(resumeSoon, nowMs)).toBe(
 			"AI answers will resume in 34-min"
 		);

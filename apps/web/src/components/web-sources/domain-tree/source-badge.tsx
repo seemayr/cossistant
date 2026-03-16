@@ -54,7 +54,7 @@ export function SourceStatusBadge({ status, className }: SourceBadgeProps) {
 			className={`${config.color} ${className ?? ""}`}
 			variant={config.variant}
 		>
-			{isActive && <Spinner className="mr-1 h-3 w-3" />}
+			{isActive && <Spinner className="-ml-1 mr-1 size-2" />}
 			{config.label}
 		</Badge>
 	);

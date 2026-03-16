@@ -93,6 +93,7 @@ describe("buildFakeSmartOrderedList", () => {
 		]);
 		expect(result.categoryCounts).toEqual({
 			needsHuman: 2,
+			needsClarification: 0,
 			waiting8Hours: 1,
 			other: 3,
 		});
@@ -141,7 +142,75 @@ describe("buildFakeSmartOrderedList", () => {
 
 		expect(categories).toEqual(["other"]);
 		expect(result.categoryCounts.needsHuman).toBe(0);
+		expect(result.categoryCounts.needsClarification).toBe(0);
 		expect(result.categoryCounts.other).toBe(1);
+	});
+
+	it("places clarification-needed conversations ahead of long waiting ones", () => {
+		const clarificationConversation = createOpenConversation({
+			id: "needs-clarification",
+			activeClarification: {
+				requestId: "01JKCLARIFICATION0000000001",
+				status: "awaiting_answer",
+				topicSummary: "Clarify how invoice credits apply to plan changes.",
+				question: "Do invoice credits carry over after a downgrade?",
+				stepIndex: 2,
+				maxSteps: 5,
+				updatedAt: new Date().toISOString(),
+			},
+			lastTimelineItem: {
+				id: "needs-clarification-message",
+				conversationId: "needs-clarification",
+				organizationId: "org",
+				visibility: "public",
+				type: "message",
+				text: "Can you clarify the billing behavior here?",
+				parts: [
+					{ type: "text", text: "Can you clarify the billing behavior here?" },
+				],
+				userId: null,
+				visitorId: "needs-clarification-visitor",
+				aiAgentId: "ai-agent",
+				createdAt: new Date(Date.now() - 90 * 60 * 1000).toISOString(),
+				deletedAt: null,
+			},
+		});
+
+		const waitingConversation = createOpenConversation({
+			id: "still-waiting",
+			lastTimelineItem: {
+				id: "still-waiting-message",
+				conversationId: "still-waiting",
+				organizationId: "org",
+				visibility: "public",
+				type: "message",
+				text: "Just checking back in",
+				parts: [{ type: "text", text: "Just checking back in" }],
+				userId: null,
+				visitorId: "still-waiting-visitor",
+				aiAgentId: null,
+				createdAt: new Date(Date.now() - 10 * 60 * 60 * 1000).toISOString(),
+				deletedAt: null,
+			},
+		});
+
+		const result = buildFakeSmartOrderedList([
+			clarificationConversation,
+			waitingConversation,
+		]);
+		const headers = result.items.filter((item) => item.type === "header");
+		const conversations = result.items.filter(
+			(item) => item.type === "conversation"
+		);
+
+		expect(headers.map((item) => item.category)).toEqual([
+			"needsClarification",
+			"waiting8Hours",
+		]);
+		expect(conversations.map((item) => item.category)).toEqual([
+			"needsClarification",
+			"waiting8Hours",
+		]);
 	});
 
 	it("sorts needsHuman and waiting8Hours by priority then recency", () => {
@@ -345,6 +414,7 @@ describe("buildFakeSmartOrderedList", () => {
 		expect(result.items).toHaveLength(2);
 		expect(result.categoryCounts).toEqual({
 			needsHuman: 0,
+			needsClarification: 0,
 			waiting8Hours: 0,
 			other: 2,
 		});

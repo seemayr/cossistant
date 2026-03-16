@@ -32,10 +32,14 @@ function getMessagingContractError(params: {
 	publicMessagesSent: number;
 }): string | null {
 	const { input, action, publicMessagesSent } = params;
+	const requiresPublicChatReply =
+		action.action === "respond" ||
+		action.action === "resolve" ||
+		action.action === "mark_spam";
 
 	if (
 		input.mode !== "background_only" &&
-		action.action !== "skip" &&
+		requiresPublicChatReply &&
 		publicMessagesSent === 0
 	) {
 		return "Non-background completion requires sendMessage as the main public response";

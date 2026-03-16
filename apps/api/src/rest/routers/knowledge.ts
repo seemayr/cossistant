@@ -5,6 +5,7 @@ import {
 	listKnowledge,
 	updateKnowledge,
 } from "@api/db/queries/knowledge";
+import { syncLinkSourceStatsFromKnowledge } from "@api/db/queries/link-source";
 import {
 	safelyExtractRequestData,
 	validateResponse,
@@ -704,6 +705,18 @@ knowledgeRouter.openapi(
 				);
 			}
 
+			const knowledgeEntry = await getKnowledgeById(db, {
+				id,
+				websiteId: website.id,
+			});
+
+			if (!knowledgeEntry) {
+				return c.json(
+					{ error: "NOT_FOUND", message: "Knowledge entry not found" },
+					404
+				);
+			}
+
 			const deleted = await deleteKnowledge(db, {
 				id,
 				websiteId: website.id,
@@ -714,6 +727,13 @@ knowledgeRouter.openapi(
 					{ error: "NOT_FOUND", message: "Knowledge entry not found" },
 					404
 				);
+			}
+
+			if (knowledgeEntry.linkSourceId && knowledgeEntry.type === "url") {
+				await syncLinkSourceStatsFromKnowledge(db, {
+					id: knowledgeEntry.linkSourceId,
+					websiteId: website.id,
+				});
 			}
 
 			return c.body(null, 204);

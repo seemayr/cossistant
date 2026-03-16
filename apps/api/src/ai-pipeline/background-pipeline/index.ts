@@ -17,6 +17,7 @@ import {
 	type GenerationRuntimeResult,
 	runGenerationRuntime,
 } from "../shared/generation";
+import { runBackgroundKnowledgeGapReview } from "./knowledge-gap-review";
 
 export type BackgroundPipelineInput = {
 	conversationId: string;
@@ -47,6 +48,7 @@ type BackgroundPipelineContext = {
 };
 
 const BACKGROUND_TOOL_IDS: AiAgentToolId[] = [
+	"requestKnowledgeClarification",
 	"updateConversationTitle",
 	"updateSentiment",
 	"setPriority",
@@ -63,6 +65,10 @@ function getBackgroundToolAllowlist(
 
 	const settings = getBehaviorSettings(aiAgent);
 	const allowlist: AiAgentToolId[] = [];
+
+	if (settings.canRequestKnowledgeClarification) {
+		allowlist.push("requestKnowledgeClarification");
+	}
 
 	if (settings.autoGenerateTitle) {
 		allowlist.push("updateConversationTitle");
@@ -353,13 +359,64 @@ export async function runBackgroundPipeline(
 			};
 		}
 
+		const knowledgeGapReviewResult =
+			(generationResult.toolCallsByName.requestKnowledgeClarification ?? 0) > 0
+				? ({
+						status: "skipped",
+						reason: "active_clarification_exists",
+					} as const)
+				: await runBackgroundKnowledgeGapReview({
+						db: ctx.db,
+						input: ctx.input,
+						intake: {
+							aiAgent: intakeResult.aiAgent,
+							conversation: intakeResult.conversation,
+							conversationHistory: intakeResult.conversationHistory,
+							triggerMessage: intakeResult.triggerMessage,
+						},
+					});
+
+		if (knowledgeGapReviewResult.status === "created") {
+			logAiPipeline({
+				area: "background",
+				event: "knowledge_gap_clarification_created",
+				conversationId,
+				fields: {
+					requestId: knowledgeGapReviewResult.requestId,
+					created: knowledgeGapReviewResult.created,
+					topicSummary: knowledgeGapReviewResult.topicSummary,
+					reason: knowledgeGapReviewResult.reason,
+				},
+			});
+
+			await emitProcessingCompletedSafe({
+				conversation: intakeResult.conversation,
+				aiAgentId: intakeResult.aiAgent.id,
+				status: "success",
+				action: "requestKnowledgeClarification",
+				reason: knowledgeGapReviewResult.reason,
+			});
+			return {
+				status: "completed",
+				metrics: {
+					intakeMs,
+					analysisMs,
+					executionMs: 0,
+					totalMs: Date.now() - startTime,
+				},
+			};
+		}
+
 		if (!hasBackgroundMutation(generationResult)) {
 			logAiPipeline({
 				area: "background",
 				event: "skip",
 				conversationId,
 				fields: {
-					reason: generationResult.action.reasoning,
+					reason:
+						knowledgeGapReviewResult.reason === "review_skipped"
+							? generationResult.action.reasoning
+							: `${generationResult.action.reasoning} | knowledgeGapReview=${knowledgeGapReviewResult.reason}`,
 				},
 			});
 

@@ -2,6 +2,7 @@
 
 import type { FaqKnowledgePayload, KnowledgeResponse } from "@cossistant/types";
 import {
+	BotIcon,
 	EditIcon,
 	EyeIcon,
 	EyeOffIcon,
@@ -22,6 +23,7 @@ import { cn } from "@/lib/utils";
 type FaqListItemProps = {
 	faq: KnowledgeResponse;
 	onEdit: (faq: KnowledgeResponse) => void;
+	onDeepen: (faq: KnowledgeResponse) => void;
 	onDelete: (id: string) => void;
 	onToggleIncluded: (id: string, isIncluded: boolean) => void;
 	isDeleting?: boolean;
@@ -31,6 +33,7 @@ type FaqListItemProps = {
 export function FaqListItem({
 	faq,
 	onEdit,
+	onDeepen,
 	onDelete,
 	onToggleIncluded,
 	isDeleting,
@@ -84,6 +87,10 @@ export function FaqListItem({
 						<DropdownMenuItem onClick={() => onEdit(faq)}>
 							<EditIcon className="mr-2 h-4 w-4" />
 							Edit
+						</DropdownMenuItem>
+						<DropdownMenuItem onClick={() => onDeepen(faq)}>
+							<BotIcon className="mr-2 h-4 w-4" />
+							Deepen with AI
 						</DropdownMenuItem>
 						<DropdownMenuItem
 							disabled={isToggling}

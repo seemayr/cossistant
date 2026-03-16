@@ -305,6 +305,16 @@ export function wrapPipelineToolsWithTelemetry(params: {
 						}
 					}
 
+					params.context.runtimeState.toolExecutions.push({
+						toolName,
+						state,
+						input: sanitizedInput,
+						...(sanitizedOutput === undefined
+							? {}
+							: { output: sanitizedOutput }),
+						...(failureText ? { errorText: failureText } : {}),
+					});
+
 					await safeUpdateToolTimelineItem({
 						context: params.context,
 						toolName,
@@ -358,6 +368,12 @@ export function wrapPipelineToolsWithTelemetry(params: {
 						params.context.runtimeState.failedToolCallCounts,
 						toolName
 					);
+					params.context.runtimeState.toolExecutions.push({
+						toolName,
+						state: "error",
+						input: sanitizedInput,
+						errorText,
+					});
 
 					await safeUpdateToolTimelineItem({
 						context: params.context,

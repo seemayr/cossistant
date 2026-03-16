@@ -1,6 +1,7 @@
 /** biome-ignore-all lint/style/noNonNullAssertion: ok here */
 import { DEFAULT_PAGE_LIMIT } from "@api/constants";
 import type { Database } from "@api/db";
+import { listActiveKnowledgeClarificationSummariesForConversations } from "@api/db/queries/knowledge-clarification";
 
 import {
 	contact,
@@ -545,6 +546,11 @@ export async function listConversationsHeaders(
 					)
 					.orderBy(desc(conversationSeen.lastSeenAt))
 			: [];
+	const activeClarificationSummaryMap =
+		await listActiveKnowledgeClarificationSummariesForConversations(db, {
+			websiteId: params.websiteId,
+			conversationIds,
+		});
 
 	const lastTimelineItemsMap = new Map<string, ConversationTimelineItemRow>();
 	for (const item of lastTimelineRows) {
@@ -639,6 +645,8 @@ export async function listConversationsHeaders(
 			lastSeenAt: userLastSeenMap.get(conversationId) ?? null,
 			lastMessageTimelineItem,
 			lastTimelineItem,
+			activeClarification:
+				activeClarificationSummaryMap.get(conversationId) ?? null,
 			seenData: seenDataMap.get(conversationId) ?? [],
 		};
 	});
@@ -758,6 +766,11 @@ export async function getConversationHeader(
 	}));
 
 	const viewIds = viewRows.map((view) => view.viewId);
+	const activeClarificationSummaryMap =
+		await listActiveKnowledgeClarificationSummariesForConversations(db, {
+			websiteId: params.websiteId,
+			conversationIds: [params.conversationId],
+		});
 
 	const lastTimelineItem = lastTimelineRow
 		? mapTimelineRowToTimelineItem(lastTimelineRow)
@@ -808,6 +821,8 @@ export async function getConversationHeader(
 		lastSeenAt: userLastSeenAt ?? null,
 		lastMessageTimelineItem,
 		lastTimelineItem,
+		activeClarification:
+			activeClarificationSummaryMap.get(params.conversationId) ?? null,
 		seenData,
 	} satisfies ConversationHeader;
 }

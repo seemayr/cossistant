@@ -8,6 +8,7 @@ import type {
 
 export type PipelineToolResult<T = unknown> = {
 	success: boolean;
+	changed?: boolean;
 	error?: string;
 	data?: T;
 };
@@ -16,6 +17,14 @@ export type ToolRuntimeError = {
 	toolName: string;
 	error: string;
 	fatal: boolean;
+};
+
+export type ToolExecutionSnapshot = {
+	toolName: string;
+	state: "result" | "error";
+	input: Record<string, unknown>;
+	output?: unknown;
+	errorText?: string;
 };
 
 export type PublicMessageToolName = "sendMessage";
@@ -33,6 +42,7 @@ export type ToolRuntimeState = {
 	failedToolCallCounts: Record<string, number>;
 	/** Successful calls used for credit accounting. */
 	chargeableToolCallCounts: Record<string, number>;
+	toolExecutions: ToolExecutionSnapshot[];
 	publicSendSequence: number;
 	privateSendSequence: number;
 	sentPublicMessageIds: Set<string>;

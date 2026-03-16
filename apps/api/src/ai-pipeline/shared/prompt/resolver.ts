@@ -14,9 +14,8 @@ import {
 	EDITABLE_CORE_PROMPT_DOCUMENT_NAME_SET,
 } from "./documents";
 import {
+	buildBehaviorInstructions,
 	buildCapabilitiesInstructions,
-	buildEscalationInstructions,
-	buildModeBehaviorInstructions,
 } from "./instructions";
 
 type ResponseMode =
@@ -59,10 +58,7 @@ export function buildFallbackCoreDocuments(
 	mode: ResponseMode
 ): Record<CorePromptDocumentName, string> {
 	const settings = getBehaviorSettings(aiAgent);
-	const behaviorSections = [
-		buildEscalationInstructions(settings),
-		buildModeBehaviorInstructions(mode),
-	].filter(Boolean);
+	const behaviorInstructions = buildBehaviorInstructions(settings, mode);
 	const capabilities = buildCapabilitiesInstructions(settings);
 	const visitorContactBehavior = getBehaviorPromptDefinition("visitor_contact");
 	const smartDecisionBehavior = getBehaviorPromptDefinition("smart_decision");
@@ -70,7 +66,7 @@ export function buildFallbackCoreDocuments(
 	return {
 		"agent.md": aiAgent.basePrompt,
 		"security.md": CORE_SECURITY_PROMPT,
-		"behaviour.md": behaviorSections.join("\n\n"),
+		"behaviour.md": behaviorInstructions,
 		"visitor-contact.md":
 			visitorContactBehavior?.defaultContent ??
 			PROMPT_TEMPLATES.VISITOR_IDENTIFICATION_SOFT,
@@ -98,6 +94,8 @@ function getBehaviorSettingValue(
 			return settings.canSetPriority;
 		case "canEscalate":
 			return settings.canEscalate;
+		case "canRequestKnowledgeClarification":
+			return settings.canRequestKnowledgeClarification;
 		case "autoCategorize":
 			return settings.autoCategorize;
 		case "autoGenerateTitle":

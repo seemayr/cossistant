@@ -12,6 +12,7 @@ import type {
 import type {
 	PipelineAvailableView,
 	PipelineToolLogger,
+	ToolExecutionSnapshot,
 	ToolTracePayloadMode,
 } from "../tools/contracts";
 
@@ -79,6 +80,7 @@ export type GenerationRuntimeResult = {
 	toolCallsByName: Record<string, number>;
 	mutationToolCallsByName?: Record<string, number>;
 	chargeableToolCallsByName?: Record<string, number>;
+	toolExecutions?: ToolExecutionSnapshot[];
 	totalToolCalls: number;
 	usage?: {
 		inputTokens?: number;

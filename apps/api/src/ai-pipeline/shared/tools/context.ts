@@ -19,7 +19,57 @@ const searchKnowledgeInputSchema = z.object({
 		.string()
 		.min(1)
 		.describe("Short keyword query for knowledge search."),
+	questionContext: z
+		.string()
+		.min(1)
+		.max(1000)
+		.optional()
+		.describe(
+			"Short summary of the question or issue being checked against the knowledge base."
+		),
 });
+
+const STRONG_SEARCH_MATCH_THRESHOLD = 0.78;
+const WEAK_SEARCH_MATCH_THRESHOLD = 0.55;
+
+export type SearchKnowledgeRetrievalQuality = "none" | "weak" | "strong";
+
+export type SearchKnowledgeClarificationSignal =
+	| "immediate"
+	| "background_review"
+	| "none";
+
+function resolveSearchRetrievalQuality(params: {
+	maxSimilarity: number | null;
+	totalFound: number;
+}): SearchKnowledgeRetrievalQuality {
+	if (!(params.totalFound > 0) || params.maxSimilarity === null) {
+		return "none";
+	}
+
+	if (params.maxSimilarity >= STRONG_SEARCH_MATCH_THRESHOLD) {
+		return "strong";
+	}
+
+	if (params.maxSimilarity >= WEAK_SEARCH_MATCH_THRESHOLD) {
+		return "weak";
+	}
+
+	return "none";
+}
+
+function resolveSearchClarificationSignal(
+	retrievalQuality: SearchKnowledgeRetrievalQuality
+): SearchKnowledgeClarificationSignal {
+	switch (retrievalQuality) {
+		case "none":
+			return "immediate";
+		case "weak":
+			return "background_review";
+		default:
+			return "none";
+	}
+}
 
 const identifyVisitorInputSchema = z
 	.object({
@@ -37,6 +87,7 @@ export function createSearchKnowledgeBaseTool(ctx: PipelineToolContext) {
 		inputSchema: searchKnowledgeInputSchema,
 		execute: async ({
 			query,
+			questionContext,
 		}): Promise<
 			PipelineToolResult<{
 				articles: Array<{
@@ -47,7 +98,11 @@ export function createSearchKnowledgeBaseTool(ctx: PipelineToolContext) {
 					sourceType: string | null;
 				}>;
 				query: string;
+				questionContext: string | null;
 				totalFound: number;
+				maxSimilarity: number | null;
+				retrievalQuality: SearchKnowledgeRetrievalQuality;
+				clarificationSignal: SearchKnowledgeClarificationSignal;
 				lowConfidence: boolean;
 				guidance: string | null;
 			}>
@@ -79,6 +134,19 @@ export function createSearchKnowledgeBaseTool(ctx: PipelineToolContext) {
 				};
 			});
 			const totalFound = articles.length;
+			const maxSimilarity =
+				totalFound > 0
+					? articles.reduce(
+							(currentMax, article) => Math.max(currentMax, article.similarity),
+							0
+						)
+					: null;
+			const retrievalQuality = resolveSearchRetrievalQuality({
+				maxSimilarity,
+				totalFound,
+			});
+			const clarificationSignal =
+				resolveSearchClarificationSignal(retrievalQuality);
 			const lowConfidence =
 				totalFound > 0 &&
 				articles.every((article) => article.similarity < 0.75);
@@ -97,7 +165,11 @@ export function createSearchKnowledgeBaseTool(ctx: PipelineToolContext) {
 				data: {
 					articles,
 					query,
+					questionContext: questionContext?.trim() || null,
 					totalFound,
+					maxSimilarity,
+					retrievalQuality,
+					clarificationSignal,
 					lowConfidence,
 					guidance,
 				},
@@ -241,10 +313,22 @@ function summarizeSearchKnowledgeBaseOutput(output: unknown): unknown {
 		error: typeof output.error === "string" ? output.error : null,
 		data: {
 			query: typeof data?.query === "string" ? data.query : null,
+			questionContext:
+				typeof data?.questionContext === "string" ? data.questionContext : null,
 			totalFound:
 				typeof data?.totalFound === "number"
 					? data.totalFound
 					: articles.length,
+			maxSimilarity:
+				typeof data?.maxSimilarity === "number" ? data.maxSimilarity : null,
+			retrievalQuality:
+				typeof data?.retrievalQuality === "string"
+					? data.retrievalQuality
+					: null,
+			clarificationSignal:
+				typeof data?.clarificationSignal === "string"
+					? data.clarificationSignal
+					: null,
 			lowConfidence: data?.lowConfidence === true,
 			guidance: typeof data?.guidance === "string" ? data.guidance : null,
 			articlesCount: articles.length,

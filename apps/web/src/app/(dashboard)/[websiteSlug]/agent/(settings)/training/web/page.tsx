@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
+import { TrainingEmptyState } from "@/components/agents/training-empty-state";
 import { UpgradeModal } from "@/components/plan/upgrade-modal";
 import { Button } from "@/components/ui/button";
 import Icon from "@/components/ui/icons";
@@ -57,6 +58,15 @@ export default function WebSourcesPage() {
 	// User cannot add more URLs if at link limit or pages limit
 	const isAtAnyLimit = isAtLinkLimit || isAtPagesLimit;
 
+	const handleOpenCreate = useCallback(() => {
+		if (isAtAnyLimit) {
+			setShowUpgradeModal(true);
+			return;
+		}
+
+		setShowAddDialog(true);
+	}, [isAtAnyLimit]);
+
 	// Mutations hook for creating link sources
 	const { handleCreate, isCreating } = useLinkSourceMutations({
 		websiteSlug: website.slug,
@@ -82,20 +92,16 @@ export default function WebSourcesPage() {
 			<SettingsHeader>
 				Web Sources
 				<div className="flex items-center gap-2 pr-1">
-					<TooltipOnHover content="Add Website">
+					<TooltipOnHover content="Add website">
 						<Button
-							aria-label="Add Website"
-							onClick={() =>
-								isAtAnyLimit
-									? setShowUpgradeModal(true)
-									: setShowAddDialog(true)
-							}
+							aria-label="Add website"
+							onClick={handleOpenCreate}
 							size="sm"
 							type="button"
 							variant="secondary"
 						>
 							<Icon filledOnHover name="plus" />
-							Add url
+							Add website
 						</Button>
 					</TooltipOnHover>
 				</div>
@@ -122,7 +128,18 @@ export default function WebSourcesPage() {
 
 					{/* Domain Tree - Unified hierarchical view */}
 					{aiAgent && (
-						<DomainTree aiAgentId={aiAgent.id} websiteSlug={website.slug} />
+						<DomainTree
+							aiAgentId={aiAgent.id}
+							emptyState={
+								<TrainingEmptyState
+									actionLabel="Add website"
+									description="Add a website and we'll crawl it for your agent."
+									onAction={handleOpenCreate}
+									title="No websites yet"
+								/>
+							}
+							websiteSlug={website.slug}
+						/>
 					)}
 				</div>
 			</PageContent>

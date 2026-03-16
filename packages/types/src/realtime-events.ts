@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { conversationClarificationSummarySchema } from "./api/knowledge-clarification";
 import { visitorResponseSchema } from "./api/visitor";
 import {
 	ConversationEventType,
@@ -152,6 +153,9 @@ export const realtimeSchema = {
 			resolutionTime: z.number().nullable().optional(),
 			deletedAt: z.string().nullable().optional(),
 			aiPausedUntil: z.string().nullable().optional(),
+			activeClarification: conversationClarificationSummarySchema
+				.nullable()
+				.optional(),
 			viewIds: z.array(z.string()).optional(),
 		}),
 		aiAgentId: z.string().nullable(),

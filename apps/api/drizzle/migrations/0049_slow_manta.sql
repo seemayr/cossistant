@@ -1,0 +1,1 @@
+ALTER TYPE "public"."knowledge_clarification_turn_role" ADD VALUE 'human_skip';

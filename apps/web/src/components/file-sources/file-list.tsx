@@ -3,6 +3,7 @@
 import type { KnowledgeResponse } from "@cossistant/types";
 import { useQuery } from "@tanstack/react-query";
 import { FileTextIcon } from "lucide-react";
+import type * as React from "react";
 import { useTRPC } from "@/lib/trpc/client";
 import { FileListItem } from "./file-list-item";
 
@@ -14,6 +15,7 @@ type FileListProps = {
 	onToggleIncluded: (id: string, isIncluded: boolean) => void;
 	isDeleting?: boolean;
 	isToggling?: boolean;
+	emptyState?: React.ReactNode;
 };
 
 export function FileList({
@@ -24,6 +26,7 @@ export function FileList({
 	onToggleIncluded,
 	isDeleting,
 	isToggling,
+	emptyState,
 }: FileListProps) {
 	const trpc = useTRPC();
 
@@ -53,14 +56,16 @@ export function FileList({
 
 	if (files.length === 0) {
 		return (
-			<div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-12">
-				<FileTextIcon className="mb-4 h-12 w-12 text-muted-foreground/50" />
-				<p className="mb-2 text-center font-medium">No files yet</p>
-				<p className="max-w-md text-center text-muted-foreground text-sm">
-					Add markdown files or documentation to help your AI agent understand
-					your product better.
-				</p>
-			</div>
+			emptyState ?? (
+				<div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-12">
+					<FileTextIcon className="mb-4 h-12 w-12 text-muted-foreground/50" />
+					<p className="mb-2 text-center font-medium">No files yet</p>
+					<p className="max-w-md text-center text-muted-foreground text-sm">
+						Add markdown files or documentation to help your AI agent understand
+						your product better.
+					</p>
+				</div>
+			)
 		);
 	}
 

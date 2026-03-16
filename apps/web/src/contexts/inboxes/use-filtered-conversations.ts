@@ -115,7 +115,12 @@ function categorizeConversation(
 		return "needsHuman";
 	}
 
-	// Category 2: Waiting 8+ hours (last message from visitor, > 8 hours old)
+	// Category 2: Needs clarification from the team
+	if (conversation.activeClarification) {
+		return "needsClarification";
+	}
+
+	// Category 3: Waiting 8+ hours (last message from visitor, > 8 hours old)
 	const lastTimelineItem = conversation.lastTimelineItem;
 
 	if (isInboundVisitorMessage(lastTimelineItem)) {
@@ -126,7 +131,7 @@ function categorizeConversation(
 		}
 	}
 
-	// Category 3: Everything else
+	// Category 4: Everything else
 	return "other";
 }
 
@@ -142,6 +147,7 @@ function buildSmartOrderedList(
 	// Categorize all conversations (O(n))
 	const categorized = new Map<CategoryType, ConversationItem[]>([
 		["needsHuman", []],
+		["needsClarification", []],
 		["waiting8Hours", []],
 		["other", []],
 	]);
@@ -156,7 +162,7 @@ function buildSmartOrderedList(
 		});
 	}
 
-	// Sort "needsHuman" and "waiting8Hours" by priority DESC, then lastMessageAt DESC
+	// Sort "needsHuman", "needsClarification", and "waiting8Hours" by priority DESC, then lastMessageAt DESC
 	const sortByPriorityThenTime = (categoryItems: ConversationItem[]) => {
 		categoryItems.sort((a, b) => {
 			// First by priority (higher priority first)
@@ -209,11 +215,15 @@ function buildSmartOrderedList(
 
 	// Apply appropriate sorting to each category
 	const needsHumanItems = categorized.get("needsHuman");
+	const needsClarificationItems = categorized.get("needsClarification");
 	const waiting8HoursItems = categorized.get("waiting8Hours");
 	const otherItems = categorized.get("other");
 
 	if (needsHumanItems) {
 		sortByPriorityThenTime(needsHumanItems);
+	}
+	if (needsClarificationItems) {
+		sortByPriorityThenTime(needsClarificationItems);
 	}
 	if (waiting8HoursItems) {
 		sortByPriorityThenTime(waiting8HoursItems);
@@ -227,13 +237,16 @@ function buildSmartOrderedList(
 	const conversationIndexMap = new Map<string, number>();
 	const categoryCounts: Record<CategoryType, number> = {
 		needsHuman: needsHumanItems?.length ?? 0,
+		needsClarification: needsClarificationItems?.length ?? 0,
 		waiting8Hours: waiting8HoursItems?.length ?? 0,
 		other: otherItems?.length ?? 0,
 	};
 
 	// Check if we only have "other" conversations - if so, skip headers entirely
 	const hasOnlyOther =
-		categoryCounts.needsHuman === 0 && categoryCounts.waiting8Hours === 0;
+		categoryCounts.needsHuman === 0 &&
+		categoryCounts.needsClarification === 0 &&
+		categoryCounts.waiting8Hours === 0;
 
 	const addCategory = (category: CategoryType, showHeader: boolean) => {
 		const categoryItems = categorized.get(category);
@@ -260,6 +273,7 @@ function buildSmartOrderedList(
 	};
 
 	addCategory("needsHuman", true);
+	addCategory("needsClarification", true);
 	addCategory("waiting8Hours", true);
 	addCategory("other", !hasOnlyOther);
 

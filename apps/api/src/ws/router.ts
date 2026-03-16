@@ -143,10 +143,14 @@ function shouldSendToVisitor<T extends RealtimeEventType>(
 			payload as {
 				updates?: {
 					aiPausedUntil?: string | null;
+					activeClarification?: unknown;
 				};
 			}
 		).updates;
-		if (updates && "aiPausedUntil" in updates) {
+		if (
+			updates &&
+			("aiPausedUntil" in updates || "activeClarification" in updates)
+		) {
 			return false;
 		}
 	}

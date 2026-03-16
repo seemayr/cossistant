@@ -30,6 +30,8 @@ export type AiAgentBehaviorSettings = {
 	canCategorize: boolean;
 	/** Can the AI escalate to human agents */
 	canEscalate: boolean;
+	/** Can the AI start a private knowledge clarification flow for teammates */
+	canRequestKnowledgeClarification: boolean;
 
 	// Escalation config
 	/** Default user to assign when escalating (null = no default) */

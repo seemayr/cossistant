@@ -22,6 +22,8 @@ function getBehaviorSettingValue(
 			return settings.canSetPriority;
 		case "canEscalate":
 			return settings.canEscalate;
+		case "canRequestKnowledgeClarification":
+			return settings.canRequestKnowledgeClarification;
 		case "autoCategorize":
 			return settings.autoCategorize;
 		case "autoGenerateTitle":

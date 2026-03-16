@@ -896,6 +896,11 @@ export const aiAgentBehaviorSettingsSchema = z
 			description: "Whether the AI can escalate conversations to human agents.",
 			example: true,
 		}),
+		canRequestKnowledgeClarification: z.boolean().openapi({
+			description:
+				"Whether the AI can open private knowledge clarification flows for teammates.",
+			example: true,
+		}),
 
 		// Escalation config
 		defaultEscalationUserId: z.string().nullable().openapi({

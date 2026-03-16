@@ -3,14 +3,14 @@
 import type { Mention, MentionType } from "@cossistant/tiny-markdown";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
-import { MentionPopover } from "../../conversation/multimodal-input/mention-popover";
+import { MentionPopover } from "../../conversation/composer/mention-popover";
 import {
 	formatMentionDisplay,
 	type MentionStore,
-} from "../../conversation/multimodal-input/mention-store";
-import { StyledOverlay } from "../../conversation/multimodal-input/styled-overlay";
-import { useMentionEditor } from "../../conversation/multimodal-input/use-mention-editor";
-import { useMentionSearch } from "../../conversation/multimodal-input/use-mention-search";
+} from "../../conversation/composer/mention-store";
+import { StyledOverlay } from "../../conversation/composer/styled-overlay";
+import { useMentionEditor } from "../../conversation/composer/use-mention-editor";
+import { useMentionSearch } from "../../conversation/composer/use-mention-search";
 
 const MENTION_MARKDOWN_REGEX = /\[@([^\]]+)\]\(mention:([^:]+):([^)]+)\)/g;
 

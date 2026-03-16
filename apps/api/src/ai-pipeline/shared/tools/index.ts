@@ -31,6 +31,8 @@ function getBehaviorSettingValue(
 			return settings.autoGenerateTitle;
 		case "canEscalate":
 			return settings.canEscalate;
+		case "canRequestKnowledgeClarification":
+			return settings.canRequestKnowledgeClarification;
 		case "canMarkSpam":
 			return settings.canMarkSpam;
 		case "canResolve":

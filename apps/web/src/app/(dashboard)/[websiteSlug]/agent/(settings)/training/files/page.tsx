@@ -3,6 +3,7 @@
 import type { KnowledgeResponse } from "@cossistant/types";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
+import { TrainingEmptyState } from "@/components/agents/training-empty-state";
 import {
 	AddFileDialog,
 	EditFileDialog,
@@ -67,6 +68,15 @@ export default function FilesPage() {
 		stats?.articleKnowledgeCount !== undefined &&
 		stats.articleKnowledgeCount >= (stats.planLimitFiles ?? 0);
 
+	const handleOpenCreate = useCallback(() => {
+		if (isAtFileLimit) {
+			setShowUpgradeModal(true);
+			return;
+		}
+
+		setShowAddDialog(true);
+	}, [isAtFileLimit]);
+
 	// Mutations hook
 	const {
 		handleCreate,
@@ -125,20 +135,16 @@ export default function FilesPage() {
 			<SettingsHeader>
 				Files
 				<div className="flex items-center gap-2 pr-1">
-					<TooltipOnHover content="Add File">
+					<TooltipOnHover content="Add file">
 						<Button
-							aria-label="Add File"
-							onClick={() =>
-								isAtFileLimit
-									? setShowUpgradeModal(true)
-									: setShowAddDialog(true)
-							}
+							aria-label="Add file"
+							onClick={handleOpenCreate}
 							size="sm"
 							type="button"
 							variant="secondary"
 						>
 							<Icon filledOnHover name="plus" />
-							Add File
+							Add file
 						</Button>
 					</TooltipOnHover>
 				</div>
@@ -170,6 +176,14 @@ export default function FilesPage() {
 					{aiAgent && (
 						<FileList
 							aiAgentId={aiAgent.id}
+							emptyState={
+								<TrainingEmptyState
+									actionLabel="Add file"
+									description="Add a file to give your agent more context."
+									onAction={handleOpenCreate}
+									title="No files yet"
+								/>
+							}
 							isDeleting={isDeleting}
 							isToggling={isToggling}
 							onDelete={handleDelete}

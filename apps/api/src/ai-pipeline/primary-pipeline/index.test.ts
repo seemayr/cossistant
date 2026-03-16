@@ -48,6 +48,10 @@ const runGenerationRuntimeMock = mock((async () => ({
 	toolCallsByName: {},
 	totalToolCalls: 0,
 })) as (...args: unknown[]) => Promise<any>);
+const maybeCreateImmediateClarificationFromSearchGapMock = mock((async () => ({
+	status: "skipped" as const,
+	reason: "no_search" as const,
+})) as (...args: unknown[]) => Promise<any>);
 const trackGenerationUsageMock = mock(async () => {});
 const emitPipelineSeenMock = mock(async () => {});
 const emitPipelineProcessingCompletedMock = mock(async () => {});
@@ -98,6 +102,11 @@ mock.module("../shared/generation", () => ({
 	runGenerationRuntime: runGenerationRuntimeMock,
 }));
 
+mock.module("../shared/knowledge-gap/immediate-clarification", () => ({
+	maybeCreateImmediateClarificationFromSearchGap:
+		maybeCreateImmediateClarificationFromSearchGapMock,
+}));
+
 mock.module("../shared/usage", () => ({
 	trackGenerationUsage: trackGenerationUsageMock,
 }));
@@ -133,6 +142,7 @@ describe("runPrimaryPipeline generation error/skip behavior", () => {
 		runIntakeStepMock.mockClear();
 		runDecisionStepMock.mockClear();
 		runGenerationRuntimeMock.mockClear();
+		maybeCreateImmediateClarificationFromSearchGapMock.mockClear();
 		trackGenerationUsageMock.mockClear();
 		emitPipelineSeenMock.mockClear();
 		emitPipelineProcessingCompletedMock.mockClear();
@@ -189,6 +199,10 @@ describe("runPrimaryPipeline generation error/skip behavior", () => {
 			publicMessagesSent: 1,
 			toolCallsByName: {},
 			totalToolCalls: 0,
+		});
+		maybeCreateImmediateClarificationFromSearchGapMock.mockResolvedValue({
+			status: "skipped",
+			reason: "no_search",
 		});
 		trackGenerationUsageMock.mockResolvedValue(undefined);
 	});
@@ -356,6 +370,37 @@ describe("runPrimaryPipeline generation error/skip behavior", () => {
 
 		expect(result.status).toBe("error");
 		expect(result.retryable).toBe(true);
+	});
+
+	it("advances the cursor after generation errors that happen after durable mutations", async () => {
+		runGenerationRuntimeMock.mockResolvedValueOnce({
+			status: "error",
+			action: {
+				action: "skip",
+				reasoning: "Escalation confirmation failed after mutation",
+				confidence: 1,
+			},
+			error: "Escalation confirmation failed after mutation",
+			failureCode: "runtime_error",
+			publicMessagesSent: 0,
+			toolCallsByName: {
+				escalate: 1,
+			},
+			mutationToolCallsByName: {
+				escalate: 1,
+			},
+			totalToolCalls: 1,
+		});
+
+		const { runPrimaryPipeline } = await modulePromise;
+		const result = await runPrimaryPipeline({
+			db: {} as never,
+			input: baseInput,
+		});
+
+		expect(result.status).toBe("error");
+		expect(result.retryable).toBe(false);
+		expect(result.cursorDisposition).toBe("advance");
 	});
 
 	it("starts the typing heartbeat for public runs and stops it once before send cleanup", async () => {

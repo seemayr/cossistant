@@ -26,6 +26,12 @@ export function buildBehaviorInstructions(
 		instructions.push(escalationInstructions);
 	}
 
+	const clarificationInstructions =
+		buildKnowledgeClarificationInstructions(settings);
+	if (clarificationInstructions) {
+		instructions.push(clarificationInstructions);
+	}
+
 	// Add mode-specific behavior
 	const modeInstructions = buildModeBehaviorInstructions(mode);
 	if (modeInstructions) {
@@ -41,12 +47,20 @@ export function buildEscalationInstructions(
 	return settings.canEscalate ? PROMPT_TEMPLATES.ESCALATION_GUIDELINES : "";
 }
 
+export function buildKnowledgeClarificationInstructions(
+	settings: AiAgentBehaviorSettings
+): string {
+	return settings.canRequestKnowledgeClarification
+		? PROMPT_TEMPLATES.KNOWLEDGE_CLARIFICATION_GUIDELINES
+		: "";
+}
+
 export function buildModeBehaviorInstructions(mode: ResponseMode): string {
 	if (mode === "background_only") {
 		return `## Current Mode: Background Only
 
 You are in background mode. Do NOT send visible messages to the visitor.
-Use sendPrivateMessage() if needed, then finish with respond or skip.`;
+Use private/context actions if needed, including requestKnowledgeClarification when appropriate, then finish with skip.`;
 	}
 
 	return "";

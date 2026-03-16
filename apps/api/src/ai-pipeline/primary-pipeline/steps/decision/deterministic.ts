@@ -118,6 +118,23 @@ export function runDeterministicDecision(
 		};
 	}
 
+	if (
+		triggerMessage.senderType === "human_agent" &&
+		triggerMessage.visibility === "public"
+	) {
+		// Public teammate replies are new context, not implicit execution commands.
+		return {
+			type: "final",
+			result: withConversationState(conversationState, {
+				shouldAct: true,
+				reason:
+					"Public human teammate reply should only trigger silent follow-up work",
+				mode: "background_only",
+				humanCommand: null,
+			}),
+		};
+	}
+
 	return {
 		type: "continue",
 		cleanedTriggerText: tagResult.cleanedText.trim(),

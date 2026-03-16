@@ -7,6 +7,7 @@ export * from "./contact";
 export * from "./conversation";
 export * from "./feedback";
 export * from "./knowledge";
+export * from "./knowledge-clarification";
 export * from "./link-source";
 export * from "./notification";
 export * from "./organization";

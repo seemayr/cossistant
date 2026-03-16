@@ -9,6 +9,8 @@ import {
 import { logAiPipeline } from "../../logger";
 import type { GenerationTokenUsage } from "../generation/contracts";
 import {
+	type GenerationUsagePhase,
+	type GenerationUsageSource,
 	type GenerationUsageTimelinePayload,
 	logGenerationUsageTimeline,
 } from "./timeline";
@@ -33,11 +35,12 @@ export async function trackGenerationUsage(params: {
 	db: import("@api/db").Database;
 	organizationId: string;
 	websiteId: string;
-	conversationId: string;
-	visitorId: string;
-	aiAgentId: string;
-	workflowRunId: string;
-	triggerMessageId: string;
+	conversationId?: string;
+	visitorId?: string;
+	aiAgentId?: string;
+	workflowRunId?: string;
+	usageEventId?: string;
+	triggerMessageId?: string;
 	triggerVisibility?: "public" | "private";
 	modelId: string;
 	modelIdOriginal?: string;
@@ -52,11 +55,22 @@ export async function trackGenerationUsage(params: {
 		| undefined;
 	toolCallsByName?: Record<string, number> | null;
 	chargeableToolCallsByName?: Record<string, number> | null;
+	source?: GenerationUsageSource;
+	phase?: GenerationUsagePhase;
+	knowledgeClarificationRequestId?: string;
+	knowledgeClarificationStepIndex?: number;
 }): Promise<GenerationUsageTrackingResult> {
 	const usageTokens = resolveGenerationTokenUsage({
 		providerUsage: params.providerUsage,
 	});
 	const mode = params.mode ?? "normal";
+	const usageEventId = params.usageEventId ?? params.workflowRunId;
+
+	if (!usageEventId) {
+		throw new Error(
+			"trackGenerationUsage requires usageEventId or workflowRunId"
+		);
+	}
 
 	const effectiveToolCallsByName =
 		params.chargeableToolCallsByName &&
@@ -82,7 +96,7 @@ export async function trackGenerationUsage(params: {
 			const ingestResult = await ingestAiCreditUsage({
 				organizationId: params.organizationId,
 				credits: charge.totalCredits,
-				workflowRunId: params.workflowRunId,
+				workflowRunId: usageEventId,
 				modelId: params.modelId,
 				modelIdOriginal: params.modelIdOriginal,
 				modelMigrationApplied: params.modelMigrationApplied,
@@ -101,13 +115,17 @@ export async function trackGenerationUsage(params: {
 				area: "usage",
 				event: "ingest_failed",
 				level: "warn",
-				conversationId: params.conversationId,
+				conversationId:
+					params.conversationId ??
+					params.knowledgeClarificationRequestId ??
+					undefined,
 				error,
 			});
 		}
 	}
 
 	const timelinePayload: GenerationUsageTimelinePayload = {
+		usageEventId,
 		workflowRunId: params.workflowRunId,
 		triggerMessageId: params.triggerMessageId,
 		triggerVisibility: params.triggerVisibility,
@@ -129,26 +147,35 @@ export async function trackGenerationUsage(params: {
 		ingestStatus,
 		balanceBefore: null,
 		balanceAfterEstimate: null,
+		source: params.source,
+		phase: params.phase,
+		knowledgeClarificationRequestId: params.knowledgeClarificationRequestId,
+		knowledgeClarificationStepIndex: params.knowledgeClarificationStepIndex,
 	};
 
-	try {
-		await logGenerationUsageTimeline({
-			db: params.db,
-			organizationId: params.organizationId,
-			websiteId: params.websiteId,
-			conversationId: params.conversationId,
-			visitorId: params.visitorId,
-			aiAgentId: params.aiAgentId,
-			payload: timelinePayload,
-		});
-	} catch (error) {
-		logAiPipeline({
-			area: "usage",
-			event: "timeline_failed",
-			level: "warn",
-			conversationId: params.conversationId,
-			error,
-		});
+	if (params.conversationId && params.visitorId && params.aiAgentId) {
+		try {
+			await logGenerationUsageTimeline({
+				db: params.db,
+				organizationId: params.organizationId,
+				websiteId: params.websiteId,
+				conversationId: params.conversationId,
+				visitorId: params.visitorId,
+				aiAgentId: params.aiAgentId,
+				payload: timelinePayload,
+			});
+		} catch (error) {
+			logAiPipeline({
+				area: "usage",
+				event: "timeline_failed",
+				level: "warn",
+				conversationId:
+					params.conversationId ??
+					params.knowledgeClarificationRequestId ??
+					undefined,
+				error,
+			});
+		}
 	}
 
 	return {

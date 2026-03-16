@@ -51,6 +51,7 @@ type ConversationItemViewProps = {
 	isLastMessageFromAI?: boolean;
 	waitingSinceLabel?: string | null;
 	needsHumanIntervention?: boolean;
+	needsClarification?: boolean;
 	hasUnreadMessage: boolean;
 	focused?: boolean;
 	rightContent?: ReactNode;
@@ -76,6 +77,7 @@ export function ConversationItemView({
 	isLastMessageFromAI = false,
 	waitingSinceLabel,
 	needsHumanIntervention = false,
+	needsClarification = false,
 	hasUnreadMessage,
 	focused = false,
 	rightContent,
@@ -166,6 +168,10 @@ export function ConversationItemView({
 				) : needsHumanIntervention ? (
 					<span className="shrink-0 font-medium text-cossistant-orange text-xs leading-none">
 						Needs human
+					</span>
+				) : needsClarification ? (
+					<span className="shrink-0 font-medium text-cossistant-orange text-xs leading-none">
+						Clarification needed
 					</span>
 				) : waitingSinceLabel ? (
 					<span className="shrink-0 font-medium text-cossistant-orange text-xs leading-none">
@@ -529,6 +535,10 @@ export function ConversationItem({
 		() => Boolean(header.escalatedAt && !header.escalationHandledAt),
 		[header.escalatedAt, header.escalationHandledAt]
 	);
+	const needsClarification = useMemo(
+		() => Boolean(header.activeClarification) && !needsHumanIntervention,
+		[header.activeClarification, needsHumanIntervention]
+	);
 
 	const headerLastSeenAt = header.lastSeenAt
 		? new Date(header.lastSeenAt)
@@ -557,6 +567,8 @@ export function ConversationItem({
 	// In smart mode, hide "needs human" badge since category header provides this info
 	// But show waiting time label in orange when conversation is in "long waiting" category
 	const showNeedsHuman = !isSmartMode && needsHumanIntervention;
+	const showNeedsClarification =
+		!(isSmartMode || needsHumanIntervention) && needsClarification;
 	// In smart mode, show waiting label inline (without "Waiting for" prefix)
 	const showWaitingLabel = waitingSinceLabel;
 
@@ -571,6 +583,7 @@ export function ConversationItem({
 			lastTimelineContent={lastTimelineContent}
 			lastTimelineItemCreatedAt={lastTimelineItemCreatedAt}
 			locked={isLocked}
+			needsClarification={showNeedsClarification}
 			needsHumanIntervention={showNeedsHuman}
 			onAvatarClick={detailTarget ? handleAvatarClick : undefined}
 			onClick={isLocked ? () => onLockedActivate?.(header.id) : undefined}

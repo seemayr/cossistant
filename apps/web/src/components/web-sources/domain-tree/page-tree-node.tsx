@@ -39,11 +39,9 @@ export function PageTreeNode({
 	isLast,
 	ancestorsAreLastChild,
 }: PageTreeNodeProps) {
-	const depth = ancestorsAreLastChild.length;
-	const [isExpanded, setIsExpanded] = useState(depth < 2);
-	const [, setKnowledgeId] = useQueryState("knowledge", parseAsString);
-
 	const hasChildren = node.children.length > 0;
+	const [isExpanded, setIsExpanded] = useState(() => !hasChildren);
+	const [, setKnowledgeId] = useQueryState("knowledge", parseAsString);
 
 	// Generate the ASCII tree prefix for this node
 	const treePrefix = useMemo(
@@ -91,6 +89,7 @@ export function PageTreeNode({
 				onToggleExpand={handleToggleExpand}
 				onToggleIncluded={handleToggleIncluded}
 				onViewContent={handleViewContent}
+				pageCount={node.descendantCount}
 				path={node.path}
 				sizeBytes={node.sizeBytes}
 				sourceUrl={node.linkSourceUrl}

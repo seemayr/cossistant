@@ -415,4 +415,53 @@ describe("ToolCall", () => {
 		expect(html).toContain("Classified as");
 		expect(html).toContain("billing");
 	});
+
+	it("renders clarification credit usage context in ai credit activity", () => {
+		const html = render(
+			createToolTimelineItem({
+				text: "FAQ draft generation: 240 tokens, 1 credits",
+				parts: [
+					{
+						type: "tool-aiCreditUsage",
+						toolCallId: "call-credits",
+						toolName: "aiCreditUsage",
+						input: {
+							usageEventId: "usage-1",
+							modelId: "moonshotai/kimi-k2.5",
+							source: "knowledge_clarification",
+							phase: "faq_draft_generation",
+						},
+						state: "result",
+						output: {
+							modelId: "moonshotai/kimi-k2.5",
+							baseCredits: 1,
+							modelCredits: 0,
+							toolCredits: 0,
+							totalCredits: 1,
+							billableToolCount: 0,
+							excludedToolCount: 0,
+							totalToolCount: 0,
+							balanceBefore: null,
+							balanceAfterEstimate: null,
+							mode: "normal",
+							ingestStatus: "ingested",
+							inputTokens: 180,
+							outputTokens: 60,
+							totalTokens: 240,
+							tokenSource: "provider",
+							source: "knowledge_clarification",
+							phase: "faq_draft_generation",
+							knowledgeClarificationRequestId: "clar-1",
+							knowledgeClarificationStepIndex: 3,
+						},
+					},
+				],
+				tool: "aiCreditUsage",
+			})
+		);
+
+		expect(html).toContain("Used");
+		expect(html).toContain("FAQ draft generation");
+		expect(html).toContain("Show details");
+	});
 });

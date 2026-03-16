@@ -51,18 +51,13 @@ export async function getKnowledgeByContentHash(
 		websiteId: string;
 		aiAgentId: string | null;
 		contentHash: string;
-		includeSoftDeleted?: boolean;
 	}
 ): Promise<KnowledgeSelect | null> {
 	const conditions = [
 		eq(knowledge.websiteId, params.websiteId),
 		eq(knowledge.contentHash, params.contentHash),
+		isNull(knowledge.deletedAt),
 	];
-
-	// Only filter out deleted entries if not explicitly including them
-	if (!params.includeSoftDeleted) {
-		conditions.push(isNull(knowledge.deletedAt));
-	}
 
 	// Handle null aiAgentId - shared knowledge
 	if (params.aiAgentId === null) {
@@ -248,16 +243,14 @@ export async function upsertKnowledge(
 		params.sizeBytes ??
 		new TextEncoder().encode(JSON.stringify(params.payload)).length;
 
-	// Check if entry with same content hash exists (including soft-deleted)
+	// Check if entry with same content hash exists for the active scope.
 	const existing = await getKnowledgeByContentHash(db, {
 		websiteId: params.websiteId,
 		aiAgentId: params.aiAgentId ?? null,
 		contentHash,
-		includeSoftDeleted: true,
 	});
 
 	if (existing) {
-		// Update existing entry (reactivate if soft-deleted)
 		const [updated] = await db
 			.update(knowledge)
 			.set({
@@ -270,7 +263,6 @@ export async function upsertKnowledge(
 				isIncluded: params.isIncluded ?? true,
 				sizeBytes,
 				updatedAt: now,
-				deletedAt: null, // Reactivate if soft-deleted
 			})
 			.where(eq(knowledge.id, existing.id))
 			.returning();
@@ -424,7 +416,7 @@ export async function updateKnowledge(
 }
 
 /**
- * Soft delete a knowledge entry
+ * Permanently delete a knowledge entry.
  */
 export async function deleteKnowledge(
 	db: Database,
@@ -433,24 +425,40 @@ export async function deleteKnowledge(
 		websiteId: string;
 	}
 ): Promise<boolean> {
-	const now = new Date().toISOString();
-
 	const [entry] = await db
-		.update(knowledge)
-		.set({
-			deletedAt: now,
-			updatedAt: now,
-		})
+		.delete(knowledge)
 		.where(
 			and(
 				eq(knowledge.id, params.id),
-				eq(knowledge.websiteId, params.websiteId),
-				isNull(knowledge.deletedAt)
+				eq(knowledge.websiteId, params.websiteId)
 			)
 		)
 		.returning({ id: knowledge.id });
 
 	return Boolean(entry);
+}
+
+/**
+ * Permanently delete all knowledge entries for a link source.
+ */
+export async function deleteKnowledgeByLinkSource(
+	db: Database,
+	params: {
+		linkSourceId: string;
+		websiteId: string;
+	}
+): Promise<number> {
+	const deletedEntries = await db
+		.delete(knowledge)
+		.where(
+			and(
+				eq(knowledge.linkSourceId, params.linkSourceId),
+				eq(knowledge.websiteId, params.websiteId)
+			)
+		)
+		.returning({ id: knowledge.id });
+
+	return deletedEntries.length;
 }
 
 /**

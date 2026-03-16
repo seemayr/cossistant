@@ -139,6 +139,8 @@ export type CrawlResult = {
 	success: boolean;
 	jobId?: string;
 	error?: string;
+	statusCode?: number;
+	retryable?: boolean;
 };
 
 export type CrawlStatus = {
@@ -148,6 +150,8 @@ export type CrawlStatus = {
 		completed: number;
 		total: number;
 	};
+	materializedPageCount?: number;
+	paginationTruncated?: boolean;
 	pages?: Array<{
 		url: string;
 		title: string | null;
@@ -155,6 +159,8 @@ export type CrawlStatus = {
 		sizeBytes: number;
 	}>;
 	error?: string;
+	statusCode?: number;
+	retryable?: boolean;
 };
 
 export type CrawlErrorDetails = {
@@ -398,6 +404,37 @@ function retryDelayMs(attempt: number): number {
 	return Math.min(exponential + jitter, 5000);
 }
 
+function isRetryableStatusCode(statusCode: number): boolean {
+	return RETRYABLE_STATUS_CODES.has(statusCode);
+}
+
+function buildHttpFailureResult(
+	statusCode: number,
+	errorText: string
+): {
+	error: string;
+	statusCode: number;
+	retryable?: boolean;
+} {
+	return {
+		error: `Firecrawl API error: ${statusCode} ${errorText}`,
+		statusCode,
+		retryable: isRetryableStatusCode(statusCode) || undefined,
+	};
+}
+
+function buildThrownFailureResult(error: unknown): {
+	error: string;
+	retryable?: boolean;
+} {
+	const message = error instanceof Error ? error.message : "Unknown error";
+	const retryable = isRetryableError(error);
+	return {
+		error: message,
+		retryable: retryable || undefined,
+	};
+}
+
 function resolvePageUrl(metadata?: FirecrawlPageMetadata): string | null {
 	return metadata?.sourceURL ?? metadata?.sourceUrl ?? metadata?.url ?? null;
 }
@@ -442,6 +479,24 @@ function normalizePages(pages: FirecrawlPageData[] | undefined): Array<{
 	}
 
 	return Array.from(dedupedByUrl.values());
+}
+
+function countMaterializedPages(
+	pages: FirecrawlPageData[] | undefined
+): number {
+	if (!pages || pages.length === 0) {
+		return 0;
+	}
+
+	const urls = new Set<string>();
+	for (const page of pages) {
+		const sourceUrl = resolvePageUrl(page.metadata);
+		if (sourceUrl) {
+			urls.add(sourceUrl);
+		}
+	}
+
+	return urls.size;
 }
 
 /**
@@ -522,18 +577,33 @@ export class FirecrawlService {
 		return truncateErrorBody(body || "No error body");
 	}
 
-	private async collectPaginatedPages(
-		nextUrl?: string
-	): Promise<FirecrawlPageData[]> {
+	private async collectPaginatedPages(nextUrl?: string): Promise<{
+		pages: FirecrawlPageData[];
+		truncated: boolean;
+	}> {
 		if (!nextUrl) {
-			return [];
+			return {
+				pages: [],
+				truncated: false,
+			};
 		}
 
 		const pages: FirecrawlPageData[] = [];
 		let cursor: string | undefined = nextUrl;
 		let requests = 0;
+		let truncated = false;
+		const seenCursors = new Set<string>();
 
 		while (cursor && requests < FIRECRAWL_MAX_PAGINATION_REQUESTS) {
+			if (seenCursors.has(cursor)) {
+				truncated = true;
+				console.warn(
+					"[firecrawl] Pagination stopped after Firecrawl returned a repeated cursor."
+				);
+				break;
+			}
+
+			seenCursors.add(cursor);
 			requests++;
 
 			const response = await this.requestWithRetry(cursor, {
@@ -564,13 +634,17 @@ export class FirecrawlService {
 			cursor = data.next;
 		}
 
-		if (cursor) {
+		if (cursor && !truncated) {
+			truncated = true;
 			console.warn(
 				"[firecrawl] Pagination truncated after max requests. Consider reducing crawl scope."
 			);
 		}
 
-		return pages;
+		return {
+			pages,
+			truncated,
+		};
 	}
 
 	/**
@@ -599,6 +673,7 @@ export class FirecrawlService {
 			return {
 				success: false,
 				error: "Firecrawl API key not configured",
+				retryable: false,
 			};
 		}
 
@@ -658,7 +733,7 @@ export class FirecrawlService {
 				const errorText = await this.readErrorBody(response);
 				return {
 					success: false,
-					error: `Firecrawl API error: ${response.status} ${errorText}`,
+					...buildHttpFailureResult(response.status, errorText),
 				};
 			}
 
@@ -668,6 +743,7 @@ export class FirecrawlService {
 				return {
 					success: false,
 					error: data.error ?? "Unknown error starting crawl",
+					retryable: false,
 				};
 			}
 
@@ -676,10 +752,11 @@ export class FirecrawlService {
 				jobId: data.id,
 			};
 		} catch (error) {
-			const message = error instanceof Error ? error.message : "Unknown error";
+			const failure = buildThrownFailureResult(error);
 			return {
 				success: false,
-				error: `Failed to start crawl: ${message}`,
+				error: `Failed to start crawl: ${failure.error}`,
+				retryable: failure.retryable,
 			};
 		}
 	}
@@ -695,6 +772,7 @@ export class FirecrawlService {
 			return {
 				status: "failed",
 				error: "Firecrawl API key not configured",
+				retryable: false,
 			};
 		}
 
@@ -710,7 +788,7 @@ export class FirecrawlService {
 				const errorText = await this.readErrorBody(response);
 				return {
 					status: "failed",
-					error: `Firecrawl API error: ${response.status} ${errorText}`,
+					...buildHttpFailureResult(response.status, errorText),
 				};
 			}
 
@@ -720,6 +798,7 @@ export class FirecrawlService {
 				return {
 					status: "failed",
 					error: data.error ?? "Invalid response checking crawl status",
+					retryable: false,
 				};
 			}
 
@@ -734,14 +813,15 @@ export class FirecrawlService {
 			const status = statusMap[data.status] ?? "pending";
 
 			let allPages = data.data ?? [];
+			let paginationTruncated = false;
 			if (options.includeAllPages && data.next) {
-				allPages = [
-					...allPages,
-					...(await this.collectPaginatedPages(data.next)),
-				];
+				const paginatedResult = await this.collectPaginatedPages(data.next);
+				allPages = [...allPages, ...paginatedResult.pages];
+				paginationTruncated = paginatedResult.truncated;
 			}
 
 			const normalizedPages = normalizePages(allPages);
+			const materializedPageCount = countMaterializedPages(allPages);
 			const result: CrawlStatus = {
 				status,
 				rawStatus: data.status ?? null,
@@ -752,19 +832,24 @@ export class FirecrawlService {
 								total: data.total,
 							}
 						: undefined,
+				materializedPageCount:
+					materializedPageCount > 0 ? materializedPageCount : undefined,
+				paginationTruncated: paginationTruncated || undefined,
 				pages: normalizedPages.length > 0 ? normalizedPages : undefined,
 			};
 
 			if (status === "failed") {
 				result.error = data.error ?? "Crawl failed";
+				result.retryable = false;
 			}
 
 			return result;
 		} catch (error) {
-			const message = error instanceof Error ? error.message : "Unknown error";
+			const failure = buildThrownFailureResult(error);
 			return {
 				status: "failed",
-				error: `Failed to get crawl status: ${message}`,
+				error: `Failed to get crawl status: ${failure.error}`,
+				retryable: failure.retryable,
 			};
 		}
 	}
@@ -1004,10 +1089,8 @@ export class FirecrawlService {
 
 			let allPages = data.data ?? [];
 			if (options.includeAllPages && data.next) {
-				allPages = [
-					...allPages,
-					...(await this.collectPaginatedPages(data.next)),
-				];
+				const paginatedResult = await this.collectPaginatedPages(data.next);
+				allPages = [...allPages, ...paginatedResult.pages];
 			}
 
 			const normalizedPages = normalizePages(allPages);

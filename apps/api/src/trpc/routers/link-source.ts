@@ -1,9 +1,10 @@
 import {
+	deleteKnowledge,
+	deleteKnowledgeByLinkSource,
 	getKnowledgeById,
 	getKnowledgeCountByType,
 	getTotalKnowledgeSizeBytes,
 	getTotalUrlKnowledgeCount,
-	listKnowledge,
 	listKnowledgeByLinkSource,
 	updateKnowledge,
 	upsertKnowledge,
@@ -19,7 +20,6 @@ import {
 	updateLinkSource,
 } from "@api/db/queries/link-source";
 import { getWebsiteBySlugWithAccess } from "@api/db/queries/website";
-import { knowledge } from "@api/db/schema/knowledge";
 import type { LinkSourceSelect } from "@api/db/schema/link-source";
 import { getPlanForWebsite } from "@api/lib/plans/access";
 import { firecrawlService } from "@api/services/firecrawl";
@@ -45,9 +45,9 @@ import {
 	trainingStatsResponseSchema,
 } from "@cossistant/types";
 import { TRPCError } from "@trpc/server";
-import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "../init";
+import { removeLinkSourceKnowledgePage } from "./link-source-cleanup";
 
 function toLinkSourceResponse(entry: LinkSourceSelect): LinkSourceResponse {
 	return {
@@ -293,7 +293,7 @@ export const linkSourceRouter = createTRPCRouter({
 		}),
 
 	/**
-	 * Delete a link source (soft delete)
+	 * Delete a link source
 	 */
 	delete: protectedProcedure
 		.input(deleteLinkSourceRequestSchema)
@@ -357,19 +357,11 @@ export const linkSourceRouter = createTRPCRouter({
 				}
 			}
 
-			// Soft delete associated knowledge entries
-			const now = new Date().toISOString();
-			await db
-				.update(knowledge)
-				.set({
-					deletedAt: now,
-					updatedAt: now,
-				})
-				.where(
-					and(eq(knowledge.linkSourceId, input.id), isNull(knowledge.deletedAt))
-				);
+			await deleteKnowledgeByLinkSource(db, {
+				linkSourceId: input.id,
+				websiteId: websiteData.id,
+			});
 
-			// Soft delete the link source
 			const deleted = await deleteLinkSource(db, {
 				id: input.id,
 				websiteId: websiteData.id,
@@ -928,7 +920,7 @@ export const linkSourceRouter = createTRPCRouter({
 		}),
 
 	/**
-	 * Ignore a page - adds URL to ignoredUrls array and soft-deletes the knowledge entry
+	 * Ignore a page - adds URL to ignoredUrls array and removes the knowledge entry
 	 */
 	ignorePage: protectedProcedure
 		.input(ignorePageRequestSchema)
@@ -979,27 +971,29 @@ export const linkSourceRouter = createTRPCRouter({
 				});
 			}
 
-			// Add URL to ignoredUrls
-			const currentIgnored = linkSourceEntry.ignoredUrls ?? [];
-			if (!currentIgnored.includes(knowledgeEntry.sourceUrl)) {
-				await updateLinkSource(db, {
-					id: input.linkSourceId,
-					websiteId: websiteData.id,
-					ignoredUrls: [...currentIgnored, knowledgeEntry.sourceUrl],
+			if (knowledgeEntry.linkSourceId !== input.linkSourceId) {
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message: "Knowledge entry does not belong to this link source",
 				});
 			}
 
-			// Soft-delete the knowledge entry
-			const now = new Date().toISOString();
-			await db
-				.update(knowledge)
-				.set({
-					deletedAt: now,
-					updatedAt: now,
-				})
-				.where(
-					and(eq(knowledge.id, input.knowledgeId), isNull(knowledge.deletedAt))
-				);
+			const deleted = await removeLinkSourceKnowledgePage({
+				db,
+				websiteId: websiteData.id,
+				linkSourceId: input.linkSourceId,
+				knowledgeId: input.knowledgeId,
+				sourceUrl: knowledgeEntry.sourceUrl,
+				ignoredUrls: linkSourceEntry.ignoredUrls ?? null,
+				ignoreFutureCrawls: true,
+			});
+
+			if (!deleted) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Knowledge entry not found",
+				});
+			}
 
 			return { success: true };
 		}),
@@ -1147,17 +1141,27 @@ export const linkSourceRouter = createTRPCRouter({
 				});
 			}
 
-			// Soft-delete the knowledge entry
-			const now = new Date().toISOString();
-			await db
-				.update(knowledge)
-				.set({
-					deletedAt: now,
-					updatedAt: now,
-				})
-				.where(
-					and(eq(knowledge.id, input.knowledgeId), isNull(knowledge.deletedAt))
-				);
+			const deleted = knowledgeEntry.linkSourceId
+				? await removeLinkSourceKnowledgePage({
+						db,
+						websiteId: websiteData.id,
+						linkSourceId: knowledgeEntry.linkSourceId,
+						knowledgeId: input.knowledgeId,
+						sourceUrl: knowledgeEntry.sourceUrl,
+						ignoredUrls: null,
+						ignoreFutureCrawls: false,
+					})
+				: await deleteKnowledge(db, {
+						id: input.knowledgeId,
+						websiteId: websiteData.id,
+					});
+
+			if (!deleted) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Knowledge entry not found",
+				});
+			}
 
 			return { success: true };
 		}),

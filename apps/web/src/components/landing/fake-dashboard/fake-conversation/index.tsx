@@ -1,6 +1,6 @@
 import type { ConversationHeader as ConversationHeaderType } from "@cossistant/types";
 import { type RefObject, useRef } from "react";
-import { EscalationAction } from "@/components/conversation/multimodal-input/escalation-action";
+import { EscalationAction } from "@/components/conversation/composer/escalation-action";
 import { Page } from "@/components/ui/layout";
 import type { ConversationHeader } from "@/contexts/inboxes";
 import type { ConversationTimelineItem } from "@/data/conversation-message-cache";

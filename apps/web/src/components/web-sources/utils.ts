@@ -31,6 +31,7 @@ export type MergedPageNode = {
 	isIncluded: boolean;
 	sizeBytes: number;
 	updatedAt: string;
+	descendantCount: number;
 	children: MergedPageNode[];
 };
 
@@ -101,6 +102,7 @@ export function buildMergedDomainTree(
 				isIncluded: page.isIncluded,
 				sizeBytes: page.sizeBytes,
 				updatedAt: page.updatedAt,
+				descendantCount: 0,
 				children: [],
 			};
 
@@ -137,6 +139,7 @@ export function buildMergedDomainTree(
 				isIncluded: page.isIncluded,
 				sizeBytes: page.sizeBytes,
 				updatedAt: page.updatedAt,
+				descendantCount: 0,
 				children: [],
 			});
 		}
@@ -153,6 +156,21 @@ export function buildMergedDomainTree(
 	};
 
 	sortNodes(root);
+
+	const setDescendantCounts = (node: MergedPageNode): number => {
+		let totalDescendants = 0;
+
+		for (const child of node.children) {
+			totalDescendants += 1 + setDescendantCounts(child);
+		}
+
+		node.descendantCount = totalDescendants;
+		return totalDescendants;
+	};
+
+	for (const node of root) {
+		setDescendantCounts(node);
+	}
 
 	return root;
 }

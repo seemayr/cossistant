@@ -7,17 +7,14 @@ import {
 	VisitorSidebar,
 	type VisitorSidebarProps,
 } from "../ui/layout/sidebars/visitor/visitor-sidebar";
-import { ConversationHeader, type ConversationHeaderProps } from "./header";
-import { ConversationTimelineList } from "./messages/conversation-timeline";
-import { MultimodalInput, type MultimodalInputProps } from "./multimodal-input";
+import { Composer, type ComposerProps } from "./composer";
 import {
 	EscalationAction,
 	type EscalationActionProps,
-} from "./multimodal-input/escalation-action";
-import {
-	LimitAction,
-	type LimitActionProps,
-} from "./multimodal-input/limit-action";
+} from "./composer/escalation-action";
+import { LimitAction, type LimitActionProps } from "./composer/limit-action";
+import { ConversationHeader, type ConversationHeaderProps } from "./header";
+import { ConversationTimelineList } from "./messages/conversation-timeline";
 
 type ConversationTimelineProps = ComponentProps<
 	typeof ConversationTimelineList
@@ -26,7 +23,7 @@ type ConversationTimelineProps = ComponentProps<
 export type ConversationProps = {
 	header: ConversationHeaderProps;
 	timeline: ConversationTimelineProps;
-	input: MultimodalInputProps;
+	input: ComposerProps;
 	visitorSidebar: VisitorSidebarProps;
 	/** If set, shows escalation action instead of input */
 	escalation?: EscalationActionProps | null;
@@ -55,7 +52,7 @@ export function Conversation({
 				) : limitAction ? (
 					<LimitAction {...limitAction} onHeightChange={setInputHeight} />
 				) : (
-					<MultimodalInput {...input} onHeightChange={setInputHeight} />
+					<Composer {...input} onHeightChange={setInputHeight} />
 				)}
 			</Page>
 			<VisitorSidebar {...visitorSidebar} />

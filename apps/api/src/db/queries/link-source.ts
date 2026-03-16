@@ -1,4 +1,5 @@
 import type { Database } from "@api/db";
+import { knowledge } from "@api/db/schema/knowledge";
 import {
 	type LinkSourceInsert,
 	type LinkSourceSelect,
@@ -269,7 +270,7 @@ export async function updateLinkSource(
 }
 
 /**
- * Soft delete a link source
+ * Permanently delete a link source.
  */
 export async function deleteLinkSource(
 	db: Database,
@@ -278,24 +279,50 @@ export async function deleteLinkSource(
 		websiteId: string;
 	}
 ): Promise<boolean> {
-	const now = new Date().toISOString();
-
 	const [entry] = await db
-		.update(linkSource)
-		.set({
-			deletedAt: now,
-			updatedAt: now,
-		})
+		.delete(linkSource)
 		.where(
 			and(
 				eq(linkSource.id, params.id),
-				eq(linkSource.websiteId, params.websiteId),
-				isNull(linkSource.deletedAt)
+				eq(linkSource.websiteId, params.websiteId)
 			)
 		)
 		.returning({ id: linkSource.id });
 
 	return Boolean(entry);
+}
+
+/**
+ * Recalculate persisted link source stats from live URL knowledge rows.
+ */
+export async function syncLinkSourceStatsFromKnowledge(
+	db: Database,
+	params: {
+		id: string;
+		websiteId: string;
+	}
+): Promise<LinkSourceSelect | null> {
+	const [result] = await db
+		.select({
+			crawledPagesCount: count(),
+			totalSizeBytes: sql<number>`COALESCE(SUM(${knowledge.sizeBytes}), 0)`,
+		})
+		.from(knowledge)
+		.where(
+			and(
+				eq(knowledge.websiteId, params.websiteId),
+				eq(knowledge.linkSourceId, params.id),
+				eq(knowledge.type, "url"),
+				isNull(knowledge.deletedAt)
+			)
+		);
+
+	return updateLinkSource(db, {
+		id: params.id,
+		websiteId: params.websiteId,
+		crawledPagesCount: Number(result?.crawledPagesCount ?? 0),
+		totalSizeBytes: Number(result?.totalSizeBytes ?? 0),
+	});
 }
 
 /**

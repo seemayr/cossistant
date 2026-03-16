@@ -134,6 +134,35 @@ describe("runDeterministicDecision", () => {
 			},
 		});
 	});
+
+	it("routes public human replies into silent background follow-up", () => {
+		const result = runDeterministicDecision(
+			createInput({
+				triggerMessage: {
+					messageId: "msg-6",
+					content: "When you hit your seat limit, each extra seat is $10/mo.",
+					senderType: "human_agent",
+					senderId: "user-1",
+					senderName: "Support Agent",
+					timestamp: "2026-03-05T00:00:00.000Z",
+					visibility: "public",
+				},
+			})
+		);
+
+		expect(result).toEqual({
+			type: "final",
+			result: {
+				shouldAct: true,
+				reason:
+					"Public human teammate reply should only trigger silent follow-up work",
+				mode: "background_only",
+				humanCommand: null,
+				isEscalated: false,
+				escalationReason: null,
+			},
+		});
+	});
 });
 
 describe("mapSmartDecisionToDecisionResult", () => {

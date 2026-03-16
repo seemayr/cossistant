@@ -152,6 +152,8 @@ export function buildBehaviorSettingsPatch(
 			return { canSetPriority: value };
 		case "canEscalate":
 			return { canEscalate: value };
+		case "canRequestKnowledgeClarification":
+			return { canRequestKnowledgeClarification: value };
 		case "autoGenerateTitle":
 			return { autoGenerateTitle: value };
 		case "autoAnalyzeSentiment":

@@ -47,9 +47,17 @@ type TestContext = {
 		finalAction: null;
 		publicMessagesSent: number;
 		toolCallCounts: Record<string, number>;
+		mutationToolCallCounts: Record<string, number>;
 		successfulToolCallCounts: Record<string, number>;
 		failedToolCallCounts: Record<string, number>;
 		chargeableToolCallCounts: Record<string, number>;
+		toolExecutions: Array<{
+			toolName: string;
+			state: "result" | "error";
+			input: Record<string, unknown>;
+			output?: unknown;
+			errorText?: string;
+		}>;
 		publicSendSequence: number;
 		privateSendSequence: number;
 		sentPublicMessageIds: Set<string>;
@@ -91,9 +99,11 @@ function createContext(overrides: Partial<TestContext> = {}): TestContext {
 			finalAction: null,
 			publicMessagesSent: 0,
 			toolCallCounts: {},
+			mutationToolCallCounts: {},
 			successfulToolCallCounts: {},
 			failedToolCallCounts: {},
 			chargeableToolCallCounts: {},
+			toolExecutions: [],
 			publicSendSequence: 0,
 			privateSendSequence: 0,
 			sentPublicMessageIds: new Set<string>(),

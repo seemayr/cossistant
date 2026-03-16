@@ -5,6 +5,7 @@ import {
 	forEachConversationHeadersQuery,
 	updateConversationHeaderInCache,
 } from "@/data/conversation-header-cache";
+import { invalidateActiveConversationClarificationQuery } from "@/data/knowledge-clarification-cache";
 import type { DashboardRealtimeContext } from "../types";
 
 type ConversationUpdatedEvent = RealtimeEvent<"conversationUpdated">;
@@ -54,6 +55,13 @@ export function handleConversationUpdated({
 	}
 
 	const headerUpdater = createHeaderUpdaterFromUpdates(updates);
+
+	if (updates.activeClarification !== undefined) {
+		invalidateActiveConversationClarificationQuery(queryClient, {
+			websiteSlug: website.slug,
+			conversationId,
+		});
+	}
 
 	forEachConversationHeadersQuery(queryClient, website.slug, (queryKey) => {
 		updateConversationHeaderInCache(
@@ -131,6 +139,10 @@ function createHeaderUpdaterFromUpdates(
 
 		if (updates.aiPausedUntil !== undefined) {
 			updatedHeader.aiPausedUntil = updates.aiPausedUntil;
+		}
+
+		if (updates.activeClarification !== undefined) {
+			updatedHeader.activeClarification = updates.activeClarification;
 		}
 
 		return ensureDashboardConversationLockRedaction(updatedHeader);

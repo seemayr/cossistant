@@ -3,6 +3,7 @@
 import type { KnowledgeResponse } from "@cossistant/types";
 import { useQuery } from "@tanstack/react-query";
 import { HelpCircleIcon } from "lucide-react";
+import type * as React from "react";
 import { useTRPC } from "@/lib/trpc/client";
 import { FaqListItem } from "./faq-list-item";
 
@@ -10,20 +11,24 @@ type FaqListProps = {
 	websiteSlug: string;
 	aiAgentId: string | null;
 	onEdit: (faq: KnowledgeResponse) => void;
+	onDeepen: (faq: KnowledgeResponse) => void;
 	onDelete: (id: string) => void;
 	onToggleIncluded: (id: string, isIncluded: boolean) => void;
 	isDeleting?: boolean;
 	isToggling?: boolean;
+	emptyState?: React.ReactNode;
 };
 
 export function FaqList({
 	websiteSlug,
 	aiAgentId,
 	onEdit,
+	onDeepen,
 	onDelete,
 	onToggleIncluded,
 	isDeleting,
 	isToggling,
+	emptyState,
 }: FaqListProps) {
 	const trpc = useTRPC();
 
@@ -53,14 +58,16 @@ export function FaqList({
 
 	if (faqs.length === 0) {
 		return (
-			<div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-12">
-				<HelpCircleIcon className="mb-4 h-12 w-12 text-muted-foreground/50" />
-				<p className="mb-2 text-center font-medium">No FAQs yet</p>
-				<p className="max-w-md text-center text-muted-foreground text-sm">
-					Add frequently asked questions and answers to help your AI agent
-					respond to common customer inquiries.
-				</p>
-			</div>
+			emptyState ?? (
+				<div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-12">
+					<HelpCircleIcon className="mb-4 h-12 w-12 text-muted-foreground/50" />
+					<p className="mb-2 text-center font-medium">No FAQs yet</p>
+					<p className="max-w-md text-center text-muted-foreground text-sm">
+						Add frequently asked questions and answers to help your AI agent
+						respond to common customer inquiries.
+					</p>
+				</div>
+			)
 		);
 	}
 
@@ -72,6 +79,7 @@ export function FaqList({
 					isDeleting={isDeleting}
 					isToggling={isToggling}
 					key={faq.id}
+					onDeepen={onDeepen}
 					onDelete={onDelete}
 					onEdit={onEdit}
 					onToggleIncluded={onToggleIncluded}

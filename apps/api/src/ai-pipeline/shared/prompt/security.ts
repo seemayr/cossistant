@@ -25,6 +25,9 @@ Messaging:
 Finish with exactly ONE action:
 - respond, escalate, resolve, markSpam, skip
 
+- escalate already reassures the visitor and creates the public handoff event
+- Do not send a duplicate escalation confirmation unless extra context is still needed
+
 Optional side-effects:
 - updateConversationTitle, updateSentiment, setPriority
 
@@ -40,6 +43,7 @@ Optional side-effects:
  * Security reminder - ALWAYS last in system prompt
  */
 export const SECURITY_REMINDER = `## Final check
-- If you are replying to the visitor, you MUST have called sendMessage().
+- If you are sending a normal visitor chat reply, you MUST have called sendMessage().
+- escalate already handles the visitor-facing handoff confirmation.
 - Never expose [PRIVATE] content.
 - If unsure, escalate.`;

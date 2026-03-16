@@ -1,6 +1,6 @@
-import { and, cosineDistance, desc, eq, gt, sql } from "drizzle-orm";
+import { and, cosineDistance, desc, eq, gt, isNull, sql } from "drizzle-orm";
 import type { Database } from "../db";
-import { chunk } from "../db/schema";
+import { chunk, knowledge } from "../db/schema";
 import { generateEmbedding } from "../lib/embedding-client";
 
 export type SourceType = "knowledge" | "visitor_memory" | "contact_memory";
@@ -117,11 +117,38 @@ export async function findSimilarKnowledge(
 	websiteId: string,
 	options?: Omit<VectorSearchOptions, "websiteId" | "sourceType">
 ): Promise<ChunkSearchResult[]> {
-	return findSimilarChunks(db, query, {
-		...options,
-		websiteId,
-		sourceType: "knowledge",
-	});
+	const { knowledgeId, minSimilarity = 0.3, limit = 10 } = options ?? {};
+
+	const queryEmbedding = await generateEmbedding(query);
+	const similarity = sql<number>`1 - (${cosineDistance(chunk.embedding, queryEmbedding)})`;
+	const conditions = [
+		eq(chunk.websiteId, websiteId),
+		eq(chunk.sourceType, "knowledge"),
+		isNull(knowledge.deletedAt),
+		gt(similarity, minSimilarity),
+	];
+
+	if (knowledgeId) {
+		conditions.push(eq(chunk.knowledgeId, knowledgeId));
+	}
+
+	return db
+		.select({
+			id: chunk.id,
+			content: chunk.content,
+			metadata: chunk.metadata,
+			similarity,
+			sourceType: chunk.sourceType,
+			knowledgeId: chunk.knowledgeId,
+			visitorId: chunk.visitorId,
+			contactId: chunk.contactId,
+			chunkIndex: chunk.chunkIndex,
+		})
+		.from(chunk)
+		.innerJoin(knowledge, eq(chunk.knowledgeId, knowledge.id))
+		.where(and(...conditions))
+		.orderBy(desc(similarity))
+		.limit(limit);
 }
 
 export type FindSimilarVisitorMemoriesOptions = {

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { conversationClarificationSummarySchema } from "../api/knowledge-clarification";
 import { timelineItemSchema } from "../api/timeline-item";
 import { visitorProfileSchema } from "../api/visitor";
 import {
@@ -108,6 +109,7 @@ export const conversationHeaderSchema = z.object({
 	lastSeenAt: z.string().nullable(),
 	lastMessageTimelineItem: timelineItemSchema.nullable(),
 	lastTimelineItem: timelineItemSchema.nullable(),
+	activeClarification: conversationClarificationSummarySchema.nullable(),
 	dashboardLocked: z.boolean().optional(),
 	dashboardLockReason: z
 		.union([z.literal("conversation_limit"), z.null()])

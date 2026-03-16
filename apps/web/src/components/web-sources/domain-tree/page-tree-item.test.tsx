@@ -11,6 +11,7 @@ function renderPageTreeItem(
 			hasChildren={false}
 			isExpanded={false}
 			isIncluded
+			pageCount={0}
 			path="/docs/getting-started/installation"
 			sizeBytes={2048}
 			title="Installation"
@@ -45,5 +46,30 @@ describe("PageTreeItemView", () => {
 		expect(html).toContain(
 			'title="https://example.com/docs/getting-started/installation"'
 		);
+	});
+
+	it("renders the page size inline after the title", () => {
+		const html = renderPageTreeItem();
+
+		expect(html).toMatch(
+			/Installation<\/span><span class="[^"]*text-muted-foreground text-xs">2 KB<\/span>/
+		);
+	});
+
+	it("caps the title width so long titles truncate", () => {
+		const html = renderPageTreeItem();
+
+		expect(html).toContain("max-w-[50px] shrink-0 truncate");
+	});
+
+	it("shows descendant count text and a persistent expand control for rows with children", () => {
+		const html = renderPageTreeItem({
+			hasChildren: true,
+			pageCount: 3,
+		});
+
+		expect(html).toContain(">3 pages</span>");
+		expect(html).toContain('aria-label="Expand pages"');
+		expect(html).toContain("lucide-chevron-right");
 	});
 });

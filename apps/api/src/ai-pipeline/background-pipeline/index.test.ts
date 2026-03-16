@@ -15,6 +15,7 @@ const getBehaviorSettingsMock = mock(() => ({
 	canSetPriority: true,
 	autoCategorize: false,
 	canCategorize: false,
+	canRequestKnowledgeClarification: true,
 }));
 const listActiveWebsiteViewsMock = mock(
 	(async (): Promise<
@@ -104,6 +105,10 @@ const runGenerationRuntimeMock = mock((async () => ({
 	},
 	totalToolCalls: 2,
 })) as (...args: unknown[]) => Promise<any>);
+const runBackgroundKnowledgeGapReviewMock = mock((async () => ({
+	status: "skipped" as const,
+	reason: "no_candidate_gap" as const,
+})) as (...args: unknown[]) => Promise<any>);
 
 mock.module("../logger", () => ({
 	logAiPipeline: logAiPipelineMock,
@@ -132,6 +137,10 @@ mock.module("../primary-pipeline/steps/intake/load-context", () => ({
 
 mock.module("../shared/generation", () => ({
 	runGenerationRuntime: runGenerationRuntimeMock,
+}));
+
+mock.module("./knowledge-gap-review", () => ({
+	runBackgroundKnowledgeGapReview: runBackgroundKnowledgeGapReviewMock,
 }));
 
 mock.module("../shared/events", () => ({
@@ -168,6 +177,7 @@ describe("runBackgroundPipeline", () => {
 		loadIntakeContextMock.mockReset();
 		emitPipelineProcessingCompletedMock.mockReset();
 		runGenerationRuntimeMock.mockReset();
+		runBackgroundKnowledgeGapReviewMock.mockReset();
 
 		getAiAgentByIdMock.mockResolvedValue({
 			id: "ai-1",
@@ -183,6 +193,7 @@ describe("runBackgroundPipeline", () => {
 			canSetPriority: true,
 			autoCategorize: false,
 			canCategorize: false,
+			canRequestKnowledgeClarification: true,
 		});
 		listActiveWebsiteViewsMock.mockReset();
 		listActiveWebsiteViewsMock.mockResolvedValue([]);
@@ -244,6 +255,10 @@ describe("runBackgroundPipeline", () => {
 			},
 			totalToolCalls: 2,
 		});
+		runBackgroundKnowledgeGapReviewMock.mockResolvedValue({
+			status: "skipped",
+			reason: "no_candidate_gap",
+		});
 	});
 
 	it("skips when no background analysis capabilities are enabled", async () => {
@@ -253,6 +268,7 @@ describe("runBackgroundPipeline", () => {
 			canSetPriority: false,
 			autoCategorize: false,
 			canCategorize: false,
+			canRequestKnowledgeClarification: false,
 		});
 
 		const { runBackgroundPipeline } = await modulePromise;
@@ -298,6 +314,7 @@ describe("runBackgroundPipeline", () => {
 				triggerMessageCreatedAt: "2026-03-04T10:05:00.000Z",
 				allowPublicMessages: false,
 				toolAllowlist: [
+					"requestKnowledgeClarification",
 					"updateConversationTitle",
 					"updateSentiment",
 					"setPriority",
@@ -355,6 +372,7 @@ describe("runBackgroundPipeline", () => {
 			canSetPriority: false,
 			autoCategorize: true,
 			canCategorize: true,
+			canRequestKnowledgeClarification: true,
 		});
 		listActiveWebsiteViewsMock.mockResolvedValueOnce([
 			{
@@ -377,7 +395,11 @@ describe("runBackgroundPipeline", () => {
 		});
 		expect(runGenerationRuntimeMock).toHaveBeenCalledWith(
 			expect.objectContaining({
-				toolAllowlist: ["categorizeConversation", "skip"],
+				toolAllowlist: [
+					"requestKnowledgeClarification",
+					"categorizeConversation",
+					"skip",
+				],
 				availableViews: [
 					{
 						id: "view-1",

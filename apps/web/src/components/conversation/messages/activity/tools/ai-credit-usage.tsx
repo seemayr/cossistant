@@ -25,6 +25,13 @@ type CreditPayload = {
 	outputTokens?: number;
 	totalTokens?: number;
 	tokenSource?: "provider" | "fallback_constant";
+	source?: "primary_pipeline" | "knowledge_clarification";
+	phase?:
+		| "primary_generation"
+		| "clarification_question"
+		| "faq_draft_generation";
+	knowledgeClarificationRequestId?: string;
+	knowledgeClarificationStepIndex?: number;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -45,6 +52,46 @@ function toStringOrEmpty(value: unknown): string {
 
 function toMode(value: unknown): "normal" | "outage" {
 	return value === "outage" ? "outage" : "normal";
+}
+
+function toSource(
+	value: unknown
+): "primary_pipeline" | "knowledge_clarification" | undefined {
+	if (value === "primary_pipeline" || value === "knowledge_clarification") {
+		return value;
+	}
+
+	return;
+}
+
+function toPhase(
+	value: unknown
+):
+	| "primary_generation"
+	| "clarification_question"
+	| "faq_draft_generation"
+	| undefined {
+	if (
+		value === "primary_generation" ||
+		value === "clarification_question" ||
+		value === "faq_draft_generation"
+	) {
+		return value;
+	}
+
+	return;
+}
+
+function getUsageContextLabel(payload: CreditPayload): string | null {
+	if (payload.source !== "knowledge_clarification") {
+		return null;
+	}
+
+	if (payload.phase === "faq_draft_generation") {
+		return "FAQ draft generation";
+	}
+
+	return "Knowledge clarification";
 }
 
 function normalizeCreditPayload(
@@ -91,6 +138,16 @@ function normalizeCreditPayload(
 			payload.tokenSource === "fallback_constant"
 				? "fallback_constant"
 				: "provider",
+		source: toSource(payload.source),
+		phase: toPhase(payload.phase),
+		knowledgeClarificationRequestId:
+			typeof payload.knowledgeClarificationRequestId === "string"
+				? payload.knowledgeClarificationRequestId
+				: undefined,
+		knowledgeClarificationStepIndex:
+			typeof payload.knowledgeClarificationStepIndex === "number"
+				? payload.knowledgeClarificationStepIndex
+				: undefined,
 	};
 }
 
@@ -225,6 +282,15 @@ export function AiCreditUsageActivity({
 				{payload.totalCredits}
 			</span>{" "}
 			credits
+			{getUsageContextLabel(payload) ? (
+				<>
+					{" "}
+					for{" "}
+					<span className="font-medium text-foreground">
+						{getUsageContextLabel(payload)}
+					</span>
+				</>
+			) : null}
 			{!expanded && (
 				<button
 					className="ml-1.5 text-muted-foreground/70 text-xs underline decoration-muted-foreground/30 underline-offset-2 transition-colors hover:text-foreground"
@@ -282,6 +348,18 @@ export function AiCreditUsageActivity({
 					)}
 
 					<div className="my-1.5 border-border/30 border-t" />
+
+					{getUsageContextLabel(payload) ? (
+						<DetailRow label="Context">
+							{getUsageContextLabel(payload)}
+						</DetailRow>
+					) : null}
+
+					{typeof payload.knowledgeClarificationStepIndex === "number" ? (
+						<DetailRow label="Clarification step">
+							{payload.knowledgeClarificationStepIndex}
+						</DetailRow>
+					) : null}
 
 					<DetailRow label="Model">
 						<span className="font-mono text-[11px]">

@@ -2,7 +2,11 @@
 
 import type { ConversationHeader } from "@/contexts/inboxes";
 
-export type CategoryType = "needsHuman" | "waiting8Hours" | "other";
+export type CategoryType =
+	| "needsHuman"
+	| "needsClarification"
+	| "waiting8Hours"
+	| "other";
 
 export type CategoryHeader = {
 	type: "header";
@@ -25,6 +29,7 @@ export type VirtualListItem = CategoryHeader | ConversationItem | AnalyticsItem;
 
 export const CATEGORY_LABELS: Record<CategoryType, string> = {
 	needsHuman: "Human intervention needed",
+	needsClarification: "Clarification needed",
 	waiting8Hours: "Long waiting",
 	other: "Other conversations",
 } as const;

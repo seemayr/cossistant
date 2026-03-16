@@ -182,6 +182,7 @@ export async function runGenerationAttempt(params: {
 		const chargeableToolCallsByName = {
 			...params.runtimeState.chargeableToolCallCounts,
 		};
+		const toolExecutions = [...params.runtimeState.toolExecutions];
 		const totalToolCalls = countTotalToolCalls(toolCallsByName);
 
 		if (params.runtimeState.lastToolError?.fatal) {
@@ -202,6 +203,7 @@ export async function runGenerationAttempt(params: {
 				toolCallsByName,
 				mutationToolCallsByName,
 				chargeableToolCallsByName,
+				toolExecutions,
 				totalToolCalls,
 				usage: toUsage(result.usage),
 			};
@@ -238,6 +240,7 @@ export async function runGenerationAttempt(params: {
 				toolCallsByName,
 				mutationToolCallsByName,
 				chargeableToolCallsByName,
+				toolExecutions,
 				totalToolCalls,
 				usage: toUsage(result.usage),
 			};
@@ -258,6 +261,7 @@ export async function runGenerationAttempt(params: {
 			toolCallsByName,
 			mutationToolCallsByName,
 			chargeableToolCallsByName,
+			toolExecutions,
 			totalToolCalls,
 			usage: toUsage(result.usage),
 		};
@@ -270,6 +274,7 @@ export async function runGenerationAttempt(params: {
 		const chargeableToolCallsByName = {
 			...params.runtimeState.chargeableToolCallCounts,
 		};
+		const toolExecutions = [...params.runtimeState.toolExecutions];
 		const totalToolCalls = countTotalToolCalls(toolCallsByName);
 
 		if (
@@ -317,6 +322,7 @@ export async function runGenerationAttempt(params: {
 					toolCallsByName,
 					mutationToolCallsByName,
 					chargeableToolCallsByName,
+					toolExecutions,
 					totalToolCalls,
 				};
 			}
@@ -336,6 +342,7 @@ export async function runGenerationAttempt(params: {
 				toolCallsByName,
 				mutationToolCallsByName,
 				chargeableToolCallsByName,
+				toolExecutions,
 				totalToolCalls,
 			};
 		}
@@ -360,6 +367,7 @@ export async function runGenerationAttempt(params: {
 			toolCallsByName,
 			mutationToolCallsByName,
 			chargeableToolCallsByName,
+			toolExecutions,
 			totalToolCalls,
 		};
 	} finally {

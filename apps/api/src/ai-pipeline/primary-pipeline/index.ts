@@ -9,6 +9,7 @@ import {
 	type GenerationRuntimeInput,
 	runGenerationRuntime,
 } from "../shared/generation";
+import { maybeCreateImmediateClarificationFromSearchGap } from "../shared/knowledge-gap/immediate-clarification";
 import type { ToolTracePayloadMode } from "../shared/tools/contracts";
 import type {
 	PrimaryPipelineContext,
@@ -62,6 +63,21 @@ function buildGenerationRuntimeInput(params: {
 		deepTraceEnabled: params.deepTraceEnabled,
 		tracePayloadMode: params.tracePayloadMode,
 	};
+}
+
+function countRecordedToolCalls(
+	counts: Record<string, number> | undefined
+): number {
+	if (!counts) {
+		return 0;
+	}
+
+	return Object.values(counts).reduce((sum, value) => {
+		if (!Number.isFinite(value) || value <= 0) {
+			return sum;
+		}
+		return sum + Math.floor(value);
+	}, 0);
 }
 
 export async function runPrimaryPipeline(
@@ -259,10 +275,56 @@ export async function runPrimaryPipeline(
 			generationResult,
 		});
 
+		let immediateClarificationResult:
+			| Awaited<
+					ReturnType<typeof maybeCreateImmediateClarificationFromSearchGap>
+			  >
+			| undefined;
+
+		if (generationResult.status === "completed") {
+			try {
+				immediateClarificationResult =
+					await maybeCreateImmediateClarificationFromSearchGap({
+						db: ctx.db,
+						intake: intakeResult.data,
+						generationResult,
+					});
+
+				if (immediateClarificationResult.status === "created") {
+					logAiPipeline({
+						area: "primary",
+						event: "knowledge_gap_clarification_created",
+						conversationId: ctx.input.conversationId,
+						fields: {
+							stage: "post_generation",
+							requestId: immediateClarificationResult.requestId,
+							created: immediateClarificationResult.created,
+							topicSummary: immediateClarificationResult.topicSummary,
+						},
+					});
+				}
+			} catch (error) {
+				logAiPipeline({
+					area: "primary",
+					event: "knowledge_gap_clarification_failed",
+					level: "warn",
+					conversationId: ctx.input.conversationId,
+					fields: {
+						stage: "post_generation",
+					},
+					error,
+				});
+			}
+		}
+
 		if (generationResult.status === "error") {
 			const errorMessage =
 				generationResult.error ?? "Generation step failed unexpectedly";
-			const retryable = generationResult.publicMessagesSent === 0;
+			const durableMutationCount = countRecordedToolCalls(
+				generationResult.mutationToolCallsByName
+			);
+			const retryable =
+				generationResult.publicMessagesSent === 0 && durableMutationCount === 0;
 			logAiPipeline({
 				area: "primary",
 				event: "generation_error",
@@ -271,6 +333,7 @@ export async function runPrimaryPipeline(
 				fields: {
 					stage: "generation",
 					retryable,
+					durableMutations: durableMutationCount,
 					failureCode: generationResult.failureCode,
 					attempts: generationResult.attempts?.length,
 					message: errorMessage,

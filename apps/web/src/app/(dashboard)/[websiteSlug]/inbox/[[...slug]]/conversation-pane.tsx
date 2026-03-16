@@ -10,15 +10,27 @@ import {
 import type { AvailableAIAgent } from "@cossistant/types";
 import type { TimelineItem } from "@cossistant/types/api/timeline-item";
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+	startTransition,
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import type { ConversationProps } from "@/components/conversation";
 import { Conversation } from "@/components/conversation";
-import type { ConversationHeaderNavigationProps } from "@/components/conversation/header/navigation";
 import type {
 	AiPauseAction,
 	MessageVisibility,
-} from "@/components/conversation/multimodal-input";
+} from "@/components/conversation/composer";
+import { useClarificationComposerFlow } from "@/components/conversation/composer/clarification-composer-flow";
+import { ClarificationPrompt } from "@/components/conversation/composer/clarification-teaser";
+import type { ConversationHeaderNavigationProps } from "@/components/conversation/header/navigation";
+import { resolveConversationClarificationDisplayState } from "@/components/knowledge-clarification/conversation-state";
+import { KnowledgeClarificationDialog } from "@/components/knowledge-clarification/dialog";
+import { stepFromKnowledgeClarificationRequest } from "@/components/knowledge-clarification/helpers";
 import { ButtonWithPaywall } from "@/components/plan/button-with-paywall";
 import { UpgradeModal } from "@/components/plan/upgrade-modal";
 import Icon from "@/components/ui/icons";
@@ -67,6 +79,17 @@ export function ConversationPane({
 	const { data: aiAgent } = useQuery(
 		trpc.aiAgent.get.queryOptions({ websiteSlug })
 	);
+	const { data: activeClarificationData, refetch: refetchActiveClarification } =
+		useQuery(
+			trpc.knowledgeClarification.getActiveForConversation.queryOptions({
+				websiteSlug,
+				conversationId,
+			})
+		);
+	const [engagedClarificationRequestId, setEngagedClarificationRequestId] =
+		useState<string | null>(null);
+	const [isClarificationDialogOpen, setIsClarificationDialogOpen] =
+		useState(false);
 
 	// Build availableAIAgents array from fetched AI agent
 	const availableAIAgents = useMemo<AvailableAIAgent[]>(() => {
@@ -471,6 +494,92 @@ export function ConversationPane({
 		}
 	}, [fetchNextPage, hasNextPage]);
 
+	const activeClarificationSummary =
+		selectedConversation?.activeClarification ?? null;
+	const hasEscalationAction = Boolean(
+		selectedConversation?.escalatedAt &&
+			!selectedConversation?.escalationHandledAt
+	);
+	const clarificationDisplayState =
+		resolveConversationClarificationDisplayState({
+			summary: activeClarificationSummary,
+			request: activeClarificationData?.request,
+			engagedRequestId: engagedClarificationRequestId,
+			hasEscalation: hasEscalationAction,
+			hasLimitAction: isMessageLimitReached,
+		});
+	const showClarificationAction = clarificationDisplayState.showAction;
+	const showClarificationPrompt = clarificationDisplayState.showPrompt;
+	const engagedClarificationRequest = clarificationDisplayState.actionRequest;
+
+	const handleStartClarification = useCallback(() => {
+		if (!activeClarificationSummary) {
+			return;
+		}
+
+		startTransition(() => {
+			if (hasEscalationAction) {
+				setIsClarificationDialogOpen(true);
+				return;
+			}
+
+			setEngagedClarificationRequestId(activeClarificationSummary.requestId);
+		});
+
+		if (
+			activeClarificationData?.request?.id !==
+			activeClarificationSummary.requestId
+		) {
+			void refetchActiveClarification();
+		}
+	}, [
+		activeClarificationData?.request?.id,
+		activeClarificationSummary,
+		hasEscalationAction,
+		refetchActiveClarification,
+	]);
+	const handleCancelClarification = useCallback(() => {
+		setEngagedClarificationRequestId(null);
+	}, []);
+
+	const clarificationPromptContent =
+		activeClarificationSummary && showClarificationPrompt ? (
+			<ClarificationPrompt
+				onClarify={handleStartClarification}
+				summary={activeClarificationSummary}
+				websiteSlug={websiteSlug}
+			/>
+		) : null;
+
+	const clarificationComposerBlocks = useClarificationComposerFlow({
+		onCancel: handleCancelClarification,
+		request: showClarificationAction ? engagedClarificationRequest : null,
+		summary: showClarificationAction ? activeClarificationSummary : null,
+		websiteSlug,
+	});
+
+	useEffect(() => {
+		if (
+			clarificationDisplayState.engagedRequestId !==
+			engagedClarificationRequestId
+		) {
+			setEngagedClarificationRequestId(
+				clarificationDisplayState.engagedRequestId
+			);
+		}
+	}, [
+		clarificationDisplayState.engagedRequestId,
+		engagedClarificationRequestId,
+	]);
+
+	useEffect(() => {
+		if (hasEscalationAction && activeClarificationSummary) {
+			return;
+		}
+
+		setIsClarificationDialogOpen(false);
+	}, [activeClarificationSummary, hasEscalationAction]);
+
 	if (!visitor) {
 		return null;
 	}
@@ -531,6 +640,16 @@ export function ConversationPane({
 			onSubmit: submit,
 			placeholder: "Type your message...",
 			value: message,
+			aboveBlock: hasEscalationAction
+				? null
+				: (clarificationComposerBlocks?.aboveBlock ??
+					clarificationPromptContent),
+			centralBlock: hasEscalationAction
+				? undefined
+				: clarificationComposerBlocks?.centralBlock,
+			bottomBlock: hasEscalationAction
+				? undefined
+				: clarificationComposerBlocks?.bottomBlock,
 			visibility: messageVisibility,
 			onVisibilityChange: setMessageVisibility,
 			aiPausedUntil: selectedConversation.aiPausedUntil,
@@ -587,17 +706,16 @@ export function ConversationPane({
 				}
 			: null,
 		// Show escalation action if escalated but not yet handled
-		escalation:
-			selectedConversation.escalatedAt &&
-			!selectedConversation.escalationHandledAt
-				? {
-						reason:
-							selectedConversation.escalationReason ??
-							"Human assistance requested",
-						onJoin: joinEscalation,
-						isJoining: pendingAction.joinEscalation,
-					}
-				: null,
+		escalation: hasEscalationAction
+			? {
+					aboveAction: clarificationPromptContent,
+					reason:
+						selectedConversation.escalationReason ??
+						"Human assistance requested",
+					onJoin: joinEscalation,
+					isJoining: pendingAction.joinEscalation,
+				}
+			: null,
 	};
 
 	return (
@@ -610,6 +728,17 @@ export function ConversationPane({
 				</div>
 			) : null} */}
 			<Conversation {...conversationProps} />
+			{hasEscalationAction && activeClarificationSummary ? (
+				<KnowledgeClarificationDialog
+					initialRequest={activeClarificationData?.request ?? null}
+					initialStep={stepFromKnowledgeClarificationRequest(
+						activeClarificationData?.request
+					)}
+					onOpenChange={setIsClarificationDialogOpen}
+					open={isClarificationDialogOpen}
+					websiteSlug={websiteSlug}
+				/>
+			) : null}
 			{planInfo ? (
 				<UpgradeModal
 					currentPlan={planInfo.plan}

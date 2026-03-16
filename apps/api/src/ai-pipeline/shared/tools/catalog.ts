@@ -37,6 +37,10 @@ import {
 	SKIP_TELEMETRY,
 } from "./finish";
 import {
+	createRequestKnowledgeClarificationTool,
+	REQUEST_KNOWLEDGE_CLARIFICATION_TELEMETRY,
+} from "./knowledge-clarification";
+import {
 	createSendMessageTool,
 	createSendPrivateMessageTool,
 	SEND_MESSAGE_TELEMETRY,
@@ -75,6 +79,13 @@ export const SHARED_PIPELINE_TOOL_CATALOG: readonly PipelineToolDefinition[] = [
 		availability: { primary: true, background: true },
 		behaviorSettingKey: null,
 		telemetry: IDENTIFY_VISITOR_TELEMETRY,
+	},
+	{
+		id: "requestKnowledgeClarification",
+		factory: createRequestKnowledgeClarificationTool,
+		availability: { primary: true, background: true },
+		behaviorSettingKey: "canRequestKnowledgeClarification",
+		telemetry: REQUEST_KNOWLEDGE_CLARIFICATION_TELEMETRY,
 	},
 	{
 		id: "updateConversationTitle",
