@@ -20,7 +20,7 @@ export function SettingsPage({ children, className }: SettingsPageProps) {
 
 export function SettingsHeader({ children }: { children: React.ReactNode }) {
 	return (
-		<PageHeader className="absolute z-10 border-primary/10 border-b bg-background pr-3 pl-4 text-sm 2xl:border-transparent 2xl:bg-transparent dark:border-primary/5 dark:bg-background-50 dark:2xl:border-transparent 2xl:dark:bg-transparent">
+		<PageHeader className="absolute z-10 border-b bg-background pr-3 pl-4 text-sm 2xl:border-transparent 2xl:bg-transparent dark:bg-background-50 dark:2xl:border-transparent 2xl:dark:bg-transparent">
 			{children}
 		</PageHeader>
 	);
@@ -50,7 +50,7 @@ export function SettingsRow({
 					"mt-4 flex w-full flex-col overflow-clip rounded-md border",
 					isDanger
 						? "border-destructive/30 bg-destructive/5 dark:border-destructive/20"
-						: "border-primary/10 dark:border-primary/5 dark:bg-background-100"
+						: "dark:bg-background-100"
 				)}
 			>
 				{children}
@@ -61,12 +61,7 @@ export function SettingsRow({
 
 export function SettingsRowFooter({ children, className }: SettingsPageProps) {
 	return (
-		<div
-			className={cn(
-				"border-primary/10 border-t bg-background-100 p-4 dark:border-primary/5",
-				className
-			)}
-		>
+		<div className={cn("border-t bg-background-100 p-4", className)}>
 			{children}
 		</div>
 	);

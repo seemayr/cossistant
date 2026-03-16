@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/ui/layout";
 
 export function FakeConversationHeader() {
 	return (
-		<PageHeader className="z-10 border-primary/10 border-b bg-background pl-3.5 dark:border-primary/5 dark:bg-background-50">
+		<PageHeader className="z-10 border-b bg-background pl-3.5 dark:bg-background-50">
 			<div className="flex items-center gap-2">
 				<div className="flex items-center gap-4">
 					<Button

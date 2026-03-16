@@ -71,7 +71,7 @@ export const CentralContainer = ({
 	<div className="h-[calc(100vh-4rem)] w-full px-2 pb-2">
 		<section
 			className={cn(
-				"relative flex h-full max-h-full overflow-clip rounded border border-primary/10 bg-background dark:border-primary/5 dark:bg-background-50",
+				"relative flex h-full max-h-full overflow-clip rounded border bg-background dark:bg-background-50",
 				className
 			)}
 		>

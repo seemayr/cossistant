@@ -22,7 +22,7 @@ export const FakeResizableSidebar = ({
 }: ResizableSidebarProps) => (
 	<aside
 		className={cn(
-			"relative flex border-primary/10 p-0 transition-all duration-200 ease-in-out dark:border-primary/5",
+			"relative flex p-0 transition-all duration-200 ease-in-out",
 			className,
 			{
 				"ml-0 p-0": !open,

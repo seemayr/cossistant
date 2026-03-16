@@ -52,7 +52,7 @@ export default async function ChangelogPage() {
 				<Suspense fallback={<GitHubActivityGraphSkeleton />}>
 					<GitHubActivityGraph />
 				</Suspense>
-				<div className="-translate-x-1/2 absolute bottom-0 left-1/2 w-screen border-primary/10 border-t border-dashed" />
+				<div className="-translate-x-1/2 absolute bottom-0 left-1/2 w-screen border-t border-dashed" />
 			</div>
 			<div className="mx-auto w-full px-4 md:px-0">
 				<div className="flex flex-col">
@@ -67,7 +67,7 @@ export default async function ChangelogPage() {
 									<div className="flex items-center gap-3 md:flex-col md:items-start md:gap-1">
 										{entryData.version && (
 											<a
-												className="inline-flex items-center border border-primary/10 border-dashed bg-background-300 px-2.5 py-1 font-mono text-sm transition-colors hover:bg-background-400"
+												className="inline-flex items-center border border-dashed bg-background-300 px-2.5 py-1 font-mono text-sm transition-colors hover:bg-background-400"
 												href={`https://www.npmjs.com/package/@cossistant/react/v/${entryData.version}`}
 												rel="noopener noreferrer"
 												target="_blank"
@@ -97,7 +97,7 @@ export default async function ChangelogPage() {
 
 								{/* Separator line */}
 								<div className="relative w-full">
-									<div className="-translate-x-1/2 absolute top-0 left-1/2 w-screen border-primary/10 border-t border-dashed" />
+									<div className="-translate-x-1/2 absolute top-0 left-1/2 w-screen border-t border-dashed" />
 								</div>
 							</article>
 						);

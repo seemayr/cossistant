@@ -80,7 +80,7 @@ function ActivityCell({
 		<div
 			className={cn(
 				"aspect-square w-full",
-				"border border-primary/10 border-dashed",
+				"border border-dashed",
 				ACTIVITY_COLORS[level],
 				level === 0 && "border-primary/5"
 			)}
@@ -100,7 +100,7 @@ export function GitHubActivityGraphSkeleton() {
 
 			{/* Grid skeleton */}
 			<div className="w-full">
-				<div className="w-full rounded border border-primary/10 border-dashed p-3 md:p-4">
+				<div className="w-full rounded border border-dashed p-3 md:p-4">
 					<div className="grid w-full grid-flow-col grid-cols-52 grid-rows-7 gap-0.5 md:gap-1">
 						{Array.from({ length: 52 * 7 }).map((_, i) => (
 							<Skeleton
@@ -191,7 +191,7 @@ export async function GitHubActivityGraph() {
 							<div
 								className={cn(
 									"size-2 md:size-2.5 lg:size-3",
-									"border border-primary/10 border-dashed",
+									"border border-dashed",
 									ACTIVITY_COLORS[level]
 								)}
 								key={level}

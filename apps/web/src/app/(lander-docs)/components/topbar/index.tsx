@@ -160,7 +160,7 @@ export function TopBar({
 						<Sheet>
 							<SheetTrigger asChild>
 								<Button
-									className="size-8 border border-primary/10 border-dashed md:hidden"
+									className="size-8 border border-dashed md:hidden"
 									size="icon"
 									type="button"
 									variant="ghost"
@@ -169,7 +169,7 @@ export function TopBar({
 									<span className="sr-only">Open navigation menu</span>
 								</Button>
 							</SheetTrigger>
-							<SheetContent className="w-full border-primary/10 border-dashed bg-background p-6 sm:max-w-sm">
+							<SheetContent className="w-full border-dashed bg-background p-6 sm:max-w-sm">
 								<SheetHeader>
 									<SheetTitle>Navigation</SheetTitle>
 									<SheetDescription>

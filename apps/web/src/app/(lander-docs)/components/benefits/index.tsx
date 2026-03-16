@@ -90,11 +90,11 @@ export const Benefits = () => (
 				{HEADLINE}
 			</h2>
 		</div>
-		<div className="isolate grid gap-0 border-primary/10 border-b-0 border-dashed lg:grid-cols-6 lg:border-y">
+		<div className="isolate grid gap-0 border-b-0 border-dashed lg:grid-cols-6 lg:border-y">
 			{benefits.map((benefit, index) => (
 				<div
 					className={cn(
-						"relative flex flex-col gap-2 overflow-hidden border-primary/10 border-dashed p-4 pt-20 sm:p-8 sm:pt-16",
+						"relative flex flex-col gap-2 overflow-hidden border-dashed p-4 pt-20 sm:p-8 sm:pt-16",
 						benefit.className,
 						// Add border-right for first column items (index 0, 2, 4)
 						index % 2 === 0 && "border-r",

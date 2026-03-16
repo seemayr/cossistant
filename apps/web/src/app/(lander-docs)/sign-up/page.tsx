@@ -12,11 +12,11 @@ export const metadata = utilityNoindex({
 
 export default function SignupPage() {
 	return (
-		<div className="flex h-screen w-full items-center justify-center border-primary/10 border-b border-dashed">
+		<div className="flex h-screen w-full items-center justify-center border-b border-dashed">
 			<div className="flex items-center justify-center md:w-1/2">
 				<SignupForm />
 			</div>
-			<div className="cossistant relative hidden h-full w-1/2 items-center justify-center border-primary/10 border-l border-dashed lg:flex">
+			<div className="cossistant relative hidden h-full w-1/2 items-center justify-center border-l border-dashed lg:flex">
 				<Background />
 				<FakeSupportWidget />
 			</div>

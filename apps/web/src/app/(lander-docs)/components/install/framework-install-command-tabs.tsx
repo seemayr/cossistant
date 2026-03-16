@@ -73,7 +73,7 @@ export function FrameworkInstallCommandTabs({
 					</SelectContent>
 				</Select>
 			</div>
-			<div className="border border-primary/10 border-dashed bg-background-100">
+			<div className="border border-dashed bg-background-100">
 				<CodeBlockCommand
 					__bun__={installCommands.bun}
 					__npm__={installCommands.npm}

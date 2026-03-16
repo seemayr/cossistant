@@ -9,10 +9,7 @@ const Card = ({
 	ref?: React.Ref<HTMLDivElement>;
 }) => (
 	<div
-		className={cn(
-			"rounded border border-primary/10 bg-background text-foreground dark:border-primary/5",
-			className
-		)}
+		className={cn("rounded border bg-background text-foreground", className)}
 		ref={ref}
 		{...props}
 	/>

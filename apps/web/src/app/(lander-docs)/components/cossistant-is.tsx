@@ -1,7 +1,7 @@
 function CossistantIs() {
 	return (
 		<section
-			className="flex flex-col gap-6 border-primary/10 px-4 py-40"
+			className="flex flex-col gap-6 px-4 py-40"
 			suppressHydrationWarning
 		>
 			<h2 className="text-pretty text-center font-f37-stout text-2xl leading-relaxed md:text-left md:text-[38px]">

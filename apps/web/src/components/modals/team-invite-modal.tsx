@@ -265,13 +265,13 @@ export function TeamInviteModal({
 					)}
 
 					{teamSettings && !canManageTeam && (
-						<div className="rounded border border-primary/10 bg-background-100 px-3 py-2 text-muted-foreground text-xs">
+						<div className="rounded border bg-background-100 px-3 py-2 text-muted-foreground text-xs">
 							Only organization admins and owners can send invitations.
 						</div>
 					)}
 
 					{results.length > 0 && (
-						<div className="max-h-50 space-y-2 overflow-y-auto rounded border border-primary/10 bg-background-100 p-2">
+						<div className="max-h-50 space-y-2 overflow-y-auto rounded border bg-background-100 p-2">
 							{results.map((result) => (
 								<div
 									className="flex items-center justify-between gap-3 rounded px-2 py-1.5 text-sm"

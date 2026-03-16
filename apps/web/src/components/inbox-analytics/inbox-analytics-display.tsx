@@ -305,7 +305,7 @@ function SheetLivePresenceMetric({
 	return (
 		<section
 			aria-label="Live visitors"
-			className="flex flex-col gap-2 overflow-hidden rounded-[10px] border border-primary/10 bg-background-100/70 px-3 py-3"
+			className="flex flex-col gap-2 overflow-hidden rounded-[10px] border bg-background-100/70 px-3 py-3"
 			data-slot="inbox-analytics-live-presence"
 		>
 			<p className="text-primary/60 text-xs">Live visitors</p>
@@ -332,7 +332,7 @@ function SheetMetric({
 	const deltaClassName = getDeltaClassName(metric.trendPositive);
 
 	return (
-		<div className="flex flex-col gap-2 rounded-[10px] border border-primary/10 bg-background-100/70 px-3 py-3">
+		<div className="flex flex-col gap-2 rounded-[10px] border bg-background-100/70 px-3 py-3">
 			<div className="flex items-center justify-between gap-3">
 				<p className="text-primary/60 text-xs">{metric.label}</p>
 				{isLoading ? (

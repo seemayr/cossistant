@@ -22,7 +22,7 @@ export const EscapeIframeAnimation = () => {
 			{/* right */}
 			<motion.div
 				animate={{ scaleY: 1 }}
-				className="-top-[15px] -right-[1px] pointer-events-none absolute h-[45px] w-[1px] border-primary/10 border-r border-dashed"
+				className="-top-[15px] -right-[1px] pointer-events-none absolute h-[45px] w-[1px] border-r border-dashed"
 				initial={{ scaleY: 0 }}
 				style={{ originY: 0.5 }}
 				transition={{ duration: 1, delay: 1, ease: "easeOut" }}

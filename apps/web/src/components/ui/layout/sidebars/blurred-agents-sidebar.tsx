@@ -29,7 +29,7 @@ export function BlurredAgentsSidebar({ className }: BlurredAgentsSidebarProps) {
 	return (
 		<div
 			className={cn(
-				"pointer-events-none relative flex h-full shrink-0 select-none flex-col border-primary/10 border-r dark:border-primary/5",
+				"pointer-events-none relative flex h-full shrink-0 select-none flex-col border-r",
 				className
 			)}
 			style={{ width: DEFAULT_SIDEBAR_WIDTH }}

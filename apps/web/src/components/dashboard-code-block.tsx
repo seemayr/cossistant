@@ -274,7 +274,7 @@ export function DashboardCodeBlock({
 		<div className="flex flex-col">
 			<div
 				className={cn(
-					"relative overflow-clip rounded border border-primary/10 bg-background-200 pt-6",
+					"relative overflow-clip rounded border bg-background-200 pt-6",
 					className
 				)}
 			>
@@ -345,7 +345,7 @@ export function DashboardCodeBlock({
 							</Button>
 						</div>
 					) : (
-						<div className="flex items-center justify-center border-primary/10 border-t px-4 py-2">
+						<div className="flex items-center justify-center border-t px-4 py-2">
 							<Button
 								className="h-7"
 								onClick={() => setIsExpanded(false)}
@@ -362,7 +362,7 @@ export function DashboardCodeBlock({
 			{activeComment ? (
 				<div
 					className={cn(
-						"border-primary/10 py-2 text-muted-foreground text-sm",
+						"py-2 text-muted-foreground text-sm",
 						activeCommentClassName
 					)}
 				>

@@ -34,7 +34,7 @@ export function AnimationControls() {
 		<div className="hidden w-max gap-2 lg:flex">
 			<Button
 				className={cn(
-					"rounded border-primary/10 border-dashed bg-background-200 dark:bg-background",
+					"rounded border-dashed bg-background-200 dark:bg-background",
 					currentView === "inbox" &&
 						"ring-1 ring-primary/10 ring-offset-2 ring-offset-background"
 				)}
@@ -47,7 +47,7 @@ export function AnimationControls() {
 			</Button>
 			<Button
 				className={cn(
-					"rounded border-primary/10 border-dashed bg-background-200 dark:bg-background",
+					"rounded border-dashed bg-background-200 dark:bg-background",
 					currentView === "conversation" &&
 						"ring-1 ring-primary/10 ring-offset-2 ring-offset-background"
 				)}

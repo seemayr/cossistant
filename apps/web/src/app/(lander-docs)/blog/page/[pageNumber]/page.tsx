@@ -56,7 +56,7 @@ function BlogListItem({ post }: { post: BlogPage }) {
 
 	return (
 		<Link
-			className="group flex gap-6 border-primary/10 border-b border-dashed py-6 transition-colors last:border-b-0"
+			className="group flex gap-6 border-b border-dashed py-6 transition-colors last:border-b-0"
 			href={post.url}
 		>
 			<div className="flex flex-1 flex-col gap-2">

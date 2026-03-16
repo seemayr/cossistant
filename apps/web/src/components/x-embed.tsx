@@ -50,7 +50,7 @@ async function TweetContent({ id }: { id: string }) {
 
 export function XEmbed({ id }: XEmbedProps) {
 	return (
-		<div className="not-prose relative my-8 rounded border border-primary/10 bg-background p-4 transition-colors hover:bg-background-100">
+		<div className="not-prose relative my-8 rounded border bg-background p-4 transition-colors hover:bg-background-100">
 			<svg
 				aria-hidden="true"
 				className="absolute top-4 right-4 size-4 text-muted-foreground"

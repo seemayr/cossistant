@@ -136,7 +136,7 @@ export default async function ChangelogPaginatedPage(props: {
 								</div>
 
 								{/* Separator line */}
-								<div className="mt-16 border-primary/10 border-t" />
+								<div className="mt-16 border-t" />
 							</article>
 						);
 					})}

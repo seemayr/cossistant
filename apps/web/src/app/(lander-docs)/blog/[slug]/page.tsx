@@ -86,7 +86,7 @@ function RelatedArticles({ slugs }: { slugs: string[] }) {
 					const date = new Date(relatedPost.date);
 					return (
 						<Link
-							className="group flex flex-col gap-3 border border-primary/10 border-dashed bg-background-50 p-5 transition-colors hover:bg-background-100 dark:bg-background-100 dark:hover:bg-background-200"
+							className="group flex flex-col gap-3 border border-dashed bg-background-50 p-5 transition-colors hover:bg-background-100 dark:bg-background-100 dark:hover:bg-background-200"
 							href={post.url}
 							key={post.url}
 						>
@@ -206,7 +206,7 @@ export default async function BlogPostPage(props: {
 					<AsciiImage
 						alt={title}
 						asciiOpacity={0.9}
-						className="mb-12 aspect-[16/9] border border-primary/10 border-dashed bg-background-100 grayscale"
+						className="mb-12 aspect-[16/9] border border-dashed bg-background-100 grayscale"
 						priority
 						resolution={0.15}
 						src={image || DEFAULT_BLOG_IMAGE}

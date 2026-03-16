@@ -400,7 +400,7 @@ export function UpgradeModal({
 											"rounded border p-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
 											isSelected
 												? "border-primary bg-primary/5"
-												: "border-primary/10 hover:border-primary/40"
+												: "hover:border-primary/40"
 										)}
 										key={plan.name}
 										onClick={() => setSelectedPlanName(planName)}

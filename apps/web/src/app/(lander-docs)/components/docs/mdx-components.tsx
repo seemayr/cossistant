@@ -181,7 +181,7 @@ export const mdxComponents = {
 	figure: ({ className, ...props }: React.ComponentProps<"figure">) => (
 		<figure
 			className={cn(
-				"border border-primary/10 border-dashed bg-background-50 dark:bg-background-100",
+				"border border-dashed bg-background-50 dark:bg-background-100",
 				className
 			)}
 			{...props}
@@ -232,7 +232,7 @@ export const mdxComponents = {
 			return (
 				<code
 					className={cn(
-						"relative rounded border border-primary/10 border-dashed bg-background-300 px-[0.3rem] py-[0.2rem] font-mono text-[0.8rem] outline-none dark:bg-background-400",
+						"relative rounded border border-dashed bg-background-300 px-[0.3rem] py-[0.2rem] font-mono text-[0.8rem] outline-none dark:bg-background-400",
 						className
 					)}
 					{...props}
@@ -356,7 +356,7 @@ export const mdxComponents = {
 	LinkedCard: ({ className, ...props }: React.ComponentProps<typeof Link>) => (
 		<Link
 			className={cn(
-				"flex w-full flex-col items-start gap-2 rounded-[1px] border border-primary/10 bg-background-100 p-4 text-surface-foreground transition-colors hover:bg-background-200 sm:p-6",
+				"flex w-full flex-col items-start gap-2 rounded-[1px] border bg-background-100 p-4 text-surface-foreground transition-colors hover:bg-background-200 sm:p-6",
 				className
 			)}
 			{...props}

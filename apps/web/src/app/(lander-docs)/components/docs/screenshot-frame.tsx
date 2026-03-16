@@ -133,7 +133,7 @@ function BrowserSlide({
 		>
 			<BrowserShell
 				chromeUrl={item.browserUrl}
-				className={cn("w-full overflow-hidden rounded-md border-primary/10")}
+				className={cn("w-full overflow-hidden rounded-md")}
 				contentClassName="flex-none"
 			>
 				<div
@@ -294,7 +294,7 @@ export function ScreenshotFrame({
 			<figure
 				className={cn(
 					SHARP_RADIUS_CLASSNAME,
-					"relative overflow-hidden border border-primary/10 border-dashed px-3 py-3 sm:px-4 sm:py-4 md:px-5 md:py-5"
+					"relative overflow-hidden border border-dashed px-3 py-3 sm:px-4 sm:py-4 md:px-5 md:py-5"
 				)}
 				style={{ backgroundColor }}
 			>

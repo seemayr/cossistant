@@ -185,8 +185,8 @@ export function DeveloperToolView({
 						<LogTypeBadge logType={toolCall.logType} />
 					</div>
 				</div>
-				<div className="rounded border border-primary/10 border-dashed dark:bg-background-200">
-					<div className="flex items-center gap-10 border-primary/10 border-b border-dashed bg-background p-2 font-mono text-[11px] leading-relaxed">
+				<div className="rounded border border-dashed dark:bg-background-200">
+					<div className="flex items-center gap-10 border-b border-dashed bg-background p-2 font-mono text-[11px] leading-relaxed">
 						<div>
 							<span className="text-muted-foreground">tool</span>:{" "}
 							{toolCall.toolName}

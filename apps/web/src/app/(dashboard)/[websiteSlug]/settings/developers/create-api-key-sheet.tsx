@@ -219,7 +219,7 @@ export function CreateApiKeySheet({ organizationId }: CreateApiKeySheetProps) {
 																		"flex w-full cursor-pointer flex-col items-start gap-3 rounded-md border bg-background p-3 text-sm",
 																		field.value === option.value
 																			? "border-primary/30 bg-background-200"
-																			: "border-primary/10"
+																			: ""
 																	)}
 																	htmlFor={`key-type-${option.value}`}
 																	key={option.value}
@@ -275,7 +275,7 @@ export function CreateApiKeySheet({ organizationId }: CreateApiKeySheetProps) {
 											render={({ field }) => (
 												<FormItem>
 													<FormControl>
-														<div className="flex items-center justify-between rounded-md border border-primary/10 bg-background-100 p-3">
+														<div className="flex items-center justify-between rounded-md border bg-background-100 p-3">
 															<div className="flex flex-col gap-1">
 																<span className="font-medium text-sm">
 																	{field.value === "production"

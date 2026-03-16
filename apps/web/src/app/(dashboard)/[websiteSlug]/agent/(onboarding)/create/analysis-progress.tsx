@@ -102,7 +102,7 @@ export function AnalysisProgress({
 	return (
 		<motion.div
 			animate={{ opacity: 1, y: 0 }}
-			className="rounded-md border border-primary/10 p-4"
+			className="rounded-md border p-4"
 			initial={{ opacity: 0, y: -10 }}
 		>
 			<div className="space-y-3">

@@ -58,7 +58,7 @@ function BlogListItem({ post }: { post: BlogPage }) {
 
 	return (
 		<Link
-			className="group flex gap-6 border-primary/10 border-b border-dashed py-6 transition-colors last:border-b-0"
+			className="group flex gap-6 border-b border-dashed py-6 transition-colors last:border-b-0"
 			href={post.url}
 		>
 			<div className="flex flex-1 flex-col gap-2">
@@ -159,7 +159,7 @@ export default async function BlogTagPage(props: {
 
 				{/* Separator */}
 				<div className="relative mb-8">
-					<div className="-translate-x-1/2 absolute top-0 left-1/2 w-screen border-primary/10 border-t border-dashed" />
+					<div className="-translate-x-1/2 absolute top-0 left-1/2 w-screen border-t border-dashed" />
 				</div>
 
 				{/* Articles List */}

@@ -47,7 +47,7 @@ function BlogHero({ post }: { post: BlogPage }) {
 
 	return (
 		<Link
-			className="group relative grid border-primary/10 border-x border-dashed bg-background-50 transition-colors hover:bg-background-100 md:grid-cols-2 dark:bg-background-100 dark:hover:bg-background-200"
+			className="group relative grid border-x border-dashed bg-background-50 transition-colors hover:bg-background-100 md:grid-cols-2 dark:bg-background-100 dark:hover:bg-background-200"
 			href={post.url}
 		>
 			<AsciiImage
@@ -62,7 +62,7 @@ function BlogHero({ post }: { post: BlogPage }) {
 				<div className="flex flex-wrap items-center gap-1.5">
 					{post.data.tags.slice(0, 3).map((tag) => (
 						<span
-							className="inline-flex items-center border border-primary/10 border-dashed bg-background-200 px-2 py-0.5 font-mono text-muted-foreground text-xs"
+							className="inline-flex items-center border border-dashed bg-background-200 px-2 py-0.5 font-mono text-muted-foreground text-xs"
 							key={tag}
 						>
 							{tag}
@@ -162,9 +162,9 @@ export const Section = ({
 	className?: string;
 }) => (
 	<section className={cn("relative", className)}>
-		<div className="-translate-x-1/2 absolute top-0 left-1/2 w-screen border-primary/10 border-t border-dashed" />
+		<div className="-translate-x-1/2 absolute top-0 left-1/2 w-screen border-t border-dashed" />
 		{children}
-		<div className="-translate-x-1/2 absolute bottom-0 left-1/2 w-screen border-primary/10 border-t border-dashed" />
+		<div className="-translate-x-1/2 absolute bottom-0 left-1/2 w-screen border-t border-dashed" />
 	</section>
 );
 
@@ -232,12 +232,12 @@ export default function BlogPage() {
 											<BlogCard
 												className={cn(
 													// Mobile: horizontal borders between stacked cards
-													"border-primary/10 border-b border-dashed last:border-b-0 md:border-b-0",
+													"border-b border-dashed last:border-b-0 md:border-b-0",
 													// Desktop: vertical borders between cards
-													"md:border-primary/10 md:border-l md:border-dashed",
+													"md: md:border-l md:border-dashed",
 													// Desktop: right border on last card in row
 													index === rowPosts.length - 1 &&
-														"md:border-primary/10 md:border-r md:border-dashed"
+														"md: md:border-r md:border-dashed"
 												)}
 												key={post.url}
 												post={post}

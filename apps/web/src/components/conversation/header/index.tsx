@@ -185,7 +185,7 @@ export function ConversationHeader({
 	onUpdateTitle,
 }: ConversationHeaderProps) {
 	return (
-		<PageHeader className="z-10 border-primary/10 border-b bg-background pl-3.5 2xl:border-0 2xl:bg-linear-to-b 2xl:bg-transparent 2xl:from-background 2xl:via-background 2xl:to-transparent dark:bg-background-50 2xl:dark:bg-transparent 2xl:dark:from-background-50 2xl:dark:via-background-50 2xl:dark:to-transparent">
+		<PageHeader className="z-10 border-b bg-background pl-3.5 2xl:border-0 2xl:bg-linear-to-b 2xl:bg-transparent 2xl:from-background 2xl:via-background 2xl:to-transparent dark:bg-background-50 2xl:dark:bg-transparent 2xl:dark:from-background-50 2xl:dark:via-background-50 2xl:dark:to-transparent">
 			<div className="flex min-w-0 flex-1 items-center gap-2">
 				{!isLeftSidebarOpen && (
 					<TooltipOnHover

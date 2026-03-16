@@ -19,7 +19,7 @@ export function BrowserShell({
 	return (
 		<div
 			className={cn(
-				"overflow-hidden border border-primary/10 shadow-2xl dark:shadow-primary/5",
+				"overflow-hidden border shadow-2xl dark:shadow-primary/5",
 				className
 			)}
 			data-slot="browser-shell"

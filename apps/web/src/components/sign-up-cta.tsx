@@ -37,7 +37,7 @@ export function SignUpCTA({
 	return (
 		<div
 			className={cn(
-				"not-prose my-30 overflow-hidden rounded border border-primary/10",
+				"not-prose my-30 overflow-hidden rounded border",
 				className
 			)}
 		>
@@ -46,7 +46,7 @@ export function SignUpCTA({
 				<p className="mt-1 text-muted-foreground text-sm">{description}</p>
 			</div>
 
-			<div className="border-primary/10 border-y bg-background-50 dark:bg-background-100">
+			<div className="border-y bg-background-50 dark:bg-background-100">
 				<div className="relative overflow-x-auto">
 					<Tabs
 						className="gap-0"

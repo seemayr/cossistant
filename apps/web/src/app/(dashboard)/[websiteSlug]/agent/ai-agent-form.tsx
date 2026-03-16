@@ -254,7 +254,7 @@ export function AIAgentForm({
 				{/* Enable/Disable toggle at the top when editing */}
 				{isEditing && initialData && (
 					<>
-						<div className="flex items-center justify-between border-primary/10 border-b px-4 py-4 dark:border-primary/5">
+						<div className="flex items-center justify-between border-b px-4 py-4">
 							<div className="flex flex-col gap-1">
 								<span className="font-medium text-sm">Agent Status</span>
 								<span className="text-muted-foreground text-xs">
@@ -271,7 +271,7 @@ export function AIAgentForm({
 						</div>
 
 						{/* Agent ID - copiable only */}
-						<div className="flex items-center justify-between border-primary/10 border-b px-4 py-4 dark:border-primary/5">
+						<div className="flex items-center justify-between border-b px-4 py-4">
 							<div className="flex flex-col gap-1">
 								<span className="font-medium text-sm">Agent ID</span>
 								<span className="text-muted-foreground text-xs">

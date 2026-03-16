@@ -398,7 +398,7 @@ export function TeamSettingsClient({
 					</p>
 				</section>
 
-				<section className="space-y-3 border-primary/10 border-t pt-6">
+				<section className="space-y-3 border-t pt-6">
 					<div className="space-y-1">
 						<p className="font-medium text-sm">
 							Members with access [{settings.members.length}]
@@ -499,7 +499,7 @@ export function TeamSettingsClient({
 					</div>
 				</section>
 
-				<section className="space-y-3 border-primary/10 border-t pt-6">
+				<section className="space-y-3 border-t pt-6">
 					<div className="space-y-1">
 						<p className="font-medium text-sm">
 							Invitations [{settings.invitations.length}]
@@ -520,7 +520,7 @@ export function TeamSettingsClient({
 										className="group flex items-center gap-3 py-2 text-sm first:pt-0 last:pb-0"
 										key={invitation.id}
 									>
-										<div className="flex size-8 items-center justify-center rounded border border-primary/10 bg-background-100">
+										<div className="flex size-8 items-center justify-center rounded border bg-background-100">
 											<MailIcon className="size-4 text-muted-foreground" />
 										</div>
 

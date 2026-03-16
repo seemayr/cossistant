@@ -90,7 +90,7 @@ function SearchKey({
 	return (
 		<span
 			className={cn(
-				"inline-flex h-5 min-w-5 items-center justify-center border border-primary/10 border-dashed bg-background-100 px-1 font-mono text-[10px] text-muted-foreground leading-none",
+				"inline-flex h-5 min-w-5 items-center justify-center border border-dashed bg-background-100 px-1 font-mono text-[10px] text-muted-foreground leading-none",
 				className
 			)}
 		>
@@ -244,7 +244,7 @@ export function SearchBar({ catalog }: { catalog: SearchCatalogMap }) {
 	return (
 		<>
 			<Button
-				className="h-7 w-[140px] justify-start rounded-none border border-primary/10 border-dashed bg-background px-2 font-normal text-muted-foreground shadow-none hover:bg-background-200 dark:bg-background-50"
+				className="h-7 w-[140px] justify-start rounded-none border border-dashed bg-background px-2 font-normal text-muted-foreground shadow-none hover:bg-background-200 dark:bg-background-50"
 				onClick={() => setOpen(true)}
 				type="button"
 				variant="ghost"
@@ -253,7 +253,7 @@ export function SearchBar({ catalog }: { catalog: SearchCatalogMap }) {
 			</Button>
 			<Dialog onOpenChange={setOpen} open={open}>
 				<DialogContent
-					className="top-[18%] w-[calc(100%-1.5rem)] translate-x-[-50%] translate-y-0 gap-0 rounded-none border border-primary/10 border-dashed bg-background p-0 shadow-2xl sm:max-w-[760px]"
+					className="top-[18%] w-[calc(100%-1.5rem)] translate-x-[-50%] translate-y-0 gap-0 rounded-none border border-dashed bg-background p-0 shadow-2xl sm:max-w-[760px]"
 					showCloseButton={false}
 				>
 					<DialogHeader className="sr-only">
@@ -267,7 +267,7 @@ export function SearchBar({ catalog }: { catalog: SearchCatalogMap }) {
 							"rounded-none bg-transparent",
 							"**:data-[slot=command-input-wrapper]:h-10",
 							"**:data-[slot=command-input-wrapper]:border-b",
-							"**:data-[slot=command-input-wrapper]:border-primary/10",
+							"**:data-[slot=command-input-wrapper]:",
 							"**:data-[slot=command-input-wrapper]:border-dashed",
 							"**:data-[slot=command-input-wrapper]:bg-background-100",
 							"**:data-[slot=command-input-wrapper]:mb-0",
@@ -317,10 +317,10 @@ export function SearchBar({ catalog }: { catalog: SearchCatalogMap }) {
 											<div className="flex min-w-0 flex-1 flex-col gap-1">
 												<div className="line-clamp-1 text-sm">{item.label}</div>
 												<div className="flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground">
-													<span className="rounded-none border border-primary/10 border-dashed bg-background-100 px-1 py-0.5 font-mono text-[10px] uppercase leading-none">
+													<span className="rounded-none border border-dashed bg-background-100 px-1 py-0.5 font-mono text-[10px] uppercase leading-none">
 														{item.sourceLabel}
 													</span>
-													<span className="rounded-none border border-primary/10 border-dashed bg-background-100 px-1 py-0.5 font-mono text-[10px] uppercase leading-none">
+													<span className="rounded-none border border-dashed bg-background-100 px-1 py-0.5 font-mono text-[10px] uppercase leading-none">
 														{item.kindLabel}
 													</span>
 													{item.description ? (
@@ -365,10 +365,10 @@ export function SearchBar({ catalog }: { catalog: SearchCatalogMap }) {
 														<HighlightedSearchContent content={item.content} />
 													</div>
 													<div className="flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground">
-														<span className="border border-primary/10 border-dashed bg-background-100 px-1 py-0.5 font-mono text-[10px] uppercase leading-none">
+														<span className="border border-dashed bg-background-100 px-1 py-0.5 font-mono text-[10px] uppercase leading-none">
 															{item.sourceLabel}
 														</span>
-														<span className="border border-primary/10 border-dashed bg-background-100 px-1 py-0.5 font-mono text-[10px] uppercase leading-none">
+														<span className="border border-dashed bg-background-100 px-1 py-0.5 font-mono text-[10px] uppercase leading-none">
 															{item.kindLabel}
 														</span>
 														{item.type !== "page" && item.pageTitle ? (
@@ -383,7 +383,7 @@ export function SearchBar({ catalog }: { catalog: SearchCatalogMap }) {
 							})}
 						</CommandList>
 					</Command>
-					<div className="flex h-9 items-center justify-between border-primary/10 border-t border-dashed bg-background-100 px-3 text-muted-foreground text-xs">
+					<div className="flex h-9 items-center justify-between border-t border-dashed bg-background-100 px-3 text-muted-foreground text-xs">
 						<div className="flex items-center gap-1.5">
 							<SearchKey className="px-1.5">Enter</SearchKey>
 							<span>Open page</span>

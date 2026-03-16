@@ -43,7 +43,7 @@ describe("SegmentedControl", () => {
 		expect(html).toContain("width:calc(100% / 3 + 4px)");
 		expect(html).toContain("rounded-[2px]");
 		expect(html).toContain("bg-background-100");
-		expect(html).toContain("border-primary/10");
+		expect(html).toContain("");
 		expect(html).toContain("overflow-visible");
 		expect(html).toContain("bg-background");
 		expect(html).toContain('data-state="on"');

@@ -39,7 +39,7 @@ export function LegalPageLayout({
 					))}
 				</div>
 
-				<div className="mt-16 border-primary/10 border-t border-dashed pt-8">
+				<div className="mt-16 border-t border-dashed pt-8">
 					<p className="text-muted-foreground text-sm">
 						If you have any questions about this document, please contact us at{" "}
 						<a

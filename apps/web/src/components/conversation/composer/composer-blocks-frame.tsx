@@ -31,7 +31,7 @@ export function ComposerBlocksFrame({
 		<motion.div
 			className={cn(
 				"flex flex-col gap-1 rounded-[4px] border border-dashed p-1 transition-colors duration-200 dark:bg-background-50",
-				highlighted ? "border-primary/10" : "border-transparent",
+				highlighted ? "" : "border-transparent",
 				className
 			)}
 			data-composer-frame={highlighted ? "highlighted" : "default"}

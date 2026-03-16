@@ -76,7 +76,7 @@ export function TypeTable({
 	const headers = headerLabels[variant];
 
 	return (
-		<div className="@container my-6 flex flex-col overflow-hidden rounded border border-primary/10 border-dashed bg-background-100 p-1 text-primary text-sm">
+		<div className="@container my-6 flex flex-col overflow-hidden rounded border border-dashed bg-background-100 p-1 text-primary text-sm">
 			<div className="not-prose mb-4 flex items-center px-3 py-1 font-medium text-fd-muted-foreground">
 				<p className="w-[33%]">{headers.name}</p>
 				<p className="@max-xl:hidden">{headers.type}</p>
@@ -110,13 +110,13 @@ function Item({
 	return (
 		<Collapsible
 			className={cn(
-				"overflow-hidden rounded border border-primary/10 bg-background-100 transition-all",
+				"overflow-hidden rounded border bg-background-100 transition-all",
 				open ? "not-last:mb-2 bg-background-200" : "border-transparent"
 			)}
 			onOpenChange={setOpen}
 			open={open}
 		>
-			<CollapsibleTrigger className="group not-prose relative flex w-full flex-row items-center px-3 py-2 text-start hover:border-primary/10 hover:bg-background-200">
+			<CollapsibleTrigger className="group not-prose hover: relative flex w-full flex-row items-center px-3 py-2 text-start hover:bg-background-200">
 				<code
 					className={cn(
 						keyVariants({

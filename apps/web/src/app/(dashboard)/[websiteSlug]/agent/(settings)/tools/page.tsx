@@ -757,7 +757,7 @@ export default function ToolsPage() {
 						</div>
 
 						{customSkills.length === 0 ? (
-							<div className="flex h-44 flex-col items-center justify-center gap-2 rounded border border-primary/10 border-dashed p-4">
+							<div className="flex h-44 flex-col items-center justify-center gap-2 rounded border border-dashed p-4">
 								<p className="text-muted-foreground text-sm">
 									No custom tools yet.
 								</p>

@@ -32,7 +32,7 @@ export function ContactVisitorsList({ visitors }: ContactVisitorsListProps) {
 					key={visitor.id}
 				>
 					<div
-						className="flex flex-col gap-2 border-primary/10 border-b pb-3 last:border-b-0"
+						className="flex flex-col gap-2 border-b pb-3 last:border-b-0"
 						key={visitor.id}
 					>
 						<div className="flex items-center justify-between gap-2 pl-2">

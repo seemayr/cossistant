@@ -50,7 +50,7 @@ function LimitRow({
 	usage?: number;
 }) {
 	return (
-		<div className="flex items-center justify-between border-primary/10 border-b py-3 last:border-0">
+		<div className="flex items-center justify-between border-b py-3 last:border-0">
 			<div className="flex items-center gap-2">
 				<Check className="size-4 text-cossistant-green" />
 				<span className="font-medium text-sm">{label}</span>

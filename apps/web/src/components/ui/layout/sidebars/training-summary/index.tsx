@@ -227,7 +227,7 @@ export function TrainingSummarySidebar({
 							)}
 						</div>
 
-						<div className="border-primary/10 border-t px-1 pt-4 dark:border-primary/5">
+						<div className="border-t px-1 pt-4">
 							<div className="mb-2 flex items-center justify-between">
 								<span className="text-muted-foreground text-xs">
 									Total size
@@ -421,7 +421,7 @@ export function TrainingSummarySidebarPlaceholder() {
 							<Skeleton className="h-5 w-full" />
 						</div>
 					</div>
-					<div className="border-primary/10 border-t pt-4 dark:border-primary/5">
+					<div className="border-t pt-4">
 						<Skeleton className="h-4 w-full" />
 						<Skeleton className="mt-2 h-2 w-full" />
 					</div>

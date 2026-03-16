@@ -15,7 +15,7 @@ export const Install = () => (
 		<div className="flex w-full flex-1 flex-col-reverse justify-stretch gap-0 lg:flex-row">
 			<div
 				className={cn(
-					"relative flex flex-col justify-center gap-4 border-primary/10 border-dashed p-4 py-20 lg:border-r"
+					"relative flex flex-col justify-center gap-4 border-dashed p-4 py-20 lg:border-r"
 				)}
 			>
 				<p className="font-mono text-primary/70 text-xs">{"<Support />"}</p>

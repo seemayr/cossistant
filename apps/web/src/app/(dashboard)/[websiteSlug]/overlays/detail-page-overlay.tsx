@@ -336,7 +336,7 @@ function buildVisitorInsight(hero: HeroDetails): React.ReactNode {
 		>
 			{hero.countryCode ? (
 				<span
-					className="overflow-clip rounded-[2px] border border-primary/10 p-[1px] dark:border-primary/5"
+					className="overflow-clip rounded-[2px] border p-[1px]"
 					data-slot="contact-visitor-summary-flag"
 				>
 					<CountryFlag countryCode={hero.countryCode} />

@@ -13,7 +13,7 @@ const Circle = forwardRef<
 >(({ className, children }, ref) => (
 	<div
 		className={cn(
-			"relative z-10 flex size-12 items-center justify-center rounded border border-primary/10 border-dashed bg-background-200 p-2 dark:bg-background-400",
+			"relative z-10 flex size-12 items-center justify-center rounded border border-dashed bg-background-200 p-2 dark:bg-background-400",
 			className
 		)}
 		ref={ref}
@@ -95,7 +95,7 @@ export function CustomToolsGraphic() {
 							url="https://cdn.cossistant.com/yin-yang.png"
 						/>
 						{showTyping && (
-							<div className="-bottom-1 fade-in slide-in-from-bottom-1 absolute flex w-[115px] animate-in gap-1 border border-primary/10 border-dashed bg-background-200 px-0.5 text-center text-xs duration-300 dark:bg-background-500">
+							<div className="-bottom-1 fade-in slide-in-from-bottom-1 absolute flex w-[115px] animate-in gap-1 border border-dashed bg-background-200 px-0.5 text-center text-xs duration-300 dark:bg-background-500">
 								Yin Yang typing
 								<TypingDots />
 							</div>

@@ -205,7 +205,7 @@ export default function CreationFlowWrapper({
 				<div className="font-semibold text-lg">Create your website</div>
 				<div className="mt-3 space-y-4">
 					{websiteSetup ? (
-						<div className="rounded border border-primary/10 bg-background-200 px-4 py-3 text-sm">
+						<div className="rounded border bg-background-200 px-4 py-3 text-sm">
 							<p className="font-medium text-primary">
 								{websiteSetup.website.name} is ready.
 							</p>
@@ -254,7 +254,7 @@ export default function CreationFlowWrapper({
 												"flex h-full cursor-pointer flex-col items-start gap-2 rounded-md border p-4 text-left",
 												integrationMode === option.value
 													? "border-primary/30 bg-background-200"
-													: "border-primary/10"
+													: ""
 											)}
 											htmlFor={`integration-mode-${option.value}`}
 											key={option.value}
@@ -313,7 +313,7 @@ export default function CreationFlowWrapper({
 										<h4 className="font-medium text-primary text-sm tracking-wide">
 											[Install the package]
 										</h4>
-										<div className="relative overflow-clip rounded border border-primary/10 bg-background-200 pt-0">
+										<div className="relative overflow-clip rounded border bg-background-200 pt-0">
 											<CodeBlockCommand
 												__bun__={installCommands.bun}
 												__npm__={installCommands.npm}

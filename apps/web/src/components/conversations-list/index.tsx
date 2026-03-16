@@ -143,7 +143,7 @@ export function ConversationsList({
 								</Button>
 							</SheetTrigger>
 							<SheetContent
-								className="max-h-[85vh] overflow-y-auto border-primary/10 bg-background p-0 lg:hidden"
+								className="max-h-[85vh] overflow-y-auto bg-background p-0 lg:hidden"
 								side="bottom"
 							>
 								<SheetHeader className="pr-12">
