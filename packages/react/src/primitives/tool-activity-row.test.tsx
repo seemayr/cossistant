@@ -78,4 +78,21 @@ describe("ToolActivityRow", () => {
 			'data-tool-execution-indicator-slot="true"'
 		);
 	});
+
+	it("uses the same fixed dashboard indicator slot for spinner and arrow states", () => {
+		const partialHtml = renderToStaticMarkup(
+			<ToolActivityRow state="partial" text="Working..." tone="dashboard" />
+		);
+		const resultHtml = renderToStaticMarkup(
+			<ToolActivityRow state="result" text="Finished" tone="dashboard" />
+		);
+
+		expect(partialHtml).toContain(
+			'class="flex h-6 w-5 shrink-0 items-center justify-center"'
+		);
+		expect(resultHtml).toContain(
+			'class="flex h-6 w-5 shrink-0 items-center justify-center"'
+		);
+		expect(partialHtml).not.toContain("mt-1");
+	});
 });

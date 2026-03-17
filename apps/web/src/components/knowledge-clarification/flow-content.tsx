@@ -8,7 +8,11 @@ import type {
 import { LoaderCircleIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { KnowledgeClarificationDraftReview } from "./draft-review";
+import type { KnowledgeClarificationDraftReviewState } from "./draft-review";
+import {
+	KnowledgeClarificationDraftReview,
+	KnowledgeClarificationDraftReviewBody,
+} from "./draft-review";
 import { KnowledgeClarificationQuestionCard } from "./question-card";
 
 type KnowledgeClarificationFlowContentProps = {
@@ -35,6 +39,7 @@ type KnowledgeClarificationFlowContentProps = {
 	) => unknown | Promise<unknown>;
 	onRetry: (requestId: string) => unknown | Promise<unknown>;
 	onClose: () => unknown | Promise<unknown>;
+	pageDraftReviewState?: KnowledgeClarificationDraftReviewState | null;
 };
 
 function PageMessageRow({
@@ -157,6 +162,7 @@ export function KnowledgeClarificationFlowContent({
 	onApprove,
 	onRetry,
 	onClose,
+	pageDraftReviewState = null,
 }: KnowledgeClarificationFlowContentProps) {
 	if (isLoading) {
 		return variant === "page" ? (
@@ -185,6 +191,7 @@ export function KnowledgeClarificationFlowContent({
 						? "Answer one short question so the AI can complete the draft."
 						: "Answer the current question now, save it for later, or remove it entirely."
 				}
+				inputMode={currentStep.inputMode}
 				isAnalyzing={isSubmittingAnswer}
 				isSubmitting={isSubmittingAnswer}
 				maxSteps={currentStep.request.maxSteps}
@@ -206,6 +213,12 @@ export function KnowledgeClarificationFlowContent({
 	}
 
 	if (currentStep?.kind === "draft_ready") {
+		if (variant === "page" && pageDraftReviewState) {
+			return (
+				<KnowledgeClarificationDraftReviewBody state={pageDraftReviewState} />
+			);
+		}
+
 		return (
 			<KnowledgeClarificationDraftReview
 				draft={currentStep.draftFaqPayload}
@@ -229,6 +242,7 @@ export function KnowledgeClarificationFlowContent({
 						? "This suggestion is waiting for another answer."
 						: "This proposal is waiting for another answer."
 				}
+				inputMode={fallbackStep.inputMode}
 				isSubmitting={isSubmittingAnswer}
 				maxSteps={fallbackStep.request.maxSteps}
 				onDefer={() => {
@@ -249,6 +263,12 @@ export function KnowledgeClarificationFlowContent({
 	}
 
 	if (fallbackStep?.kind === "draft_ready") {
+		if (variant === "page" && pageDraftReviewState) {
+			return (
+				<KnowledgeClarificationDraftReviewBody state={pageDraftReviewState} />
+			);
+		}
+
 		return (
 			<KnowledgeClarificationDraftReview
 				draft={fallbackStep.draftFaqPayload}

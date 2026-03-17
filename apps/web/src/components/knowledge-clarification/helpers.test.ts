@@ -23,6 +23,8 @@ function createRequest(
 			"At the next billing cycle",
 			"It depends on the plan",
 		],
+		currentQuestionInputMode: "suggested_answers",
+		currentQuestionScope: "narrow_detail",
 		draftFaqPayload: null,
 		lastError: null,
 		createdAt: "2026-03-16T09:00:00.000Z",
@@ -50,6 +52,8 @@ describe("stepFromKnowledgeClarificationRequest", () => {
 				"At the next billing cycle",
 				"It depends on the plan",
 			],
+			inputMode: "suggested_answers",
+			questionScope: "narrow_detail",
 		});
 	});
 });

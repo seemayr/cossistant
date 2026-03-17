@@ -94,7 +94,7 @@ export function FaqListPage() {
 							},
 						]}
 						href={href}
-						icon={<HelpCircleIcon className="size-4" />}
+						icon={<span className="font-medium">?</span>}
 						key={faq.id}
 						onHoverPrefetch={() => prefetchKnowledgeEntry(faq.id, href)}
 						primary={payload.question}

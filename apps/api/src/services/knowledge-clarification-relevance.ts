@@ -5,6 +5,10 @@ import type {
 	KnowledgeClarificationSearchEvidence,
 	KnowledgeClarificationTranscriptMessageSnapshot,
 } from "@api/lib/knowledge-clarification-context";
+import type {
+	KnowledgeClarificationQuestionInputMode,
+	KnowledgeClarificationQuestionScope,
+} from "@cossistant/types";
 
 const MAX_GROUNDED_FACTS = 10;
 const MAX_TRANSCRIPT_CLAIMS = 6;
@@ -205,6 +209,17 @@ function looksBroadOrExploratory(value: string): boolean {
 		"can you share more context",
 		"provide more details",
 	].some((pattern) => normalized.includes(pattern));
+}
+
+function staysAnchoredToTopic(params: {
+	question: string;
+	topicAnchor: string;
+	groundingSnippet: string;
+}): boolean {
+	return (
+		countTokenOverlap(params.question, params.topicAnchor) >= 1 ||
+		countTokenOverlap(params.question, params.groundingSnippet) >= 1
+	);
 }
 
 function looksGenericMissingFact(value: string): boolean {
@@ -546,6 +561,10 @@ export function validateClarificationQuestionCandidate(params: {
 	question: string;
 	missingFact: string;
 	whyItMatters: string;
+	inputMode: KnowledgeClarificationQuestionInputMode;
+	questionScope: KnowledgeClarificationQuestionScope;
+	expectedInputMode: KnowledgeClarificationQuestionInputMode;
+	expectedQuestionScope: KnowledgeClarificationQuestionScope;
 	groundingSource: ClarificationQuestionGroundingSource;
 	groundingSnippet: string;
 	packet: ClarificationRelevancePacket;
@@ -558,11 +577,60 @@ export function validateClarificationQuestionCandidate(params: {
 		};
 	}
 
+	if (params.inputMode !== params.expectedInputMode) {
+		return {
+			valid: false,
+			reason: "Question input mode does not match the expected strategy.",
+		};
+	}
+
+	if (params.questionScope !== params.expectedQuestionScope) {
+		return {
+			valid: false,
+			reason: "Question scope does not match the expected strategy.",
+		};
+	}
+
 	if (looksBroadOrExploratory(params.question)) {
 		return {
 			valid: false,
 			reason: "Question is too broad for a high-signal clarification step.",
 		};
+	}
+
+	if (params.questionScope === "broad_discovery") {
+		if (params.packet.latestExchange) {
+			return {
+				valid: false,
+				reason:
+					"Broad discovery is only allowed on the first clarification step.",
+			};
+		}
+
+		if (
+			params.groundingSource === "latest_human_answer" ||
+			params.groundingSource === "latest_exchange"
+		) {
+			return {
+				valid: false,
+				reason:
+					"Broad discovery questions must be anchored to the topic, not a follow-up exchange.",
+			};
+		}
+
+		if (
+			!staysAnchoredToTopic({
+				question: params.question,
+				topicAnchor: params.packet.topicAnchor,
+				groundingSnippet: params.groundingSnippet,
+			})
+		) {
+			return {
+				valid: false,
+				reason:
+					"Broad discovery question is not anchored tightly enough to the topic.",
+			};
+		}
 	}
 
 	if (

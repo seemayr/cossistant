@@ -295,10 +295,36 @@ describe("TimelineActivityGroup", () => {
 
 		expect(html).toContain("Anthony Riera");
 		expect(html).toContain("Searched for &quot;pricing&quot;");
+		expect(html).toContain('data-activity-group-layout="single-tool"');
 		expect(html).toContain('data-tool-execution-indicator="arrow"');
 		expect(html).not.toContain("data-activity-tree-prefix=");
 		expect(html).not.toContain("data-activity-single-tool=");
 		expect(html).not.toContain("data-activity-bullet=");
+	});
+
+	it("uses the single-tool layout when only one visible tool row remains", () => {
+		const group = createActivityGroup([
+			createToolItem({
+				id: "tool-visible",
+				createdAt: "2026-01-01T10:00:00.000Z",
+				toolName: "searchKnowledgeBase",
+				text: 'Searched for "pricing"',
+			}),
+			createToolItem({
+				id: "tool-hidden",
+				createdAt: "2026-01-01T10:01:00.000Z",
+				toolName: "aiDecision",
+				text: "Decision log",
+			}),
+		]);
+
+		const html = renderActivityGroup(group);
+
+		expect(html).toContain('data-activity-group-layout="single-tool"');
+		expect(
+			countOccurrences(html, 'data-tool-execution-indicator="arrow"')
+		).toBe(1);
+		expect(html).toContain("Anthony Riera");
 	});
 
 	it("keeps terminal arrows when an activity group has multiple tool rows", () => {
@@ -319,6 +345,7 @@ describe("TimelineActivityGroup", () => {
 
 		const html = renderActivityGroup(group);
 
+		expect(html).toContain('data-activity-group-layout="stacked"');
 		expect(
 			countOccurrences(html, 'data-tool-execution-indicator="arrow"')
 		).toBe(2);

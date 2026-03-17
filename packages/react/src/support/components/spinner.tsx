@@ -65,12 +65,10 @@ export function Spinner({
 	const reactId = React.useId();
 	const resolvedVariant = resolveSpinnerVariant(reactId, variant);
 	const gap = Math.max(Math.round(size / 8), 1);
-	const radius = Math.max(Math.round(size / 7), 1);
 
 	const spinnerStyle = {
 		"--co-spinner-size": `${size}px`,
 		"--co-spinner-gap": `${gap}px`,
-		"--co-spinner-radius": `${radius}px`,
 	} as React.CSSProperties;
 
 	return (

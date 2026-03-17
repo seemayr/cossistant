@@ -124,6 +124,8 @@ export function TimelineActivityGroup({
 		return null;
 	}
 	const hasToolRows = activityRows.some((row) => row.type === "tool");
+	const hasSingleVisibleToolRow =
+		activityRows.length === 1 && activityRows[0]?.type === "tool";
 	const showSenderLabel = hasToolRows;
 
 	return (
@@ -133,8 +135,19 @@ export function TimelineActivityGroup({
 			viewerType={SenderType.TEAM_MEMBER}
 		>
 			{() => (
-				<div className="flex w-full flex-row gap-2">
-					<TimelineItemGroupAvatar className="flex shrink-0 flex-col justify-start pt-0.5">
+				<div
+					className="flex w-full flex-row gap-2"
+					data-activity-group-layout={
+						hasSingleVisibleToolRow ? "single-tool" : "stacked"
+					}
+				>
+					<TimelineItemGroupAvatar
+						className={
+							hasSingleVisibleToolRow
+								? "flex shrink-0 flex-col justify-start pt-6"
+								: "flex shrink-0 flex-col justify-start pt-1"
+						}
+					>
 						<TimelineGroupSenderAvatar
 							availableAIAgents={availableAIAgents}
 							senderId={group.senderId}
@@ -144,10 +157,16 @@ export function TimelineActivityGroup({
 						/>
 					</TimelineItemGroupAvatar>
 
-					<TimelineItemGroupContent className="flex min-w-0 flex-1 flex-col gap-1 pt-1">
+					<TimelineItemGroupContent
+						className={
+							hasSingleVisibleToolRow
+								? "flex min-w-0 flex-1 flex-col gap-1 pt-0.5"
+								: "flex min-w-0 flex-1 flex-col gap-1 pt-1"
+						}
+					>
 						<div className="flex w-full min-w-0 flex-col gap-1">
 							{showSenderLabel ? (
-								<div className="px-1 text-muted-foreground text-xs">
+								<div className="px-1 pt-1.5 text-muted-foreground text-xs leading-4">
 									{senderDisplayName}
 								</div>
 							) : null}

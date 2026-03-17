@@ -33,6 +33,10 @@ function createToolTimelineItem(
 	};
 }
 
+function countOccurrences(html: string, pattern: string): number {
+	return html.split(pattern).length - 1;
+}
+
 describe("SearchKnowledgeTimelineTool", () => {
 	it("renders the partial state with the knowledge search label", () => {
 		const html = renderToStaticMarkup(
@@ -50,7 +54,7 @@ describe("SearchKnowledgeTimelineTool", () => {
 		expect(html).not.toContain("rounded-lg");
 	});
 
-	it("renders result state with the executed query and source labels", () => {
+	it("renders only unique web sources as external links", () => {
 		const html = renderToStaticMarkup(
 			<SearchKnowledgeTimelineTool
 				conversationId="conv-1"
@@ -66,14 +70,30 @@ describe("SearchKnowledgeTimelineTool", () => {
 							output: {
 								success: true,
 								data: {
-									totalFound: 2,
+									totalFound: 5,
 									articles: [
 										{
 											title: "Billing FAQ",
 											sourceUrl: "https://example.com/billing",
+											sourceType: "url",
+										},
+										{
+											title: "Billing FAQ Duplicate",
+											sourceUrl: "https://example.com/billing/",
+											sourceType: "url",
 										},
 										{
 											sourceUrl: "https://docs.example.com/pricing",
+											sourceType: "url",
+										},
+										{
+											title: "Internal FAQ",
+											sourceUrl: "https://example.com/internal-faq",
+											sourceType: "faq",
+										},
+										{
+											title: "Legacy entry",
+											sourceUrl: "https://example.com/legacy-entry",
 										},
 									],
 								},
@@ -87,10 +107,19 @@ describe("SearchKnowledgeTimelineTool", () => {
 		expect(html).toContain("Searched for &quot;pricing&quot;");
 		expect(html).toContain("Billing FAQ");
 		expect(html).toContain("docs.example.com/pricing");
+		expect(html).toContain('href="https://example.com/billing"');
+		expect(html).toContain('href="https://docs.example.com/pricing"');
+		expect(countOccurrences(html, 'target="_blank"')).toBe(2);
+		expect(countOccurrences(html, 'rel="noopener noreferrer"')).toBe(2);
+		expect(countOccurrences(html, 'href="https://example.com/billing"')).toBe(
+			1
+		);
 		expect(html).toContain('data-tool-display-state="result"');
 		expect(html).toContain('data-tool-execution-indicator-slot="true"');
 		expect(html).toContain('data-tool-execution-indicator="arrow"');
 		expect(html).toContain("-&gt;");
+		expect(html).not.toContain("Internal FAQ");
+		expect(html).not.toContain("Legacy entry");
 		expect(html).not.toContain("rounded-full");
 	});
 
@@ -154,5 +183,48 @@ describe("SearchKnowledgeTimelineTool", () => {
 		expect(html).toContain("Searched for &quot;pricing&quot;");
 		expect(html).not.toContain('data-tool-execution-indicator="arrow"');
 		expect(html).not.toContain('data-tool-execution-indicator-slot="true"');
+	});
+
+	it("hides source links when results are not explicit web sources", () => {
+		const html = renderToStaticMarkup(
+			<SearchKnowledgeTimelineTool
+				conversationId="conv-1"
+				item={createToolTimelineItem({
+					text: "Found 2 sources",
+					parts: [
+						{
+							type: "tool-searchKnowledgeBase",
+							toolCallId: "call-privacy",
+							toolName: "searchKnowledgeBase",
+							input: { query: "billing" },
+							state: "result",
+							output: {
+								success: true,
+								data: {
+									totalFound: 2,
+									articles: [
+										{
+											title: "FAQ",
+											sourceUrl: "https://example.com/faq",
+											sourceType: "faq",
+										},
+										{
+											title: "Legacy doc",
+											sourceUrl: "https://example.com/legacy-doc",
+										},
+									],
+								},
+							},
+						},
+					],
+				})}
+			/>
+		);
+
+		expect(html).toContain("Searched for &quot;billing&quot;");
+		expect(html).not.toContain("<a ");
+		expect(html).not.toContain('target="_blank"');
+		expect(html).not.toContain("FAQ");
+		expect(html).not.toContain("Legacy doc");
 	});
 });

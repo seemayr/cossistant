@@ -110,6 +110,30 @@ describe("Composer", () => {
 		expect(html).not.toContain("Type your message...");
 	});
 
+	it("renders escalation action in the center while keeping the default footer", async () => {
+		const { Composer } = await composerModulePromise;
+
+		const html = renderToStaticMarkup(
+			React.createElement(Composer, {
+				escalationAction: {
+					reason: "Needs a human response",
+					onJoin: () => {},
+				},
+				onChange: () => {},
+				onSubmit: () => {},
+				placeholder: "Type your message...",
+				value: "",
+			})
+		);
+
+		expect(html).toContain("Join the conversation");
+		expect(html).toContain("Needs a human response");
+		expect(html).toContain('data-composer-frame="highlighted"');
+		expect(html).toContain('data-composer-central-block="true"');
+		expect(html).toContain('data-composer-bottom-block="true"');
+		expect(html).not.toContain("Type your message...");
+	});
+
 	it("composes the slot identity with keyed custom children", async () => {
 		const { getComposerAnimatedSlotKey } = await composerSlotKeyModulePromise;
 

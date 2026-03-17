@@ -511,6 +511,9 @@ export function ConversationPane({
 	const showClarificationAction = clarificationDisplayState.showAction;
 	const showClarificationPrompt = clarificationDisplayState.showPrompt;
 	const engagedClarificationRequest = clarificationDisplayState.actionRequest;
+	const showClarificationDraftBanner =
+		clarificationDisplayState.showDraftBanner;
+	const clarificationBannerRequest = clarificationDisplayState.bannerRequest;
 
 	const handleStartClarification = useCallback(() => {
 		if (!activeClarificationSummary) {
@@ -553,8 +556,15 @@ export function ConversationPane({
 
 	const clarificationComposerBlocks = useClarificationComposerFlow({
 		onCancel: handleCancelClarification,
-		request: showClarificationAction ? engagedClarificationRequest : null,
-		summary: showClarificationAction ? activeClarificationSummary : null,
+		request: showClarificationDraftBanner
+			? clarificationBannerRequest
+			: showClarificationAction
+				? engagedClarificationRequest
+				: null,
+		summary:
+			showClarificationDraftBanner || showClarificationAction
+				? activeClarificationSummary
+				: null,
 		websiteSlug,
 	});
 
@@ -626,7 +636,18 @@ export function ConversationPane({
 		},
 		input: {
 			allowedFileTypes: FILE_INPUT_ACCEPT,
+			aboveBlock:
+				clarificationComposerBlocks?.aboveBlock ?? clarificationPromptContent,
 			error,
+			escalationAction: hasEscalationAction
+				? {
+						reason:
+							selectedConversation.escalationReason ??
+							"Human assistance requested",
+						onJoin: joinEscalation,
+						isJoining: pendingAction.joinEscalation,
+					}
+				: null,
 			files,
 			isSubmitting,
 			isUploading,
@@ -640,10 +661,6 @@ export function ConversationPane({
 			onSubmit: submit,
 			placeholder: "Type your message...",
 			value: message,
-			aboveBlock: hasEscalationAction
-				? null
-				: (clarificationComposerBlocks?.aboveBlock ??
-					clarificationPromptContent),
 			centralBlock: hasEscalationAction
 				? undefined
 				: clarificationComposerBlocks?.centralBlock,
@@ -697,25 +714,15 @@ export function ConversationPane({
 			isLoading: isVisitorLoading,
 			visitor,
 		},
-		limitAction: isMessageLimitReached
-			? {
-					limit: messageLimitStatus?.limit ?? null,
-					onUpgradeClick: () => setIsUpgradeModalOpen(true),
-					used: messageLimitStatus?.used ?? 0,
-					windowDays: hardLimitStatus?.rollingWindowDays ?? 30,
-				}
-			: null,
-		// Show escalation action if escalated but not yet handled
-		escalation: hasEscalationAction
-			? {
-					aboveAction: clarificationPromptContent,
-					reason:
-						selectedConversation.escalationReason ??
-						"Human assistance requested",
-					onJoin: joinEscalation,
-					isJoining: pendingAction.joinEscalation,
-				}
-			: null,
+		limitAction:
+			!hasEscalationAction && isMessageLimitReached
+				? {
+						limit: messageLimitStatus?.limit ?? null,
+						onUpgradeClick: () => setIsUpgradeModalOpen(true),
+						used: messageLimitStatus?.used ?? 0,
+						windowDays: hardLimitStatus?.rollingWindowDays ?? 30,
+					}
+				: null,
 	};
 
 	return (

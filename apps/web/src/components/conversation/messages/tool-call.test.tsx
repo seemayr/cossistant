@@ -205,6 +205,64 @@ describe("ToolCall", () => {
 		expect(html).not.toContain("<a ");
 	});
 
+	it("deduplicates repeated source URLs before computing pill overflow", () => {
+		const html = render(
+			createToolTimelineItem({
+				parts: [
+					{
+						type: "tool-searchKnowledgeBase",
+						toolCallId: "call-deduped-sources",
+						toolName: "searchKnowledgeBase",
+						input: { query: "billing" },
+						state: "result",
+						output: {
+							success: true,
+							data: {
+								totalFound: 6,
+								articles: [
+									{
+										title: "Billing FAQ",
+										sourceUrl: "https://example.com/billing/",
+									},
+									{
+										title: "Billing FAQ Duplicate",
+										sourceUrl: "https://example.com/billing",
+									},
+									{
+										title: "Pricing API",
+										sourceUrl: "https://example.com/pricing-api",
+									},
+									{
+										title: "Help Center",
+										sourceUrl: "https://EXAMPLE.com/help?tab=all#top",
+									},
+									{
+										title: "Help Center Duplicate",
+										sourceUrl: "https://example.com/help?tab=all",
+									},
+									{
+										title: "Enterprise Terms",
+										sourceUrl: "https://example.com/enterprise",
+									},
+									{
+										title: "Changelog",
+										sourceUrl: "https://example.com/changelog",
+									},
+								],
+							},
+						},
+					},
+				],
+			})
+		);
+
+		expect(countOccurrences(html, 'data-source-pill="true"')).toBe(4);
+		expect(html).toContain('data-source-overflow="1"');
+		expect(html).toContain(">+1<");
+		expect(countOccurrences(html, 'data-source-overflow-item="true"')).toBe(1);
+		expect(html).not.toContain("<a ");
+	});
+
 	it("prefers title labels and falls back to compact URL labels", () => {
 		const html = render(
 			createToolTimelineItem({

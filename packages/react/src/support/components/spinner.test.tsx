@@ -13,6 +13,7 @@ describe("Spinner", () => {
 
 		expect(html).toContain('data-co-spinner="true"');
 		expect(countOccurrences(html, 'data-co-spinner-cell="true"')).toBe(9);
+		expect(html).not.toContain("--co-spinner-radius");
 	});
 
 	it("renders stable auto-variant markup for SSR", () => {

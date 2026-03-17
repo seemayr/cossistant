@@ -164,6 +164,8 @@ function createRequest(overrides: Record<string, unknown> = {}) {
 		contextSnapshot: createContextSnapshot(),
 		targetKnowledgeId: null,
 		draftFaqPayload: null,
+		currentQuestionInputMode: "suggested_answers",
+		currentQuestionScope: "narrow_detail",
 		lastError: null,
 		createdAt: "2026-03-13T10:00:00.000Z",
 		updatedAt: "2026-03-13T10:00:00.000Z",
@@ -296,6 +298,8 @@ describe("knowledge clarification usage tracking", () => {
 			"At the next billing cycle",
 			"It depends on the plan",
 		]);
+		expect(serialized.currentQuestionInputMode).toBe("textarea_first");
+		expect(serialized.currentQuestionScope).toBe("broad_discovery");
 	});
 
 	it("tracks clarification-question usage when the model returns the next question", async () => {
@@ -305,7 +309,12 @@ describe("knowledge clarification usage tracking", () => {
 			stepIndex: 0,
 		});
 		const nextQuestionTurn = createTurn({
-			question: "When does the billing change take effect?",
+			question: "How does billing timing work today?",
+			suggestedAnswers: [
+				"Users see the change immediately",
+				"It waits until the next billing cycle",
+				"It depends on the plan or change type",
+			],
 		});
 
 		listKnowledgeClarificationTurnsMock
@@ -315,16 +324,18 @@ describe("knowledge clarification usage tracking", () => {
 			output: {
 				kind: "question",
 				continueClarifying: true,
+				inputMode: "textarea_first",
+				questionScope: "broad_discovery",
 				topicSummary: "Clarify billing timing",
-				missingFact: "Whether the change is immediate or next-cycle",
+				missingFact: "How billing-change handling works today",
 				whyItMatters: "That detail determines the final FAQ answer.",
 				groundingSource: "topic_anchor",
 				groundingSnippet: "Clarify billing timing",
-				question: "When does the billing change take effect?",
+				question: "How does billing timing work today?",
 				suggestedAnswers: [
-					"Immediately",
-					"At the next billing cycle",
-					"It depends on the plan",
+					"Users see the change immediately",
+					"It waits until the next billing cycle",
+					"It depends on the plan or change type",
 				],
 			},
 			usage: {
@@ -353,6 +364,10 @@ describe("knowledge clarification usage tracking", () => {
 			| undefined;
 
 		expect(step.kind).toBe("question");
+		expect(step).toMatchObject({
+			inputMode: "textarea_first",
+			questionScope: "broad_discovery",
+		});
 		expect(trackGenerationUsageMock).toHaveBeenCalledTimes(1);
 		expect(usageCall?.[0]).toMatchObject({
 			conversationId: "conv_1",
@@ -364,6 +379,169 @@ describe("knowledge clarification usage tracking", () => {
 			phase: "clarification_question",
 			knowledgeClarificationRequestId: "clar_req_1",
 			knowledgeClarificationStepIndex: 1,
+		});
+	});
+
+	it("falls back to a draft when the first broad question degrades into a catch-all prompt", async () => {
+		const { runKnowledgeClarificationStep } = await modulePromise;
+		const request = createRequest({
+			status: "analyzing",
+			stepIndex: 0,
+		});
+
+		listKnowledgeClarificationTurnsMock.mockResolvedValue([]);
+		generateTextMock
+			.mockResolvedValueOnce({
+				output: {
+					kind: "question",
+					continueClarifying: true,
+					inputMode: "textarea_first",
+					questionScope: "broad_discovery",
+					topicSummary: "Clarify billing timing",
+					missingFact: "How billing-change handling works today",
+					whyItMatters: "That detail determines the FAQ draft.",
+					groundingSource: "topic_anchor",
+					groundingSnippet: "Clarify billing timing",
+					question: "Can you share more context?",
+					suggestedAnswers: [
+						"It changes immediately",
+						"It changes on the next cycle",
+						"It depends on the plan",
+					],
+				},
+				usage: {
+					inputTokens: 120,
+					outputTokens: 40,
+					totalTokens: 160,
+				},
+			})
+			.mockResolvedValueOnce({
+				output: {
+					kind: "draft_ready",
+					continueClarifying: false,
+					topicSummary: "Clarify billing timing",
+					missingFact: "No additional grounded gap remains",
+					whyItMatters:
+						"The first broad question was too generic to keep asking.",
+					draftFaqPayload: {
+						title: "Billing timing",
+						question: "When does a billing change take effect?",
+						answer: "Billing changes apply at the next billing cycle.",
+						categories: ["Billing"],
+						relatedQuestions: [],
+					},
+				},
+				usage: {
+					inputTokens: 80,
+					outputTokens: 30,
+					totalTokens: 110,
+				},
+			});
+		updateKnowledgeClarificationRequestMock.mockResolvedValue(
+			createRequest({
+				status: "draft_ready",
+				stepIndex: 0,
+				currentQuestion: null,
+				currentSuggestedAnswers: null,
+				currentQuestionInputMode: null,
+				currentQuestionScope: null,
+				draftFaqPayload: {
+					title: "Billing timing",
+					question: "When does a billing change take effect?",
+					answer: "Billing changes apply at the next billing cycle.",
+					categories: ["Billing"],
+					relatedQuestions: [],
+				},
+			})
+		);
+
+		const step = await runKnowledgeClarificationStep({
+			db: {} as never,
+			request,
+			aiAgent: createAiAgent(),
+			conversation: createConversation(),
+		});
+
+		expect(step.kind).toBe("draft_ready");
+		expect(generateTextMock).toHaveBeenCalledTimes(2);
+	});
+
+	it("sanitizes malformed clarification questions before storing them", async () => {
+		const { runKnowledgeClarificationStep } = await modulePromise;
+		const request = createRequest({
+			status: "analyzing",
+			stepIndex: 0,
+			topicSummary: "Clarify account deletion",
+			source: "faq",
+			conversationId: null,
+		});
+		const malformedQuestion =
+			'1. What is the exact method for a user to delete their account - do they (a) click a "Delete Account" button in settings, (b) email support with a deletion request, or (c) run a CLI command such as `npx ai-support delete-account`?';
+		const sanitizedQuestion =
+			"What is the exact method for a user to delete their account?";
+		const suggestedAnswers = [
+			"Click Delete Account in settings",
+			"Email support",
+			"Use a CLI command",
+		];
+		const nextQuestionTurn = createTurn({
+			question: sanitizedQuestion,
+			suggestedAnswers,
+		});
+
+		listKnowledgeClarificationTurnsMock
+			.mockResolvedValueOnce([])
+			.mockResolvedValueOnce([nextQuestionTurn]);
+		generateTextMock.mockResolvedValue({
+			output: {
+				kind: "question",
+				continueClarifying: true,
+				inputMode: "suggested_answers",
+				questionScope: "narrow_detail",
+				topicSummary: "Clarify account deletion",
+				missingFact: "Which account deletion path users should follow",
+				whyItMatters: "That determines the final FAQ answer.",
+				groundingSource: "topic_anchor",
+				groundingSnippet: "Clarify account deletion",
+				question: malformedQuestion,
+				suggestedAnswers,
+			},
+			usage: {
+				inputTokens: 120,
+				outputTokens: 40,
+				totalTokens: 160,
+			},
+		});
+		updateKnowledgeClarificationRequestMock.mockResolvedValue(
+			createRequest({
+				source: "faq",
+				conversationId: null,
+				status: "awaiting_answer",
+				stepIndex: 1,
+				topicSummary: "Clarify account deletion",
+			})
+		);
+
+		const step = await runKnowledgeClarificationStep({
+			db: {} as never,
+			request,
+			aiAgent: createAiAgent(),
+			conversation: createConversation(),
+		});
+
+		expect(createKnowledgeClarificationTurnMock).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({
+				question: sanitizedQuestion,
+				suggestedAnswers,
+			})
+		);
+		expect(step).toMatchObject({
+			kind: "question",
+			question: sanitizedQuestion,
+			suggestedAnswers,
+			inputMode: "suggested_answers",
+			questionScope: "narrow_detail",
 		});
 	});
 
@@ -398,6 +576,8 @@ describe("knowledge clarification usage tracking", () => {
 			output: {
 				kind: "question",
 				continueClarifying: true,
+				inputMode: "suggested_answers",
+				questionScope: "narrow_detail",
 				topicSummary: "Clarify billing timing",
 				missingFact:
 					"Whether the billing change always waits for the next cycle",
@@ -543,6 +723,8 @@ describe("knowledge clarification usage tracking", () => {
 				output: {
 					kind: "question",
 					continueClarifying: true,
+					inputMode: "suggested_answers",
+					questionScope: "narrow_detail",
 					topicSummary: "Clarify billing timing",
 					missingFact: "Whether billing changes immediately",
 					whyItMatters: "That controls the FAQ answer.",
@@ -639,6 +821,8 @@ describe("knowledge clarification usage tracking", () => {
 				output: {
 					kind: "question",
 					continueClarifying: true,
+					inputMode: "suggested_answers",
+					questionScope: "narrow_detail",
 					topicSummary: "Clarify billing timing",
 					missingFact: "Whether annual plans are an exception",
 					whyItMatters: "That would materially change the FAQ answer.",
@@ -830,6 +1014,75 @@ describe("knowledge clarification usage tracking", () => {
 		);
 		expect(prompt).not.toContain(
 			"Grounded facts:\n- Visitor claim: When does the billing change take effect?"
+		);
+	});
+
+	it("tells the model to keep clarification questions short and free of inline answers", async () => {
+		const { runKnowledgeClarificationStep } = await modulePromise;
+		const request = createRequest({
+			status: "analyzing",
+			stepIndex: 0,
+		});
+
+		listKnowledgeClarificationTurnsMock.mockResolvedValue([]);
+		generateTextMock.mockResolvedValue({
+			output: {
+				kind: "draft_ready",
+				continueClarifying: false,
+				topicSummary: "Clarify billing timing",
+				missingFact: "No additional grounded gap remains",
+				whyItMatters: "The prompt should constrain question formatting.",
+				draftFaqPayload: {
+					title: "Billing timing",
+					question: "When does a billing change take effect?",
+					answer: "Billing changes apply at the next billing cycle.",
+					categories: ["Billing"],
+					relatedQuestions: [],
+				},
+			},
+			usage: {
+				inputTokens: 180,
+				outputTokens: 60,
+				totalTokens: 240,
+			},
+		});
+		updateKnowledgeClarificationRequestMock.mockResolvedValue(
+			createRequest({
+				status: "draft_ready",
+				stepIndex: 0,
+				draftFaqPayload: {
+					title: "Billing timing",
+					question: "When does a billing change take effect?",
+					answer: "Billing changes apply at the next billing cycle.",
+					categories: ["Billing"],
+					relatedQuestions: [],
+				},
+			})
+		);
+
+		await runKnowledgeClarificationStep({
+			db: {} as never,
+			request,
+			aiAgent: createAiAgent(),
+			conversation: createConversation(),
+		});
+
+		const promptCall = generateTextMock.mock.calls[0] as
+			| [Record<string, unknown>]
+			| undefined;
+		const systemPrompt = String(promptCall?.[0]?.system ?? "");
+
+		expect(systemPrompt).toContain(
+			"the question field must be one short, simple plain-language question."
+		);
+		expect(systemPrompt).toContain(
+			'must not start with numbering or bullets such as "1.", "1)", "a)", or "(a)".'
+		);
+		expect(systemPrompt).toContain(
+			"must not include answer options, multiple-choice labels, button text, support emails, CLI commands, or any candidate answers."
+		);
+		expect(systemPrompt).toContain(
+			"Put all answer choices only in suggestedAnswers."
 		);
 	});
 

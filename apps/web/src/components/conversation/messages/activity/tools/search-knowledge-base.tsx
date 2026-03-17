@@ -38,6 +38,75 @@ function extractArticles(output: unknown): ArticleSummary[] {
 		}));
 }
 
+function normalizeSourceTitle(title: string | null | undefined): string | null {
+	const trimmedTitle = title?.trim();
+	if (!trimmedTitle) {
+		return null;
+	}
+
+	return trimmedTitle.replace(/\s+/g, " ").toLowerCase();
+}
+
+function normalizeSourceUrl(
+	sourceUrl: string | null | undefined
+): string | null {
+	const trimmedSourceUrl = sourceUrl?.trim();
+	if (!trimmedSourceUrl) {
+		return null;
+	}
+
+	try {
+		const parsedUrl = new URL(trimmedSourceUrl);
+		const normalizedPathname =
+			parsedUrl.pathname === "/"
+				? "/"
+				: parsedUrl.pathname.replace(/\/+$/, "") || "/";
+		const normalizedHostname = parsedUrl.hostname.toLowerCase();
+		const normalizedPort = parsedUrl.port ? `:${parsedUrl.port}` : "";
+
+		return `${parsedUrl.protocol}//${normalizedHostname}${normalizedPort}${normalizedPathname}${parsedUrl.search}`;
+	} catch {
+		return null;
+	}
+}
+
+function getArticleDedupKey(article: ArticleSummary): string | null {
+	const normalizedUrl = normalizeSourceUrl(article.sourceUrl);
+	if (normalizedUrl) {
+		return `url:${normalizedUrl}`;
+	}
+
+	const normalizedTitle = normalizeSourceTitle(article.title);
+	if (normalizedTitle) {
+		return `title:${normalizedTitle}`;
+	}
+
+	return null;
+}
+
+function dedupeArticles(articles: ArticleSummary[]): ArticleSummary[] {
+	const seenKeys = new Set<string>();
+	const dedupedArticles: ArticleSummary[] = [];
+
+	for (const article of articles) {
+		const dedupeKey = getArticleDedupKey(article);
+
+		if (!dedupeKey) {
+			dedupedArticles.push(article);
+			continue;
+		}
+
+		if (seenKeys.has(dedupeKey)) {
+			continue;
+		}
+
+		seenKeys.add(dedupeKey);
+		dedupedArticles.push(article);
+	}
+
+	return dedupedArticles;
+}
+
 function extractSearchQuery(input: unknown): string | null {
 	if (!isRecord(input) || typeof input.query !== "string") {
 		return null;
@@ -114,7 +183,7 @@ function SourcePillList({ articles }: { articles: ArticleSummary[] }) {
 	}
 
 	return (
-		<div className="mt-1 flex min-w-0 flex-wrap items-center gap-1">
+		<div className="mt-1 ml-7 flex min-w-0 flex-wrap items-center gap-1">
 			{visibleArticles.map((article, index) => {
 				const label = getSourceLabel(article);
 
@@ -220,7 +289,7 @@ export function SearchKnowledgeBaseActivity({
 		);
 	}
 
-	const articles = extractArticles(output);
+	const articles = dedupeArticles(extractArticles(output));
 
 	return (
 		<ActivityWrapper

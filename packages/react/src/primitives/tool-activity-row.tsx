@@ -28,10 +28,11 @@ export type ToolActivityRowProps = {
 const TONE_CLASSNAMES = {
 	dashboard: {
 		textRow: "flex min-h-6 gap-2 text-muted-foreground text-sm",
-		text: "min-w-0 flex-1 break-words [&_a]:underline [&_a]:underline-offset-2",
+		text: "min-w-0 flex-1 break-words leading-6 [&_a]:underline [&_a]:underline-offset-2",
 		details: "mt-1.5",
 		timestamp:
 			"text-xs opacity-0 transition-opacity group-hover/tool-activity:opacity-100",
+		indicatorSlot: "flex h-6 w-5 shrink-0 items-center justify-center",
 		indicator:
 			"font-mono text-sm leading-6 text-muted-foreground data-[state=error]:text-destructive/70",
 		spinner: "text-primary/70",
@@ -41,6 +42,7 @@ const TONE_CLASSNAMES = {
 		text: "min-w-0 flex-1 break-words text-co-primary/75 text-sm leading-6 data-[state=error]:text-co-destructive",
 		details: "pl-7 text-co-muted-foreground text-sm leading-5",
 		timestamp: "text-[10px] text-co-muted-foreground/70",
+		indicatorSlot: "flex h-6 w-5 shrink-0 items-center justify-center",
 		indicator:
 			"font-mono text-sm leading-6 text-co-muted-foreground data-[state=error]:text-co-destructive",
 		spinner: "text-co-primary/70",
@@ -69,14 +71,14 @@ function ToolActivityIndicator({
 	return (
 		<span
 			aria-hidden="true"
-			className={cn(
-				"flex min-h-6 w-5 shrink-0 items-start justify-center",
-				slotClassName
-			)}
+			className={cn(TONE_CLASSNAMES[tone].indicatorSlot, slotClassName)}
 			data-tool-execution-indicator-slot="true"
 		>
 			{state === "partial" ? (
-				<span className="mt-1 shrink-0" data-tool-execution-indicator="spinner">
+				<span
+					className="shrink-0 leading-none"
+					data-tool-execution-indicator="spinner"
+				>
 					<Spinner
 						className={cn(TONE_CLASSNAMES[tone].spinner, spinnerClassName)}
 						size={12}

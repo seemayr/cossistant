@@ -145,7 +145,6 @@
 	}
 
 	.co-spinner__cell {
-		border-radius: var(--co-spinner-radius, 2px);
 		background: currentColor;
 		animation-duration: 1.15s;
 		animation-delay: var(--co-spinner-delay, 0ms);

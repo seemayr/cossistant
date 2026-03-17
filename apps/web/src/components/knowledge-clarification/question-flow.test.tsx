@@ -92,4 +92,54 @@ describe("KnowledgeClarificationQuestionContent", () => {
 		expect(html).toContain('placeholder="Type your answer here..."');
 		expect(html).not.toContain(">Other<");
 	});
+
+	it("keeps numbering on the answer options instead of the question text", () => {
+		const html = renderToStaticMarkup(
+			<KnowledgeClarificationQuestionContent
+				freeAnswer=""
+				isOtherSelected={false}
+				onFreeAnswerChange={() => {}}
+				onSelectAnswer={() => {}}
+				question="How does a user delete their account?"
+				selectedAnswer={null}
+				suggestedAnswers={[
+					"Click Delete Account in settings",
+					"Email support",
+					"Use a CLI command",
+				]}
+			/>
+		);
+
+		expect(html).toContain("How does a user delete their account?");
+		expect(html).not.toContain("1. How does a user delete their account?");
+		expect(html).toContain(">1.<");
+		expect(html).toContain(">2.<");
+		expect(html).toContain(">3.<");
+		expect(html).toContain(">4.<");
+	});
+
+	it("renders textarea-first discovery questions with starter chips instead of numbered options", () => {
+		const html = renderToStaticMarkup(
+			<KnowledgeClarificationQuestionContent
+				freeAnswer=""
+				inputMode="textarea_first"
+				isOtherSelected={false}
+				onFreeAnswerChange={() => {}}
+				onSelectAnswer={() => {}}
+				question="How does account deletion work today?"
+				selectedAnswer={null}
+				suggestedAnswers={[
+					"Users delete it in settings",
+					"Support handles it manually",
+					"It depends on the account type",
+				]}
+			/>
+		);
+
+		expect(html).toContain(
+			'placeholder="Describe how this workflow or rule works today..."'
+		);
+		expect(html).toContain("Starter ideas");
+		expect(html).not.toContain(">4.<");
+	});
 });

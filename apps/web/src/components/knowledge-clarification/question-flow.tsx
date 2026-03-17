@@ -1,5 +1,6 @@
 "use client";
 
+import type { KnowledgeClarificationQuestionInputMode } from "@cossistant/types";
 import { useEffect, useId, useState } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -59,18 +60,21 @@ export function changeKnowledgeClarificationFreeAnswer(
 export type KnowledgeClarificationQuestionContentProps = {
 	question: string;
 	suggestedAnswers: [string, string, string] | string[];
+	inputMode?: KnowledgeClarificationQuestionInputMode;
 	selectedAnswer: string | null;
 	freeAnswer: string;
 	isOtherSelected: boolean;
 	isSubmitting?: boolean;
 	isAnalyzing?: boolean;
+	analyzingMessage?: string;
 	className?: string;
 	onSelectAnswer: (answer: string) => void;
 	onFreeAnswerChange: (value: string) => void;
 };
 
 export function useKnowledgeClarificationAnswerDraft(
-	question: string | null | undefined
+	question: string | null | undefined,
+	inputMode: KnowledgeClarificationQuestionInputMode = "suggested_answers"
 ) {
 	const [draftState, setDraftState] =
 		useState<KnowledgeClarificationAnswerDraftState>(EMPTY_ANSWER_DRAFT_STATE);
@@ -80,7 +84,7 @@ export function useKnowledgeClarificationAnswerDraft(
 
 	useEffect(() => {
 		setDraftState(EMPTY_ANSWER_DRAFT_STATE);
-	}, [question]);
+	}, [inputMode, question]);
 
 	const submitPayload = getKnowledgeClarificationSubmitPayload(draftState);
 
@@ -104,97 +108,156 @@ export function useKnowledgeClarificationAnswerDraft(
 export function KnowledgeClarificationQuestionContent({
 	question,
 	suggestedAnswers,
+	inputMode = "suggested_answers",
 	selectedAnswer,
 	freeAnswer,
 	isOtherSelected,
 	isSubmitting = false,
 	isAnalyzing = false,
+	analyzingMessage = "Answer saved. AI is preparing the next step...",
 	className,
 	onSelectAnswer,
 	onFreeAnswerChange,
 }: KnowledgeClarificationQuestionContentProps) {
 	const otherAnswerId = useId();
+	const trimmedFreeAnswer = freeAnswer.trim();
 
 	return (
-		<div className={cn("space-y-4", className)}>
+		<div
+			aria-busy={isAnalyzing}
+			className={cn(
+				"space-y-4 transition-opacity",
+				isAnalyzing && "opacity-60",
+				className
+			)}
+		>
 			<div className="space-y-3">
 				<h3 className="font-bold text-sm leading-tight">{question}</h3>
 				{isAnalyzing ? (
 					<div className="flex items-center gap-2 rounded-xl border border-dashed bg-muted/40 px-3 py-2 text-muted-foreground text-sm">
 						<Spinner size={16} />
-						Analyzing and preparing the next step...
+						{analyzingMessage}
 					</div>
 				) : null}
 			</div>
-			<div className="space-y-2">
-				{suggestedAnswers.map((answer, index) => {
-					const isSelected = selectedAnswer === answer;
-
-					return (
-						<button
-							className={cn(
-								"flex w-full items-start gap-3 py-2 text-left text-sm transition-colors hover:cursor-pointer",
-								isSelected
-									? "text-cossistant-orange"
-									: "text-primary/70 hover:text-primary"
-							)}
-							disabled={isSubmitting || isAnalyzing}
-							key={answer}
-							onClick={() => onSelectAnswer(answer)}
-							type="button"
-						>
-							<div
-								className={cn(
-									"mt-1 flex size-3 shrink-0 items-center justify-center rounded font-bold text-xs",
-									isSelected ? "text-cossistant-orange" : "text-primary/70"
-								)}
-							>
-								{index + 1}.
-							</div>
-							<div>{answer}</div>
-						</button>
-					);
-				})}
-
-				<Separator className="opacity-80" />
-
-				<div
-					className={cn(
-						"flex w-full items-start gap-3 py-2 text-sm transition-colors",
-						isOtherSelected
-							? "text-cossistant-orange"
-							: "text-primary/70 focus-within:text-primary"
-					)}
-				>
-					<div
-						className={cn(
-							"mt-1 flex size-3 shrink-0 items-center justify-center rounded font-bold text-xs",
-							isOtherSelected ? "text-cossistant-orange" : "text-primary/70"
-						)}
-					>
-						4.
-					</div>
-					<div className="min-w-0 flex-1">
+			{inputMode === "textarea_first" ? (
+				<div className="space-y-3">
+					<div className="space-y-2">
 						<label className="sr-only" htmlFor={otherAnswerId}>
-							Custom answer
+							Describe how it works today
 						</label>
 						<Textarea
-							aria-label="Custom answer"
-							className={cn(
-								"min-h-auto resize-none rounded-none border-0 bg-transparent px-0 py-0 text-inherit shadow-none focus-visible:border-0 focus-visible:ring-0 dark:bg-transparent",
-								!isOtherSelected && "text-primary/70"
-							)}
+							aria-label="Describe how it works today"
+							className="min-h-28 resize-y rounded-xl border bg-background px-3 py-2 text-sm shadow-none focus-visible:ring-1"
 							disabled={isSubmitting || isAnalyzing}
 							id={otherAnswerId}
 							maxLength={500}
 							onChange={(event) => onFreeAnswerChange(event.target.value)}
-							placeholder="Type your answer here..."
-							rows={2}
+							placeholder="Describe how this workflow or rule works today..."
+							rows={5}
 							value={freeAnswer}
 						/>
 					</div>
+
+					<div className="space-y-2">
+						<div className="font-medium text-muted-foreground text-xs uppercase tracking-[0.12em]">
+							Starter ideas
+						</div>
+						<div className="flex flex-wrap gap-2">
+							{suggestedAnswers.map((answer) => {
+								const isSelected = trimmedFreeAnswer === answer.trim();
+
+								return (
+									<button
+										className={cn(
+											"rounded-full border px-3 py-1.5 text-left text-sm transition-colors",
+											isSelected
+												? "border-cossistant-orange text-cossistant-orange"
+												: "border-border text-primary/70 hover:text-primary"
+										)}
+										disabled={isSubmitting || isAnalyzing}
+										key={answer}
+										onClick={() => onFreeAnswerChange(answer)}
+										type="button"
+									>
+										{answer}
+									</button>
+								);
+							})}
+						</div>
+					</div>
 				</div>
-			</div>
+			) : (
+				<div className="space-y-2">
+					{suggestedAnswers.map((answer, index) => {
+						const isSelected = selectedAnswer === answer;
+
+						return (
+							<button
+								className={cn(
+									"flex w-full items-start gap-3 py-2 text-left text-sm transition-colors hover:cursor-pointer",
+									isSelected
+										? "text-cossistant-orange"
+										: "text-primary/70 hover:text-primary"
+								)}
+								disabled={isSubmitting || isAnalyzing}
+								key={answer}
+								onClick={() => onSelectAnswer(answer)}
+								type="button"
+							>
+								<div
+									className={cn(
+										"mt-1 flex size-3 shrink-0 items-center justify-center rounded font-bold text-xs",
+										isSelected ? "text-cossistant-orange" : "text-primary/70"
+									)}
+								>
+									{index + 1}.
+								</div>
+								<div>{answer}</div>
+							</button>
+						);
+					})}
+
+					<Separator className="opacity-80" />
+
+					<div
+						className={cn(
+							"flex w-full items-start gap-3 py-2 text-sm transition-colors",
+							isOtherSelected
+								? "text-cossistant-orange"
+								: "text-primary/70 focus-within:text-primary"
+						)}
+					>
+						<div
+							className={cn(
+								"mt-1 flex size-3 shrink-0 items-center justify-center rounded font-bold text-xs",
+								isOtherSelected ? "text-cossistant-orange" : "text-primary/70"
+							)}
+						>
+							4.
+						</div>
+						<div className="min-w-0 flex-1">
+							<label className="sr-only" htmlFor={otherAnswerId}>
+								Custom answer
+							</label>
+							<Textarea
+								aria-label="Custom answer"
+								className={cn(
+									"min-h-auto resize-none rounded-none border-0 bg-transparent px-0 py-0 text-inherit shadow-none focus-visible:border-0 focus-visible:ring-0 dark:bg-transparent",
+									!isOtherSelected && "text-primary/70"
+								)}
+								disabled={isSubmitting || isAnalyzing}
+								id={otherAnswerId}
+								maxLength={500}
+								onChange={(event) => onFreeAnswerChange(event.target.value)}
+								placeholder="Type your answer here..."
+								rows={2}
+								value={freeAnswer}
+							/>
+						</div>
+					</div>
+				</div>
+			)}
 		</div>
 	);
 }

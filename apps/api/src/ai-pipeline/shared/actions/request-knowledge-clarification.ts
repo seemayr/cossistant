@@ -46,7 +46,7 @@ export async function requestKnowledgeClarification(
 		await emitConversationClarificationUpdate({
 			db: params.db,
 			conversation: params.conversation,
-			request: step.request.status === "draft_ready" ? null : step.request,
+			request: step.request,
 			aiAgentId: params.aiAgentId,
 		});
 

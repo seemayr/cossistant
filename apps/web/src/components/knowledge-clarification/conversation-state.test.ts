@@ -44,6 +44,8 @@ function createRequest(
 			"At the next billing cycle",
 			"It depends on the plan",
 		],
+		currentQuestionInputMode: "suggested_answers",
+		currentQuestionScope: "narrow_detail",
 		draftFaqPayload: null,
 		lastError: null,
 		createdAt: "2026-03-13T10:00:00.000Z",
@@ -76,6 +78,18 @@ describe("resolveEngagedConversationClarificationRequestId", () => {
 				engagedRequestId: "req_1",
 			})
 		).toBe("req_1");
+	});
+
+	it("clears the engaged request once the clarification becomes a draft banner", () => {
+		expect(
+			resolveEngagedConversationClarificationRequestId({
+				summary: createSummary({
+					status: "draft_ready",
+					question: null,
+				}),
+				engagedRequestId: "req_1",
+			})
+		).toBeNull();
 	});
 });
 
@@ -175,6 +189,42 @@ describe("resolveConversationClarificationDisplayState", () => {
 			showPrompt: false,
 			showAction: true,
 			actionRequest: null,
+		});
+	});
+
+	it("switches draft-ready clarifications into the composer banner state", () => {
+		const request = createRequest({
+			status: "draft_ready",
+			currentQuestion: null,
+			currentSuggestedAnswers: null,
+			currentQuestionInputMode: null,
+			currentQuestionScope: null,
+			draftFaqPayload: {
+				title: "Billing timing",
+				question: "When does billing change take effect?",
+				answer: "It applies at the next billing cycle.",
+				categories: ["Billing"],
+				relatedQuestions: [],
+			},
+		});
+
+		expect(
+			resolveConversationClarificationDisplayState({
+				summary: createSummary({
+					status: "draft_ready",
+					question: null,
+				}),
+				request,
+				engagedRequestId: "req_1",
+				hasEscalation: false,
+				hasLimitAction: false,
+			})
+		).toMatchObject({
+			engagedRequestId: null,
+			showPrompt: false,
+			showAction: false,
+			showDraftBanner: true,
+			bannerRequest: request,
 		});
 	});
 });

@@ -26,6 +26,8 @@ export function stepFromKnowledgeClarificationRequest(
 			request,
 			question: request.currentQuestion,
 			suggestedAnswers: request.currentSuggestedAnswers,
+			inputMode: request.currentQuestionInputMode ?? "suggested_answers",
+			questionScope: request.currentQuestionScope ?? "narrow_detail",
 		};
 	}
 

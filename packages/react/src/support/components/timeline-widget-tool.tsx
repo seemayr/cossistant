@@ -17,7 +17,7 @@ import { useToolDisplayState } from "./use-tool-display-state";
 type WidgetToolActivityRowProps = {
 	text: string;
 	state?: TimelineToolPartState;
-	detailLabels?: string[];
+	details?: React.ReactNode;
 	showTerminalIndicator?: boolean;
 };
 
@@ -50,22 +50,12 @@ function getGenericToolText(params: {
 export function WidgetToolActivityRow({
 	text,
 	state = "partial",
-	detailLabels = [],
+	details,
 	showTerminalIndicator = true,
 }: WidgetToolActivityRowProps): React.ReactElement {
 	return (
 		<ToolActivityRow
-			details={
-				detailLabels.length > 0 ? (
-					<div className="flex flex-col gap-1">
-						{detailLabels.map((label) => (
-							<span className="truncate" key={label} title={label}>
-								{label}
-							</span>
-						))}
-					</div>
-				) : undefined
-			}
+			details={details}
 			showTerminalIndicator={showTerminalIndicator}
 			state={state}
 			text={text}

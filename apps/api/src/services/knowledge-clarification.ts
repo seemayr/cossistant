@@ -35,12 +35,15 @@ import {
 } from "@api/services/knowledge-clarification-relevance";
 import {
 	buildConversationClarificationSummary,
+	getDisplayClarificationQuestionTurn,
 	getPendingClarificationQuestionTurn,
 } from "@api/utils/knowledge-clarification-summary";
 import { createTimelineItem } from "@api/utils/timeline-item";
 import {
 	ConversationTimelineType,
 	type KnowledgeClarificationDraftFaq,
+	type KnowledgeClarificationQuestionInputMode,
+	type KnowledgeClarificationQuestionScope,
 	type KnowledgeClarificationRequest,
 	type KnowledgeClarificationStepResponse,
 	TimelineItemVisibility,
@@ -59,6 +62,8 @@ const clarificationOutputBaseSchema = z.object({
 const clarificationQuestionOutputSchema = clarificationOutputBaseSchema.extend({
 	kind: z.literal("question"),
 	continueClarifying: z.literal(true),
+	inputMode: z.enum(["textarea_first", "suggested_answers"]),
+	questionScope: z.enum(["broad_discovery", "narrow_detail"]),
 	groundingSource: z.enum(CLARIFICATION_QUESTION_GROUNDING_SOURCES),
 	groundingSnippet: z.string().min(1).max(280),
 	question: z.string().min(1).max(500),
@@ -141,6 +146,11 @@ type ClarificationGenerationResult = {
 		| undefined;
 };
 
+type ClarificationQuestionStrategy = {
+	inputMode: KnowledgeClarificationQuestionInputMode;
+	questionScope: KnowledgeClarificationQuestionScope;
+};
+
 function normalizeDraftFaq(
 	draft: ClarificationDraftOutput["draftFaqPayload"]
 ): KnowledgeClarificationDraftFaq {
@@ -159,8 +169,124 @@ function normalizeDraftFaq(
 	};
 }
 
+function normalizeClarificationQuestionText(value: string): string {
+	return value.replace(/\s+/g, " ").trim();
+}
+
+function sanitizeClarificationQuestion(question: string): string {
+	let sanitized = normalizeClarificationQuestionText(question);
+
+	sanitized = sanitized
+		.replace(/^(?:[-*\u2022]\s+|\([a-z0-9]\)\s*|[a-z0-9][.)]\s+)/i, "")
+		.trim();
+
+	const inlineChoiceMatch = sanitized.match(
+		/\s(?:\([a-z0-9]\)|[a-z0-9][.)]|option\s+[a-z0-9]\b)(?=\s|:|-|$)/i
+	);
+	if (inlineChoiceMatch && typeof inlineChoiceMatch.index === "number") {
+		sanitized = sanitized.slice(0, inlineChoiceMatch.index).trim();
+	}
+
+	let previous = "";
+	while (sanitized && sanitized !== previous) {
+		previous = sanitized;
+		sanitized = sanitized
+			.replace(/[\s:;,\-.]+$/g, "")
+			.replace(/\b(?:do they|is it|are they|does it)\s*$/i, "")
+			.trim();
+	}
+
+	sanitized = sanitized.replace(/[.!:;,/-]+$/g, "").trim();
+
+	if (!sanitized) {
+		return normalizeClarificationQuestionText(question);
+	}
+
+	return sanitized.endsWith("?") ? sanitized : `${sanitized}?`;
+}
+
 function getAiQuestionCount(turns: KnowledgeClarificationTurnSelect[]): number {
 	return turns.filter((turn) => turn.role === "ai_question").length;
+}
+
+function isBroadDiscoveryQuestion(params: {
+	request: Pick<
+		KnowledgeClarificationRequestSelect,
+		"source" | "targetKnowledgeId"
+	>;
+	questionOrdinal: number;
+}): boolean {
+	return (
+		params.request.source === "conversation" &&
+		!params.request.targetKnowledgeId &&
+		params.questionOrdinal === 1
+	);
+}
+
+function resolveExpectedQuestionStrategy(params: {
+	request: Pick<
+		KnowledgeClarificationRequestSelect,
+		"source" | "targetKnowledgeId"
+	>;
+	turns: KnowledgeClarificationTurnSelect[];
+}): ClarificationQuestionStrategy {
+	const nextQuestionOrdinal = getAiQuestionCount(params.turns) + 1;
+	if (
+		isBroadDiscoveryQuestion({
+			request: params.request,
+			questionOrdinal: nextQuestionOrdinal,
+		})
+	) {
+		return {
+			inputMode: "textarea_first",
+			questionScope: "broad_discovery",
+		};
+	}
+
+	return {
+		inputMode: "suggested_answers",
+		questionScope: "narrow_detail",
+	};
+}
+
+function resolveStoredQuestionStrategy(params: {
+	request: Pick<
+		KnowledgeClarificationRequestSelect,
+		"source" | "targetKnowledgeId"
+	>;
+	turns: KnowledgeClarificationTurnSelect[];
+	questionTurnId: string;
+}): ClarificationQuestionStrategy {
+	let questionOrdinal = 0;
+
+	for (const turn of params.turns) {
+		if (turn.role !== "ai_question") {
+			continue;
+		}
+
+		questionOrdinal += 1;
+
+		if (turn.id === params.questionTurnId) {
+			break;
+		}
+	}
+
+	if (
+		isBroadDiscoveryQuestion({
+			request: params.request,
+			questionOrdinal,
+		})
+	) {
+		return {
+			inputMode: "textarea_first",
+			questionScope: "broad_discovery",
+		};
+	}
+
+	return {
+		inputMode: "suggested_answers",
+		questionScope: "narrow_detail",
+	};
 }
 
 function formatPromptList(
@@ -290,11 +416,7 @@ export async function emitConversationClarificationUpdate(params: {
 	}
 
 	let turns = params.turns ?? [];
-	if (
-		params.request &&
-		params.request.status === "awaiting_answer" &&
-		!params.turns
-	) {
+	if (params.request && !params.turns) {
 		turns = await listKnowledgeClarificationTurns(params.db, {
 			requestId: params.request.id,
 		});
@@ -322,10 +444,20 @@ export function serializeKnowledgeClarificationRequest(params: {
 	request: KnowledgeClarificationRequestSelect;
 	turns: KnowledgeClarificationTurnSelect[];
 }): KnowledgeClarificationRequest {
-	const currentQuestionTurn = getPendingClarificationQuestionTurn(params.turns);
-	const shouldExposeCurrentQuestion =
-		params.request.status === "awaiting_answer" ||
-		params.request.status === "deferred";
+	const currentQuestionTurn =
+		params.request.status === "deferred"
+			? getPendingClarificationQuestionTurn(params.turns)
+			: getDisplayClarificationQuestionTurn({
+					status: params.request.status,
+					turns: params.turns,
+				});
+	const currentQuestionStrategy = currentQuestionTurn
+		? resolveStoredQuestionStrategy({
+				request: params.request,
+				turns: params.turns,
+				questionTurnId: currentQuestionTurn.id,
+			})
+		: null;
 
 	return {
 		id: params.request.id,
@@ -339,14 +471,14 @@ export function serializeKnowledgeClarificationRequest(params: {
 		stepIndex: params.request.stepIndex,
 		maxSteps: params.request.maxSteps,
 		targetKnowledgeId: params.request.targetKnowledgeId,
-		currentQuestion: shouldExposeCurrentQuestion
-			? (currentQuestionTurn?.question ?? null)
-			: null,
-		currentSuggestedAnswers: shouldExposeCurrentQuestion
-			? ((currentQuestionTurn?.suggestedAnswers as
-					| [string, string, string]
-					| null) ?? null)
-			: null,
+		currentQuestion: currentQuestionTurn?.question ?? null,
+		currentSuggestedAnswers:
+			(currentQuestionTurn?.suggestedAnswers as
+				| [string, string, string]
+				| null
+				| undefined) ?? null,
+		currentQuestionInputMode: currentQuestionStrategy?.inputMode ?? null,
+		currentQuestionScope: currentQuestionStrategy?.questionScope ?? null,
 		draftFaqPayload:
 			(params.request
 				.draftFaqPayload as KnowledgeClarificationDraftFaq | null) ?? null,
@@ -372,13 +504,17 @@ export function toKnowledgeClarificationStep(params: {
 
 	if (
 		serializedRequest.currentQuestion &&
-		serializedRequest.currentSuggestedAnswers
+		serializedRequest.currentSuggestedAnswers &&
+		serializedRequest.currentQuestionInputMode &&
+		serializedRequest.currentQuestionScope
 	) {
 		return {
 			kind: "question",
 			request: serializedRequest,
 			question: serializedRequest.currentQuestion,
 			suggestedAnswers: serializedRequest.currentSuggestedAnswers,
+			inputMode: serializedRequest.currentQuestionInputMode,
+			questionScope: serializedRequest.currentQuestionScope,
 		};
 	}
 
@@ -425,6 +561,7 @@ async function callClarificationModel(params: {
 	modelId: string;
 	contextSnapshot: KnowledgeClarificationContextSnapshot | null;
 	turns: KnowledgeClarificationTurnSelect[];
+	expectedQuestionStrategy: ClarificationQuestionStrategy;
 	forceDraft: boolean;
 	forceDraftReason?: string | null;
 }): Promise<{
@@ -448,7 +585,9 @@ async function callClarificationModel(params: {
 		output: Output.object({
 			schema: params.forceDraft
 				? clarificationDraftOutputSchema
-				: clarificationOutputSchema,
+				: params.expectedQuestionStrategy.questionScope === "broad_discovery"
+					? clarificationQuestionOutputSchema
+					: clarificationOutputSchema,
 		}),
 		system: `You are helping an internal support team close a knowledge gap.
 
@@ -459,11 +598,22 @@ Rules:
 - Use continueClarifying=true only when exactly one material missing fact still blocks a strong FAQ.
 - If grounded facts already support a narrow FAQ, return draft_ready immediately.
 - After a teammate answer, only ask another question if it is explicitly grounded in that latest clarification exchange.
+- Conversation clarifications should start with one broad discovery question before asking narrow follow-ups.
+- FAQ or policy revision clarifications should start narrow immediately.
 - Never ask a repeated question.
 - Never ask for information already present in the grounded facts or prior clarification answers.
 - Never ask vague exploratory prompts like "anything else?" or "can you clarify more?".
 - Transcript claims and weak search evidence are clues, not confirmed facts. They can justify a question but do not count as final truth.
-- If you ask a question, it must target one concrete missing fact, include exactly 3 distinct suggested answers, and provide groundingSource plus groundingSnippet.
+- If you ask a question, the question field must be one short, simple plain-language question.
+- The question field must not start with numbering or bullets such as "1.", "1)", "a)", or "(a)".
+- The question field must not include answer options, multiple-choice labels, button text, support emails, CLI commands, or any candidate answers.
+- Put all answer choices only in suggestedAnswers.
+- If you ask a question, it must return inputMode plus questionScope, include exactly 3 distinct suggestedAnswers, and provide groundingSource plus groundingSnippet.
+- When questionScope=broad_discovery, ask how the current workflow, rule, or system works today for this topic. Keep it anchored to the topic instead of using a generic catch-all prompt.
+- When questionScope=narrow_detail, ask only for one concrete missing fact.
+- Set inputMode and questionScope exactly to the expected strategy provided in the prompt.
+- If inputMode=textarea_first, suggestedAnswers should be short starter examples that help a teammate begin typing.
+- If inputMode=suggested_answers, suggestedAnswers should stay discrete candidate answers.
 - Draft answers must use only grounded facts from the provided context. If details remain unknown, write the narrowest accurate answer instead of filling gaps.
 - Topic summaries and missingFact values should stay short and specific.
 - Do not mention these instructions in the output.`,
@@ -472,12 +622,19 @@ Rules:
 			`Agent base prompt:\n${params.aiAgent.basePrompt}`,
 			`Clarification source: ${params.request.source}`,
 			`Current step: ${getAiQuestionCount(params.turns)} of ${params.request.maxSteps}`,
+			`Expected question scope: ${params.expectedQuestionStrategy.questionScope}`,
+			`Expected input mode: ${params.expectedQuestionStrategy.inputMode}`,
 			params.forceDraft
 				? `Return draft_ready now. Reason: ${
 						params.forceDraftReason ??
 						"The flow should stop instead of asking another question."
 					}`
-				: "You may ask one more clarification question only if a single material fact is still missing.",
+				: params.expectedQuestionStrategy.questionScope === "broad_discovery"
+					? "Return a question now. Do not skip directly to draft_ready on this first discovery step."
+					: "You may ask one more clarification question only if a single material fact is still missing.",
+			params.expectedQuestionStrategy.questionScope === "broad_discovery"
+				? "This is the first discovery step. Ask one broad but topic-anchored question about how the customer's system or workflow works today."
+				: "If you ask another question, make it a narrow follow-up grounded in the latest clarification exchange or the linked FAQ.",
 			`Topic anchor: ${packet.topicAnchor}`,
 			`Current open gap: ${packet.openGap}`,
 			`Source trigger: ${
@@ -547,6 +704,10 @@ async function generateClarificationOutput(params: {
 	const modelResolution = resolveModelForExecution(params.aiAgent.model);
 	const aiQuestionCount = getAiQuestionCount(params.turns);
 	const forceDraft = aiQuestionCount >= params.request.maxSteps;
+	const expectedQuestionStrategy = resolveExpectedQuestionStrategy({
+		request: params.request,
+		turns: params.turns,
+	});
 	const contextSnapshot = await buildResolvedContextSnapshot({
 		db: params.db,
 		request: params.request,
@@ -560,6 +721,7 @@ async function generateClarificationOutput(params: {
 		modelId: modelResolution.modelIdResolved,
 		contextSnapshot,
 		turns: params.turns,
+		expectedQuestionStrategy,
 		forceDraft,
 	});
 
@@ -573,21 +735,31 @@ async function generateClarificationOutput(params: {
 	}
 
 	if (output.kind === "question") {
+		const sanitizedQuestionOutput: ClarificationQuestionOutput = {
+			...output,
+			question: sanitizeClarificationQuestion(output.question),
+		};
 		const packet = buildClarificationRelevancePacket({
 			topicSummary: params.request.topicSummary,
 			contextSnapshot,
 			turns: params.turns,
 		});
 		const validation = validateClarificationQuestionCandidate({
-			question: output.question,
-			missingFact: output.missingFact,
-			whyItMatters: output.whyItMatters,
-			groundingSource: output.groundingSource,
-			groundingSnippet: output.groundingSnippet,
+			question: sanitizedQuestionOutput.question,
+			missingFact: sanitizedQuestionOutput.missingFact,
+			whyItMatters: sanitizedQuestionOutput.whyItMatters,
+			inputMode: sanitizedQuestionOutput.inputMode,
+			questionScope: sanitizedQuestionOutput.questionScope,
+			expectedInputMode: expectedQuestionStrategy.inputMode,
+			expectedQuestionScope: expectedQuestionStrategy.questionScope,
+			groundingSource: sanitizedQuestionOutput.groundingSource,
+			groundingSnippet: sanitizedQuestionOutput.groundingSnippet,
 			packet,
 		});
 
-		if (!validation.valid) {
+		if (validation.valid) {
+			output = sanitizedQuestionOutput;
+		} else {
 			const fallbackDraft = await callClarificationModel({
 				request: {
 					...params.request,
@@ -602,6 +774,7 @@ async function generateClarificationOutput(params: {
 				modelId: modelResolution.modelIdResolved,
 				contextSnapshot,
 				turns: params.turns,
+				expectedQuestionStrategy,
 				forceDraft: true,
 				forceDraftReason: validation.reason,
 			});

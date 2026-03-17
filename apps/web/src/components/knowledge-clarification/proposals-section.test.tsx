@@ -52,6 +52,8 @@ function createProposal(
 		targetKnowledgeId: null,
 		currentQuestion: "Do annual plans get a prorated refund?",
 		currentSuggestedAnswers: ["Yes", "No", "Only within 30 days"],
+		currentQuestionInputMode: "suggested_answers",
+		currentQuestionScope: "narrow_detail",
 		draftFaqPayload: null,
 		lastError: null,
 		createdAt: "2026-03-16T00:00:00.000Z",

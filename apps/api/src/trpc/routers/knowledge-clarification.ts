@@ -493,7 +493,7 @@ export const knowledgeClarificationRouter = createTRPCRouter({
 				await emitConversationClarificationUpdate({
 					db,
 					conversation: runtime.conversation,
-					request: step.request.status === "draft_ready" ? null : step.request,
+					request: step.request,
 					aiAgentId: null,
 				});
 
@@ -589,7 +589,7 @@ export const knowledgeClarificationRouter = createTRPCRouter({
 				await emitConversationClarificationUpdate({
 					db,
 					conversation: runtime.conversation,
-					request: step.request.status === "draft_ready" ? null : step.request,
+					request: step.request,
 					aiAgentId: null,
 				});
 
@@ -669,7 +669,7 @@ export const knowledgeClarificationRouter = createTRPCRouter({
 				await emitConversationClarificationUpdate({
 					db,
 					conversation: runtime.conversation,
-					request: step.request.status === "draft_ready" ? null : step.request,
+					request: step.request,
 					aiAgentId: null,
 				});
 				return { step };

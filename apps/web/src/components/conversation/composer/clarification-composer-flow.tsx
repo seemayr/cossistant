@@ -5,6 +5,7 @@ import type {
 	KnowledgeClarificationRequest,
 } from "@cossistant/types";
 import { useMutation } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import type React from "react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -30,8 +31,8 @@ type ClarificationComposerFlowProps = {
 
 type ClarificationComposerBlocks = {
 	aboveBlock: React.ReactNode;
-	centralBlock: React.ReactNode;
-	bottomBlock: React.ReactNode;
+	centralBlock: React.ReactNode | null;
+	bottomBlock: React.ReactNode | null;
 };
 
 type ClarificationTopicBlockProps = {
@@ -90,6 +91,64 @@ function ClarificationLoadingBlock() {
 				Preparing the next clarification step...
 			</div>
 		</ComposerCentralBlock>
+	);
+}
+
+function ClarificationDraftReadyBanner({
+	request,
+	topicSummary,
+	isApproving,
+	onApprove,
+	onClose,
+	onView,
+}: {
+	request: KnowledgeClarificationRequest | null;
+	topicSummary: string;
+	isApproving: boolean;
+	onApprove: () => void;
+	onClose: () => void;
+	onView: () => void;
+}) {
+	return (
+		<div
+			className="mb-4 flex items-center justify-between gap-3 rounded-[2px] border border-dashed px-3 py-2"
+			data-clarification-slot="draft-ready-banner"
+		>
+			<div className="min-w-0">
+				<div className="font-medium text-xs">FAQ draft ready</div>
+				<p className="truncate text-muted-foreground text-sm">{topicSummary}</p>
+			</div>
+
+			<div className="flex shrink-0 items-center gap-2">
+				<Button
+					disabled={!request}
+					onClick={onView}
+					size="xs"
+					type="button"
+					variant="ghost"
+				>
+					View
+				</Button>
+				<Button
+					disabled={isApproving || !request?.draftFaqPayload}
+					onClick={onApprove}
+					size="xs"
+					type="button"
+				>
+					{isApproving ? (
+						<>
+							<Spinner size={16} />
+							Approve
+						</>
+					) : (
+						"Approve"
+					)}
+				</Button>
+				<Button onClick={onClose} size="xs" type="button" variant="ghost">
+					Close
+				</Button>
+			</div>
+		</div>
 	);
 }
 
@@ -163,15 +222,30 @@ export function useClarificationComposerFlow({
 	request,
 	onCancel,
 }: ClarificationComposerFlowProps): ClarificationComposerBlocks | null {
+	const router = useRouter();
 	const trpc = useTRPC();
 	const invalidateClarificationQueries =
 		useKnowledgeClarificationQueryInvalidation(websiteSlug);
 	const [localStep, setLocalStep] = useState(
 		stepFromKnowledgeClarificationRequest(request)
 	);
+	const [closedDraftRequestId, setClosedDraftRequestId] = useState<
+		string | null
+	>(null);
 
 	useEffect(() => {
 		setLocalStep(stepFromKnowledgeClarificationRequest(request));
+	}, [request]);
+
+	useEffect(() => {
+		if (!(request && request.status === "draft_ready")) {
+			setClosedDraftRequestId(null);
+			return;
+		}
+
+		setClosedDraftRequestId((current) =>
+			current === request.id ? current : null
+		);
 	}, [request]);
 
 	const step = useMemo(
@@ -180,7 +254,8 @@ export function useClarificationComposerFlow({
 	);
 
 	const answerDraft = useKnowledgeClarificationAnswerDraft(
-		step?.kind === "question" ? step.question : null
+		step?.kind === "question" ? step.question : null,
+		step?.kind === "question" ? step.inputMode : "suggested_answers"
 	);
 
 	const handleMutationSuccess = async (result: {
@@ -210,12 +285,87 @@ export function useClarificationComposerFlow({
 		})
 	);
 
+	const approveMutation = useMutation(
+		trpc.knowledgeClarification.approveDraft.mutationOptions({
+			onSuccess: async (result) => {
+				await invalidateClarificationQueries({
+					request: result.request,
+					includeKnowledgeQueries: true,
+				});
+				toast.success("FAQ draft approved");
+			},
+			onError: (error) => {
+				toast.error(error.message || "Failed to approve draft");
+			},
+		})
+	);
+
 	const currentRequest = step?.request ?? request;
+	if (!summary) {
+		return null;
+	}
+
+	const isDraftReady =
+		currentRequest?.status === "draft_ready" &&
+		Boolean(currentRequest.draftFaqPayload);
+
+	if (summary.status === "draft_ready" && !currentRequest) {
+		return {
+			aboveBlock: (
+				<ClarificationDraftReadyBanner
+					isApproving={false}
+					onApprove={() => {}}
+					onClose={() => {
+						setClosedDraftRequestId(summary.requestId);
+					}}
+					onView={() => {}}
+					request={null}
+					topicSummary={summary.topicSummary}
+				/>
+			),
+			centralBlock: null,
+			bottomBlock: null,
+		};
+	}
+
 	if (
-		!summary ||
-		step?.kind === "draft_ready" ||
-		currentRequest?.status === "draft_ready"
+		isDraftReady &&
+		currentRequest &&
+		closedDraftRequestId !== currentRequest.id
 	) {
+		return {
+			aboveBlock: (
+				<ClarificationDraftReadyBanner
+					isApproving={approveMutation.isPending}
+					onApprove={() => {
+						if (!currentRequest.draftFaqPayload) {
+							return;
+						}
+
+						void approveMutation.mutateAsync({
+							websiteSlug,
+							requestId: currentRequest.id,
+							draft: currentRequest.draftFaqPayload,
+						});
+					}}
+					onClose={() => {
+						setClosedDraftRequestId(currentRequest.id);
+					}}
+					onView={() => {
+						router.push(
+							`/${websiteSlug}/agent/training/faq/proposals/${currentRequest.id}`
+						);
+					}}
+					request={currentRequest}
+					topicSummary={currentRequest.topicSummary ?? summary.topicSummary}
+				/>
+			),
+			centralBlock: null,
+			bottomBlock: null,
+		};
+	}
+
+	if (isDraftReady) {
 		return null;
 	}
 
@@ -264,6 +414,7 @@ export function useClarificationComposerFlow({
 					<div className="p-2" data-clarification-slot="question-flow">
 						<KnowledgeClarificationQuestionContent
 							freeAnswer={answerDraft.freeAnswer}
+							inputMode={step.inputMode}
 							isAnalyzing={isPending}
 							isOtherSelected={answerDraft.isOtherSelected}
 							isSubmitting={isPending}

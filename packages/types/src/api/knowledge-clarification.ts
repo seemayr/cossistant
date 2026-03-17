@@ -26,7 +26,11 @@ export const knowledgeClarificationStatusSchema = z
 	});
 
 export const activeConversationKnowledgeClarificationStatusSchema = z
-	.union([z.literal("analyzing"), z.literal("awaiting_answer")])
+	.union([
+		z.literal("analyzing"),
+		z.literal("awaiting_answer"),
+		z.literal("draft_ready"),
+	])
 	.openapi({
 		description:
 			"Clarification statuses that should appear on active conversation surfaces.",
@@ -50,6 +54,21 @@ export const knowledgeClarificationSuggestedAnswersSchema = z
 			"It only applies to paid plans.",
 			"It depends on the feature flag.",
 		],
+	});
+
+export const knowledgeClarificationQuestionInputModeSchema = z
+	.enum(["textarea_first", "suggested_answers"])
+	.openapi({
+		description: "How the current clarification question should be answered.",
+		example: "textarea_first",
+	});
+
+export const knowledgeClarificationQuestionScopeSchema = z
+	.enum(["broad_discovery", "narrow_detail"])
+	.openapi({
+		description:
+			"Whether the current clarification question is broad or narrow.",
+		example: "broad_discovery",
 	});
 
 export const knowledgeClarificationDraftFaqSchema = faqKnowledgePayloadSchema
@@ -89,6 +108,9 @@ export const knowledgeClarificationRequestSchema = z.object({
 	currentQuestion: z.string().nullable(),
 	currentSuggestedAnswers:
 		knowledgeClarificationSuggestedAnswersSchema.nullable(),
+	currentQuestionInputMode:
+		knowledgeClarificationQuestionInputModeSchema.nullable(),
+	currentQuestionScope: knowledgeClarificationQuestionScopeSchema.nullable(),
 	draftFaqPayload: knowledgeClarificationDraftFaqSchema.nullable(),
 	lastError: z.string().nullable(),
 	createdAt: z.string(),
@@ -112,6 +134,8 @@ export const knowledgeClarificationQuestionStepSchema = z.object({
 	request: knowledgeClarificationRequestSchema,
 	question: z.string(),
 	suggestedAnswers: knowledgeClarificationSuggestedAnswersSchema,
+	inputMode: knowledgeClarificationQuestionInputModeSchema,
+	questionScope: knowledgeClarificationQuestionScopeSchema,
 });
 
 export const knowledgeClarificationDraftStepSchema = z.object({
@@ -219,6 +243,12 @@ export type ConversationClarificationSummary = z.infer<
 >;
 export type KnowledgeClarificationTurnRole = z.infer<
 	typeof knowledgeClarificationTurnRoleSchema
+>;
+export type KnowledgeClarificationQuestionInputMode = z.infer<
+	typeof knowledgeClarificationQuestionInputModeSchema
+>;
+export type KnowledgeClarificationQuestionScope = z.infer<
+	typeof knowledgeClarificationQuestionScopeSchema
 >;
 export type KnowledgeClarificationDraftFaq = z.infer<
 	typeof knowledgeClarificationDraftFaqSchema

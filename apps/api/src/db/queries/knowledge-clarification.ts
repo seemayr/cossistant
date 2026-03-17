@@ -27,6 +27,7 @@ const PROPOSAL_STATUSES: KnowledgeClarificationStatus[] = [
 const ACTIVE_CONVERSATION_STATUSES: KnowledgeClarificationStatus[] = [
 	"analyzing",
 	"awaiting_answer",
+	"draft_ready",
 ];
 
 export async function getKnowledgeClarificationRequestById(

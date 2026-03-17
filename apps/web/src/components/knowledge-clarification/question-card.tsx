@@ -1,5 +1,6 @@
 "use client";
 
+import type { KnowledgeClarificationQuestionInputMode } from "@cossistant/types";
 import { LoaderCircleIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -11,6 +12,7 @@ import {
 type KnowledgeClarificationQuestionCardProps = {
 	question: string;
 	suggestedAnswers: [string, string, string] | string[];
+	inputMode?: KnowledgeClarificationQuestionInputMode;
 	stepIndex: number;
 	maxSteps: number;
 	onSubmit: (payload: {
@@ -37,12 +39,13 @@ export function KnowledgeClarificationQuestionCard({
 	onDefer,
 	isSubmitting = false,
 	isAnalyzing = false,
+	inputMode = "suggested_answers",
 	className,
 	title = "Help sharpen this topic",
 	description = "Answer one short question so the AI can turn this into a stronger FAQ draft.",
 	variant = "dialog",
 }: KnowledgeClarificationQuestionCardProps) {
-	const draft = useKnowledgeClarificationAnswerDraft(question);
+	const draft = useKnowledgeClarificationAnswerDraft(question, inputMode);
 
 	const handleSubmit = () => {
 		if (!draft.submitPayload) {
@@ -66,13 +69,14 @@ export function KnowledgeClarificationQuestionCard({
 					<div className="font-medium text-base">{title}</div>
 					<p className="text-muted-foreground text-sm">{description}</p>
 				</div>
-				<div className="shrink-0 rounded-full border px-2.5 py-1 font-medium text-muted-foreground text-xs">
+				<div className="shrink-0 font-medium text-muted-foreground text-xs">
 					{Math.max(stepIndex, 1)} of {maxSteps}
 				</div>
 			</div>
 
 			<KnowledgeClarificationQuestionContent
 				freeAnswer={draft.freeAnswer}
+				inputMode={inputMode}
 				isAnalyzing={isAnalyzing}
 				isOtherSelected={draft.isOtherSelected}
 				isSubmitting={isSubmitting}
@@ -114,7 +118,12 @@ export function KnowledgeClarificationQuestionCard({
 					onClick={handleSubmit}
 					type="button"
 				>
-					{isSubmitting ? (
+					{isAnalyzing ? (
+						<>
+							<LoaderCircleIcon className="h-4 w-4 animate-spin" />
+							Preparing
+						</>
+					) : isSubmitting ? (
 						<>
 							<LoaderCircleIcon className="h-4 w-4 animate-spin" />
 							Submitting

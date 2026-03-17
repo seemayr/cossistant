@@ -83,6 +83,7 @@ export const ClarificationAction: React.FC<ClarificationActionProps> = ({
 		<KnowledgeClarificationQuestionCard
 			className={className}
 			description="The AI is asking for a precise internal answer so it can improve the FAQ without handing this conversation to a human."
+			inputMode={step.inputMode}
 			isAnalyzing={answerMutation.isPending}
 			isSubmitting={answerMutation.isPending}
 			maxSteps={step.request.maxSteps}

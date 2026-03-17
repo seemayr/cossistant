@@ -8,10 +8,6 @@ import {
 	type VisitorSidebarProps,
 } from "../ui/layout/sidebars/visitor/visitor-sidebar";
 import { Composer, type ComposerProps } from "./composer";
-import {
-	EscalationAction,
-	type EscalationActionProps,
-} from "./composer/escalation-action";
 import { LimitAction, type LimitActionProps } from "./composer/limit-action";
 import { ConversationHeader, type ConversationHeaderProps } from "./header";
 import { ConversationTimelineList } from "./messages/conversation-timeline";
@@ -25,8 +21,6 @@ export type ConversationProps = {
 	timeline: ConversationTimelineProps;
 	input: ComposerProps;
 	visitorSidebar: VisitorSidebarProps;
-	/** If set, shows escalation action instead of input */
-	escalation?: EscalationActionProps | null;
 	/** If set, shows hard-limit action instead of input */
 	limitAction?: LimitActionProps | null;
 };
@@ -36,7 +30,6 @@ export function Conversation({
 	timeline,
 	input,
 	visitorSidebar,
-	escalation,
 	limitAction,
 }: ConversationProps) {
 	// Track input/escalation height for dynamic timeline padding
@@ -47,9 +40,7 @@ export function Conversation({
 			<Page className="relative py-0 pr-0.5 pl-0">
 				<ConversationHeader {...header} />
 				<ConversationTimelineList {...timeline} inputHeight={inputHeight} />
-				{escalation ? (
-					<EscalationAction {...escalation} onHeightChange={setInputHeight} />
-				) : limitAction ? (
+				{limitAction && !input.escalationAction ? (
 					<LimitAction {...limitAction} onHeightChange={setInputHeight} />
 				) : (
 					<Composer {...input} onHeightChange={setInputHeight} />

@@ -119,7 +119,15 @@ describe("buildConversationClarificationSummary", () => {
 				request: createRequest({ status: "draft_ready" }),
 				turns: [createTurn()],
 			})
-		).toBeNull();
+		).toEqual({
+			requestId: "req_1",
+			status: "draft_ready",
+			topicSummary: "Clarify billing timing",
+			question: null,
+			stepIndex: 2,
+			maxSteps: 5,
+			updatedAt: "2026-03-13T10:00:00.000Z",
+		});
 
 		expect(
 			buildConversationClarificationSummary({

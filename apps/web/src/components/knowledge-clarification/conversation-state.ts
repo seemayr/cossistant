@@ -8,6 +8,8 @@ export type ConversationClarificationDisplayState = {
 	showPrompt: boolean;
 	showAction: boolean;
 	actionRequest: KnowledgeClarificationRequest | null;
+	showDraftBanner: boolean;
+	bannerRequest: KnowledgeClarificationRequest | null;
 };
 
 export function resolveEngagedConversationClarificationRequestId(params: {
@@ -19,6 +21,10 @@ export function resolveEngagedConversationClarificationRequestId(params: {
 	}
 
 	if (!params.engagedRequestId) {
+		return null;
+	}
+
+	if (params.summary.status === "draft_ready") {
 		return null;
 	}
 
@@ -52,7 +58,13 @@ export function shouldShowConversationClarificationAction(params: {
 	summary: ConversationClarificationSummary | null | undefined;
 	engagedRequestId: string | null;
 }): boolean {
-	if (!(params.summary && params.engagedRequestId)) {
+	if (
+		!(
+			params.summary &&
+			params.engagedRequestId &&
+			params.summary.status !== "draft_ready"
+		)
+	) {
 		return false;
 	}
 
@@ -76,6 +88,13 @@ export function resolveConversationClarificationDisplayState(params: {
 			summary: params.summary,
 			engagedRequestId,
 		});
+	const showDraftBanner = Boolean(
+		!(
+			params.hasEscalation ||
+			params.hasLimitAction ||
+			params.summary?.status !== "draft_ready"
+		)
+	);
 	const showPrompt = shouldShowConversationClarificationPrompt({
 		summary: params.summary,
 		engagedRequestId,
@@ -88,5 +107,7 @@ export function resolveConversationClarificationDisplayState(params: {
 		showPrompt,
 		showAction,
 		actionRequest: showAction ? (params.request ?? null) : null,
+		showDraftBanner,
+		bannerRequest: showDraftBanner ? (params.request ?? null) : null,
 	};
 }

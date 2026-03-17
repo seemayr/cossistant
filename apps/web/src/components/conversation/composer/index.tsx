@@ -22,6 +22,10 @@ import {
 import { ComposerDefaultBottomBlock } from "./composer-bottom-block";
 import { ComposerDefaultCentralBlock } from "./composer-central-block";
 import { getComposerAnimatedSlotKey } from "./composer-slot-key";
+import {
+	EscalationAction,
+	type EscalationActionProps,
+} from "./escalation-action";
 import type { MentionStore } from "./mention-store";
 import { useComposerHeightSync } from "./use-composer-height-sync";
 import { useComposerTextareaLayout } from "./use-composer-textarea-layout";
@@ -33,11 +37,17 @@ export type MessageVisibility = "public" | "private";
 
 const AI_PAUSE_TICK_MS = 30_000;
 
+export type ComposerEscalationActionProps = Pick<
+	EscalationActionProps,
+	"isJoining" | "joinButtonRef" | "onJoin" | "reason"
+>;
+
 export type ComposerProps = {
 	className?: string;
 	aboveBlock?: React.ReactNode;
 	bottomBlock?: React.ReactNode;
 	centralBlock?: React.ReactNode;
+	escalationAction?: ComposerEscalationActionProps | null;
 	value: string;
 	onChange: (value: string) => void;
 	onSubmit: () => void;
@@ -73,6 +83,7 @@ export const Composer: React.FC<ComposerProps> = ({
 	aboveBlock,
 	bottomBlock,
 	centralBlock,
+	escalationAction = null,
 	value,
 	onChange,
 	onSubmit,
@@ -115,7 +126,11 @@ export const Composer: React.FC<ComposerProps> = ({
 	}, [aiPausedUntil, nowMs]);
 	const aiPauseMenuActions = getAiPauseMenuActions(aiPauseStatus.isPaused);
 	const isAiPauseControlDisabled = disabled || isAiPauseActionPending;
-	const hasCustomBlocks = Boolean(aboveBlock || centralBlock || bottomBlock);
+	const embeddedEscalationAction = centralBlock ? null : escalationAction;
+	const showsEmbeddedEscalationAction = embeddedEscalationAction !== null;
+	const hasCustomBlocks = Boolean(
+		aboveBlock || bottomBlock || centralBlock || showsEmbeddedEscalationAction
+	);
 
 	useEffect(() => {
 		setNowMs(Date.now());
@@ -162,11 +177,12 @@ export const Composer: React.FC<ComposerProps> = ({
 			onVisibilityChange?.(isPrivate ? "public" : "private");
 		},
 		{
+			enabled: Boolean(onVisibilityChange) && !showsEmbeddedEscalationAction,
 			enableOnFormTags: false,
 			enableOnContentEditable: false,
 			preventDefault: true,
 		},
-		[isPrivate, onVisibilityChange]
+		[isPrivate, onVisibilityChange, showsEmbeddedEscalationAction]
 	);
 
 	const handleSubmit = () => {
@@ -223,34 +239,44 @@ export const Composer: React.FC<ComposerProps> = ({
 		onAiPauseAction(action);
 	};
 
-	const resolvedCentralBlock = centralBlock ?? (
-		<ComposerDefaultCentralBlock
-			allowedFileTypes={allowedFileTypes}
-			canSubmit={canSubmit}
-			className={className}
-			disabled={disabled}
-			error={error}
-			fileInputRef={fileInputRef}
-			files={files}
-			handleKeyDown={handleKeyDown}
-			handlePaste={handlePaste}
-			isAttachDisabled={isAttachDisabled}
-			isPrivate={isPrivate}
-			isUploading={isUploading}
-			mentionEditor={mentionEditor}
-			mentionEnabled={Boolean(mentionConfig)}
-			mentionStore={mentionStoreRef.current}
-			onFileSelect={onFileSelect}
-			onFormSubmit={handleFormSubmit}
-			onRemoveFile={onRemoveFile}
-			onVisibilityChange={onVisibilityChange}
-			placeholder={placeholder}
-			renderAttachButton={renderAttachButton}
-			triggerFileInput={triggerFileInput}
-			uploadProgress={uploadProgress}
-			value={value}
-		/>
-	);
+	const resolvedCentralBlock =
+		centralBlock ??
+		(showsEmbeddedEscalationAction ? (
+			<EscalationAction
+				isJoining={embeddedEscalationAction.isJoining}
+				joinButtonRef={embeddedEscalationAction.joinButtonRef}
+				layout="embedded"
+				onJoin={embeddedEscalationAction.onJoin}
+				reason={embeddedEscalationAction.reason}
+			/>
+		) : (
+			<ComposerDefaultCentralBlock
+				allowedFileTypes={allowedFileTypes}
+				canSubmit={canSubmit}
+				className={className}
+				disabled={disabled}
+				error={error}
+				fileInputRef={fileInputRef}
+				files={files}
+				handleKeyDown={handleKeyDown}
+				handlePaste={handlePaste}
+				isAttachDisabled={isAttachDisabled}
+				isPrivate={isPrivate}
+				isUploading={isUploading}
+				mentionEditor={mentionEditor}
+				mentionEnabled={Boolean(mentionConfig)}
+				mentionStore={mentionStoreRef.current}
+				onFileSelect={onFileSelect}
+				onFormSubmit={handleFormSubmit}
+				onRemoveFile={onRemoveFile}
+				onVisibilityChange={onVisibilityChange}
+				placeholder={placeholder}
+				renderAttachButton={renderAttachButton}
+				triggerFileInput={triggerFileInput}
+				uploadProgress={uploadProgress}
+				value={value}
+			/>
+		));
 
 	const resolvedBottomBlock = bottomBlock ?? (
 		<ComposerDefaultBottomBlock
@@ -263,8 +289,13 @@ export const Composer: React.FC<ComposerProps> = ({
 		/>
 	);
 	const aboveSlotKey = getComposerAnimatedSlotKey("above-custom", aboveBlock);
+	const centralSlotBaseKey = centralBlock
+		? "central-custom"
+		: showsEmbeddedEscalationAction
+			? "central-escalation"
+			: "central-default";
 	const centralSlotKey = getComposerAnimatedSlotKey(
-		centralBlock ? "central-custom" : "central-default",
+		centralSlotBaseKey,
 		resolvedCentralBlock
 	);
 	const bottomSlotKey = getComposerAnimatedSlotKey(

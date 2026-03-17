@@ -6,9 +6,11 @@ import { useRouter } from "next/navigation";
 import { useMemo } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { useWebsite } from "@/contexts/website";
 import { useTRPC } from "@/lib/trpc/client";
 import { TrainingEntryDetailLayout } from "../training-entries";
+import { useKnowledgeClarificationDraftReviewState } from "./draft-review";
 import { KnowledgeClarificationFlowContent } from "./flow-content";
 import { useKnowledgeClarificationFlow } from "./use-clarification-flow";
 
@@ -56,6 +58,26 @@ export function KnowledgeClarificationProposalPage({
 		},
 	});
 
+	const activeDraftStep = useMemo(() => {
+		if (flow.currentStep?.kind === "draft_ready") {
+			return flow.currentStep;
+		}
+
+		if (flow.fallbackStep?.kind === "draft_ready") {
+			return flow.fallbackStep;
+		}
+
+		return null;
+	}, [flow.currentStep, flow.fallbackStep]);
+
+	const draftReviewState = useKnowledgeClarificationDraftReviewState(
+		activeDraftStep?.draftFaqPayload ?? null
+	);
+
+	const closeProposal = () => {
+		router.push(`/${website.slug}/agent/training/faq`);
+	};
+
 	const headerTitle = useMemo(() => {
 		if (flow.currentRequest?.draftFaqPayload?.question) {
 			return flow.currentRequest.draftFaqPayload.question;
@@ -67,6 +89,34 @@ export function KnowledgeClarificationProposalPage({
 	return (
 		<TrainingEntryDetailLayout
 			backHref={`/${website.slug}/agent/training/faq`}
+			headerActions={
+				activeDraftStep ? (
+					<>
+						<Button
+							disabled={flow.approveMutation.isPending}
+							onClick={closeProposal}
+							type="button"
+							variant="ghost"
+						>
+							Cancel
+						</Button>
+						<Button
+							disabled={
+								flow.approveMutation.isPending || !draftReviewState.canApprove
+							}
+							onClick={() => {
+								void flow.approveDraft(
+									activeDraftStep.request.id,
+									draftReviewState.parsedDraft
+								);
+							}}
+							type="button"
+						>
+							{flow.approveMutation.isPending ? "Approving..." : "Approve"}
+						</Button>
+					</>
+				) : null
+			}
 			title={headerTitle}
 		>
 			<div className="flex flex-wrap items-center gap-2">
@@ -93,12 +143,11 @@ export function KnowledgeClarificationProposalPage({
 				isSubmittingApproval={flow.approveMutation.isPending}
 				onAnswer={flow.submitAnswer}
 				onApprove={flow.approveDraft}
-				onClose={() => {
-					router.push(`/${website.slug}/agent/training/faq`);
-				}}
+				onClose={closeProposal}
 				onDefer={flow.deferRequest}
 				onDismiss={flow.dismissRequest}
 				onRetry={flow.retryRequest}
+				pageDraftReviewState={activeDraftStep ? draftReviewState : null}
 				variant="page"
 			/>
 		</TrainingEntryDetailLayout>

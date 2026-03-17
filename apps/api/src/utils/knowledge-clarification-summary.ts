@@ -39,7 +39,11 @@ function isHumanResolutionTurnRole(
 function isActiveConversationClarificationStatus(
 	status: ActiveConversationClarificationRequest["status"]
 ): status is ActiveConversationKnowledgeClarificationStatus {
-	return status === "analyzing" || status === "awaiting_answer";
+	return (
+		status === "analyzing" ||
+		status === "awaiting_answer" ||
+		status === "draft_ready"
+	);
 }
 
 export function getLatestAiQuestionTurn<T extends ClarificationTurnLike>(
@@ -72,6 +76,23 @@ export function getPendingClarificationQuestionTurn<
 	}
 
 	return pendingQuestionTurn;
+}
+
+export function getDisplayClarificationQuestionTurn<
+	T extends ClarificationTurnLike,
+>(params: {
+	status: ActiveConversationClarificationRequest["status"];
+	turns: T[];
+}): T | null {
+	if (params.status === "awaiting_answer") {
+		return getPendingClarificationQuestionTurn(params.turns);
+	}
+
+	if (params.status === "analyzing") {
+		return getLatestAiQuestionTurn(params.turns);
+	}
+
+	return null;
 }
 
 export function buildConversationClarificationSummary(params: {
