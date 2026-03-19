@@ -16,6 +16,10 @@ import {
 } from "@/components/ui/segmented-control";
 import { TooltipOnHover } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import {
+	COMPOSER_EDITOR_SURFACE_CLASS_NAME,
+	COMPOSER_MIN_EDITOR_HEIGHT_CLASS_NAME,
+} from "./composer-editor-layout";
 import { MentionPopover } from "./mention-popover";
 import type { MentionStore } from "./mention-store";
 import { StyledOverlay } from "./styled-overlay";
@@ -30,6 +34,7 @@ type ComposerCentralBlockProps = {
 type ComposerDefaultCentralBlockProps = {
 	className?: string;
 	value: string;
+	textareaOverlay?: ReactNode;
 	disabled: boolean;
 	error?: Error | null;
 	files: File[];
@@ -77,6 +82,7 @@ type ComposerEditorProps = {
 	mentionEditor: UseMentionEditorReturn;
 	mentionStore: MentionStore;
 	placeholder: string;
+	textareaOverlay?: ReactNode;
 	value: string;
 	error?: Error | null;
 	handleKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
@@ -205,6 +211,7 @@ function ComposerEditor({
 	mentionEditor,
 	mentionStore,
 	placeholder,
+	textareaOverlay,
 	value,
 	error,
 	handleKeyDown,
@@ -212,7 +219,11 @@ function ComposerEditor({
 }: ComposerEditorProps) {
 	return (
 		<div
-			className="scrollbar-thin scrollbar-track-fd-overlay scrollbar-thumb-border/30 hover:scrollbar-thumb-border/50 relative max-h-[280px] overflow-y-scroll"
+			className={cn(
+				"scrollbar-thin scrollbar-track-fd-overlay scrollbar-thumb-border/30 hover:scrollbar-thumb-border/50 relative max-h-[280px] overflow-y-scroll",
+				COMPOSER_MIN_EDITOR_HEIGHT_CLASS_NAME
+			)}
+			data-composer-editor-viewport="true"
 			ref={mentionEditor.mentionViewportRef}
 		>
 			{mentionEnabled ? (
@@ -230,7 +241,8 @@ function ComposerEditor({
 			{mentionEditor.hasMentions ? (
 				<StyledOverlay
 					className={cn(
-						"pointer-events-none absolute inset-0 min-h-[20px] w-full whitespace-pre-wrap break-words p-3 text-foreground text-sm",
+						"pointer-events-none absolute inset-0 whitespace-pre-wrap break-words text-foreground",
+						COMPOSER_EDITOR_SURFACE_CLASS_NAME,
 						className
 					)}
 					mentionStore={mentionStore}
@@ -244,10 +256,13 @@ function ComposerEditor({
 				aria-invalid={error ? "true" : undefined}
 				autoFocus
 				className={cn(
-					"min-h-[20px] w-full flex-1 resize-none bg-transparent p-3 text-sm placeholder:text-primary/50 focus-visible:outline-none",
+					"flex-1 resize-none bg-transparent placeholder:text-primary/50 focus-visible:outline-none",
+					COMPOSER_EDITOR_SURFACE_CLASS_NAME,
 					mentionEditor.hasMentions
 						? "text-transparent caret-foreground"
 						: "text-foreground",
+					textareaOverlay &&
+						"text-transparent caret-transparent selection:bg-transparent placeholder:text-transparent",
 					className
 				)}
 				disabled={disabled}
@@ -267,6 +282,19 @@ function ComposerEditor({
 				rows={1}
 				value={value}
 			/>
+			{textareaOverlay ? (
+				<div
+					aria-hidden="true"
+					className={cn(
+						"pointer-events-none absolute inset-0 flex items-start overflow-hidden whitespace-pre-wrap break-words",
+						COMPOSER_EDITOR_SURFACE_CLASS_NAME,
+						className
+					)}
+					data-composer-textarea-overlay="true"
+				>
+					{textareaOverlay}
+				</div>
+			) : null}
 		</div>
 	);
 }
@@ -384,6 +412,7 @@ export function ComposerCentralBlock({
 export function ComposerDefaultCentralBlock({
 	className,
 	value,
+	textareaOverlay,
 	disabled,
 	error,
 	files,
@@ -452,6 +481,7 @@ export function ComposerDefaultCentralBlock({
 							mentionEnabled={mentionEnabled}
 							mentionStore={mentionStore}
 							placeholder={placeholder}
+							textareaOverlay={textareaOverlay}
 							value={value}
 						/>
 						<ComposerActions

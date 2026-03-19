@@ -23,7 +23,11 @@ export function FakeInboxNavigationSidebar({
 	statusCounts,
 }: FakeInboxNavigationSidebarProps) {
 	return (
-		<FakeResizableSidebar className="pointer-events-none" open position="left">
+		<FakeResizableSidebar
+			className="pointer-events-none"
+			open={open}
+			position="left"
+		>
 			<SidebarContainer
 				footer={
 					<>

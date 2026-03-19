@@ -46,6 +46,8 @@ type FakeConversationTimelineListProps = {
 	visitor: ConversationHeader["visitor"];
 	className?: string;
 	typingActors: FakeTypingActor[];
+	layoutMode?: "scroll" | "centered";
+	inputHeight?: number;
 };
 
 const ANTHONY_RIERA_ID = "01JGUSER1111111111111111";
@@ -80,6 +82,8 @@ export function FakeConversationTimelineList({
 	visitor,
 	className,
 	typingActors,
+	layoutMode = "scroll",
+	inputHeight = 140,
 }: FakeConversationTimelineListProps) {
 	const messageListRef = useRef<HTMLDivElement | null>(null);
 
@@ -138,18 +142,39 @@ export function FakeConversationTimelineList({
 
 	return (
 		<PrimitiveConversationTimeline
-			autoScroll={true}
+			autoScroll={layoutMode === "scroll"}
 			className={cn(
-				"min-h-0 w-full flex-1 overflow-y-scroll pt-20 pb-48",
-				"scrollbar-thin scrollbar-thumb-background-300 scrollbar-track-fd-overlay",
+				layoutMode === "scroll"
+					? "min-h-0 w-full flex-1 overflow-y-scroll pt-20"
+					: "w-full overflow-visible py-0",
+				layoutMode === "scroll" &&
+					"scrollbar-thin scrollbar-thumb-background-300 scrollbar-track-fd-overlay",
 				className
 			)}
+			data-fake-conversation-layout-mode={layoutMode}
 			id="fake-conversation-timeline"
 			items={timelineItems as unknown as TimelineItem[]}
 			ref={messageListRef}
+			style={
+				layoutMode === "scroll"
+					? {
+							paddingBottom: `${inputHeight + 100}px`,
+						}
+					: undefined
+			}
 		>
-			<div className="mx-auto pr-4 pl-6 xl:max-w-xl 2xl:max-w-2xl">
-				<ConversationTimelineContainer className="flex min-h-full w-full flex-col gap-5">
+			<div
+				className={cn(
+					"mx-auto pr-4 pl-6 xl:max-w-xl 2xl:max-w-2xl",
+					layoutMode === "centered" && "w-full px-0 pr-0"
+				)}
+			>
+				<ConversationTimelineContainer
+					className={cn(
+						"flex w-full flex-col gap-5",
+						layoutMode === "scroll" ? "min-h-full" : "justify-center"
+					)}
+				>
 					<AnimatePresence initial={false} mode="popLayout">
 						{renderItems.map((item, index) => {
 							if (item.type === "public_activity_group") {

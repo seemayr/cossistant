@@ -2,6 +2,7 @@
 
 import type { RefObject } from "react";
 import { useEffect, useLayoutEffect } from "react";
+import { getComposerEditorHeightPx } from "./composer-editor-layout";
 
 type UseComposerTextareaLayoutOptions = {
 	textareaRef: RefObject<HTMLTextAreaElement | null>;
@@ -9,7 +10,7 @@ type UseComposerTextareaLayoutOptions = {
 	value: string;
 };
 
-function syncTextareaLayout(
+export function syncTextareaLayout(
 	textarea: HTMLTextAreaElement | null,
 	overlay: HTMLDivElement | null
 ) {
@@ -19,12 +20,12 @@ function syncTextareaLayout(
 
 	textarea.style.height = "auto";
 
-	const scrollHeight = textarea.scrollHeight;
-	textarea.style.height = `${scrollHeight}px`;
+	const resolvedHeight = getComposerEditorHeightPx(textarea.scrollHeight);
+	textarea.style.height = `${resolvedHeight}px`;
 	textarea.style.overflowY = "hidden";
 
 	if (overlay) {
-		overlay.style.height = `${scrollHeight}px`;
+		overlay.style.height = `${resolvedHeight}px`;
 	}
 }
 

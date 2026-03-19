@@ -139,7 +139,53 @@ describe("KnowledgeClarificationQuestionContent", () => {
 		expect(html).toContain(
 			'placeholder="Describe how this workflow or rule works today..."'
 		);
-		expect(html).toContain("Starter ideas");
 		expect(html).not.toContain(">4.<");
+	});
+
+	it("renders an optional overlay for landing-style typed textarea demos", () => {
+		const html = renderToStaticMarkup(
+			<KnowledgeClarificationQuestionContent
+				freeAnswer="Delete it in Settings -> Account."
+				inputMode="textarea_first"
+				isOtherSelected={true}
+				onFreeAnswerChange={() => {}}
+				onSelectAnswer={() => {}}
+				question="How does account deletion work today?"
+				selectedAnswer={null}
+				suggestedAnswers={[
+					"Users delete it in settings",
+					"Support handles it manually",
+					"It depends on the account type",
+				]}
+				textareaOverlay={<div>Typed answer overlay</div>}
+			/>
+		);
+
+		expect(html).toContain('data-clarification-textarea-overlay="true"');
+		expect(html).toContain("Typed answer overlay");
+	});
+
+	it("marks targeted suggested answers so the landing cursor can click them", () => {
+		const targetRef = React.createRef<HTMLButtonElement>();
+		const html = renderToStaticMarkup(
+			<KnowledgeClarificationQuestionContent
+				freeAnswer=""
+				getSuggestedAnswerButtonRef={(answer) =>
+					answer === "Settings -> Account" ? targetRef : undefined
+				}
+				isOtherSelected={false}
+				onFreeAnswerChange={() => {}}
+				onSelectAnswer={() => {}}
+				question="Where should the visitor go to start the deletion flow?"
+				selectedAnswer={null}
+				suggestedAnswers={[
+					"Settings -> Account",
+					"Email support",
+					"Use a CLI command",
+				]}
+			/>
+		);
+
+		expect(html).toContain('data-clarification-answer-target="true"');
 	});
 });

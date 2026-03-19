@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 
 type KnowledgeClarificationDraftReviewProps = {
 	draft: KnowledgeClarificationDraftFaq;
@@ -37,6 +38,16 @@ type KnowledgeClarificationDraftReviewBodyProps = {
 	state: KnowledgeClarificationDraftReviewState;
 	title?: string;
 	description?: string;
+};
+
+type KnowledgeClarificationDraftPreviewCardProps = {
+	draft: KnowledgeClarificationDraftFaq;
+	className?: string;
+	title?: string;
+	description?: string;
+	badgeLabel?: string;
+	variant?: "default" | "minimal";
+	minimalPills?: string[];
 };
 
 function runDraftReviewAction(action: () => void | Promise<void>) {
@@ -156,6 +167,118 @@ export function KnowledgeClarificationDraftReviewBody({
 						placeholder="Comma-separated related questions"
 						value={state.relatedQuestions}
 					/>
+				</div>
+			</div>
+		</div>
+	);
+}
+
+export function KnowledgeClarificationDraftPreviewCard({
+	draft,
+	className,
+	title = "FAQ created",
+	description = "Added to your knowledge base from the clarification flow.",
+	badgeLabel = "Knowledge base updated",
+	variant = "default",
+	minimalPills,
+}: KnowledgeClarificationDraftPreviewCardProps) {
+	if (variant === "minimal") {
+		return (
+			<div
+				className={cn(
+					"border border-dashed bg-background px-5 py-5 shadow-none dark:bg-background-50",
+					className
+				)}
+				data-knowledge-clarification-draft-preview="true"
+				data-knowledge-clarification-draft-preview-variant="minimal"
+			>
+				<div className="space-y-3">
+					{minimalPills?.length ? (
+						<div
+							className="flex flex-wrap gap-2"
+							data-knowledge-clarification-draft-preview-pills="true"
+						>
+							{minimalPills.map((pill) => (
+								<div
+									className="border border-dashed px-2 py-1 font-medium text-[10px] leading-none"
+									data-knowledge-clarification-draft-preview-pill={pill}
+									key={pill}
+								>
+									{pill}
+								</div>
+							))}
+						</div>
+					) : null}
+					<div className="font-medium text-base leading-6">
+						{draft.question}
+					</div>
+					<p className="text-primary/80 text-sm leading-6">{draft.answer}</p>
+				</div>
+			</div>
+		);
+	}
+
+	return (
+		<div
+			className={cn(
+				"rounded-[28px] border bg-background p-6 shadow-sm",
+				className
+			)}
+			data-knowledge-clarification-draft-preview="true"
+			data-knowledge-clarification-draft-preview-variant="default"
+		>
+			<div className="space-y-5">
+				<div className="flex flex-wrap items-start justify-between gap-3">
+					<div className="space-y-1">
+						<div className="font-medium text-base">{title}</div>
+						<p className="text-muted-foreground text-sm">{description}</p>
+					</div>
+					<div className="rounded-full border px-3 py-1 font-medium text-xs">
+						{badgeLabel}
+					</div>
+				</div>
+
+				<div className="space-y-4">
+					{draft.title ? (
+						<div className="space-y-1">
+							<div className="text-muted-foreground text-xs uppercase tracking-[0.16em]">
+								Title
+							</div>
+							<div className="font-medium text-sm">{draft.title}</div>
+						</div>
+					) : null}
+
+					<div className="space-y-1">
+						<div className="text-muted-foreground text-xs uppercase tracking-[0.16em]">
+							Question
+						</div>
+						<div className="font-medium text-base">{draft.question}</div>
+					</div>
+
+					<div className="space-y-1">
+						<div className="text-muted-foreground text-xs uppercase tracking-[0.16em]">
+							Answer
+						</div>
+						<p className="text-sm leading-6">{draft.answer}</p>
+					</div>
+
+					{draft.categories.length > 0 ? (
+						<div className="space-y-2">
+							<div className="text-muted-foreground text-xs uppercase tracking-[0.16em]">
+								Categories
+							</div>
+							<div className="flex flex-wrap gap-2">
+								{draft.categories.map((category) => (
+									<div
+										className="rounded-full border px-3 py-1 text-xs"
+										key={category}
+									>
+										{category}
+									</div>
+								))}
+							</div>
+						</div>
+					) : null}
 				</div>
 			</div>
 		</div>

@@ -1,6 +1,7 @@
 "use client";
 
 import type { KnowledgeClarificationQuestionInputMode } from "@cossistant/types";
+import type { ReactNode, RefObject } from "react";
 import { useEffect, useId, useState } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -69,6 +70,11 @@ export type KnowledgeClarificationQuestionContentProps = {
 	isAnalyzing?: boolean;
 	analyzingMessage?: string;
 	className?: string;
+	textareaOverlay?: ReactNode;
+	getSuggestedAnswerButtonRef?: (
+		answer: string,
+		index: number
+	) => RefObject<HTMLButtonElement | null> | undefined;
 	onSelectAnswer: (answer: string) => void;
 	onFreeAnswerChange: (value: string) => void;
 };
@@ -117,16 +123,17 @@ export function KnowledgeClarificationQuestionContent({
 	isAnalyzing = false,
 	analyzingMessage = "Answer saved. AI is preparing the next step...",
 	className,
+	textareaOverlay,
+	getSuggestedAnswerButtonRef,
 	onSelectAnswer,
 	onFreeAnswerChange,
 }: KnowledgeClarificationQuestionContentProps) {
 	const otherAnswerId = useId();
-	const trimmedFreeAnswer = freeAnswer.trim();
 
 	if (isAnalyzing) {
 		return (
 			<div className="flex items-center gap-2 px-1 py-1 text-muted-foreground text-sm">
-				<Spinner size={16} />
+				<Spinner size={14} />
 				{analyzingMessage}
 			</div>
 		);
@@ -155,14 +162,18 @@ export function KnowledgeClarificationQuestionContent({
 			</div>
 			{inputMode === "textarea_first" ? (
 				<div className="space-y-3">
-					<div className="space-y-2">
+					<div className="relative space-y-2">
 						<label className="sr-only" htmlFor={otherAnswerId}>
 							Describe how it works today
 						</label>
 						<Textarea
 							aria-label="Describe how it works today"
 							autoFocus
-							className="min-h-28 w-full resize-y border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 dark:bg-transparent"
+							className={cn(
+								"min-h-28 w-full resize-y border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 dark:bg-transparent",
+								textareaOverlay &&
+									"text-transparent caret-transparent selection:bg-transparent placeholder:text-transparent"
+							)}
 							disabled={isSubmitting || isAnalyzing}
 							id={otherAnswerId}
 							maxLength={500}
@@ -171,39 +182,24 @@ export function KnowledgeClarificationQuestionContent({
 							rows={5}
 							value={freeAnswer}
 						/>
-					</div>
-					<div className="space-y-2">
-						<div className="font-medium text-muted-foreground text-xs uppercase tracking-[0.12em]">
-							Starter ideas
-						</div>
-						<div className="flex flex-wrap gap-2">
-							{suggestedAnswers.map((answer) => {
-								const isSelected = trimmedFreeAnswer === answer.trim();
-
-								return (
-									<button
-										className={cn(
-											"rounded-full border px-3 py-1.5 text-left text-sm transition-colors",
-											isSelected
-												? "border-cossistant-orange text-cossistant-orange"
-												: "border-border text-primary/70 hover:text-primary"
-										)}
-										disabled={isSubmitting || isAnalyzing}
-										key={answer}
-										onClick={() => onFreeAnswerChange(answer)}
-										type="button"
-									>
-										{answer}
-									</button>
-								);
-							})}
-						</div>
+						{textareaOverlay ? (
+							<div
+								className="pointer-events-none absolute inset-0 overflow-hidden"
+								data-clarification-textarea-overlay="true"
+							>
+								{textareaOverlay}
+							</div>
+						) : null}
 					</div>
 				</div>
 			) : (
 				<div className="space-y-2">
 					{suggestedAnswers.map((answer, index) => {
 						const isSelected = selectedAnswer === answer;
+						const suggestedAnswerButtonRef = getSuggestedAnswerButtonRef?.(
+							answer,
+							index
+						);
 
 						return (
 							<button
@@ -213,9 +209,14 @@ export function KnowledgeClarificationQuestionContent({
 										? "text-cossistant-orange"
 										: "text-primary/70 hover:text-primary"
 								)}
+								data-clarification-answer-index={index + 1}
+								data-clarification-answer-target={
+									suggestedAnswerButtonRef ? "true" : undefined
+								}
 								disabled={isSubmitting || isAnalyzing}
 								key={answer}
 								onClick={() => onSelectAnswer(answer)}
+								ref={suggestedAnswerButtonRef}
 								type="button"
 							>
 								<div

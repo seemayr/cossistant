@@ -116,6 +116,16 @@ function extractSearchQuery(input: unknown): string | null {
 	return query.length > 0 ? query : null;
 }
 
+function extractTotalFound(output: unknown): number | null {
+	if (!isRecord(output)) {
+		return null;
+	}
+
+	const data = isRecord(output.data) ? output.data : null;
+
+	return typeof data?.totalFound === "number" ? data.totalFound : null;
+}
+
 function getSourceLabel(article: ArticleSummary): string {
 	const title = article.title?.trim();
 	if (title && title.length > 0) {
@@ -144,8 +154,9 @@ function getKnowledgeSearchText(params: {
 	query: string | null;
 	state: "partial" | "result" | "error";
 	resultFallbackText: string;
+	hasNoResults: boolean;
 }): string {
-	const { query, state, resultFallbackText } = params;
+	const { query, state, resultFallbackText, hasNoResults } = params;
 
 	if (query) {
 		if (state === "partial") {
@@ -154,6 +165,10 @@ function getKnowledgeSearchText(params: {
 
 		if (state === "error") {
 			return `Search for "${query}" failed`;
+		}
+
+		if (hasNoResults) {
+			return `No saved answer for "${query}" yet`;
 		}
 
 		return `Searched for "${query}"`;
@@ -165,6 +180,10 @@ function getKnowledgeSearchText(params: {
 
 	if (state === "error") {
 		return "Knowledge base lookup failed";
+	}
+
+	if (hasNoResults) {
+		return "No saved answer yet";
 	}
 
 	return resultFallbackText;
@@ -255,10 +274,12 @@ export function SearchKnowledgeBaseActivity({
 }: ToolActivityProps) {
 	const { input, state, output, summaryText } = toolCall;
 	const query = extractSearchQuery(input);
+	const totalFound = extractTotalFound(output);
 	const text = getKnowledgeSearchText({
 		query,
 		state,
 		resultFallbackText: summaryText,
+		hasNoResults: totalFound === 0,
 	});
 
 	if (state === "partial") {

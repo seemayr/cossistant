@@ -235,9 +235,8 @@ describe("useClarificationComposerFlow", () => {
 		expect(html).toContain(
 			'placeholder="Describe how this workflow or rule works today..."'
 		);
-		expect(html).toContain("Starter ideas");
 		expect(html).toContain("autofocus");
-		expect(html).not.toContain(">4.<");
+		expect(html).toContain("How does billing-change handling work today?");
 	});
 
 	it("renders a loading state while the engaged clarification request is still loading", async () => {
@@ -304,7 +303,6 @@ describe("useClarificationComposerFlow", () => {
 		expect(html).toContain("This clarification needs a retry");
 		expect(html).toContain("Provider returned error");
 		expect(html).toContain(">Retry AI<");
-		expect(html).toContain(">Cancel<");
 		expect(html).not.toContain('data-clarification-slot="actions"');
 	});
 
@@ -350,6 +348,49 @@ describe("useClarificationComposerFlow", () => {
 		expect(html).toContain("FAQ draft ready");
 		expect(html).toContain(">View<");
 		expect(html).toContain(">Approve<");
-		expect(html).toContain(">Close<");
+	});
+
+	it("accepts an approve button ref on the shared draft-ready banner", async () => {
+		const { ClarificationDraftReadyBanner } = await modulePromise;
+		const approveButtonRef = React.createRef<HTMLButtonElement>();
+
+		const html = renderToStaticMarkup(
+			<ClarificationDraftReadyBanner
+				approveButtonRef={approveButtonRef}
+				canApprove={true}
+				canView={true}
+				isApproving={false}
+				onApprove={() => {}}
+				onClose={() => {}}
+				onView={() => {}}
+				request={null}
+				topicSummary="Clarify billing timing"
+			/>
+		);
+
+		expect(html).toContain('data-clarification-slot="draft-ready-banner"');
+		expect(html).toContain(">Approve<");
+	});
+
+	it("marks the shared next button as a cursor target when a submit ref is provided", async () => {
+		const { ClarificationActionsBlock } = await modulePromise;
+		const submitButtonRef = React.createRef<HTMLButtonElement>();
+
+		const html = renderToStaticMarkup(
+			<ClarificationActionsBlock
+				canSkip={true}
+				canSubmit={true}
+				isPending={false}
+				isSkipping={false}
+				isSubmitting={false}
+				onCancel={() => {}}
+				onSkip={() => {}}
+				onSubmit={() => {}}
+				submitButtonRef={submitButtonRef}
+			/>
+		);
+
+		expect(html).toContain('data-clarification-submit-target="true"');
+		expect(html).toContain(">Next<");
 	});
 });

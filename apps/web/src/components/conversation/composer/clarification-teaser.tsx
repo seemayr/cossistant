@@ -2,6 +2,7 @@
 
 import type { ConversationClarificationSummary } from "@cossistant/types";
 import { useMutation } from "@tanstack/react-query";
+import type React from "react";
 import { toast } from "sonner";
 import { useKnowledgeClarificationQueryInvalidation } from "@/components/knowledge-clarification/use-query-invalidation";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,72 @@ export type ClarificationPromptProps = {
 	onClarify: () => void;
 	className?: string;
 };
+
+export type ClarificationPromptCardProps = {
+	topicSummary: string;
+	onClarify: () => void;
+	onDismiss?: () => void;
+	onLater?: () => void;
+	isPending?: boolean;
+	className?: string;
+	clarifyButtonRef?: React.RefObject<HTMLButtonElement | null>;
+};
+
+export function ClarificationPromptCard({
+	topicSummary,
+	onClarify,
+	onDismiss,
+	onLater,
+	isPending = false,
+	className,
+	clarifyButtonRef,
+}: ClarificationPromptCardProps) {
+	return (
+		<div className={cn("px-2 pt-2 pb-2", className)}>
+			<div className="flex items-start justify-between gap-4">
+				<div className="space-y-1">
+					<div className="font-medium text-sm">Clarification</div>
+					<p className="text-muted-foreground text-sm">{topicSummary}</p>
+				</div>
+				{onDismiss ? (
+					<Button
+						className="absolute top-2 right-2"
+						disabled={isPending}
+						onClick={onDismiss}
+						size="icon-small"
+						type="button"
+						variant="ghost"
+					>
+						<Icon className="size-3.5" name="x" variant="filled" />
+					</Button>
+				) : null}
+			</div>
+
+			<div className="mt-6 flex flex-wrap items-center justify-end gap-2">
+				{onLater ? (
+					<Button
+						disabled={isPending}
+						onClick={onLater}
+						size="xs"
+						type="button"
+						variant="ghost"
+					>
+						Later
+					</Button>
+				) : null}
+				<Button
+					disabled={isPending}
+					onClick={onClarify}
+					ref={clarifyButtonRef}
+					size="xs"
+					type="button"
+				>
+					Clarify
+				</Button>
+			</div>
+		</div>
+	);
+}
 
 export function ClarificationPrompt({
 	websiteSlug,
@@ -50,55 +117,23 @@ export function ClarificationPrompt({
 	const isPending = deferMutation.isPending || dismissMutation.isPending;
 
 	return (
-		<div className={cn("px-2 pt-2 pb-2", className)}>
-			<div className="flex items-start justify-between gap-4">
-				<div className="space-y-1">
-					<div className="font-medium text-sm">Clarification</div>
-					<p className="text-muted-foreground text-sm">
-						{summary.topicSummary}
-					</p>
-				</div>
-				<Button
-					className="absolute top-2 right-2"
-					disabled={isPending}
-					onClick={() => {
-						dismissMutation.mutate({
-							websiteSlug,
-							requestId: summary.requestId,
-						});
-					}}
-					size="icon-small"
-					type="button"
-					variant="ghost"
-				>
-					<Icon className="size-3.5" name="x" variant="filled" />
-				</Button>
-			</div>
-
-			<div className="mt-6 flex flex-wrap items-center justify-end gap-2">
-				<Button
-					disabled={isPending}
-					onClick={() => {
-						deferMutation.mutate({
-							websiteSlug,
-							requestId: summary.requestId,
-						});
-					}}
-					size="xs"
-					type="button"
-					variant="ghost"
-				>
-					Later
-				</Button>
-				<Button
-					disabled={isPending}
-					onClick={onClarify}
-					size="xs"
-					type="button"
-				>
-					Clarify
-				</Button>
-			</div>
-		</div>
+		<ClarificationPromptCard
+			className={className}
+			isPending={isPending}
+			onClarify={onClarify}
+			onDismiss={() => {
+				dismissMutation.mutate({
+					websiteSlug,
+					requestId: summary.requestId,
+				});
+			}}
+			onLater={() => {
+				deferMutation.mutate({
+					websiteSlug,
+					requestId: summary.requestId,
+				});
+			}}
+			topicSummary={summary.topicSummary}
+		/>
 	);
 }

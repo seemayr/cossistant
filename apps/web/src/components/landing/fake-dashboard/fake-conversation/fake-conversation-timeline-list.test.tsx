@@ -84,6 +84,35 @@ const VISITOR = {
 } as unknown as ConversationHeader["visitor"];
 
 describe("FakeDashboard timeline activity grouping", () => {
+	it("supports a centered layout mode for focused landing demos", () => {
+		const items = [
+			createTimelineItem({
+				id: "visitor-message",
+				type: "message",
+				text: "How do I delete my account?",
+				parts: [{ type: "text", text: "How do I delete my account?" }],
+				userId: null,
+				visitorId: "visitor-1",
+				aiAgentId: null,
+				createdAt: "2026-01-01T10:00:00.000Z",
+			}),
+		] as unknown as ConversationTimelineItem[];
+
+		const html = renderToStaticMarkup(
+			React.createElement(FakeConversationTimelineList, {
+				items,
+				layoutMode: "centered",
+				visitor: VISITOR,
+				typingActors: [],
+			})
+		);
+
+		expect(html).toContain('data-fake-conversation-layout-mode="centered"');
+		expect(html).toContain("How do I delete my account?");
+		expect(html).not.toContain("overflow-y-scroll");
+		expect(html).not.toContain("pt-20");
+	});
+
 	it("uses the flat tool row structure for grouped activity rows and keeps sender identity visible", () => {
 		const items = [
 			createEventItem("event-1", "2026-01-01T10:00:00.000Z"),

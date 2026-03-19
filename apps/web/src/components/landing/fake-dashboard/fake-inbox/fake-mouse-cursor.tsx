@@ -4,6 +4,34 @@ import { motion } from "motion/react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
+export const FAKE_MOUSE_CURSOR_ANIMATION_DURATION_S = 1.05;
+export const FAKE_MOUSE_CURSOR_START_OFFSET_X = 12;
+export const FAKE_MOUSE_CURSOR_START_Y = 76;
+export const FAKE_MOUSE_CURSOR_RETRY_DELAY_MS = 8;
+
+export function getFakeMouseCursorMotionPlan(params: {
+	containerRect: Pick<DOMRect, "left" | "top" | "width" | "height">;
+	targetRect: Pick<DOMRect, "left" | "top" | "width" | "height">;
+	cursorSize?: number;
+}) {
+	const cursorSize = params.cursorSize ?? 14;
+
+	return {
+		startX: params.containerRect.width + FAKE_MOUSE_CURSOR_START_OFFSET_X,
+		startY: FAKE_MOUSE_CURSOR_START_Y,
+		targetX:
+			params.targetRect.left -
+			params.containerRect.left +
+			params.targetRect.width / 2 -
+			cursorSize / 2,
+		targetY:
+			params.targetRect.top -
+			params.containerRect.top +
+			params.targetRect.height / 2 -
+			cursorSize / 2,
+	};
+}
+
 type FakeMouseCursorProps = {
 	isVisible: boolean;
 	targetElementRef: React.RefObject<HTMLElement | null>;
@@ -52,7 +80,10 @@ export function FakeMouseCursor({
 				// Retry if element not found yet
 				if (retryCount < maxRetries) {
 					retryCount++;
-					timeoutId = setTimeout(updatePositions, 50);
+					timeoutId = setTimeout(
+						updatePositions,
+						FAKE_MOUSE_CURSOR_RETRY_DELAY_MS
+					);
 				}
 				return;
 			}
@@ -72,7 +103,10 @@ export function FakeMouseCursor({
 				// Retry if container not found
 				if (retryCount < maxRetries) {
 					retryCount++;
-					timeoutId = setTimeout(updatePositions, 50);
+					timeoutId = setTimeout(
+						updatePositions,
+						FAKE_MOUSE_CURSOR_RETRY_DELAY_MS
+					);
 				}
 				return;
 			}
@@ -86,42 +120,26 @@ export function FakeMouseCursor({
 			if (targetRect.width === 0 || targetRect.height === 0) {
 				if (retryCount < maxRetries) {
 					retryCount++;
-					timeoutId = setTimeout(updatePositions, 50);
+					timeoutId = setTimeout(
+						updatePositions,
+						FAKE_MOUSE_CURSOR_RETRY_DELAY_MS
+					);
 				}
 				return;
 			}
 
-			// Calculate target position relative to Page container
-			// Account for cursor size (24px = size-6) to center the cursor properly
-			const cursorSize = 24;
-			const targetX =
-				targetRect.left -
-				containerRect.left +
-				targetRect.width / 2 -
-				cursorSize / 2;
-			const targetY =
-				targetRect.top -
-				containerRect.top +
-				targetRect.height / 2 -
-				cursorSize / 2;
-
-			// The cursor renders absolutely positioned within Page, but the target
-			// is inside a scrollable container. getBoundingClientRect gives viewport coords,
-			// which already accounts for scroll. Since we're positioning absolutely in Page,
-			// this should work correctly without additional scroll adjustments.
-
-			// Start from top-right corner (slightly outside viewport)
-			const startX = containerRect.width + 20;
-			const startY = 100;
+			const { startX, startY, targetX, targetY } = getFakeMouseCursorMotionPlan(
+				{
+					containerRect,
+					targetRect,
+				}
+			);
 
 			setStartPosition({ x: startX, y: startY });
 			setTargetPosition({ x: targetX, y: targetY });
 		};
 
-		// Use requestAnimationFrame to ensure DOM is ready
-		requestAnimationFrame(() => {
-			requestAnimationFrame(updatePositions);
-		});
+		updatePositions();
 
 		return () => {
 			if (timeoutId) {
@@ -145,12 +163,14 @@ export function FakeMouseCursor({
 			animate={{
 				x: targetPosition.x - startPosition.x,
 				y: targetPosition.y - startPosition.y,
-				scale: [1, 0.85, 1],
+				scale: [1, 0.9, 1],
 			}}
 			className={cn(
-				"pointer-events-none absolute z-50 size-6 rounded-full border-2 border-foreground/90 bg-primary shadow-xl",
+				"pointer-events-none absolute z-50 size-3.5 rounded-full bg-primary shadow-[0_10px_24px_rgba(15,23,42,0.24),0_0_18px_rgba(255,122,0,0.26)] dark:shadow-[0_12px_28px_rgba(0,0,0,0.62),0_0_18px_rgba(255,122,0,0.34)]",
 				className
 			)}
+			data-fake-mouse-cursor="true"
+			data-fake-mouse-cursor-style="dot"
 			initial={{ scale: 1, opacity: 1 }}
 			onAnimationComplete={() => {
 				// Trigger click after animation completes
@@ -162,16 +182,13 @@ export function FakeMouseCursor({
 				willChange: "transform",
 			}}
 			transition={{
-				duration: 1.2,
+				duration: 0.88,
 				ease: [0.25, 0.1, 0.25, 1],
 				scale: {
 					times: [0, 0.85, 1],
-					duration: 1.2,
+					duration: 0.88,
 				},
 			}}
-		>
-			{/* Cursor pointer - make it more visible */}
-			<div className="absolute top-1 left-1 size-2 rounded-full bg-foreground" />
-		</motion.div>
+		/>
 	);
 }

@@ -136,8 +136,14 @@ export function FakeDashboard({ className }: { className?: string }) {
 					/>
 				) : (
 					<FakeConversation
+						composerValue={conversationHook.composerValue}
+						composerVisibility={conversationHook.composerVisibility}
 						conversation={conversationHook.conversation}
+						isComposerTyping={conversationHook.isComposerTyping}
 						isEscalationPending={conversationHook.isEscalationPending}
+						onComposerVisibilityChange={
+							conversationHook.onComposerVisibilityChange
+						}
 						onJoinConversation={conversationHook.joinEscalation}
 						onJoinCursorClick={handleJoinMouseClick}
 						showJoinCursor={showJoinMouseCursor}

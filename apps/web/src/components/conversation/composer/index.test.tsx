@@ -46,6 +46,36 @@ describe("Composer", () => {
 		expect(html).toContain("Type your message...");
 		expect(html).toContain('data-composer-frame="default"');
 		expect(html).toContain('data-composer-central-block="true"');
+		expect(html).toContain('data-composer-editor-viewport="true"');
+		expect(html).not.toContain('data-composer-textarea-overlay="true"');
+	});
+
+	it("renders a textarea overlay without duplicating the underlying visible textarea content", async () => {
+		const { Composer } = await composerModulePromise;
+
+		const html = renderToStaticMarkup(
+			React.createElement(Composer, {
+				onChange: () => {},
+				onSubmit: () => {},
+				textareaOverlay: React.createElement(
+					"div",
+					{ "data-overlay-copy": "true" },
+					"Typed reply overlay"
+				),
+				value:
+					"I joined and deployed the allowlist patch to production. Please hard refresh and run a checkout test. I'll stay here while you verify.",
+			})
+		);
+
+		expect(html).toContain('data-composer-textarea-overlay="true"');
+		expect(html).toContain('data-overlay-copy="true"');
+		expect(html).toContain("Typed reply overlay");
+		expect(html).toContain("caret-transparent");
+		expect(html).toContain("placeholder:text-transparent");
+		expect(html).toContain("min-h-11");
+		expect(html).toContain('data-composer-editor-viewport="true"');
+		expect(html).toContain("whitespace-pre-wrap");
+		expect(html).toContain("p-3");
 	});
 
 	it("renders the shared visibility segmented control when visibility can change", async () => {
@@ -65,6 +95,21 @@ describe("Composer", () => {
 		expect(html).toContain('aria-label="Message visibility"');
 		expect(html).toContain("Reply");
 		expect(html).toContain("Private note");
+	});
+
+	it("supports inline layout mode for centered landing compositions", async () => {
+		const { Composer } = await composerModulePromise;
+
+		const html = renderToStaticMarkup(
+			React.createElement(Composer, {
+				layoutMode: "inline",
+				onChange: () => {},
+				onSubmit: () => {},
+				value: "",
+			})
+		);
+
+		expect(html).toContain('data-composer-layout-mode="inline"');
 	});
 
 	it("highlights the frame as soon as any custom slot is present", async () => {

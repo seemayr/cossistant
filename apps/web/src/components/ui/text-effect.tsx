@@ -6,7 +6,7 @@ import type {
 	Variants,
 } from "motion/react";
 import { AnimatePresence, motion } from "motion/react";
-import React from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
 export type PresetType = "blur" | "fade-in-blur" | "scale" | "fade" | "slide";
@@ -35,6 +35,8 @@ export type TextEffectProps = {
 	containerTransition?: Transition;
 	segmentTransition?: Transition;
 	style?: React.CSSProperties;
+	showCaret?: boolean;
+	caretClassName?: string;
 };
 
 const defaultStaggerTimes: Record<PerType, number> = {
@@ -159,11 +161,82 @@ const AnimationComponent: React.FC<{
 
 AnimationComponent.displayName = "AnimationComponent";
 
+const TypingAnimationComponent: React.FC<{
+	segment: string;
+	per: "line" | "word" | "char";
+	duration: number;
+	segmentWrapperClassName?: string;
+}> = React.memo(({ segment, per, duration, segmentWrapperClassName }) => {
+	const content =
+		per === "line" ? (
+			<motion.span
+				animate={{ opacity: 1, y: 0 }}
+				className="block"
+				initial={{ opacity: 0, y: 4 }}
+				transition={{ duration, ease: "easeOut" }}
+			>
+				{segment}
+			</motion.span>
+		) : (
+			<motion.span
+				animate={{ opacity: 1, y: 0 }}
+				aria-hidden="true"
+				className="inline-block whitespace-pre"
+				initial={{ opacity: 0, y: 2 }}
+				transition={{ duration, ease: "easeOut" }}
+			>
+				{segment}
+			</motion.span>
+		);
+
+	if (!segmentWrapperClassName) {
+		return content;
+	}
+
+	const defaultWrapperClassName = per === "line" ? "block" : "inline-block";
+
+	return (
+		<span className={cn(defaultWrapperClassName, segmentWrapperClassName)}>
+			{content}
+		</span>
+	);
+});
+
+TypingAnimationComponent.displayName = "TypingAnimationComponent";
+
 const splitText = (text: string, per: PerType) => {
 	if (per === "line") {
 		return text.split("\n");
 	}
 	return text.split(SPACE_REGEX);
+};
+
+export const getTextEffectTypingSegments = (text: string, per: PerType) => {
+	if (per === "char") {
+		return Array.from(text);
+	}
+
+	return splitText(text, per);
+};
+
+export const getTextEffectVisibleText = (
+	segments: string[],
+	revealedCount: number
+) => segments.slice(0, Math.max(revealedCount, 0)).join("");
+
+const resolveTransitionDurationSeconds = (
+	baseDuration: number,
+	transition?: Transition
+) => {
+	if (
+		transition &&
+		"duration" in transition &&
+		typeof transition.duration === "number"
+	) {
+		return transition.duration;
+	}
+
+	return baseDuration;
 };
 
 const hasTransition = (
@@ -226,12 +299,32 @@ export function TextEffect({
 	containerTransition,
 	segmentTransition,
 	style,
+	showCaret = false,
+	caretClassName,
 }: TextEffectProps) {
-	const segments = splitText(
-		Array.isArray(children) ? children.join("") : children,
-		per
+	const fullText = useMemo(
+		() => (Array.isArray(children) ? children.join("") : children),
+		[children]
 	);
+	const segments = splitText(fullText, per);
 	const MotionTag = motion[as as keyof typeof motion] as typeof motion.div;
+	const typingSegments = useMemo(
+		() => getTextEffectTypingSegments(fullText, per),
+		[fullText, per]
+	);
+	const [revealedCount, setRevealedCount] = useState(() =>
+		showCaret ? 0 : typingSegments.length
+	);
+	const onAnimationCompleteRef = useRef(onAnimationComplete);
+	const onAnimationStartRef = useRef(onAnimationStart);
+
+	useEffect(() => {
+		onAnimationCompleteRef.current = onAnimationComplete;
+	}, [onAnimationComplete]);
+
+	useEffect(() => {
+		onAnimationStartRef.current = onAnimationStart;
+	}, [onAnimationStart]);
 
 	const baseVariants = preset
 		? presetVariants[preset]
@@ -240,6 +333,10 @@ export function TextEffect({
 	const stagger = defaultStaggerTimes[per] / speedReveal;
 
 	const baseDuration = 0.3 / speedSegment;
+	const typingSegmentDuration = resolveTransitionDurationSeconds(
+		baseDuration,
+		segmentTransition
+	);
 
 	const customStagger = hasTransition(variants?.container?.visible ?? {})
 		? (variants?.container?.visible as TargetAndTransition).transition
@@ -270,6 +367,111 @@ export function TextEffect({
 		}),
 	};
 
+	useEffect(() => {
+		if (!showCaret) {
+			setRevealedCount(typingSegments.length);
+			return;
+		}
+
+		if (!trigger) {
+			setRevealedCount(0);
+			return;
+		}
+
+		onAnimationStartRef.current?.();
+		setRevealedCount(0);
+
+		if (typingSegments.length === 0) {
+			onAnimationCompleteRef.current?.();
+			return;
+		}
+
+		const timeouts: ReturnType<typeof setTimeout>[] = [];
+		const stepDelayMs = Math.max(stagger * 1000, 1);
+		const startDelayMs = Math.max(delay * 1000, 0);
+		const completionDelayMs = Math.max(typingSegmentDuration * 1000, 0);
+
+		timeouts.push(
+			setTimeout(() => {
+				for (let index = 0; index < typingSegments.length; index += 1) {
+					timeouts.push(
+						setTimeout(() => {
+							setRevealedCount(index + 1);
+
+							if (index === typingSegments.length - 1) {
+								timeouts.push(
+									setTimeout(() => {
+										onAnimationCompleteRef.current?.();
+									}, completionDelayMs)
+								);
+							}
+						}, index * stepDelayMs)
+					);
+				}
+			}, startDelayMs)
+		);
+
+		return () => {
+			for (const timeout of timeouts) {
+				clearTimeout(timeout);
+			}
+		};
+	}, [
+		delay,
+		showCaret,
+		stagger,
+		trigger,
+		typingSegmentDuration,
+		typingSegments,
+	]);
+
+	if (showCaret) {
+		const visibleSegments = typingSegments.slice(0, revealedCount);
+
+		return (
+			<AnimatePresence mode="popLayout">
+				{trigger && (
+					<MotionTag className={className} style={style}>
+						{per !== "line" ? (
+							<span className="sr-only">{fullText}</span>
+						) : null}
+						<span
+							className={cn(per === "line" ? "block" : "inline")}
+							data-text-effect-visible="true"
+						>
+							{visibleSegments.map((segment, index) => (
+								<TypingAnimationComponent
+									duration={typingSegmentDuration}
+									key={`${per}-typing-${index}-${segment}`}
+									per={per}
+									segment={segment}
+									segmentWrapperClassName={segmentWrapperClassName}
+								/>
+							))}
+							<motion.span
+								animate={{ opacity: [1, 1, 0, 0] }}
+								aria-hidden="true"
+								className={cn(
+									per === "line"
+										? "mt-1 block h-[1em] w-px bg-current"
+										: "ml-px inline-block h-[1em] w-px bg-current align-[-0.12em]",
+									caretClassName
+								)}
+								data-text-effect-caret="true"
+								transition={{
+									duration: 1,
+									ease: "linear",
+									repeat: Number.POSITIVE_INFINITY,
+									times: [0, 0.45, 0.46, 1],
+								}}
+							/>
+						</span>
+					</MotionTag>
+				)}
+			</AnimatePresence>
+		);
+	}
+
 	return (
 		<AnimatePresence mode="popLayout">
 			{trigger && (
@@ -293,6 +495,23 @@ export function TextEffect({
 							variants={computedVariants.item}
 						/>
 					))}
+					{showCaret ? (
+						<motion.span
+							animate={{ opacity: [1, 1, 0, 0] }}
+							aria-hidden="true"
+							className={cn(
+								"ml-px inline-block h-[1em] w-px bg-current align-[-0.12em]",
+								caretClassName
+							)}
+							data-text-effect-caret="true"
+							transition={{
+								duration: 1,
+								ease: "linear",
+								repeat: Number.POSITIVE_INFINITY,
+								times: [0, 0.45, 0.46, 1],
+							}}
+						/>
+					) : null}
 				</MotionTag>
 			)}
 		</AnimatePresence>

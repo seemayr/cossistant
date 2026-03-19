@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { MessageVisibility } from "@/components/conversation/composer";
 import type { ConversationTimelineItem } from "@/data/conversation-message-cache";
 import { useAnimationScheduler } from "@/hooks/use-animation-scheduler";
 import {
@@ -22,6 +23,11 @@ const PARTICIPANT_JOINED_EVENT_ID = "01JGEVE22222222222222230";
 const HUMAN_REPLY_MESSAGE_ID = "01JGTIM22222222222222231";
 const VISITOR_CONFIRM_MESSAGE_ID = "01JGTIM22222222222222232";
 const MARC_UPDATED_TITLE = "Custom domain blocked by stale edge allowlist";
+export const FAKE_CONVERSATION_HUMAN_REPLY_TEXT =
+	"I joined and deployed the allowlist patch to production. Please hard refresh and run a checkout test. I'll stay here while you verify.";
+export const FAKE_CONVERSATION_HUMAN_TYPING_START_AT = 5400;
+export const FAKE_CONVERSATION_HUMAN_REPLY_COMMIT_AT = 7600;
+export const FAKE_CONVERSATION_VISITOR_TYPING_START_AT = 10_700;
 const VISITOR_TYPING_CONFIRM_TEXT =
 	"Perfect, I just refreshed in production and checkout events are flowing again.";
 
@@ -139,12 +145,39 @@ function createParticipantJoinedEvent(
 	};
 }
 
-function createTypingPreview(
+export function createTypingPreview(
 	fullText: string,
 	progressPercent: number
 ): string {
 	const charsToShow = Math.floor((fullText.length * progressPercent) / 100);
 	return fullText.slice(0, charsToShow);
+}
+
+export function getFakeConversationHumanReplyState(atMs: number) {
+	if (atMs < FAKE_CONVERSATION_HUMAN_TYPING_START_AT) {
+		return {
+			composerValue: "",
+			hasCommittedMessage: false,
+			isComposerTyping: false,
+			showsPlaceholder: true,
+		};
+	}
+
+	if (atMs < FAKE_CONVERSATION_HUMAN_REPLY_COMMIT_AT) {
+		return {
+			composerValue: FAKE_CONVERSATION_HUMAN_REPLY_TEXT,
+			hasCommittedMessage: false,
+			isComposerTyping: true,
+			showsPlaceholder: false,
+		};
+	}
+
+	return {
+		composerValue: "",
+		hasCommittedMessage: true,
+		isComposerTyping: false,
+		showsPlaceholder: true,
+	};
 }
 
 function createInitialTimeline(now: number): ConversationTimelineItem[] {
@@ -231,6 +264,10 @@ export function useFakeConversation({
 	>([]);
 	const [typingActors, setTypingActors] = useState<FakeTypingActor[]>([]);
 	const [isEscalationPending, setIsEscalationPending] = useState(true);
+	const [composerValue, setComposerValue] = useState("");
+	const [composerVisibility, setComposerVisibility] =
+		useState<MessageVisibility>("public");
+	const [isComposerTyping, setIsComposerTyping] = useState(false);
 	const hasScheduledRef = useRef(false);
 	const hasJoinedRef = useRef(false);
 	const hasHandledRef = useRef(false);
@@ -304,6 +341,9 @@ export function useFakeConversation({
 		setTimelineItems([]);
 		setTypingActors([]);
 		setIsEscalationPending(true);
+		setComposerValue("");
+		setComposerVisibility("public");
+		setIsComposerTyping(false);
 		resetScheduler();
 		hasScheduledRef.current = false;
 		hasJoinedRef.current = false;
@@ -338,15 +378,26 @@ export function useFakeConversation({
 				}
 			});
 
-			currentSchedule(7600, () => {
+			currentSchedule(FAKE_CONVERSATION_HUMAN_TYPING_START_AT, () => {
 				if (!hasJoinedRef.current) {
 					return;
 				}
 
+				setComposerValue(FAKE_CONVERSATION_HUMAN_REPLY_TEXT);
+				setIsComposerTyping(true);
+			});
+
+			currentSchedule(FAKE_CONVERSATION_HUMAN_REPLY_COMMIT_AT, () => {
+				if (!hasJoinedRef.current) {
+					return;
+				}
+
+				setIsComposerTyping(false);
+				setComposerValue("");
 				appendTimelineItems(
 					createMessage({
 						id: HUMAN_REPLY_MESSAGE_ID,
-						text: "I joined and deployed the allowlist patch to production. Please hard refresh and run a checkout test. I'll stay here while you verify.",
+						text: FAKE_CONVERSATION_HUMAN_REPLY_TEXT,
 						userId: ANTHONY_RIERA_ID,
 						visitorId: null,
 						aiAgentId: null,
@@ -355,7 +406,7 @@ export function useFakeConversation({
 				);
 			});
 
-			const visitorTypingStartAt = 10_700;
+			const visitorTypingStartAt = FAKE_CONVERSATION_VISITOR_TYPING_START_AT;
 			const visitorTypingDuration = 5200;
 			const visitorTypingSteps = 13;
 			const typingStepDuration = visitorTypingDuration / visitorTypingSteps;
@@ -429,7 +480,7 @@ export function useFakeConversation({
 						visitorConfirmationMessageRef.current ??
 						createMessage({
 							id: HUMAN_REPLY_MESSAGE_ID,
-							text: "I joined and deployed the allowlist patch to production. Please hard refresh and run a checkout test. I'll stay here while you verify.",
+							text: FAKE_CONVERSATION_HUMAN_REPLY_TEXT,
 							userId: ANTHONY_RIERA_ID,
 							visitorId: null,
 							aiAgentId: null,
@@ -452,6 +503,10 @@ export function useFakeConversation({
 		resetDemoData,
 		typingActors,
 		isEscalationPending,
+		composerValue,
+		composerVisibility,
+		isComposerTyping,
 		joinEscalation,
+		onComposerVisibilityChange: setComposerVisibility,
 	};
 }

@@ -152,7 +152,10 @@ export function TopBar({
 
 	return (
 		<div
-			className={cn("fixed top-0 right-0 left-0 z-50 border-grid-x", className)}
+			className={cn(
+				"fixed top-0 right-0 left-0 z-[9999] border-grid-x bg-background",
+				className
+			)}
 		>
 			<div className="container-wrapper relative mx-auto">
 				<div className="container absolute top-0 right-0 left-0 z-50 mx-auto flex items-center bg-background py-4 lg:justify-between">

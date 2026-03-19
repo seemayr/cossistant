@@ -8,6 +8,7 @@ import {
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
+import { cn } from "@/lib/utils";
 import {
 	type AiPauseAction,
 	getAiPauseActionLabel,
@@ -44,9 +45,11 @@ export type ComposerEscalationActionProps = Pick<
 
 export type ComposerProps = {
 	className?: string;
+	layoutMode?: "docked" | "inline";
 	aboveBlock?: React.ReactNode;
 	bottomBlock?: React.ReactNode;
 	centralBlock?: React.ReactNode;
+	textareaOverlay?: React.ReactNode;
 	escalationAction?: ComposerEscalationActionProps | null;
 	value: string;
 	onChange: (value: string) => void;
@@ -80,9 +83,11 @@ export type ComposerProps = {
 
 export const Composer: React.FC<ComposerProps> = ({
 	className,
+	layoutMode = "docked",
 	aboveBlock,
 	bottomBlock,
 	centralBlock,
+	textareaOverlay,
 	escalationAction = null,
 	value,
 	onChange,
@@ -272,6 +277,7 @@ export const Composer: React.FC<ComposerProps> = ({
 				onVisibilityChange={onVisibilityChange}
 				placeholder={placeholder}
 				renderAttachButton={renderAttachButton}
+				textareaOverlay={textareaOverlay}
 				triggerFileInput={triggerFileInput}
 				uploadProgress={uploadProgress}
 				value={value}
@@ -305,7 +311,13 @@ export const Composer: React.FC<ComposerProps> = ({
 
 	return (
 		<div
-			className="absolute right-0 bottom-0 left-0 z-10 mx-auto flex w-full flex-col gap-1 bg-background px-3 pb-2 xl:max-w-xl xl:px-0 2xl:max-w-2xl dark:bg-background-50"
+			className={cn(
+				"z-10 mx-auto flex w-full flex-col gap-1 bg-background px-3 pb-2 xl:max-w-xl xl:px-0 2xl:max-w-2xl dark:bg-background-50",
+				layoutMode === "docked"
+					? "absolute right-0 bottom-0 left-0"
+					: "relative"
+			)}
+			data-composer-layout-mode={layoutMode}
 			ref={rootContainerRef}
 		>
 			<ComposerBlocksFrame highlighted={hasCustomBlocks}>

@@ -39,14 +39,14 @@ type ClarificationComposerBlocks = {
 	bottomBlock: React.ReactNode | null;
 };
 
-type ClarificationTopicBlockProps = {
+export type ClarificationTopicBlockProps = {
 	topicSummary: string;
 	stepIndex: number;
 	maxSteps: number;
 	className?: string;
 };
 
-type ClarificationActionsBlockProps = {
+export type ClarificationActionsBlockProps = {
 	canSubmit: boolean;
 	canSkip: boolean;
 	isPending: boolean;
@@ -55,16 +55,37 @@ type ClarificationActionsBlockProps = {
 	onCancel: () => void;
 	onSkip: () => void;
 	onSubmit: () => void;
+	submitButtonRef?: React.RefObject<HTMLButtonElement | null>;
 };
 
-type ClarificationRetryBlockProps = {
+export type ClarificationRetryBlockProps = {
 	request: KnowledgeClarificationRequest;
 	isRetrying: boolean;
 	onCancel: () => void;
 	onRetry: () => void;
 };
 
-function ClarificationTopicBlock({
+export type ClarificationQuestionBlockProps = {
+	question: string;
+	suggestedAnswers: [string, string, string] | string[];
+	inputMode: NonNullable<
+		Parameters<typeof KnowledgeClarificationQuestionContent>[0]["inputMode"]
+	>;
+	selectedAnswer: string | null;
+	freeAnswer: string;
+	isOtherSelected: boolean;
+	isPending: boolean;
+	textareaOverlay?: Parameters<
+		typeof KnowledgeClarificationQuestionContent
+	>[0]["textareaOverlay"];
+	getSuggestedAnswerButtonRef?: Parameters<
+		typeof KnowledgeClarificationQuestionContent
+	>[0]["getSuggestedAnswerButtonRef"];
+	onSelectAnswer: (answer: string) => void;
+	onFreeAnswerChange: (value: string) => void;
+};
+
+export function ClarificationTopicBlock({
 	topicSummary,
 	stepIndex,
 	maxSteps,
@@ -88,7 +109,7 @@ function ClarificationTopicBlock({
 	);
 }
 
-function ClarificationLoadingBlock() {
+export function ClarificationLoadingBlock() {
 	return (
 		<ComposerCentralBlock>
 			<div
@@ -102,7 +123,7 @@ function ClarificationLoadingBlock() {
 	);
 }
 
-function ClarificationRetryBlock({
+export function ClarificationRetryBlock({
 	request,
 	isRetrying,
 	onCancel,
@@ -149,13 +170,16 @@ function ClarificationRetryBlock({
 	);
 }
 
-function ClarificationDraftReadyBanner({
+export function ClarificationDraftReadyBanner({
 	request,
 	topicSummary,
 	isApproving,
 	onApprove,
 	onClose,
 	onView,
+	canApprove,
+	canView,
+	approveButtonRef,
 }: {
 	request: KnowledgeClarificationRequest | null;
 	topicSummary: string;
@@ -163,6 +187,9 @@ function ClarificationDraftReadyBanner({
 	onApprove: () => void;
 	onClose: () => void;
 	onView: () => void;
+	canApprove?: boolean;
+	canView?: boolean;
+	approveButtonRef?: React.RefObject<HTMLButtonElement | null>;
 }) {
 	return (
 		<div
@@ -176,7 +203,7 @@ function ClarificationDraftReadyBanner({
 
 			<div className="flex shrink-0 items-center gap-2">
 				<Button
-					disabled={!request}
+					disabled={canView ?? !request}
 					onClick={onView}
 					size="xs"
 					type="button"
@@ -185,8 +212,9 @@ function ClarificationDraftReadyBanner({
 					View
 				</Button>
 				<Button
-					disabled={isApproving || !request?.draftFaqPayload}
+					disabled={isApproving || !(canApprove ?? !!request?.draftFaqPayload)}
 					onClick={onApprove}
+					ref={approveButtonRef}
 					size="xs"
 					type="button"
 				>
@@ -212,7 +240,42 @@ function ClarificationDraftReadyBanner({
 	);
 }
 
-function ClarificationActionsBlock({
+export function ClarificationQuestionBlock({
+	question,
+	suggestedAnswers,
+	inputMode,
+	selectedAnswer,
+	freeAnswer,
+	isOtherSelected,
+	isPending,
+	textareaOverlay,
+	getSuggestedAnswerButtonRef,
+	onSelectAnswer,
+	onFreeAnswerChange,
+}: ClarificationQuestionBlockProps) {
+	return (
+		<ComposerCentralBlock key="question">
+			<div className="p-3" data-clarification-slot="question-flow">
+				<KnowledgeClarificationQuestionContent
+					freeAnswer={freeAnswer}
+					getSuggestedAnswerButtonRef={getSuggestedAnswerButtonRef}
+					inputMode={inputMode}
+					isAnalyzing={isPending}
+					isOtherSelected={isOtherSelected}
+					isSubmitting={isPending}
+					onFreeAnswerChange={onFreeAnswerChange}
+					onSelectAnswer={onSelectAnswer}
+					question={question}
+					selectedAnswer={selectedAnswer}
+					suggestedAnswers={suggestedAnswers}
+					textareaOverlay={textareaOverlay}
+				/>
+			</div>
+		</ComposerCentralBlock>
+	);
+}
+
+export function ClarificationActionsBlock({
 	canSubmit,
 	canSkip,
 	isPending,
@@ -221,6 +284,7 @@ function ClarificationActionsBlock({
 	onCancel,
 	onSkip,
 	onSubmit,
+	submitButtonRef,
 }: ClarificationActionsBlockProps) {
 	return (
 		<ComposerBottomBlock className="pl-0">
@@ -256,8 +320,12 @@ function ClarificationActionsBlock({
 						)}
 					</Button>
 					<Button
+						data-clarification-submit-target={
+							submitButtonRef ? "true" : undefined
+						}
 						disabled={!canSubmit || isPending}
 						onClick={onSubmit}
+						ref={submitButtonRef}
 						size="xs"
 						type="button"
 					>
@@ -537,22 +605,17 @@ export function useClarificationComposerFlow({
 				request={retryRequest}
 			/>
 		) : step?.kind === "question" ? (
-			<ComposerCentralBlock key="question">
-				<div className="p-3" data-clarification-slot="question-flow">
-					<KnowledgeClarificationQuestionContent
-						freeAnswer={answerDraft.freeAnswer}
-						inputMode={step.inputMode}
-						isAnalyzing={isPending}
-						isOtherSelected={answerDraft.isOtherSelected}
-						isSubmitting={isPending}
-						onFreeAnswerChange={answerDraft.setFreeAnswer}
-						onSelectAnswer={answerDraft.selectAnswer}
-						question={step.question}
-						selectedAnswer={answerDraft.selectedAnswer}
-						suggestedAnswers={step.suggestedAnswers}
-					/>
-				</div>
-			</ComposerCentralBlock>
+			<ClarificationQuestionBlock
+				freeAnswer={answerDraft.freeAnswer}
+				inputMode={step.inputMode}
+				isOtherSelected={answerDraft.isOtherSelected}
+				isPending={isPending}
+				onFreeAnswerChange={answerDraft.setFreeAnswer}
+				onSelectAnswer={answerDraft.selectAnswer}
+				question={step.question}
+				selectedAnswer={answerDraft.selectedAnswer}
+				suggestedAnswers={step.suggestedAnswers}
+			/>
 		) : (
 			<ClarificationLoadingBlock key="loading" />
 		),

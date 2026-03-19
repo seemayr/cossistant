@@ -2,10 +2,25 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icons";
 import { PageHeader } from "@/components/ui/layout";
 
-export function FakeConversationHeader() {
+export function FakeConversationHeader({
+	isLeftSidebarOpen = true,
+}: {
+	isLeftSidebarOpen?: boolean;
+}) {
 	return (
 		<PageHeader className="z-10 border-b bg-background pl-3.5 dark:bg-background-50">
 			<div className="flex items-center gap-2">
+				{isLeftSidebarOpen ? null : (
+					<Button
+						className="ml-0.5"
+						onClick={() => {}}
+						size="icon-small"
+						type="button"
+						variant="ghost"
+					>
+						<Icon filledOnHover name="sidebar-collapse" />
+					</Button>
+				)}
 				<div className="flex items-center gap-4">
 					<Button
 						onClick={() => {}}
