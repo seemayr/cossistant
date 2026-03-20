@@ -151,14 +151,10 @@ export function TopBar({
 	];
 
 	return (
-		<div
-			className={cn(
-				"fixed top-0 right-0 left-0 z-[9999] border-grid-x bg-background",
-				className
-			)}
-		>
-			<div className="container-wrapper relative mx-auto">
-				<div className="container absolute top-0 right-0 left-0 z-50 mx-auto flex items-center bg-background py-4 lg:justify-between">
+		<div className={cn("fixed top-0 right-0 left-0 z-50", className)}>
+			<div className="fixed top-0 right-0 left-0 h-16 min-h-16 min-w-screen border-background border-b bg-background" />
+			<div className="container-wrapper relative mx-auto bg-background">
+				<div className="container z-50 mx-auto flex items-center bg-background py-4 lg:justify-between">
 					<div className="flex items-center gap-3 sm:gap-6">
 						<Sheet>
 							<SheetTrigger asChild>
@@ -223,9 +219,6 @@ export function TopBar({
 					</div>
 					<FullWidthBorder className="bottom-0" />
 				</div>
-				<div className="pointer-events-none absolute top-0 right-0 left-0 z-10 h-20 bg-linear-to-b from-background to-transparent" />
-				<div className="pointer-events-none absolute top-0 right-0 left-0 z-10 h-24 bg-linear-to-b from-background to-transparent" />
-				<div className="pointer-events-none absolute top-0 right-0 left-0 z-10 h-32 bg-linear-to-b from-background to-transparent" />
 			</div>
 		</div>
 	);

@@ -139,6 +139,7 @@ describe("KnowledgeClarificationQuestionContent", () => {
 		expect(html).toContain(
 			'placeholder="Describe how this workflow or rule works today..."'
 		);
+		expect(html).toContain("autofocus");
 		expect(html).not.toContain(">4.<");
 	});
 

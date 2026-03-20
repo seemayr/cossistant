@@ -71,6 +71,9 @@ export type ClarificationQuestionBlockProps = {
 	inputMode: NonNullable<
 		Parameters<typeof KnowledgeClarificationQuestionContent>[0]["inputMode"]
 	>;
+	autoFocus?: Parameters<
+		typeof KnowledgeClarificationQuestionContent
+	>[0]["autoFocus"];
 	selectedAnswer: string | null;
 	freeAnswer: string;
 	isOtherSelected: boolean;
@@ -244,6 +247,7 @@ export function ClarificationQuestionBlock({
 	question,
 	suggestedAnswers,
 	inputMode,
+	autoFocus,
 	selectedAnswer,
 	freeAnswer,
 	isOtherSelected,
@@ -257,6 +261,7 @@ export function ClarificationQuestionBlock({
 		<ComposerCentralBlock key="question">
 			<div className="p-3" data-clarification-slot="question-flow">
 				<KnowledgeClarificationQuestionContent
+					autoFocus={autoFocus}
 					freeAnswer={freeAnswer}
 					getSuggestedAnswerButtonRef={getSuggestedAnswerButtonRef}
 					inputMode={inputMode}

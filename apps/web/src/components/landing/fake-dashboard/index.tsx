@@ -30,6 +30,7 @@ export function FakeDashboard({ className }: { className?: string }) {
 		threshold: 0.1,
 		rootMargin: "50px",
 	});
+	const isAnimationActive = isVisible && isPlaying;
 
 	useEffect(() => {
 		if (!isVisible && isPlaying) {
@@ -74,14 +75,14 @@ export function FakeDashboard({ className }: { className?: string }) {
 	}, []);
 
 	const inboxHook = useFakeInbox({
-		isPlaying: isPlaying && currentView === "inbox",
+		isPlaying: isAnimationActive && currentView === "inbox",
 		onComplete: undefined,
 		onShowMouseCursor:
 			currentView === "inbox" ? handleShowInboxMouseCursor : undefined,
 	});
 
 	const conversationHook = useFakeConversation({
-		isPlaying: isPlaying && currentView === "conversation",
+		isPlaying: isAnimationActive && currentView === "conversation",
 		onComplete:
 			currentView === "conversation" ? onAnimationComplete : undefined,
 		onConversationHandled: inboxHook.markConversationHandledByHuman,

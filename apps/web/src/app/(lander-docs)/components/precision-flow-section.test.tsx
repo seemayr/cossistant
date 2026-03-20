@@ -37,7 +37,7 @@ describe("PrecisionFlowSection", () => {
 
 		expect(html).toContain("How do I delete my account?");
 		expect(html).toContain("How it learns");
-		expect(html).toContain("When Cossistant does not know, it asks your team.");
+		expect(html).toContain("When the AI agent doesn&#x27;t know,");
 		expect(html).toContain("Customer asks");
 		expect(html).toContain("Cossistant checks");
 		expect(html).toContain("Your team answers");
@@ -107,6 +107,7 @@ describe("PrecisionFlowSection", () => {
 		expect(html).toContain("Reply");
 		expect(html).toContain("Private note");
 		expect(html).toContain('type="file"');
+		expect(html).not.toContain("autofocus");
 		expect(html).not.toContain("How do I delete my account?");
 		expect(html).not.toContain(
 			"I don&#x27;t know this one yet, so I&#x27;m asking the team and saving the answer for next time."
@@ -139,6 +140,7 @@ describe("PrecisionFlowSection", () => {
 		expect(html).toContain('data-text-effect-caret="true"');
 		expect(html).toContain('data-text-effect-visible="true"');
 		expect(html).toContain("Next");
+		expect(html).not.toContain("autofocus");
 		expect(html).not.toContain("How do I delete my account?");
 	});
 

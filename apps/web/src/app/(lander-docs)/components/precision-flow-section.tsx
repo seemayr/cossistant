@@ -123,6 +123,7 @@ function PrecisionFlowComposer({
 		);
 		centralBlock = (
 			<ClarificationQuestionBlock
+				autoFocus={false}
 				freeAnswer={composerState.freeAnswer}
 				getSuggestedAnswerButtonRef={(answer) =>
 					answer === PRECISION_FLOW_QUESTION_TWO_ANSWER
@@ -219,6 +220,7 @@ function PrecisionFlowComposer({
 	return (
 		<Composer
 			aboveBlock={aboveBlock}
+			autoFocus={false}
 			bottomBlock={bottomBlock}
 			centralBlock={centralBlock}
 			layoutMode="inline"

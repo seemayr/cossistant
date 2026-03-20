@@ -34,6 +34,7 @@ type ComposerCentralBlockProps = {
 type ComposerDefaultCentralBlockProps = {
 	className?: string;
 	value: string;
+	autoFocus?: boolean;
 	textareaOverlay?: ReactNode;
 	disabled: boolean;
 	error?: Error | null;
@@ -75,6 +76,7 @@ type ComposerFileAttachmentsProps = {
 };
 
 type ComposerEditorProps = {
+	autoFocus: boolean;
 	className?: string;
 	disabled: boolean;
 	isPrivate: boolean;
@@ -204,6 +206,7 @@ function ComposerFileAttachments({
 }
 
 function ComposerEditor({
+	autoFocus,
 	className,
 	disabled,
 	isPrivate,
@@ -254,7 +257,7 @@ function ComposerEditor({
 			<textarea
 				aria-describedby={error ? "multimodal-input-error" : undefined}
 				aria-invalid={error ? "true" : undefined}
-				autoFocus
+				autoFocus={autoFocus}
 				className={cn(
 					"flex-1 resize-none bg-transparent placeholder:text-primary/50 focus-visible:outline-none",
 					COMPOSER_EDITOR_SURFACE_CLASS_NAME,
@@ -412,6 +415,7 @@ export function ComposerCentralBlock({
 export function ComposerDefaultCentralBlock({
 	className,
 	value,
+	autoFocus = true,
 	textareaOverlay,
 	disabled,
 	error,
@@ -471,6 +475,7 @@ export function ComposerDefaultCentralBlock({
 							onVisibilityChange={onVisibilityChange}
 						/>
 						<ComposerEditor
+							autoFocus={autoFocus}
 							className={className}
 							disabled={disabled}
 							error={error}

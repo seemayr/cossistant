@@ -112,6 +112,21 @@ describe("Composer", () => {
 		expect(html).toContain('data-composer-layout-mode="inline"');
 	});
 
+	it("lets callers disable textarea autofocus when a demo should stay passive", async () => {
+		const { Composer } = await composerModulePromise;
+
+		const html = renderToStaticMarkup(
+			React.createElement(Composer, {
+				autoFocus: false,
+				onChange: () => {},
+				onSubmit: () => {},
+				value: "",
+			})
+		);
+
+		expect(html).not.toContain("autofocus");
+	});
+
 	it("highlights the frame as soon as any custom slot is present", async () => {
 		const { Composer } = await composerModulePromise;
 

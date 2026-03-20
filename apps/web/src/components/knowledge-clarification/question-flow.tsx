@@ -63,6 +63,7 @@ export type KnowledgeClarificationQuestionContentProps = {
 	question: string;
 	suggestedAnswers: [string, string, string] | string[];
 	inputMode?: KnowledgeClarificationQuestionInputMode;
+	autoFocus?: boolean;
 	selectedAnswer: string | null;
 	freeAnswer: string;
 	isOtherSelected: boolean;
@@ -116,6 +117,7 @@ export function KnowledgeClarificationQuestionContent({
 	question,
 	suggestedAnswers,
 	inputMode = "suggested_answers",
+	autoFocus = true,
 	selectedAnswer,
 	freeAnswer,
 	isOtherSelected,
@@ -168,7 +170,7 @@ export function KnowledgeClarificationQuestionContent({
 						</label>
 						<Textarea
 							aria-label="Describe how it works today"
-							autoFocus
+							autoFocus={autoFocus}
 							className={cn(
 								"min-h-28 w-full resize-y border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 dark:bg-transparent",
 								textareaOverlay &&

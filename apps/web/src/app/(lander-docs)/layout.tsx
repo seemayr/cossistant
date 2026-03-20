@@ -6,7 +6,7 @@ import { TopBar } from "./components/topbar";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
 	return (
-		<div className="relative flex min-h-svh flex-col overflow-clip border-grid-x">
+		<div className="relative flex min-h-svh flex-col overflow-clip">
 			<TopBar>
 				<DashboardButton />
 			</TopBar>

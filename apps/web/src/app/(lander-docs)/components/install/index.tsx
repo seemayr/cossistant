@@ -21,7 +21,7 @@ export const Install = () => (
 			</div>
 			<div
 				className={cn(
-					"relative flex flex-col justify-center gap-4 px-4 py-16 lg:w-1/2 lg:border-r lg:px-8 xl:px-12"
+					"relative flex flex-col justify-center gap-4 px-4 py-16 lg:w-1/2 lg:px-8 xl:px-12"
 				)}
 			>
 				<p className="font-mono text-primary/70 text-xs">

@@ -793,6 +793,11 @@ export function Background({
 				return;
 			}
 
+			if (!isVisible) {
+				stopLoop();
+				return;
+			}
+
 			const animate = shouldAnimateBackground({
 				documentVisible: isDocumentVisible,
 				isVisible,
@@ -870,7 +875,9 @@ export function Background({
 				devicePixelRatio
 			);
 			allocateBuffers();
-			renderFrame(lastElapsedMs);
+			if (isVisible) {
+				renderFrame(lastElapsedMs);
+			}
 			syncLoop();
 		};
 
@@ -1049,11 +1056,14 @@ export function Background({
 			intersectionObserver.observe(container);
 		} else {
 			isVisible = true;
+			syncLoop();
 		}
 
 		const rootObserver = new MutationObserver(() => {
 			updatePalette();
-			renderFrame(lastElapsedMs);
+			if (isVisible) {
+				renderFrame(lastElapsedMs);
+			}
 		});
 		rootObserver.observe(document.documentElement, {
 			attributeFilter: ["class", "style"],

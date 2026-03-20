@@ -182,6 +182,7 @@ export function FakeSupportWidget({ className }: { className?: string }) {
 		threshold: 0.1,
 		rootMargin: "50px",
 	});
+	const isAnimationActive = isVisible && isPlaying;
 
 	// Reset to a paused baseline so the animation starts only after entering view.
 	useEffect(() => {
@@ -270,14 +271,14 @@ export function FakeSupportWidget({ className }: { className?: string }) {
 	);
 
 	const homeHook = useFakeSupportWidgetHome({
-		isPlaying: isPlaying && currentView === "home",
+		isPlaying: isAnimationActive && currentView === "home",
 		onComplete: undefined, // Don't complete on home - mouse click handles transition
 		onShowMouseCursor:
 			currentView === "home" ? handleShowMouseCursor : undefined,
 	});
 
 	const conversationHook = useFakeSupportWidgetConversation({
-		isPlaying: isPlaying && currentView === "conversation",
+		isPlaying: isAnimationActive && currentView === "conversation",
 		onComplete:
 			currentView === "conversation" ? onAnimationComplete : undefined,
 	});

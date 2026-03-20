@@ -4,6 +4,7 @@ type UseViewportVisibilityOptions = {
 	threshold?: number;
 	rootMargin?: string;
 	enabled?: boolean;
+	initialVisibility?: boolean;
 };
 
 /**
@@ -16,16 +17,31 @@ type UseViewportVisibilityOptions = {
 export function useViewportVisibility<T extends HTMLElement = HTMLElement>(
 	options: UseViewportVisibilityOptions = {}
 ): [React.RefObject<T>, boolean] {
-	const { threshold = 0, rootMargin = "0px", enabled = true } = options;
-	const [isVisible, setIsVisible] = useState(true);
+	const {
+		threshold = 0,
+		rootMargin = "0px",
+		enabled = true,
+		initialVisibility = false,
+	} = options;
+	const [isVisible, setIsVisible] = useState(initialVisibility);
 	const elementRef = useRef<T | null>(null);
 
 	useEffect(() => {
-		if (!(enabled && elementRef.current)) {
+		if (!enabled) {
+			setIsVisible(initialVisibility);
+			return;
+		}
+
+		if (!elementRef.current) {
 			return;
 		}
 
 		const element = elementRef.current;
+		if (typeof IntersectionObserver === "undefined") {
+			setIsVisible(true);
+			return;
+		}
+
 		const observer = new IntersectionObserver(
 			([entry]) => {
 				setIsVisible(entry?.isIntersecting ?? false);
@@ -41,7 +57,7 @@ export function useViewportVisibility<T extends HTMLElement = HTMLElement>(
 		return () => {
 			observer.disconnect();
 		};
-	}, [threshold, rootMargin, enabled]);
+	}, [threshold, rootMargin, enabled, initialVisibility]);
 
 	return [elementRef as React.RefObject<T>, isVisible];
 }

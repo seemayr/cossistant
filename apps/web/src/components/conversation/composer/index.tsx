@@ -52,6 +52,7 @@ export type ComposerProps = {
 	textareaOverlay?: React.ReactNode;
 	escalationAction?: ComposerEscalationActionProps | null;
 	value: string;
+	autoFocus?: boolean;
 	onChange: (value: string) => void;
 	onSubmit: () => void;
 	onFileSelect?: (files: File[]) => void;
@@ -90,6 +91,7 @@ export const Composer: React.FC<ComposerProps> = ({
 	textareaOverlay,
 	escalationAction = null,
 	value,
+	autoFocus = true,
 	onChange,
 	onSubmit,
 	onFileSelect,
@@ -257,6 +259,7 @@ export const Composer: React.FC<ComposerProps> = ({
 		) : (
 			<ComposerDefaultCentralBlock
 				allowedFileTypes={allowedFileTypes}
+				autoFocus={autoFocus}
 				canSubmit={canSubmit}
 				className={className}
 				disabled={disabled}
