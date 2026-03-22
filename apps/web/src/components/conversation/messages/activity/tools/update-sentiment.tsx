@@ -23,6 +23,23 @@ function extractSentiment(output: unknown): string | null {
 	return null;
 }
 
+function extractChanged(output: unknown): boolean | null {
+	if (!isRecord(output)) {
+		return null;
+	}
+
+	const data = isRecord(output.data) ? output.data : null;
+	if (typeof data?.changed === "boolean") {
+		return data.changed;
+	}
+
+	if (typeof output.changed === "boolean") {
+		return output.changed;
+	}
+
+	return null;
+}
+
 const sentimentDotColor: Record<string, string> = {
 	positive: "bg-emerald-500",
 	neutral: "bg-zinc-400",
@@ -63,6 +80,20 @@ export function UpdateSentimentActivity({
 				showTerminalIndicator={showTerminalIndicator}
 				state="error"
 				text="Failed to update sentiment"
+				timestamp={timestamp}
+			/>
+		);
+	}
+
+	if (extractChanged(output) === false) {
+		return (
+			<ActivityWrapper
+				icon={icon}
+				showIcon={showIcon}
+				showStateIndicator={showStateIndicator}
+				showTerminalIndicator={showTerminalIndicator}
+				state="result"
+				text={summaryText}
 				timestamp={timestamp}
 			/>
 		);

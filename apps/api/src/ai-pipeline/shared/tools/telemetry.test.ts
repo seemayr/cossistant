@@ -283,6 +283,75 @@ describe("wrapPipelineToolsWithTelemetry", () => {
 		);
 	});
 
+	it("suppresses duplicate background one-shot tool calls before timeline emission", async () => {
+		const { wrapPipelineToolsWithTelemetry } = await modulePromise;
+		const context = createContext({
+			pipelineKind: "background",
+			mode: "background_only",
+			allowPublicMessages: false,
+		});
+		const tools = wrapPipelineToolsWithTelemetry({
+			tools: {
+				setPriority: {
+					execute: async () => ({
+						success: true,
+						changed: true,
+						data: { changed: true, priority: "high" },
+					}),
+				},
+			} as never,
+			context: context as never,
+			definitions: [
+				{
+					id: "setPriority",
+					factory: (() => null) as never,
+					availability: { primary: false, background: true },
+					behaviorSettingKey: "canSetPriority",
+					telemetry: {
+						summary: {
+							partial: "Setting priority...",
+							result: "Priority set",
+							error: "Priority failed",
+						},
+						progress: {
+							partial: "Setting priority...",
+							result: "Priority set",
+							error: "Priority failed",
+							audience: "dashboard",
+						},
+					},
+				},
+			] as never,
+		});
+
+		const firstResult = await tools.setPriority?.execute?.(
+			{ priority: "high" } as never,
+			{ toolCallId: "call-bg-1" } as never
+		);
+		const secondResult = await tools.setPriority?.execute?.(
+			{ priority: "high" } as never,
+			{ toolCallId: "call-bg-2" } as never
+		);
+
+		expect(firstResult).toMatchObject({
+			success: true,
+			changed: true,
+		});
+		expect(secondResult).toEqual({
+			success: true,
+			changed: false,
+			data: {
+				changed: false,
+				reason: "duplicate_in_run",
+			},
+		});
+		expect(createTimelineItemMock).toHaveBeenCalledTimes(1);
+		expect(updateTimelineItemMock).toHaveBeenCalledTimes(1);
+		expect(emitPipelineToolProgressMock).toHaveBeenCalledTimes(2);
+		expect(context.runtimeState.toolCallCounts.setPriority).toBe(1);
+		expect(context.runtimeState.toolExecutions).toHaveLength(1);
+	});
+
 	it("tracks searchKnowledgeBase partial/result text with source count", async () => {
 		const { wrapPipelineToolsWithTelemetry } = await modulePromise;
 		const context = createContext();

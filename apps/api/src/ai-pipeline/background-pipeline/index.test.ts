@@ -325,7 +325,6 @@ describe("runBackgroundPipeline", () => {
 				hasLaterHumanMessage: false,
 				hasLaterAiMessage: false,
 				toolAllowlist: [
-					"requestKnowledgeClarification",
 					"updateConversationTitle",
 					"updateSentiment",
 					"setPriority",
@@ -406,11 +405,7 @@ describe("runBackgroundPipeline", () => {
 		});
 		expect(runGenerationRuntimeMock).toHaveBeenCalledWith(
 			expect.objectContaining({
-				toolAllowlist: [
-					"requestKnowledgeClarification",
-					"categorizeConversation",
-					"skip",
-				],
+				toolAllowlist: ["categorizeConversation", "skip"],
 				availableViews: [
 					{
 						id: "view-1",

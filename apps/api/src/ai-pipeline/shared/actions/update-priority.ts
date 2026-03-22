@@ -15,6 +15,7 @@ import {
 	TimelineItemVisibility,
 } from "@cossistant/types";
 import { eq } from "drizzle-orm";
+import { loadCurrentConversation } from "./load-current-conversation";
 
 type UpdatePriorityParams = {
 	db: Database;
@@ -43,8 +44,15 @@ export async function updatePriority(params: UpdatePriorityParams): Promise<{
 		emitTimelineEvent = true,
 	} = params;
 
+	const currentConversation = await loadCurrentConversation(db, conv.id);
+	if (!currentConversation) {
+		return {
+			changed: false,
+		};
+	}
+
 	// Skip if already at desired priority
-	if (conv.priority === newPriority) {
+	if (currentConversation.priority === newPriority) {
 		return {
 			changed: false,
 			reason: "unchanged",
@@ -60,7 +68,7 @@ export async function updatePriority(params: UpdatePriorityParams): Promise<{
 			priority: newPriority,
 			updatedAt: nowIso,
 		})
-		.where(eq(conversation.id, conv.id))
+		.where(eq(conversation.id, currentConversation.id))
 		.returning();
 
 	if (!updatedConversation) {
@@ -73,16 +81,16 @@ export async function updatePriority(params: UpdatePriorityParams): Promise<{
 		await createConversationEvent({
 			db,
 			context: {
-				conversationId: conv.id,
+				conversationId: currentConversation.id,
 				organizationId,
 				websiteId,
-				visitorId: conv.visitorId,
+				visitorId: currentConversation.visitorId,
 			},
 			event: {
 				type: ConversationEventType.PRIORITY_CHANGED,
 				actorAiAgentId: aiAgentId,
 				metadata: {
-					previousPriority: conv.priority,
+					previousPriority: currentConversation.priority,
 					newPriority,
 				},
 				createdAt: now,
@@ -96,7 +104,7 @@ export async function updatePriority(params: UpdatePriorityParams): Promise<{
 		organizationId,
 		visitorId: null,
 		userId: null,
-		conversationId: conv.id,
+		conversationId: currentConversation.id,
 		updates: {
 			priority: updatedConversation.priority,
 		},

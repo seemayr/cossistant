@@ -16,6 +16,7 @@ import {
 	TimelineItemVisibility,
 } from "@cossistant/types";
 import { eq } from "drizzle-orm";
+import { loadCurrentConversation } from "./load-current-conversation";
 
 type UpdateSentimentParams = {
 	db: Database;
@@ -63,10 +64,17 @@ export async function updateSentiment(params: UpdateSentimentParams): Promise<{
 		emitTimelineEvent = false,
 	} = params;
 
+	const currentConversation = await loadCurrentConversation(db, conv.id);
+	if (!currentConversation) {
+		return {
+			changed: false,
+		};
+	}
+
 	if (
 		isSentimentEffectivelyUnchanged({
-			currentSentiment: conv.sentiment,
-			currentConfidence: conv.sentimentConfidence,
+			currentSentiment: currentConversation.sentiment,
+			currentConfidence: currentConversation.sentimentConfidence,
 			nextSentiment: sentiment,
 			nextConfidence: confidence,
 		})
@@ -87,7 +95,7 @@ export async function updateSentiment(params: UpdateSentimentParams): Promise<{
 			sentimentConfidence: confidence,
 			updatedAt: now,
 		})
-		.where(eq(conversation.id, conv.id));
+		.where(eq(conversation.id, currentConversation.id));
 
 	if (emitTimelineEvent) {
 		const eventText = `AI analyzed sentiment: ${sentiment} (${Math.round(confidence * 100)}% confidence)`;
@@ -95,8 +103,8 @@ export async function updateSentiment(params: UpdateSentimentParams): Promise<{
 			db,
 			organizationId,
 			websiteId,
-			conversationId: conv.id,
-			conversationOwnerVisitorId: conv.visitorId,
+			conversationId: currentConversation.id,
+			conversationOwnerVisitorId: currentConversation.visitorId,
 			item: {
 				type: ConversationTimelineType.EVENT,
 				visibility: TimelineItemVisibility.PRIVATE,
@@ -111,9 +119,9 @@ export async function updateSentiment(params: UpdateSentimentParams): Promise<{
 	await realtime.emit("conversationUpdated", {
 		websiteId,
 		organizationId,
-		visitorId: conv.visitorId,
+		visitorId: currentConversation.visitorId,
 		userId: null,
-		conversationId: conv.id,
+		conversationId: currentConversation.id,
 		updates: {
 			sentiment,
 			sentimentConfidence: confidence,

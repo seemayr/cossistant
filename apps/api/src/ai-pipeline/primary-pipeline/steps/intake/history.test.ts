@@ -65,6 +65,9 @@ function createTool(params: {
 	createdAt: string;
 	query?: string;
 	totalFound?: number;
+	text?: string;
+	input?: Record<string, unknown>;
+	output?: Record<string, unknown>;
 }) {
 	return {
 		id: params.id,
@@ -72,25 +75,27 @@ function createTool(params: {
 		organizationId: "org-1",
 		type: "tool",
 		text:
-			params.toolName === "searchKnowledgeBase"
+			params.text ??
+			(params.toolName === "searchKnowledgeBase"
 				? `Found ${params.totalFound ?? 0} relevant sources`
-				: `Completed ${params.toolName}`,
+				: `Completed ${params.toolName}`),
 		parts: [
 			{
 				type: `tool-${params.toolName}`,
 				toolCallId: `${params.id}-call`,
 				toolName: params.toolName,
 				state: "result",
-				input: params.query ? { query: params.query } : {},
+				input: params.input ?? (params.query ? { query: params.query } : {}),
 				output:
-					params.toolName === "searchKnowledgeBase"
+					params.output ??
+					(params.toolName === "searchKnowledgeBase"
 						? {
 								data: {
 									totalFound: params.totalFound ?? 0,
 									articles: [],
 								},
 							}
-						: {},
+						: {}),
 			},
 		],
 		userId: null,
@@ -169,6 +174,78 @@ describe("buildConversationTranscript", () => {
 		);
 		expect(toolEntries[0]?.content).toContain('query="refund policy"');
 		expect(toolEntries[0]?.content).toContain("results=3");
+	});
+
+	it("does not append metadata detail for unchanged background tool results", async () => {
+		getConversationTimelineItemsMock.mockResolvedValueOnce({
+			items: [
+				createMessage(1, {
+					senderType: "visitor",
+					text: "Can you help with billing?",
+				}),
+				createTool({
+					id: "tool-title-unchanged",
+					toolName: "updateConversationTitle",
+					createdAt: "2026-03-08T10:01:00.000Z",
+					text: "Conversation title unchanged",
+					input: { title: "Help with billing" },
+					output: {
+						data: {
+							changed: false,
+							reason: "unchanged",
+							title: "Help with billing",
+						},
+					},
+				}) as never,
+				createTool({
+					id: "tool-sentiment-unchanged",
+					toolName: "updateSentiment",
+					createdAt: "2026-03-08T10:02:00.000Z",
+					text: "Sentiment unchanged",
+					input: { sentiment: "positive" },
+					output: {
+						data: {
+							changed: false,
+							reason: "unchanged",
+							sentiment: "positive",
+						},
+					},
+				}) as never,
+				createTool({
+					id: "tool-priority-unchanged",
+					toolName: "setPriority",
+					createdAt: "2026-03-08T10:03:00.000Z",
+					text: "Priority unchanged",
+					input: { priority: "high" },
+					output: {
+						data: {
+							changed: false,
+							reason: "unchanged",
+							priority: "high",
+						},
+					},
+				}) as never,
+			],
+			hasNextPage: false,
+			nextCursor: undefined,
+		});
+
+		const { buildConversationTranscript } = await modulePromise;
+		const transcript = await buildConversationTranscript({} as never, {
+			conversationId: "conv-1",
+			organizationId: "org-1",
+			websiteId: "site-1",
+		});
+
+		const toolEntries = transcript.filter(isConversationToolAction);
+
+		expect(toolEntries).toHaveLength(3);
+		expect(toolEntries[0]?.content).toContain("Conversation title unchanged");
+		expect(toolEntries[0]?.content).not.toContain('title="Help with billing"');
+		expect(toolEntries[1]?.content).toContain("Sentiment unchanged");
+		expect(toolEntries[1]?.content).not.toContain("sentiment=positive");
+		expect(toolEntries[2]?.content).toContain("Priority unchanged");
+		expect(toolEntries[2]?.content).not.toContain("priority=high");
 	});
 });
 

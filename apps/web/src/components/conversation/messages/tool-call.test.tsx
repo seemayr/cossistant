@@ -402,6 +402,37 @@ describe("ToolCall", () => {
 		expect(html).toContain("Changed title to");
 	});
 
+	it("renders updateConversationTitle unchanged state from summary text", () => {
+		const html = render(
+			createToolTimelineItem({
+				text: "Skipped title update because the title was set manually",
+				parts: [
+					{
+						type: "tool-updateConversationTitle",
+						toolCallId: "call-5b",
+						toolName: "updateConversationTitle",
+						input: { title: "Help with billing" },
+						state: "result",
+						output: {
+							success: true,
+							data: {
+								changed: false,
+								reason: "manual_title",
+								title: "Help with billing",
+							},
+						},
+					},
+				],
+				tool: "updateConversationTitle",
+			})
+		);
+
+		expect(html).toContain(
+			"Skipped title update because the title was set manually"
+		);
+		expect(html).not.toContain("Changed title to");
+	});
+
 	it("renders updateSentiment with sentiment value", () => {
 		const html = render(
 			createToolTimelineItem({
@@ -427,6 +458,35 @@ describe("ToolCall", () => {
 		expect(html).toContain("positive");
 	});
 
+	it("renders updateSentiment unchanged state from summary text", () => {
+		const html = render(
+			createToolTimelineItem({
+				text: "Sentiment unchanged",
+				parts: [
+					{
+						type: "tool-updateSentiment",
+						toolCallId: "call-6b",
+						toolName: "updateSentiment",
+						input: {},
+						state: "result",
+						output: {
+							success: true,
+							data: {
+								changed: false,
+								reason: "unchanged",
+								sentiment: "positive",
+							},
+						},
+					},
+				],
+				tool: "updateSentiment",
+			})
+		);
+
+		expect(html).toContain("Sentiment unchanged");
+		expect(html).not.toContain("Sentiment:");
+	});
+
 	it("renders setPriority with priority badge", () => {
 		const html = render(
 			createToolTimelineItem({
@@ -447,6 +507,31 @@ describe("ToolCall", () => {
 
 		expect(html).toContain("Conversation priority set to");
 		expect(html).toContain("high");
+	});
+
+	it("renders setPriority unchanged state from summary text", () => {
+		const html = render(
+			createToolTimelineItem({
+				text: "Priority unchanged",
+				parts: [
+					{
+						type: "tool-setPriority",
+						toolCallId: "call-7b",
+						toolName: "setPriority",
+						input: {},
+						state: "result",
+						output: {
+							success: true,
+							data: { changed: false, reason: "unchanged", priority: "high" },
+						},
+					},
+				],
+				tool: "setPriority",
+			})
+		);
+
+		expect(html).toContain("Priority unchanged");
+		expect(html).not.toContain("Conversation priority set to");
 	});
 
 	it("renders categorizeConversation with the resolved view name", () => {

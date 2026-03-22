@@ -125,6 +125,14 @@ function getNumberField(
 	return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+function getBooleanField(
+	record: Record<string, unknown>,
+	key: string
+): boolean | null {
+	const value = record[key];
+	return typeof value === "boolean" ? value : null;
+}
+
 function mapTimelineMessage(
 	item: TimelineItem
 ): ConversationTranscriptEntry | null {
@@ -214,6 +222,12 @@ function summarizeIdentifyVisitor(toolPart: ToolPart): string | null {
 function summarizeUpdateConversationTitle(toolPart: ToolPart): string | null {
 	const output = isRecord(toolPart.output) ? toolPart.output : null;
 	const data = output && isRecord(output.data) ? output.data : null;
+	const changed =
+		(data && getBooleanField(data, "changed")) ??
+		(output && getBooleanField(output, "changed"));
+	if (changed === false) {
+		return null;
+	}
 	const title =
 		(data && getStringField(data, "title")) ??
 		getStringField(toolPart.input, "title");
@@ -224,6 +238,12 @@ function summarizeUpdateConversationTitle(toolPart: ToolPart): string | null {
 function summarizeUpdateSentiment(toolPart: ToolPart): string | null {
 	const output = isRecord(toolPart.output) ? toolPart.output : null;
 	const data = output && isRecord(output.data) ? output.data : null;
+	const changed =
+		(data && getBooleanField(data, "changed")) ??
+		(output && getBooleanField(output, "changed"));
+	if (changed === false) {
+		return null;
+	}
 	const sentiment =
 		(data && getStringField(data, "sentiment")) ??
 		getStringField(toolPart.input, "sentiment");
@@ -234,6 +254,12 @@ function summarizeUpdateSentiment(toolPart: ToolPart): string | null {
 function summarizeSetPriority(toolPart: ToolPart): string | null {
 	const output = isRecord(toolPart.output) ? toolPart.output : null;
 	const data = output && isRecord(output.data) ? output.data : null;
+	const changed =
+		(data && getBooleanField(data, "changed")) ??
+		(output && getBooleanField(output, "changed"));
+	if (changed === false) {
+		return null;
+	}
 	const priority =
 		(data && getStringField(data, "priority")) ??
 		getStringField(toolPart.input, "priority");

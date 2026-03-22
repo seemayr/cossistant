@@ -5,9 +5,11 @@ import {
 	emitPipelineToolProgress,
 	type PipelineToolProgressAudience,
 } from "../events/progress";
+import { isBackgroundOneShotToolName } from "./background-one-shot";
 import type {
 	PipelineToolContext,
 	PipelineToolDefinition,
+	PipelineToolResult,
 	ToolTelemetrySpec,
 	ToolTracePayloadMode,
 } from "./contracts";
@@ -168,6 +170,31 @@ function incrementCount(
 	counts[toolName] = (counts[toolName] ?? 0) + 1;
 }
 
+function isDuplicateBackgroundOneShotToolCall(params: {
+	context: PipelineToolContext;
+	toolName: string;
+}): boolean {
+	return (
+		params.context.pipelineKind === "background" &&
+		isBackgroundOneShotToolName(params.toolName) &&
+		(params.context.runtimeState.toolCallCounts[params.toolName] ?? 0) > 0
+	);
+}
+
+function buildSuppressedDuplicateToolResult(): PipelineToolResult<{
+	changed: false;
+	reason: "duplicate_in_run";
+}> {
+	return {
+		success: true,
+		changed: false,
+		data: {
+			changed: false,
+			reason: "duplicate_in_run",
+		},
+	};
+}
+
 export function wrapPipelineToolsWithTelemetry(params: {
 	tools: ToolSet;
 	context: PipelineToolContext;
@@ -216,6 +243,20 @@ export function wrapPipelineToolsWithTelemetry(params: {
 				const tracePayloadMode: ToolTracePayloadMode =
 					params.context.tracePayloadMode ?? "sanitized";
 				const baseLogMessage = `[ai-pipeline:tool] conv=${params.context.conversationId} workflowRunId=${params.context.workflowRunId} tool=${toolName} toolCallId=${toolCallId}`;
+
+				if (
+					isDuplicateBackgroundOneShotToolCall({
+						context: params.context,
+						toolName,
+					})
+				) {
+					emitStructuredToolLog(
+						params.context,
+						"warn",
+						`${baseLogMessage} evt=duplicate_background_one_shot_suppressed`
+					);
+					return buildSuppressedDuplicateToolResult();
+				}
 
 				incrementCount(params.context.runtimeState.toolCallCounts, toolName);
 

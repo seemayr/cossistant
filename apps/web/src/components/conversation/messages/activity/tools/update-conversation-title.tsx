@@ -22,6 +22,23 @@ function extractTitle(output: unknown): string | null {
 	return null;
 }
 
+function extractChanged(output: unknown): boolean | null {
+	if (!isRecord(output)) {
+		return null;
+	}
+
+	const data = isRecord(output.data) ? output.data : null;
+	if (typeof data?.changed === "boolean") {
+		return data.changed;
+	}
+
+	if (typeof output.changed === "boolean") {
+		return output.changed;
+	}
+
+	return null;
+}
+
 export function UpdateConversationTitleActivity({
 	toolCall,
 	timestamp,
@@ -55,6 +72,20 @@ export function UpdateConversationTitleActivity({
 				showTerminalIndicator={showTerminalIndicator}
 				state="error"
 				text="Failed to update title"
+				timestamp={timestamp}
+			/>
+		);
+	}
+
+	if (extractChanged(output) === false) {
+		return (
+			<ActivityWrapper
+				icon={icon}
+				showIcon={showIcon}
+				showStateIndicator={showStateIndicator}
+				showTerminalIndicator={showTerminalIndicator}
+				state="result"
+				text={summaryText}
 				timestamp={timestamp}
 			/>
 		);

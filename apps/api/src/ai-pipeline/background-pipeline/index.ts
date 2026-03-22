@@ -48,7 +48,6 @@ type BackgroundPipelineContext = {
 };
 
 const BACKGROUND_TOOL_IDS: AiAgentToolId[] = [
-	"requestKnowledgeClarification",
 	"updateConversationTitle",
 	"updateSentiment",
 	"setPriority",
@@ -65,10 +64,6 @@ function getBackgroundToolAllowlist(
 
 	const settings = getBehaviorSettings(aiAgent);
 	const allowlist: AiAgentToolId[] = [];
-
-	if (settings.canRequestKnowledgeClarification) {
-		allowlist.push("requestKnowledgeClarification");
-	}
 
 	if (settings.autoGenerateTitle) {
 		allowlist.push("updateConversationTitle");
@@ -378,22 +373,16 @@ export async function runBackgroundPipeline(
 			};
 		}
 
-		const knowledgeGapReviewResult =
-			(generationResult.toolCallsByName.requestKnowledgeClarification ?? 0) > 0
-				? ({
-						status: "skipped",
-						reason: "active_clarification_exists",
-					} as const)
-				: await runBackgroundKnowledgeGapReview({
-						db: ctx.db,
-						input: ctx.input,
-						intake: {
-							aiAgent: intakeResult.aiAgent,
-							conversation: intakeResult.conversation,
-							conversationHistory: intakeResult.conversationHistory,
-							triggerMessage: intakeResult.triggerMessage,
-						},
-					});
+		const knowledgeGapReviewResult = await runBackgroundKnowledgeGapReview({
+			db: ctx.db,
+			input: ctx.input,
+			intake: {
+				aiAgent: intakeResult.aiAgent,
+				conversation: intakeResult.conversation,
+				conversationHistory: intakeResult.conversationHistory,
+				triggerMessage: intakeResult.triggerMessage,
+			},
+		});
 
 		if (knowledgeGapReviewResult.status === "created") {
 			logAiPipeline({

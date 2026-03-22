@@ -83,7 +83,7 @@ export const SHARED_PIPELINE_TOOL_CATALOG: readonly PipelineToolDefinition[] = [
 	{
 		id: "requestKnowledgeClarification",
 		factory: createRequestKnowledgeClarificationTool,
-		availability: { primary: true, background: true },
+		availability: { primary: true, background: false },
 		behaviorSettingKey: "canRequestKnowledgeClarification",
 		telemetry: REQUEST_KNOWLEDGE_CLARIFICATION_TELEMETRY,
 	},

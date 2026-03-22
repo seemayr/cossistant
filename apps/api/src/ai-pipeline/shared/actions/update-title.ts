@@ -16,6 +16,7 @@ import {
 	TimelineItemVisibility,
 } from "@cossistant/types";
 import { eq } from "drizzle-orm";
+import { loadCurrentConversation } from "./load-current-conversation";
 
 type UpdateTitleParams = {
 	db: Database;
@@ -61,7 +62,14 @@ export async function updateTitle(params: UpdateTitleParams): Promise<{
 		emitTimelineEvent = false,
 	} = params;
 
-	if (conv.titleSource === "user") {
+	const currentConversation = await loadCurrentConversation(db, conv.id);
+	if (!currentConversation) {
+		return {
+			changed: false,
+		};
+	}
+
+	if (currentConversation.titleSource === "user") {
 		return {
 			changed: false,
 			reason: "manual_title",
@@ -69,14 +77,14 @@ export async function updateTitle(params: UpdateTitleParams): Promise<{
 	}
 
 	// Skip if title is not meaningfully different
-	if (!isTitleDifferent(conv.title, title)) {
+	if (!isTitleDifferent(currentConversation.title, title)) {
 		return {
 			changed: false,
 			reason: "unchanged",
 		};
 	}
 
-	const isUpdate = Boolean(conv.title);
+	const isUpdate = Boolean(currentConversation.title);
 	const now = new Date().toISOString();
 
 	// Update conversation
@@ -87,19 +95,19 @@ export async function updateTitle(params: UpdateTitleParams): Promise<{
 			titleSource: "ai",
 			updatedAt: now,
 		})
-		.where(eq(conversation.id, conv.id));
+		.where(eq(conversation.id, currentConversation.id));
 
 	if (emitTimelineEvent) {
 		const eventText = isUpdate
-			? `AI updated title: "${title}" (was: "${conv.title}")`
+			? `AI updated title: "${title}" (was: "${currentConversation.title}")`
 			: `AI generated title: "${title}"`;
 
 		await createTimelineItem({
 			db,
 			organizationId,
 			websiteId,
-			conversationId: conv.id,
-			conversationOwnerVisitorId: conv.visitorId,
+			conversationId: currentConversation.id,
+			conversationOwnerVisitorId: currentConversation.visitorId,
 			item: {
 				type: ConversationTimelineType.EVENT,
 				visibility: TimelineItemVisibility.PRIVATE,
@@ -114,9 +122,9 @@ export async function updateTitle(params: UpdateTitleParams): Promise<{
 	await realtime.emit("conversationUpdated", {
 		websiteId,
 		organizationId,
-		visitorId: conv.visitorId,
+		visitorId: currentConversation.visitorId,
 		userId: null,
-		conversationId: conv.id,
+		conversationId: currentConversation.id,
 		updates: {
 			title,
 		},

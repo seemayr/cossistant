@@ -10,6 +10,7 @@ import type { PrepareStepFunction } from "ai";
 import { logAiPipeline } from "../../../logger";
 import { emitPipelineGenerationProgress } from "../../events";
 import type { PipelineToolBuildResult } from "../../tools";
+import { isBackgroundOneShotToolName } from "../../tools/background-one-shot";
 import type { ToolRuntimeState } from "../../tools/contracts";
 import type {
 	GenerationRuntimeInput,
@@ -44,12 +45,57 @@ export async function runGenerationAttempt(params: {
 	const finishToolNameSet = new Set<string>(
 		params.toolsetResolution.finishToolNames
 	);
+	const isBackgroundPipeline = params.input.pipelineKind === "background";
 
 	const prepareStep: PrepareStepFunction<ToolSet> = ({ steps }) => {
 		const usedNonFinishCalls = countNonFinishToolCalls({
 			steps: steps as readonly ToolStepLike[] | undefined,
 			finishToolNames: finishToolNameSet,
 		});
+		const usedToolNames = new Set<string>();
+
+		for (const step of (steps as readonly ToolStepLike[] | undefined) ?? []) {
+			for (const call of step.toolCalls ?? []) {
+				const toolName = call?.toolName;
+				if (!(toolName && typeof toolName === "string")) {
+					continue;
+				}
+				usedToolNames.add(toolName);
+			}
+		}
+
+		if (isBackgroundPipeline) {
+			const remainingNonFinishToolNames =
+				params.toolsetResolution.toolNames.filter((toolName) => {
+					if (finishToolNameSet.has(toolName)) {
+						return false;
+					}
+
+					if (!isBackgroundOneShotToolName(toolName)) {
+						return true;
+					}
+
+					return !usedToolNames.has(toolName);
+				});
+
+			if (
+				usedNonFinishCalls >= params.nonFinishToolBudget ||
+				remainingNonFinishToolNames.length === 0
+			) {
+				return {
+					system: params.systemPrompt,
+					activeTools: params.toolsetResolution.finishToolNames,
+				};
+			}
+
+			return {
+				system: params.systemPrompt,
+				activeTools: [
+					...remainingNonFinishToolNames,
+					...params.toolsetResolution.finishToolNames,
+				],
+			};
+		}
 
 		if (usedNonFinishCalls >= params.nonFinishToolBudget) {
 			return {

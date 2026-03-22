@@ -20,6 +20,12 @@ type MockAgentOptions = {
 	model: string;
 	instructions: string;
 	tools: Record<string, { execute: (input: unknown) => Promise<unknown> }>;
+	prepareStep?: (params: {
+		steps: Array<{ toolCalls?: Array<{ toolName?: string }> }>;
+	}) => {
+		system: string;
+		activeTools?: string[];
+	};
 };
 
 type MockAgentInput = {
@@ -56,6 +62,7 @@ const buildPipelineToolsetMock = mock(
 	}: {
 		context: {
 			allowPublicMessages: boolean;
+			pipelineKind: "primary" | "background";
 			runtimeState: {
 				toolCallCounts: Record<string, number>;
 				mutationToolCallCounts: Record<string, number>;
@@ -130,15 +137,46 @@ const buildPipelineToolsetMock = mock(
 			},
 		};
 
+		const backgroundTools = {
+			updateSentiment: {
+				description: "Update sentiment",
+				execute: async () => {
+					increment("updateSentiment");
+					incrementMutation("updateSentiment");
+					return {
+						success: true,
+						changed: true,
+						data: { changed: true, sentiment: "positive" },
+					};
+				},
+			},
+			setPriority: {
+				description: "Set priority",
+				execute: async () => {
+					increment("setPriority");
+					incrementMutation("setPriority");
+					return {
+						success: true,
+						changed: true,
+						data: { changed: true, priority: "high" },
+					};
+				},
+			},
+		};
+
 		return {
 			tools: {
-				searchKnowledgeBase: {
-					description: "Search KB",
-					execute: async () => {
-						increment("searchKnowledgeBase");
-						return { success: true };
-					},
-				},
+				...(context.pipelineKind === "background"
+					? backgroundTools
+					: {
+							searchKnowledgeBase: {
+								description: "Search KB",
+								execute: async () => {
+									increment("searchKnowledgeBase");
+									return { success: true };
+								},
+							},
+						}),
 				...(context.allowPublicMessages ? publicTools : {}),
 				...(context.allowPublicMessages ? publicFinishTools : {}),
 				skip: {
@@ -155,12 +193,24 @@ const buildPipelineToolsetMock = mock(
 					},
 				},
 			},
-			toolNames: context.allowPublicMessages
-				? ["searchKnowledgeBase", "sendMessage", "respond", "escalate", "skip"]
-				: ["searchKnowledgeBase", "skip"],
-			finishToolNames: context.allowPublicMessages
-				? ["respond", "escalate", "skip"]
-				: ["skip"],
+			toolNames:
+				context.pipelineKind === "background"
+					? ["updateSentiment", "setPriority", "skip"]
+					: context.allowPublicMessages
+						? [
+								"searchKnowledgeBase",
+								"sendMessage",
+								"respond",
+								"escalate",
+								"skip",
+							]
+						: ["searchKnowledgeBase", "skip"],
+			finishToolNames:
+				context.pipelineKind === "background"
+					? ["skip"]
+					: context.allowPublicMessages
+						? ["respond", "escalate", "skip"]
+						: ["skip"],
 		};
 	}
 );
@@ -636,5 +686,55 @@ ${secondPrompt}`);
 		expect(result.status).toBe("completed");
 		expect(result.action.action).toBe("skip");
 		expect(result.publicMessagesSent).toBe(0);
+	});
+
+	it("removes already-used background one-shot tools from later steps", async () => {
+		const activeToolSnapshots: Array<string[] | undefined> = [];
+		queuedGenerateHandlers.push(async ({ options }) => {
+			activeToolSnapshots.push(
+				options.prepareStep?.({
+					steps: [],
+				})?.activeTools
+			);
+			activeToolSnapshots.push(
+				options.prepareStep?.({
+					steps: [
+						{
+							toolCalls: [{ toolName: "updateSentiment" }],
+						},
+					],
+				})?.activeTools
+			);
+			activeToolSnapshots.push(
+				options.prepareStep?.({
+					steps: [
+						{
+							toolCalls: [{ toolName: "updateSentiment" }],
+						},
+						{
+							toolCalls: [{ toolName: "setPriority" }],
+						},
+					],
+				})?.activeTools
+			);
+			await options.tools.skip.execute({ reasoning: "Nothing left to do" });
+			return { usage: {} };
+		});
+
+		const { runGenerationRuntime } = await modulePromise;
+		const result = await runGenerationRuntime(
+			createInput({
+				pipelineKind: "background",
+				mode: "background_only",
+				allowPublicMessages: false,
+			}) as never
+		);
+
+		expect(result.status).toBe("completed");
+		expect(activeToolSnapshots).toEqual([
+			["updateSentiment", "setPriority", "skip"],
+			["setPriority", "skip"],
+			["skip"],
+		]);
 	});
 });

@@ -39,8 +39,8 @@ export function createUpdateConversationTitleTool(ctx: PipelineToolContext) {
 		}): Promise<
 			PipelineToolResult<{
 				changed: boolean;
-				title: string;
 				reason?: "unchanged" | "manual_title";
+				title?: string;
 			}>
 		> => {
 			const result = await updateTitle({
@@ -54,9 +54,10 @@ export function createUpdateConversationTitleTool(ctx: PipelineToolContext) {
 			});
 			return {
 				success: true,
+				changed: result.changed,
 				data: {
 					changed: result.changed,
-					title: title.trim(),
+					...(result.changed ? { title: title.trim() } : {}),
 					...(result.reason ? { reason: result.reason } : {}),
 				},
 			};
@@ -70,12 +71,12 @@ export function createUpdateSentimentTool(ctx: PipelineToolContext) {
 		inputSchema: updateSentimentInputSchema,
 		execute: async ({
 			sentiment,
-			reason,
+			reason: _reason,
 		}): Promise<
 			PipelineToolResult<{
 				changed: boolean;
-				sentiment: string;
-				reason: string;
+				reason?: "unchanged";
+				sentiment?: string;
 			}>
 		> => {
 			const result = await updateSentiment({
@@ -90,10 +91,11 @@ export function createUpdateSentimentTool(ctx: PipelineToolContext) {
 			});
 			return {
 				success: true,
+				changed: result.changed,
 				data: {
 					changed: result.changed,
-					sentiment,
-					reason,
+					...(result.changed ? { sentiment } : {}),
+					...(result.reason ? { reason: result.reason } : {}),
 				},
 			};
 		},
@@ -106,12 +108,12 @@ export function createSetPriorityTool(ctx: PipelineToolContext) {
 		inputSchema: setPriorityInputSchema,
 		execute: async ({
 			priority,
-			reason,
+			reason: _reason,
 		}): Promise<
 			PipelineToolResult<{
 				changed: boolean;
-				priority: string;
-				reason: string;
+				reason?: "unchanged";
+				priority?: string;
 			}>
 		> => {
 			const result = await updatePriority({
@@ -125,10 +127,11 @@ export function createSetPriorityTool(ctx: PipelineToolContext) {
 			});
 			return {
 				success: true,
+				changed: result.changed,
 				data: {
 					changed: result.changed,
-					priority,
-					reason,
+					...(result.changed ? { priority } : {}),
+					...(result.reason ? { reason: result.reason } : {}),
 				},
 			};
 		},

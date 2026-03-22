@@ -60,7 +60,7 @@ export function buildModeBehaviorInstructions(mode: ResponseMode): string {
 		return `## Current Mode: Background Only
 
 You are in background mode. Do NOT send visible messages to the visitor.
-Use private/context actions if needed, including requestKnowledgeClarification when appropriate, then finish with skip.`;
+Use private/context actions if needed, then finish with skip.`;
 	}
 
 	return "";
