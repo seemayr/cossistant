@@ -17,6 +17,7 @@ COPY packages/facehash/package.json ./packages/facehash/
 COPY packages/tiny-markdown/package.json ./packages/tiny-markdown/
 COPY packages/redis/package.json ./packages/redis/
 COPY packages/location/package.json ./packages/location/
+COPY packages/memory/package.json ./packages/memory/
 COPY tinybird/package.json ./tinybird/
 
 # Install dependencies
