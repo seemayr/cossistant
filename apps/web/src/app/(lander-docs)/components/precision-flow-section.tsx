@@ -495,7 +495,7 @@ function PrecisionFlowRightPanel({ children }: { children: React.ReactNode }) {
 			data-precision-background-trail="enabled"
 		>
 			<Background
-				asciiOpacity={0.08}
+				asciiOpacity={0.4}
 				fieldOpacity={0.06}
 				interactive={true}
 				pointerTrail={true}

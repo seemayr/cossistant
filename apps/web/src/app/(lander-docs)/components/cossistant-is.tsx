@@ -7,6 +7,7 @@ import {
 	useTransform,
 } from "motion/react";
 import { useRef } from "react";
+import { Facehash } from "@/components/ui/avatar";
 import { Logos } from "../../../components/ui/logos";
 
 function CossistantIs() {
@@ -33,7 +34,18 @@ function CossistantIs() {
 				style={{ y }}
 			>
 				<span className="text-primary">
-					Support isn't just about answering questions. It's about keeping users
+					Support isn't just about answering questions. It's about keeping users{" "}
+					<span className="inline-flex items-center justify-center rounded-md border border-border border-dashed p-1 align-middle">
+						<div className="inline-block size-7 max-w-7 rounded-xs border border-background bg-background align-middle">
+							<Facehash name="UU" />
+						</div>
+						<div className="ml-1 inline-block size-7 max-w-7 rounded-xs border border-background bg-background align-middle">
+							<Facehash name="AAAk" />
+						</div>
+						<div className="ml-1 inline-block size-7 max-w-7 rounded-xs border border-background bg-background align-middle">
+							<Facehash name="I" />
+						</div>
+					</span>{" "}
 					moving.
 				</span>
 				<br />

@@ -22,7 +22,7 @@ import { PrecisionFlowSection } from "./components/precision-flow-section";
 export const dynamic = "force-dynamic";
 
 export const metadata = marketing({
-	title: "AI Support Framework for React and Next.js",
+	title: "AI agent customer support for your SaaS in under 10 lines of code",
 	description:
 		"Cossistant is the open-source AI and human support framework for React and Next.js apps, with programmable actions, custom UI, and code-first workflows.",
 	path: "/",
@@ -59,12 +59,11 @@ export default async function Landing() {
 			<div className="flex flex-col gap-8 pt-32 md:flex-row lg:min-h-screen">
 				<div className="flex flex-1 flex-col gap-6">
 					<div className="flex flex-col items-start gap-4 px-4 pb-8">
-						<p className="font-medium font-mono text-cossistant-orange text-sm">
-							[Programmatic Human + AI agent support]
+						<p className="font-medium font-mono text-cossistant-orange text-xs">
+							[AI agent team member that learns from you, not a chatbot]
 						</p>
 						<h1 className="max-w-4xl text-balance text-left font-f37-stout text-[42px] leading-tight md:text-3xl xl:text-5xl">
-							Make your SaaS customer support move faster under 10 lines of
-							code.
+							AI Agent Customer Support for Your SaaS in Under 10 Lines of Code
 						</h1>
 						<div className="mt-6 flex w-full flex-col gap-3 md:max-w-[75%] lg:max-w-full lg:flex-row lg:items-center">
 							<Button
