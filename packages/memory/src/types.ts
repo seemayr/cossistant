@@ -1,5 +1,6 @@
 import type { EmbeddingModel, LanguageModel } from "ai";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+import type { Memory } from "./memory";
 
 export type MemoryMetadataValue = string | number | boolean | null;
 export type MemoryMetadata = Record<string, MemoryMetadataValue>;
@@ -79,3 +80,52 @@ export type MemoryOptions = {
 	models?: MemoryModels;
 	now?: MemoryNow;
 };
+
+export type CreateMemoryToolOptions = {
+	memory: Memory;
+	remember: {
+		metadata: MemoryMetadata;
+		description?: string;
+	};
+	recall: {
+		where: MemoryWhere;
+		defaults?: {
+			limit?: number;
+			includeSummary?: boolean;
+		};
+		description?: string;
+	};
+};
+
+export type RememberMemoryToolInput = {
+	content: string;
+	priority?: number;
+};
+
+export type RecallMemoryToolInput = {
+	text?: string;
+	limit?: number;
+	includeSummary?: boolean;
+};
+
+export type MemoryToolFailureResult = {
+	success: false;
+	changed: false;
+	error: string;
+};
+
+export type RememberMemoryToolResult =
+	| {
+			success: true;
+			changed: true;
+			data: RememberResult;
+	  }
+	| MemoryToolFailureResult;
+
+export type RecallMemoryToolResult =
+	| {
+			success: true;
+			changed: false;
+			data: ContextResult;
+	  }
+	| MemoryToolFailureResult;

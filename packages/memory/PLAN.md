@@ -23,6 +23,7 @@
 - [x] Implement `forget()` for delete-by-id and delete-by-filter.
 - [x] Add deterministic validation and typed error classes.
 - [x] Wire embedding generation through AI SDK model instances passed to the constructor.
+- [x] Export `createMemoryTool(...)` with two prebound AI SDK tools: `remember` and `recallMemory`.
 
 ## Phase 3: Retrieval Quality
 
@@ -42,6 +43,13 @@
 ## Phase 5: Hardening
 
 - [x] Add unit coverage for public API methods, validation, filter compilation, and ranking behavior.
+- [x] Add unit coverage for the generic AI SDK tool factory and the Cossistant scope wrappers.
 - [ ] Add a DB-backed integration suite.
 - [ ] When the DB-backed suite is added, give it a dedicated Docker Compose setup for the memory package instead of coupling it to the repo-wide dev stack.
 - [ ] Revisit dedupe, retention, and summary behavior after using the package in production flows.
+
+## Phase 6: Scoped App Wrappers
+
+- [x] Add Cossistant-side wrapper helpers for visitor, conversation, and website memory scope.
+- [x] Keep those wrappers outside the package so `@cossistant/memory` stays product-agnostic.
+- [x] Keep wrappers out of the current tool catalog and capability UI for now.

@@ -14,6 +14,25 @@ runtime behavior.
 - `context()` ranking, semantic merge, and stored summary behavior
 - `forget()` by id and by filter
 
+### AI SDK tool tests
+
+`src/memory-tool.test.ts` covers:
+
+- `createMemoryTool(...)` returning `remember` and `recallMemory`
+- constructor-time guardrails for bound metadata and bound recall scope
+- strict tool input schemas
+- prebound write/read behavior
+- structured success and error result shapes
+
+### Cossistant wrapper tests
+
+`apps/api/src/ai-pipeline/shared/tools/memory.test.ts` covers:
+
+- visitor, conversation, and website scope binding
+- wrapper alias names
+- recall default propagation
+- no tool-catalog or capability-UI dependency
+
 ### Validation tests
 
 `src/validation.test.ts` covers:

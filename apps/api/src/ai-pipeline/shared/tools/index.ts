@@ -10,6 +10,12 @@ import type {
 } from "./contracts";
 import { wrapPipelineToolsWithTelemetry } from "./telemetry";
 
+export {
+	createConversationMemoryTools,
+	createVisitorMemoryTools,
+	createWebsiteMemoryTools,
+} from "./memory";
+
 const FINISH_TOOL_NAME_SET = new Set<string>(FINISH_TOOL_IDS);
 
 type BehaviorSettingKey = NonNullable<

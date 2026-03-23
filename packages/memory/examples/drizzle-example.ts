@@ -3,7 +3,9 @@ import type {
 	MemoryEmbeddingModel,
 	MemorySummarizeModel,
 } from "@cossistant/memory";
-import { Memory } from "@cossistant/memory";
+import { createMemoryTool, Memory } from "@cossistant/memory";
+import type { LanguageModel } from "ai";
+import { ToolLoopAgent } from "ai";
 import { sql } from "drizzle-orm";
 import {
 	index,
@@ -84,5 +86,39 @@ export const memory = new Memory({
 	models: {
 		embed: embedModel,
 		summarize: summarizeModel,
+	},
+});
+
+export const memoryTools = createMemoryTool({
+	memory,
+	remember: {
+		metadata: {
+			organizationId: "org_1",
+			websiteId: "site_1",
+			aiAgentId: "agent_1",
+			visitorId: "visitor_1",
+		},
+	},
+	recall: {
+		where: {
+			organizationId: "org_1",
+			websiteId: "site_1",
+			aiAgentId: "agent_1",
+			visitorId: "visitor_1",
+		},
+		defaults: {
+			limit: 6,
+			includeSummary: true,
+		},
+	},
+});
+
+declare const agentModel: LanguageModel;
+
+export const agent = new ToolLoopAgent({
+	model: agentModel,
+	tools: {
+		remember: memoryTools.remember,
+		recallMemory: memoryTools.recallMemory,
 	},
 });

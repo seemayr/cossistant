@@ -9,6 +9,7 @@ The package is intentionally narrow:
 - write durable notes with metadata and priority
 - retrieve the most relevant memory for the current situation
 - delete bad or stale memory
+- expose prebound AI SDK tools for remembering and recalling
 - stay generic by pushing product concepts into metadata
 
 ## Opinionated Stack
@@ -37,6 +38,8 @@ The runtime is split into a few small layers:
   Scores, merges, and deduplicates candidates.
 - `src/services/*`
   Implements `remember`, `context`, and `forget` in terms of the repository.
+- `src/memory-tool.ts`
+  Exposes two structured AI SDK tools with fixed write and recall guardrails.
 
 ## Why The Package Uses Its Own Runtime Table Definition
 
@@ -70,6 +73,24 @@ Each memory row stores:
 Metadata is intentionally flat. The package should not know about visitors,
 tickets, repos, or conversations as hardcoded concepts.
 
+## Tool Layer
+
+The package-level agent interface is intentionally smaller than the class API.
+
+Current tool surface:
+
+- `remember`
+- `recallMemory`
+
+Current non-tool surface:
+
+- `forget()` still exists on the class API
+- no delete tool is exposed to the model
+
+The package tool layer is generic. Product-specific scoping such as visitor,
+conversation, or website memory belongs in app-side wrapper helpers, not in the
+package itself.
+
 ## Retrieval Model
 
 `context()` follows this retrieval model:
@@ -87,6 +108,12 @@ tickets, repos, or conversations as hardcoded concepts.
 
 This makes metadata the main narrowing mechanism and semantic similarity an
 optional ranking boost.
+
+For the AI SDK tools, the model never controls raw metadata filters directly.
+Instead, `createMemoryTool(...)` binds:
+
+- one fixed metadata object for writes
+- one fixed where scope for reads
 
 ## Current Scoring
 

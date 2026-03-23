@@ -12,6 +12,7 @@ What ships today:
 - `memory.remember(input)`
 - `memory.context(input)`
 - `memory.forget(input)`
+- `createMemoryTool(options)` returning `{ remember, recallMemory }`
 - typed validation errors
 - metadata filter compilation
 - priority + freshness ranking
@@ -22,13 +23,14 @@ What is intentionally deferred:
 
 - `memory.summarize()` as a runtime method
 - generated summaries on read
+- a delete tool for agents
 - package-owned migrations
 - DB-backed integration tests in this first pass
 
 ## Quick Start
 
 ```ts
-import { Memory } from "@cossistant/memory";
+import { createMemoryTool, Memory } from "@cossistant/memory";
 import { db } from "@cossistant/db";
 import { openrouter } from "@openrouter/ai-sdk-provider";
 
@@ -66,7 +68,68 @@ await memory.forget({
 		and: [{ userId: "user_789" }, { topic: "billing" }],
 	},
 });
+
+const { remember, recallMemory } = createMemoryTool({
+	memory,
+	remember: {
+		metadata: {
+			appId: "app_123",
+			userId: "user_789",
+			conversationId: "conv_456",
+		},
+	},
+	recall: {
+		where: {
+			and: [{ appId: "app_123" }, { userId: "user_789" }],
+		},
+		defaults: {
+			limit: 6,
+			includeSummary: true,
+		},
+	},
+});
 ```
+
+## AI SDK Tools
+
+The package now exports two generic structured AI SDK tools:
+
+```ts
+const { remember, recallMemory } = createMemoryTool({
+	memory,
+	remember: {
+		metadata: {
+			organizationId: "org_1",
+			websiteId: "site_1",
+			aiAgentId: "agent_1",
+			visitorId: "visitor_1",
+		},
+	},
+	recall: {
+		where: {
+			organizationId: "org_1",
+			websiteId: "site_1",
+			aiAgentId: "agent_1",
+			visitorId: "visitor_1",
+		},
+		defaults: {
+			limit: 6,
+			includeSummary: true,
+		},
+	},
+});
+```
+
+Guardrails:
+
+- `remember` accepts only `content` and optional `priority`
+- `recallMemory` accepts only `text`, `limit`, and `includeSummary`
+- the model never controls raw `metadata` or raw `where`
+- no delete tool is exposed yet
+
+Cossistant-specific wrappers such as `rememberVisitor` and
+`recallVisitorMemory` should live outside the package and preconfigure these
+generic tools with product-safe scope.
 
 ## Runtime Contract
 
@@ -75,6 +138,7 @@ await memory.forget({
 - host app owns the schema and migrations
 - package treats `id` as an opaque string
 - Cossistant defaults to ULID-shaped ids, but UUID-backed tables are compatible
+- agent-facing tool scope is prebound at tool creation time
 
 Important:
 
@@ -114,3 +178,4 @@ The current scoring behavior is deliberately simple and documented in
 - metadata must stay flat: `string | number | boolean | null`
 - `includeSummary` only returns stored summary records; it does not generate new ones
 - `models.summarize` is accepted for forward compatibility but is not used yet
+- `createMemoryTool(...)` requires non-empty bound metadata and non-empty bound recall scope

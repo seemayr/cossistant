@@ -40,6 +40,7 @@
         "@cossistant/core": "workspace:*",
         "@cossistant/jobs": "workspace:*",
         "@cossistant/location": "workspace:*",
+        "@cossistant/memory": "workspace:*",
         "@cossistant/redis": "workspace:*",
         "@cossistant/transactional": "workspace:*",
         "@cossistant/types": "workspace:*",
@@ -353,6 +354,7 @@
       "dependencies": {
         "ai": "^6.0.49",
         "drizzle-orm": "^0.44.7",
+        "zod": "^4.3.6",
       },
       "devDependencies": {
         "@cossistant/typescript-config": "workspace:*",

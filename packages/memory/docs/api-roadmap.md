@@ -80,6 +80,45 @@ Current behavior:
 - supports delete by `where`
 - returns `{ deletedCount }`
 
+## Implemented AI SDK Tools
+
+### `createMemoryTool(options)`
+
+Purpose:
+
+- expose two prebound AI SDK tools backed by the `Memory` class
+
+Current behavior:
+
+- returns `{ remember, recallMemory }`
+- validates bound write metadata and bound recall scope at construction time
+- keeps raw `metadata` and raw `where` out of the model-visible input schema
+
+### `remember`
+
+Purpose:
+
+- let an agent store one durable memory inside a pre-approved metadata scope
+
+Current behavior:
+
+- accepts `content` and optional `priority`
+- always writes with fixed metadata from `options.remember.metadata`
+- returns a structured tool result with `id` and `createdAt`
+
+### `recallMemory`
+
+Purpose:
+
+- let an agent retrieve relevant memory inside a pre-approved recall scope
+
+Current behavior:
+
+- accepts `text`, `limit`, and `includeSummary`
+- always reads with fixed `where` from `options.recall.where`
+- applies configured recall defaults when omitted
+- returns prompt-ready `items` and optional `summary`
+
 ## Deferred Runtime API
 
 ### `summarize(input)`
@@ -91,6 +130,13 @@ Intended behavior:
 - gather matching items
 - summarize them with `models.summarize`
 - optionally store a summary row back into `memory_records`
+
+### Agent Delete Tool
+
+Not planned for the current pass.
+
+`forget()` remains available on the class API, but no delete tool is exposed to
+agents yet.
 
 ## Query DSL
 

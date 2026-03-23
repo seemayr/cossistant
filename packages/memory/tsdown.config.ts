@@ -20,5 +20,6 @@ export default defineConfig({
 		"drizzle-orm",
 		"drizzle-orm/node-postgres",
 		"drizzle-orm/pg-core",
+		"zod",
 	],
 });
