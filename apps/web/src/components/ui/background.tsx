@@ -231,7 +231,7 @@ function samplePointerTrailInfluence(
 
 export function Background({
 	accentColorVar = "--cossistant-orange",
-	asciiOpacity = 0.62,
+	asciiOpacity = 1,
 	characterPalette = "detailed",
 	characters,
 	className = "",
@@ -246,7 +246,7 @@ export function Background({
 	pointerTrailLifetimeMs = DEFAULT_BACKGROUND_POINTER_TRAIL_LIFETIME_MS,
 	pointerTrailRadius = DEFAULT_BACKGROUND_POINTER_TRAIL_RADIUS,
 	reactivity = 0.28,
-	resolution,
+	resolution = 0.15,
 	reverse = false,
 	seed,
 	speed = 1,

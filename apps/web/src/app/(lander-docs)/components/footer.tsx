@@ -103,11 +103,11 @@ export function Footer() {
 			</div>
 			<div className="flex flex-col items-center justify-between border-t border-dashed md:items-start">
 				<div className="container-wrapper relative mx-auto">
-					<div className="absolute inset-x-0 top-0 z-50 flex justify-between gap-4 p-4">
+					<div className="absolute inset-x-0 top-0 z-50 flex flex-col justify-between gap-4 p-4 md:flex-row">
 						<p className="px-6 text-center font-mono text-foreground/60 text-sm md:text-left lg:px-0">
 							© 2025 cossistant. open source under GPL-3.0 license.
 						</p>
-						<div className="mt-4 flex items-center space-x-6 px-6 md:mt-0 lg:px-0">
+						<div className="mx-auto mt-4 flex items-center space-x-6 px-6 md:mx-0 md:mt-0 lg:px-0">
 							<Link
 								className="font-mono text-foreground/60 text-sm transition-colors hover:text-foreground"
 								href="/privacy"
@@ -133,17 +133,17 @@ export function Footer() {
 					</div>
 					<div className="pointer-events-none h-100 min-h-100 w-full" />
 					<Background
-						asciiOpacity={1}
 						className="absolute inset-0 z-0"
 						fieldOpacity={0.06}
 						interactive={true}
 						pointerTrail={true}
-						resolution={0.13}
+						pointerTrailRadius={0.2}
 					/>
 
-					<div className="pointer-events-none absolute inset-x-0 top-0 z-0 h-40 w-full bg-linear-to-b from-background to-transparent" />
+					<div className="pointer-events-none absolute inset-x-0 top-0 z-0 h-100 w-full bg-linear-to-b from-background to-transparent md:h-40" />
 					<div className="pointer-events-none absolute inset-x-0 top-0 z-0 h-20 w-full bg-linear-to-b from-background to-transparent" />
-					<LogoTextSVG className="pointer-events-none absolute inset-x-0 bottom-20 z-50 w-full text-background" />
+					<LogoTextSVG className="pointer-events-none absolute inset-x-0 bottom-20 z-50 hidden w-full text-background md:block" />
+					<Logo className="pointer-events-none absolute inset-x-0 bottom-4 z-50 mx-auto block size-56 w-full text-background md:hidden" />
 				</div>
 			</div>
 		</footer>
