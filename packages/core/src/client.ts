@@ -687,6 +687,68 @@ export class CossistantClient {
 	}
 }
 
+export type CossistantClientReference = {
+	/**
+	 * Local store containing conversation summaries and pagination state.
+	 */
+	conversationsStore: CossistantClient["conversationsStore"];
+	/**
+	 * Local store containing timeline items grouped by conversation.
+	 */
+	timelineItemsStore: CossistantClient["timelineItemsStore"];
+	/**
+	 * Local store containing website bootstrap data for the widget session.
+	 */
+	websiteStore: CossistantClient["websiteStore"];
+	/**
+	 * Realtime client used for websocket connectivity.
+	 *
+	 * @remarks `RealtimeClient`
+	 * @fumadocsType `RealtimeClient`
+	 */
+	realtime: CossistantClient["realtime"];
+	/**
+	 * Fetch the public website payload used to bootstrap the widget.
+	 */
+	fetchWebsite: CossistantClient["fetchWebsite"];
+	/**
+	 * Identify the current visitor as a contact.
+	 */
+	identify: CossistantClient["identify"];
+	/**
+	 * Update metadata stored on the current visitor/contact.
+	 */
+	updateVisitorMetadata: CossistantClient["updateVisitorMetadata"];
+	/**
+	 * List conversations for the current visitor.
+	 */
+	listConversations: CossistantClient["listConversations"];
+	/**
+	 * Fetch a single conversation by ID.
+	 */
+	getConversation: CossistantClient["getConversation"];
+	/**
+	 * Fetch timeline items for a conversation.
+	 */
+	getConversationTimelineItems: CossistantClient["getConversationTimelineItems"];
+	/**
+	 * Send a timeline item to a conversation.
+	 */
+	sendMessage: CossistantClient["sendMessage"];
+	/**
+	 * Generate a presigned upload URL for a conversation attachment.
+	 */
+	generateUploadUrl: CossistantClient["generateUploadUrl"];
+	/**
+	 * Upload a file to a previously generated presigned URL.
+	 */
+	uploadFile: CossistantClient["uploadFile"];
+	/**
+	 * Tear down any active network resources owned by the client.
+	 */
+	destroy: CossistantClient["destroy"];
+};
+
 function normalizeBootstrapTimelineItem(
 	conversationId: string,
 	item: DefaultMessage | TimelineItem

@@ -12,7 +12,10 @@ import { useDefaultMessages } from "./private/use-default-messages";
 import { useConversationAutoSeen } from "./use-conversation-auto-seen";
 import { useConversationLifecycle } from "./use-conversation-lifecycle";
 import { useConversationTimelineItems } from "./use-conversation-timeline-items";
-import { useMessageComposer } from "./use-message-composer";
+import {
+	type UseMessageComposerReturn,
+	useMessageComposer,
+} from "./use-message-composer";
 
 export type UseConversationPageOptions = {
 	/**
@@ -46,30 +49,65 @@ export type UseConversationPageOptions = {
 };
 
 export type UseConversationPageReturn = {
-	// Conversation state
+	/**
+	 * Current conversation ID. For newly created conversations this switches
+	 * from the pending ID to the real conversation ID.
+	 */
 	conversationId: string;
+	/**
+	 * Whether the conversation is still in the pending pre-creation state.
+	 */
 	isPending: boolean;
+	/**
+	 * Timeline items currently displayed for the conversation.
+	 *
+	 * @remarks `TimelineItem[]`
+	 * @fumadocsType `TimelineItem[]`
+	 */
 	items: TimelineItem[];
+	/**
+	 * Whether conversation data is still loading.
+	 */
 	isLoading: boolean;
+	/**
+	 * Error from the conversation timeline or composer state.
+	 */
 	error: Error | null;
 
-	// Message composer
-	composer: {
-		message: string;
-		files: File[];
-		isSubmitting: boolean;
-		isUploading: boolean;
-		canSubmit: boolean;
-		setMessage: (message: string) => void;
-		addFiles: (files: File[]) => void;
-		removeFile: (index: number) => void;
-		submit: () => void;
-	};
+	/**
+	 * Message composer state and actions for the conversation page.
+	 *
+	 * @remarks `MessageComposer`
+	 * @fumadocsType `MessageComposer`
+	 * @fumadocsHref #messagecomposer
+	 */
+	composer: MessageComposer;
 
-	// UI helpers
+	/**
+	 * Whether there are any displayable items in the conversation.
+	 */
 	hasItems: boolean;
+	/**
+	 * Most recent timeline item, or null when the conversation is empty.
+	 *
+	 * @remarks `TimelineItem | null`
+	 * @fumadocsType `TimelineItem | null`
+	 */
 	lastTimelineItem: TimelineItem | null;
 };
+
+export type MessageComposer = Pick<
+	UseMessageComposerReturn,
+	| "message"
+	| "files"
+	| "isSubmitting"
+	| "isUploading"
+	| "canSubmit"
+	| "setMessage"
+	| "addFiles"
+	| "removeFile"
+	| "submit"
+>;
 
 function isNotFoundError(error: Error | null): boolean {
 	return error instanceof CossistantAPIError && error.code === "HTTP_404";

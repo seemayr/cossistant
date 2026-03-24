@@ -72,22 +72,70 @@ export type UseMessageComposerOptions = {
 };
 
 export type UseMessageComposerReturn = {
-	// Input state
+	/**
+	 * Current message text being composed.
+	 */
 	message: string;
+	/**
+	 * Files currently attached to the message draft.
+	 */
 	files: File[];
+	/**
+	 * Error from the most recent submission attempt.
+	 */
 	error: Error | null;
 
-	// Status
+	/**
+	 * Whether a submission is in progress.
+	 */
 	isSubmitting: boolean;
+	/**
+	 * Whether file uploads are currently in progress.
+	 */
 	isUploading: boolean;
+	/**
+	 * Whether the current draft can be submitted.
+	 */
 	canSubmit: boolean;
 
-	// Actions
+	/**
+	 * Update the message text.
+	 *
+	 * @param message - New draft message.
+	 * @returns void
+	 */
 	setMessage: (message: string) => void;
+	/**
+	 * Add files to the current draft.
+	 *
+	 * @param files - Files to attach.
+	 * @returns void
+	 */
 	addFiles: (files: File[]) => void;
+	/**
+	 * Remove an attached file by index.
+	 *
+	 * @param index - Index of the file to remove.
+	 * @returns void
+	 */
 	removeFile: (index: number) => void;
+	/**
+	 * Remove all attached files.
+	 *
+	 * @returns void
+	 */
 	clearFiles: () => void;
+	/**
+	 * Submit the current draft message.
+	 *
+	 * @returns void
+	 */
 	submit: () => void;
+	/**
+	 * Reset the current draft state.
+	 *
+	 * @returns void
+	 */
 	reset: () => void;
 };
 

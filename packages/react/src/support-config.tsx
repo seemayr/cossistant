@@ -5,7 +5,16 @@ import * as React from "react";
 import { useSupport } from "./provider";
 
 export type SupportConfigProps = {
+	/**
+	 * Custom welcome messages shown before a conversation starts.
+	 *
+	 * @remarks `DefaultMessage[]`
+	 * @fumadocsHref #defaultmessage
+	 */
 	defaultMessages?: DefaultMessage[];
+	/**
+	 * Quick reply options displayed to users.
+	 */
 	quickOptions?: string[];
 };
 

@@ -249,6 +249,18 @@ export type StrictSupportTextFormatter = {
 export type SupportTextResolvedFormatter = StrictSupportTextFormatter &
 	SupportTextFormatter;
 
+export type UseSupportTextReturn = {
+	/**
+	 * Formatter function returned by `useSupportText()`.
+	 *
+	 * Call this with a support text key and optional interpolation variables.
+	 *
+	 * @remarks `SupportTextResolvedFormatter`
+	 * @fumadocsType `SupportTextResolvedFormatter`
+	 */
+	format: SupportTextResolvedFormatter;
+};
+
 export type SupportTextProviderValue = {
 	format: SupportTextResolvedFormatter;
 	locale: string;

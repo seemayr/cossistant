@@ -3,6 +3,7 @@
 import {
 	createSupportStore,
 	type SupportConfig,
+	type SupportNavigation,
 	type SupportStore,
 	type SupportStoreState,
 } from "@cossistant/core";
@@ -85,11 +86,91 @@ export function useSupportStore(): UseSupportStoreResult {
 }
 
 export type UseSupportConfigResult = {
+	/**
+	 * Whether the support widget is currently open.
+	 */
 	isOpen: boolean;
+	/**
+	 * Current widget size configuration.
+	 */
 	size: SupportConfig["size"];
+	/**
+	 * Open the widget.
+	 *
+	 * @returns void
+	 */
 	open: () => void;
+	/**
+	 * Close the widget.
+	 *
+	 * @returns void
+	 */
 	close: () => void;
+	/**
+	 * Toggle the widget open or closed.
+	 *
+	 * @returns void
+	 */
 	toggle: () => void;
+};
+
+export type UseSupportNavigationResult = {
+	/**
+	 * Current navigation state with page and params.
+	 *
+	 * @remarks `NavigationState`
+	 * @fumadocsType `NavigationState`
+	 */
+	current: SupportNavigation["current"];
+	/**
+	 * Current page name.
+	 *
+	 * @remarks `SupportPage`
+	 * @fumadocsType `SupportPage`
+	 */
+	page: SupportNavigation["current"]["page"];
+	/**
+	 * Current page parameters.
+	 *
+	 * @remarks `RouteParams | undefined`
+	 * @fumadocsType `RouteParams | undefined`
+	 */
+	params: SupportNavigation["current"]["params"];
+	/**
+	 * Navigation history stack.
+	 *
+	 * @remarks `NavigationState[]`
+	 * @fumadocsType `NavigationState[]`
+	 */
+	previousPages: SupportNavigation["previousPages"];
+	/**
+	 * Navigate to a page and push the current state to history.
+	 *
+	 * @remarks `(options: { page: SupportPage; params?: RouteParams }) => void`
+	 * @fumadocsType `(options: { page: SupportPage; params?: RouteParams }) => void`
+	 *
+	 * @returns void
+	 */
+	navigate: SupportStore["navigate"];
+	/**
+	 * Replace the current page without pushing to history.
+	 *
+	 * @remarks `(options: { page: SupportPage; params?: RouteParams }) => void`
+	 * @fumadocsType `(options: { page: SupportPage; params?: RouteParams }) => void`
+	 *
+	 * @returns void
+	 */
+	replace: SupportStore["replace"];
+	/**
+	 * Go back to the previous page in history.
+	 *
+	 * @returns void
+	 */
+	goBack: SupportStore["goBack"];
+	/**
+	 * Whether there is at least one page in history to go back to.
+	 */
+	canGoBack: boolean;
 };
 
 /**
@@ -165,7 +246,7 @@ export const useSupportConfig = (): UseSupportConfigResult => {
  * @example
  * const { navigate, goBack, page, params } = useSupportNavigation();
  */
-export const useSupportNavigation = () => {
+export const useSupportNavigation = (): UseSupportNavigationResult => {
 	const navigation = useSelector((state) => state.navigation);
 	const { current, previousPages } = navigation;
 

@@ -82,20 +82,9 @@ export default function PricingPage() {
 }
 ```
 
-<TypeTable
-  type={{
-    defaultMessages: {
-      description: "Custom welcome messages shown before a conversation starts",
-      type: "DefaultMessage[]",
-      typeDescriptionLink: "#defaultmessage",
-      required: false,
-    },
-    quickOptions: {
-      description: "Array of quick reply options displayed to users",
-      type: "string[]",
-      required: false,
-    },
-  }}
+<auto-type-table
+  path="packages/react/src/support-config.tsx"
+  name="SupportConfigProps"
 />
 
 ## Identifying Visitors
@@ -150,115 +139,17 @@ export default async function DashboardLayout({
 
 ### Props
 
-<TypeTable
-  type={{
-    externalId: {
-      description: "Your internal user ID to uniquely identify this visitor",
-      type: "string",
-      required: false,
-    },
-    email: {
-      description: "User's email address (required if externalId not provided)",
-      type: "string",
-      required: false,
-    },
-    name: {
-      description: "User's display name shown in conversations",
-      type: "string | null",
-      required: false,
-    },
-    image: {
-      description: "URL to user's avatar image",
-      type: "string | null",
-      required: false,
-    },
-    metadata: {
-      description:
-        "Additional context about the user (plan, company, MRR, etc.)",
-      type: "VisitorMetadata | null",
-      typeDescription: "Record<string, string | number | boolean | null>",
-      typeDescriptionLink: "#visitormetadata",
-      required: false,
-    },
-  }}
+<auto-type-table
+  path="packages/react/src/identify-visitor.tsx"
+  name="IdentifySupportVisitorProps"
 />
 
 ## Support Component Props
 
-<TypeTable
-  type={{
-    className: {
-      description: "Additional CSS classes for the root wrapper",
-      type: "string",
-      required: false,
-    },
-    side: {
-      description: "Which side of the trigger to place the content",
-      type: '"top" | "bottom" | "left" | "right"',
-      default: '"top"',
-      required: false,
-    },
-    align: {
-      description: "Alignment along the side axis",
-      type: '"start" | "center" | "end"',
-      default: '"end"',
-      required: false,
-    },
-    sideOffset: {
-      description: "Distance (in pixels) between the trigger and content",
-      type: "number",
-      default: "16",
-      required: false,
-    },
-    classNames: {
-      description: "Granular className overrides for specific parts",
-      type: "object",
-      typeDescription: "{ trigger?: string, content?: string }",
-      required: false,
-    },
-    theme: {
-      description: "Force a specific theme. Omit for automatic detection",
-      type: '"light" | "dark"',
-      required: false,
-    },
-    defaultOpen: {
-      description: "Whether the widget should open automatically on mount",
-      type: "boolean",
-      default: "false",
-      required: false,
-    },
-    quickOptions: {
-      description: "Quick reply options for this widget instance",
-      type: "string[]",
-      required: false,
-    },
-    defaultMessages: {
-      description: "Welcome messages shown before conversation starts",
-      type: "DefaultMessage[]",
-      typeDescriptionLink: "#defaultmessage",
-      required: false,
-    },
-    locale: {
-      description: "Locale string for widget translations",
-      type: "string",
-      required: false,
-    },
-    content: {
-      description: "Custom text content overrides for internationalization",
-      type: "Partial<SupportTextContent>",
-      required: false,
-    },
-    customPages: {
-      description: "Custom pages to add to the router",
-      type: "CustomPage[]",
-      required: false,
-    },
-    children: {
-      description: "Composition children (Support.Trigger, Support.Content, Support.Page)",
-      type: "React.ReactNode",
-      required: false,
-    },
-  }}
+<auto-type-table
+  path="packages/react/src/support/index.tsx"
+  name="SupportPropsReference"
+  type="Pick<SupportProps, 'className' | 'side' | 'align' | 'sideOffset' | 'avoidCollisions' | 'collisionPadding' | 'classNames' | 'theme' | 'open' | 'onOpenChange' | 'defaultOpen' | 'quickOptions' | 'defaultMessages' | 'locale' | 'content' | 'customPages' | 'children'>"
 />
 
 ### Usage Examples
@@ -313,100 +204,39 @@ For advanced customization, see the [Customization](/docs/support-component/cust
 
 Structure for pre-conversation welcome messages.
 
-<TypeTable
+<auto-type-table
+  path="packages/types/src/index.ts"
+  name="DefaultMessage"
   variant="property"
-  type={{
-    content: {
-      description: "The message text content",
-      type: "string",
-      required: true,
-    },
-    senderType: {
-      description: "Who is sending the message",
-      type: "SenderType",
-      typeDescription: '"visitor" | "team_member" | "ai"',
-      typeDescriptionLink: "#sendertype",
-      required: true,
-    },
-    senderId: {
-      description: "Optional ID of the specific sender",
-      type: "string",
-      required: false,
-    },
-  }}
 />
 
 ### VisitorMetadata
 
 Key-value pairs for storing custom data about contacts.
 
-<TypeTable
+<auto-type-table
+  path="packages/types/src/api/visitor.ts"
+  name="VisitorMetadataReference"
   variant="property"
-  type={{
-    "[key: string]": {
-      description:
-        "Any string key can map to a string, number, boolean, or null value.",
-      type: "string | number | boolean | null",
-      required: false,
-    },
-  }}
 />
-
-**Type Definition:** `Record<string, string | number | boolean | null>`
 
 ### SenderType
 
 Enum defining who can send messages.
 
-<TypeTable
+<auto-type-table
+  path="packages/types/src/enums.ts"
+  name="SenderTypeReference"
+  type="typeof SenderType"
   variant="property"
-  type={{
-    VISITOR: {
-      description: "Message from an end user/visitor",
-      type: '"visitor"',
-      required: true,
-    },
-    TEAM_MEMBER: {
-      description: "Message from a human support agent",
-      type: '"team_member"',
-      required: true,
-    },
-    AI: {
-      description: "Message from an AI agent",
-      type: '"ai"',
-      required: true,
-    },
-  }}
 />
-
-**Type Definition:** `"visitor" | "team_member" | "ai"`
 
 ### TriggerRenderProps
 
 Props provided to custom trigger render functions.
 
-<TypeTable
+<auto-type-table
+  path="packages/react/src/support/types.ts"
+  name="TriggerRenderProps"
   variant="property"
-  type={{
-    isOpen: {
-      description: "Whether the support window is currently open",
-      type: "boolean",
-      required: true,
-    },
-    isTyping: {
-      description: "Whether an agent or AI is currently typing",
-      type: "boolean",
-      required: true,
-    },
-    unreadCount: {
-      description: "Number of unread messages",
-      type: "number",
-      required: true,
-    },
-    toggle: {
-      description: "Toggle the support window open/closed",
-      type: "() => void",
-      required: true,
-    },
-  }}
 />

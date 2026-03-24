@@ -7,10 +7,28 @@ import { useIdentificationState } from "./support/context/identification";
 import { computeMetadataHash } from "./utils/metadata-hash";
 
 export type IdentifySupportVisitorProps = {
+	/**
+	 * Your internal user ID used to uniquely identify this visitor.
+	 */
 	externalId?: string;
+	/**
+	 * The visitor's email address. Required when `externalId` is not provided.
+	 */
 	email?: string;
+	/**
+	 * Display name shown to agents in the support widget.
+	 */
 	name?: string | null;
+	/**
+	 * URL to the visitor's avatar image.
+	 */
 	image?: string | null;
+	/**
+	 * Additional contact metadata such as plan, company, or MRR.
+	 *
+	 * @remarks `VisitorMetadata | null`
+	 * @fumadocsHref #visitormetadata
+	 */
 	metadata?: VisitorMetadata | null;
 };
 

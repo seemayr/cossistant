@@ -128,6 +128,9 @@ export type SupportProps<Locale extends string = SupportLocale> = {
 
 	/**
 	 * Custom text content overrides for internationalization.
+	 *
+	 * @remarks `SupportTextContentOverrides<Locale>`
+	 * @fumadocsType `SupportTextContentOverrides<Locale>`
 	 */
 	content?: SupportTextContentOverrides<Locale>;
 

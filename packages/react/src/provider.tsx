@@ -79,20 +79,82 @@ export type SupportProviderProps = {
 export type CossistantProviderProps = SupportProviderProps;
 
 export type CossistantContextValue = {
+	/**
+	 * Website configuration and agent availability data.
+	 *
+	 * @remarks `PublicWebsiteResponse | null`
+	 * @fumadocsType `PublicWebsiteResponse | null`
+	 * @fumadocsHref #publicwebsiteresponse
+	 */
 	website: PublicWebsiteResponse | null;
+	/**
+	 * Custom welcome messages shown before a conversation starts.
+	 *
+	 * @remarks `DefaultMessage[]`
+	 * @fumadocsHref #defaultmessage
+	 */
 	defaultMessages: DefaultMessage[];
+	/**
+	 * Quick reply options displayed to users.
+	 */
 	quickOptions: string[];
+	/**
+	 * Replace the current default messages for the widget instance.
+	 */
 	setDefaultMessages: (messages: DefaultMessage[]) => void;
+	/**
+	 * Replace the current quick reply options for the widget instance.
+	 */
 	setQuickOptions: (options: string[]) => void;
+	/**
+	 * Number of unread messages across all conversations.
+	 */
 	unreadCount: number;
+	/**
+	 * Update the unread message count for the widget instance.
+	 */
 	setUnreadCount: (count: number) => void;
+	/**
+	 * Whether website data is still loading.
+	 */
 	isLoading: boolean;
+	/**
+	 * Error object when website data failed to load.
+	 */
 	error: Error | null;
+	/**
+	 * Configuration error caused by missing or invalid widget setup.
+	 */
 	configurationError: ConfigurationError | null;
+	/**
+	 * Underlying client instance for direct API access.
+	 *
+	 * @remarks `CossistantClient | null`
+	 * @fumadocsType `CossistantClient | null`
+	 * @fumadocsHref #cossistantclient
+	 */
 	client: CossistantClient | null;
+	/**
+	 * Whether the support widget is currently open.
+	 */
 	isOpen: boolean;
+	/**
+	 * Open the support widget.
+	 *
+	 * @returns void
+	 */
 	open: () => void;
+	/**
+	 * Close the support widget.
+	 *
+	 * @returns void
+	 */
 	close: () => void;
+	/**
+	 * Toggle the support widget open or closed.
+	 *
+	 * @returns void
+	 */
 	toggle: () => void;
 };
 
@@ -150,9 +212,33 @@ function areConversationSnapshotsEqual(
 }
 
 export type UseSupportValue = CossistantContextValue & {
+	/**
+	 * List of human support agents currently available.
+	 *
+	 * @remarks `HumanAgent[]`
+	 * @fumadocsType `HumanAgent[]`
+	 * @fumadocsHref #humanagent
+	 */
 	availableHumanAgents: NonNullable<WebsiteData["availableHumanAgents"]> | [];
+	/**
+	 * List of AI support agents currently available.
+	 *
+	 * @remarks `AIAgent[]`
+	 * @fumadocsType `AIAgent[]`
+	 * @fumadocsHref #aiagent
+	 */
 	availableAIAgents: NonNullable<WebsiteData["availableAIAgents"]> | [];
+	/**
+	 * Current visitor data with normalized locale information.
+	 *
+	 * @remarks `PublicVisitor & { locale: string | null }`
+	 * @fumadocsType `PublicVisitor & { locale: string | null }`
+	 * @fumadocsHref #publicvisitor
+	 */
 	visitor?: VisitorWithLocale;
+	/**
+	 * Current widget size configuration.
+	 */
 	size: "normal" | "larger";
 };
 

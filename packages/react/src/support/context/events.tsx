@@ -16,32 +16,77 @@ export type SupportEventType =
 	| "error";
 
 export type ConversationStartEvent = {
+	/**
+	 * Event type identifier.
+	 */
 	type: "conversationStart";
+	/**
+	 * Unique identifier of the new conversation.
+	 */
 	conversationId: string;
+	/**
+	 * Full conversation object when available.
+	 */
 	conversation?: Conversation;
 };
 
 export type ConversationEndEvent = {
+	/**
+	 * Event type identifier.
+	 */
 	type: "conversationEnd";
+	/**
+	 * Unique identifier of the ended conversation.
+	 */
 	conversationId: string;
+	/**
+	 * Full conversation object when available.
+	 */
 	conversation?: Conversation;
 };
 
 export type MessageSentEvent = {
+	/**
+	 * Event type identifier.
+	 */
 	type: "messageSent";
+	/**
+	 * Conversation the message was sent to.
+	 */
 	conversationId: string;
+	/**
+	 * The sent message object.
+	 */
 	message: TimelineItem;
 };
 
 export type MessageReceivedEvent = {
+	/**
+	 * Event type identifier.
+	 */
 	type: "messageReceived";
+	/**
+	 * Conversation the message was received in.
+	 */
 	conversationId: string;
+	/**
+	 * The received message object.
+	 */
 	message: TimelineItem;
 };
 
 export type ErrorEvent = {
+	/**
+	 * Event type identifier.
+	 */
 	type: "error";
+	/**
+	 * Error object emitted by the widget.
+	 */
 	error: Error;
+	/**
+	 * Additional context describing where the error occurred.
+	 */
 	context?: string;
 };
 
@@ -51,6 +96,42 @@ export type SupportEvent =
 	| MessageSentEvent
 	| MessageReceivedEvent
 	| ErrorEvent;
+
+export type SupportEventReference = {
+	/**
+	 * Event type identifier.
+	 *
+	 * @remarks `SupportEventType`
+	 * @fumadocsType `SupportEventType`
+	 */
+	type: SupportEventType;
+	/**
+	 * Related conversation ID when the event belongs to a conversation.
+	 */
+	conversationId?: ConversationStartEvent["conversationId"];
+	/**
+	 * Conversation payload included on conversation lifecycle events.
+	 *
+	 * @remarks `Conversation`
+	 * @fumadocsType `Conversation`
+	 */
+	conversation?: Conversation;
+	/**
+	 * Timeline item payload included on message events.
+	 *
+	 * @remarks `TimelineItem`
+	 * @fumadocsType `TimelineItem`
+	 */
+	message?: TimelineItem;
+	/**
+	 * Error payload included on error events.
+	 */
+	error?: Error;
+	/**
+	 * Additional error context when available.
+	 */
+	context?: string;
+};
 
 // =============================================================================
 // Event Callbacks
@@ -96,6 +177,45 @@ export type SupportEventsContextValue = {
 		type: T,
 		callback: (event: Extract<SupportEvent, { type: T }>) => void
 	) => () => void;
+};
+
+export type UseSupportEventEmitterResult = {
+	/**
+	 * Emit a conversation-start event.
+	 *
+	 * @returns void
+	 */
+	emitConversationStart: (
+		conversationId: string,
+		conversation?: Conversation
+	) => void;
+	/**
+	 * Emit a conversation-end event.
+	 *
+	 * @returns void
+	 */
+	emitConversationEnd: (
+		conversationId: string,
+		conversation?: Conversation
+	) => void;
+	/**
+	 * Emit a message-sent event.
+	 *
+	 * @returns void
+	 */
+	emitMessageSent: (conversationId: string, message: TimelineItem) => void;
+	/**
+	 * Emit a message-received event.
+	 *
+	 * @returns void
+	 */
+	emitMessageReceived: (conversationId: string, message: TimelineItem) => void;
+	/**
+	 * Emit an error event.
+	 *
+	 * @returns void
+	 */
+	emitError: (error: Error, context?: string) => void;
 };
 
 const SupportEventsContext =
@@ -232,7 +352,7 @@ export function useSupportEvents(): SupportEventsContextValue | null {
  * Hook to emit events from within the widget.
  * Safe to use outside of provider (will no-op).
  */
-export function useSupportEventEmitter() {
+export function useSupportEventEmitter(): UseSupportEventEmitterResult {
 	const events = useSupportEvents();
 
 	return React.useMemo(

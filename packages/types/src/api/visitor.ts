@@ -14,22 +14,27 @@ export const visitorMetadataSchema = z.record(
  * Contact information for identified visitors
  */
 export const publicContactResponseSchema = z.object({
+	/** The contact's unique identifier (ULID). */
 	id: z.ulid().openapi({
 		description: "The contact's unique identifier.",
 		example: "01JG000000000000000000000",
 	}),
+	/** The contact's display name. */
 	name: z.string().nullable().openapi({
 		description: "The contact's name.",
 		example: "John Doe",
 	}),
+	/** The contact's email address. */
 	email: z.string().nullable().openapi({
 		description: "The contact's email address.",
 		example: "john.doe@example.com",
 	}),
+	/** URL to the contact's avatar image. */
 	image: z.string().nullable().openapi({
 		description: "The contact's avatar/profile image URL.",
 		example: "https://example.com/avatar.png",
 	}),
+	/** Hash of the contact's metadata used for change detection. */
 	metadataHash: z.string().optional().openapi({
 		description:
 			"Hash of the contact's metadata. Used to detect if metadata has changed without comparing full objects.",
@@ -40,6 +45,14 @@ export const publicContactResponseSchema = z.object({
 export type PublicContact = z.infer<typeof publicContactResponseSchema>;
 
 export type VisitorMetadata = z.infer<typeof visitorMetadataSchema>;
+
+export type VisitorMetadataReference = {
+	/**
+	 * Any string key can map to a string, number, boolean, or null value.
+	 * Common examples include plan, company, role, and MRR.
+	 */
+	"[key: string]"?: VisitorMetadata[string];
+};
 
 export const attributionChannelSchema = z.enum([
 	"direct",
@@ -536,18 +549,28 @@ export type VisitorResponse = Visitor;
  * Visitor response schema
  */
 export const publicVisitorResponseSchema = z.object({
+	/** The visitor's unique identifier (ULID). */
 	id: z.ulid().openapi({
 		description: "The visitor's unique identifier (ULID).",
 		example: "01JG000000000000000000000",
 	}),
+	/** Whether the visitor is currently blocked from support. */
 	isBlocked: z.boolean().openapi({
 		description: "Whether the visitor is currently blocked.",
 		example: false,
 	}),
+	/** The visitor's preferred language code. */
 	language: z.string().nullable().openapi({
 		description: "The visitor's preferred language.",
 		example: "en-US",
 	}),
+	/**
+	 * Contact information when the visitor has been identified.
+	 *
+	 * @remarks `PublicContact | null`
+	 * @fumadocsType `PublicContact | null`
+	 * @fumadocsHref #publiccontact
+	 */
 	contact: publicContactResponseSchema.nullable().openapi({
 		description:
 			"Contact information if the visitor has been identified via .identify().",

@@ -30,7 +30,19 @@ export type CossistantError = {
 };
 
 export type DefaultMessage = {
+	/**
+	 * The message text content.
+	 */
 	content: string;
+	/**
+	 * Who is sending the message.
+	 *
+	 * @remarks `SenderType`
+	 * @fumadocsHref #sendertype
+	 */
 	senderType: SenderType;
+	/**
+	 * Optional ID of the specific sender.
+	 */
 	senderId?: string;
 };

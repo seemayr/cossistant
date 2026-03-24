@@ -1,4 +1,3 @@
-import type React from "react";
 import { changelog } from "@/lib/source";
 
 export type LatestRelease = {
@@ -7,6 +6,9 @@ export type LatestRelease = {
 	tinyExcerpt: string;
 	date: string;
 };
+
+type LatestReleasePage = ReturnType<typeof changelog.getPages>[number];
+type LatestReleaseBody = LatestReleasePage["data"]["body"];
 
 export function getLatestRelease(): LatestRelease | null {
 	const pages = changelog
@@ -35,10 +37,7 @@ export function getLatestRelease(): LatestRelease | null {
  * that needs to be rendered as JSX in a server component, then
  * passed as children through client component boundaries.
  */
-export function getLatestReleaseBody(): React.ComponentType<{
-	// biome-ignore lint/suspicious/noExplicitAny: MDX components have varied prop signatures
-	components?: Record<string, React.ComponentType<any>>;
-}> | null {
+export function getLatestReleaseBody(): LatestReleaseBody | null {
 	const pages = changelog
 		.getPages()
 		.sort(

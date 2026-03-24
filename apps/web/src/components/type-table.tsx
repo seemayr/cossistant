@@ -3,7 +3,12 @@
 import { cva } from "class-variance-authority";
 import Link from "fumadocs-core/link";
 import { ChevronDown } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import {
+	type ComponentPropsWithoutRef,
+	type ReactNode,
+	useEffect,
+	useState,
+} from "react";
 import {
 	Collapsible,
 	CollapsibleContent,
@@ -67,28 +72,39 @@ const headerLabels: Record<TypeTableVariant, { name: string; type: string }> = {
 };
 
 export function TypeTable({
+	id,
 	type,
 	variant = "prop",
+	className,
+	...props
 }: {
 	type: Record<string, TypeNode>;
 	variant?: TypeTableVariant;
-}) {
+} & ComponentPropsWithoutRef<"div">) {
 	const headers = headerLabels[variant];
 
 	return (
-		<div className="@container my-6 flex flex-col overflow-hidden rounded border border-dashed bg-background-100 p-1 text-primary text-sm">
+		<div
+			className={cn(
+				"@container my-6 flex flex-col overflow-hidden rounded border border-dashed bg-background-100 p-1 text-primary text-sm",
+				className
+			)}
+			id={id}
+			{...props}
+		>
 			<div className="not-prose mb-4 flex items-center px-3 py-1 font-medium text-fd-muted-foreground">
 				<p className="w-[33%]">{headers.name}</p>
 				<p className="@max-xl:hidden">{headers.type}</p>
 			</div>
 			{Object.entries(type).map(([key, value]) => (
-				<Item item={value} key={key} name={key} />
+				<Item item={value} key={key} name={key} parentId={id} />
 			))}
 		</div>
 	);
 }
 
 function Item({
+	parentId,
 	name,
 	item: {
 		parameters = [],
@@ -102,21 +118,41 @@ function Item({
 		returns,
 	},
 }: {
+	parentId?: string;
 	name: string;
 	item: TypeNode;
 }) {
 	const [open, setOpen] = useState(false);
+	const id = parentId ? `${parentId}-${name}` : undefined;
+
+	useEffect(() => {
+		const hash = window.location.hash;
+		if (!(id && hash)) {
+			return;
+		}
+
+		if (`#${id}` === hash) {
+			setOpen(true);
+		}
+	}, [id]);
 
 	return (
 		<Collapsible
 			className={cn(
-				"overflow-hidden rounded border bg-background-100 transition-all",
+				"scroll-m-20 overflow-hidden rounded border bg-background-100 transition-all",
 				open ? "not-last:mb-2 bg-background-200" : "border-transparent"
 			)}
-			onOpenChange={setOpen}
+			id={id}
+			onOpenChange={(value) => {
+				if (value && id) {
+					window.history.replaceState(null, "", `#${id}`);
+				}
+
+				setOpen(value);
+			}}
 			open={open}
 		>
-			<CollapsibleTrigger className="group not-prose hover: relative flex w-full flex-row items-center px-3 py-2 text-start hover:bg-background-200">
+			<CollapsibleTrigger className="group not-prose relative flex w-full flex-row items-center px-3 py-2 text-start hover:bg-background-200">
 				<code
 					className={cn(
 						keyVariants({

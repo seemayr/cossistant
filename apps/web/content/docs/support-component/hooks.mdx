@@ -58,83 +58,10 @@ export function CustomSupportButton() {
 
 ### Return Values
 
-<TypeTable
+<auto-type-table
+  path="packages/react/src/provider.tsx"
+  name="UseSupportValue"
   variant="return"
-  type={{
-    website: {
-      description: "Website configuration and available agents",
-      type: "PublicWebsiteResponse | null",
-      typeDescriptionLink: "#publicwebsiteresponse",
-      required: true,
-    },
-    visitor: {
-      description: "Current visitor data with normalized locale",
-      type: "PublicVisitor & { locale: string | null }",
-      typeDescriptionLink: "#publicvisitor",
-      required: true,
-    },
-    isOpen: {
-      description: "Whether the support widget is currently open",
-      type: "boolean",
-      required: true,
-    },
-    open: {
-      description: "Function to open the support widget",
-      type: "() => void",
-      required: true,
-      returns: "void",
-    },
-    close: {
-      description: "Function to close the support widget",
-      type: "() => void",
-      required: true,
-      returns: "void",
-    },
-    toggle: {
-      description: "Function to toggle the widget open/closed state",
-      type: "() => void",
-      required: true,
-      returns: "void",
-    },
-    unreadCount: {
-      description: "Number of unread messages across all conversations",
-      type: "number",
-      required: true,
-    },
-    availableHumanAgents: {
-      description: "List of human support agents currently available",
-      type: "HumanAgent[]",
-      typeDescriptionLink: "#humanagent",
-      required: true,
-    },
-    availableAIAgents: {
-      description: "List of AI agents configured for support",
-      type: "AIAgent[]",
-      typeDescriptionLink: "#aiagent",
-      required: true,
-    },
-    client: {
-      description: "CossistantClient instance for direct API access",
-      type: "CossistantClient",
-      typeDescriptionLink: "#cossistantclient",
-      required: true,
-    },
-    isLoading: {
-      description: "Whether website data is still loading",
-      type: "boolean",
-      required: true,
-    },
-    error: {
-      description: "Error object if website data failed to load",
-      type: "Error | null",
-      required: true,
-    },
-    size: {
-      description: "Widget size configuration",
-      type: '"normal" | "larger"',
-      required: true,
-    },
-  }}
 />
 
 ## useVisitor
@@ -207,83 +134,18 @@ export function UpgradeButton() {
 
 ### Return Values
 
-<TypeTable
+<auto-type-table
+  path="packages/react/src/hooks/use-visitor.ts"
+  name="UseVisitorReturn"
   variant="return"
-  type={{
-    visitor: {
-      description: "Current visitor object (includes contact if identified)",
-      type: "PublicVisitor | null",
-      typeDescriptionLink: "#publicvisitor",
-      required: true,
-    },
-    identify: {
-      description: "Convert anonymous visitor into an identified contact",
-      type: "(params: IdentifyParams) => Promise<...>",
-      typeDescription:
-        "(params: IdentifyParams) => Promise<{ contactId: string; visitorId: string } | null>",
-      required: true,
-      parameters: [
-        {
-          name: "params",
-          description:
-            "Identification parameters including externalId, email, name, image, and metadata. See IdentifyParams type below.",
-        },
-      ],
-      returns:
-        "Promise<{ contactId: string; visitorId: string } | null> - Returns the contact and visitor IDs on success, or null on failure",
-    },
-    setVisitorMetadata: {
-      description: "Update metadata for the identified contact",
-      type: "(metadata: VisitorMetadata) => Promise<...>",
-      typeDescription:
-        "(metadata: VisitorMetadata) => Promise<VisitorResponse | null>",
-      required: true,
-      parameters: [
-        {
-          name: "metadata",
-          description:
-            "Metadata object to merge into the contact's existing metadata. See VisitorMetadata type below.",
-        },
-      ],
-      returns:
-        "Promise<VisitorResponse | null> - Returns the updated visitor object on success, or null on failure",
-    },
-  }}
 />
 
 ### identify() Parameters
 
-<TypeTable
+<auto-type-table
+  path="packages/react/src/hooks/use-visitor.ts"
+  name="IdentifyParams"
   variant="parameter"
-  type={{
-    externalId: {
-      description: "Your internal user ID (required if email not provided)",
-      type: "string",
-      required: false,
-    },
-    email: {
-      description: "User's email address (required if externalId not provided)",
-      type: "string",
-      required: false,
-    },
-    name: {
-      description: "User's display name",
-      type: "string",
-      required: false,
-    },
-    image: {
-      description: "URL to user's avatar image",
-      type: "string",
-      required: false,
-    },
-    metadata: {
-      description: "Initial metadata to attach to the contact",
-      type: "VisitorMetadata",
-      typeDescription: "Record<string, string | number | boolean | null>",
-      typeDescriptionLink: "#visitormetadata",
-      required: false,
-    },
-  }}
 />
 
 <Alert variant="default" className="mt-6">
@@ -329,35 +191,10 @@ export function CustomToggle() {
 
 ### Return Values
 
-<TypeTable
+<auto-type-table
+  path="packages/react/src/support/store/support-store.ts"
+  name="UseSupportConfigResult"
   variant="return"
-  type={{
-    isOpen: {
-      description: "Whether the support widget is currently open",
-      type: "boolean",
-      required: true,
-    },
-    size: {
-      description: "Current widget size configuration",
-      type: '"normal" | "larger"',
-      required: true,
-    },
-    open: {
-      description: "Function to open the widget",
-      type: "() => void",
-      required: true,
-    },
-    close: {
-      description: "Function to close the widget",
-      type: "() => void",
-      required: true,
-    },
-    toggle: {
-      description: "Function to toggle widget open/closed",
-      type: "() => void",
-      required: true,
-    },
-  }}
 />
 
 <Alert variant="info" className="mt-6">
@@ -405,55 +242,15 @@ export function NavigationButtons() {
 
 ### Return Values
 
-<TypeTable
+<auto-type-table
+  path="packages/react/src/support/store/support-store.ts"
+  name="UseSupportNavigationResult"
   variant="return"
-  type={{
-    current: {
-      description: "Current navigation state with page and params",
-      type: "{ page: string; params?: RouteParams }",
-      required: true,
-    },
-    page: {
-      description: "Current page name (HOME, CONVERSATION, etc.)",
-      type: "string",
-      required: true,
-    },
-    params: {
-      description: "Current page parameters (e.g., conversationId)",
-      type: "RouteParams | undefined",
-      required: true,
-    },
-    previousPages: {
-      description: "Navigation history stack",
-      type: "NavigationState[]",
-      required: true,
-    },
-    canGoBack: {
-      description: "Whether there are pages in the history to go back to",
-      type: "boolean",
-      required: true,
-    },
-    navigate: {
-      description: "Navigate to a page, pushing to history",
-      type: "(options: { page: string; params?: RouteParams }) => void",
-      required: true,
-    },
-    replace: {
-      description: "Navigate to a page, replacing current entry",
-      type: "(options: { page: string; params?: RouteParams }) => void",
-      required: true,
-    },
-    goBack: {
-      description: "Go back to the previous page in history",
-      type: "() => void",
-      required: true,
-    },
-  }}
 />
 
 ## useSupportHandle
 
-Access the imperative handle from within the widget tree. Alternative to using refs on the Support component.
+Access the imperative handle from within the widget tree. Alternative to using refs on the Support component. The hook returns `null` outside the widget tree, and the table below describes the handle when it is available.
 
 ### Basic Example
 
@@ -480,50 +277,10 @@ export function HelpButton() {
 
 ### Return Values
 
-<TypeTable
+<auto-type-table
+  path="packages/react/src/support/context/handle.tsx"
+  name="SupportHandle"
   variant="return"
-  type={{
-    open: {
-      description: "Open the support widget",
-      type: "() => void",
-      required: true,
-    },
-    close: {
-      description: "Close the support widget",
-      type: "() => void",
-      required: true,
-    },
-    toggle: {
-      description: "Toggle the widget open/closed",
-      type: "() => void",
-      required: true,
-    },
-    navigate: {
-      description: "Navigate to a specific page",
-      type: "(options: { page: string; params?: RouteParams }) => void",
-      required: true,
-    },
-    goBack: {
-      description: "Go back to the previous page",
-      type: "() => void",
-      required: true,
-    },
-    openConversation: {
-      description: "Open a specific conversation and open the widget",
-      type: "(conversationId: string) => void",
-      required: true,
-    },
-    startConversation: {
-      description: "Start a new conversation with optional initial message",
-      type: "(initialMessage?: string) => void",
-      required: true,
-    },
-    goHome: {
-      description: "Navigate to the home page",
-      type: "() => void",
-      required: true,
-    },
-  }}
 />
 
 ## useHomePage
@@ -569,45 +326,10 @@ export function CustomHomePage() {
 
 ### Return Values
 
-<TypeTable
+<auto-type-table
+  path="packages/react/src/hooks/use-home-page.ts"
+  name="UseHomePageReturn"
   variant="return"
-  type={{
-    conversations: {
-      description: "List of displayable conversations",
-      type: "Conversation[]",
-      required: true,
-    },
-    lastOpenConversation: {
-      description: "Most recent open conversation, if any",
-      type: "Conversation | null",
-      required: true,
-    },
-    availableConversationsCount: {
-      description: "Count of available conversations",
-      type: "number",
-      required: true,
-    },
-    isLoading: {
-      description: "Whether conversations are still loading",
-      type: "boolean",
-      required: true,
-    },
-    startConversation: {
-      description: "Start a new conversation",
-      type: "() => void",
-      required: true,
-    },
-    openConversation: {
-      description: "Open an existing conversation",
-      type: "(conversationId: string) => void",
-      required: true,
-    },
-    openConversationHistory: {
-      description: "Navigate to conversation history page",
-      type: "() => void",
-      required: true,
-    },
-  }}
 />
 
 ## useConversationPage
@@ -624,7 +346,7 @@ import { useConversationPage } from "@cossistant/next";
 export function CustomConversationPage({ conversationId }: { conversationId: string }) {
   const conversation = useConversationPage({
     conversationId,
-    onConversationCreated: (id) => console.log("Created:", id),
+    onConversationIdChange: (id) => console.log("Active:", id),
   });
 
   return (
@@ -637,18 +359,19 @@ export function CustomConversationPage({ conversationId }: { conversationId: str
       </div>
 
       {/* Composer */}
-      {conversation.isConversationOpen && (
-        <form onSubmit={(e) => { e.preventDefault(); conversation.composer.submit(); }}>
-          <input
-            value={conversation.composer.message}
-            onChange={(e) => conversation.composer.setMessage(e.target.value)}
-            placeholder="Type a message..."
-          />
-          <button type="submit" disabled={!conversation.composer.canSubmit}>
-            Send
-          </button>
-        </form>
-      )}
+      <form onSubmit={(e) => { e.preventDefault(); conversation.composer.submit(); }}>
+        <input
+          value={conversation.composer.message}
+          onChange={(e) => conversation.composer.setMessage(e.target.value)}
+          placeholder={conversation.isPending ? "Start the conversation..." : "Type a message..."}
+        />
+        <button
+          type="submit"
+          disabled={!conversation.composer.canSubmit || conversation.composer.isSubmitting}
+        >
+          Send
+        </button>
+      </form>
     </div>
   );
 }
@@ -656,51 +379,10 @@ export function CustomConversationPage({ conversationId }: { conversationId: str
 
 ### Return Values
 
-<TypeTable
+<auto-type-table
+  path="packages/react/src/hooks/use-conversation-page.ts"
+  name="UseConversationPageReturn"
   variant="return"
-  type={{
-    conversationId: {
-      description: "Current conversation ID (may change if new conversation is created)",
-      type: "string | null",
-      required: true,
-    },
-    conversation: {
-      description: "Current conversation object",
-      type: "Conversation | null",
-      required: true,
-    },
-    items: {
-      description: "Timeline items (messages, events) for the conversation",
-      type: "TimelineItem[]",
-      required: true,
-    },
-    isConversationOpen: {
-      description: "Whether the conversation is still open (not resolved/closed)",
-      type: "boolean",
-      required: true,
-    },
-    isLoading: {
-      description: "Whether the conversation is loading",
-      type: "boolean",
-      required: true,
-    },
-    error: {
-      description: "Error object if loading failed",
-      type: "Error | null",
-      required: true,
-    },
-    shouldShowIdentificationTool: {
-      description: "Whether to prompt for visitor identification",
-      type: "boolean",
-      required: true,
-    },
-    composer: {
-      description: "Message composer state and actions",
-      type: "MessageComposer",
-      typeDescriptionLink: "#messagecomposer",
-      required: true,
-    },
-  }}
 />
 
 ## useMessageComposer
@@ -736,9 +418,12 @@ export function MessageInput({ conversationId }: { conversationId: string }) {
           }
         }}
       />
-      {composer.attachments.map((file) => (
+      {composer.files.map((file, index) => (
         <span key={file.name}>
-          {file.name} <button onClick={() => composer.removeFile(file.name)}>×</button>
+          {file.name}{" "}
+          <button type="button" onClick={() => composer.removeFile(index)}>
+            ×
+          </button>
         </span>
       ))}
       <button type="submit" disabled={!composer.canSubmit || composer.isSubmitting}>
@@ -751,60 +436,10 @@ export function MessageInput({ conversationId }: { conversationId: string }) {
 
 ### Return Values
 
-<TypeTable
+<auto-type-table
+  path="packages/react/src/hooks/use-message-composer.ts"
+  name="UseMessageComposerReturn"
   variant="return"
-  type={{
-    message: {
-      description: "Current message text",
-      type: "string",
-      required: true,
-    },
-    setMessage: {
-      description: "Update the message text",
-      type: "(message: string) => void",
-      required: true,
-    },
-    attachments: {
-      description: "List of attached files",
-      type: "File[]",
-      required: true,
-    },
-    addFiles: {
-      description: "Add files to attachments",
-      type: "(files: File[]) => void",
-      required: true,
-    },
-    removeFile: {
-      description: "Remove a file by name",
-      type: "(fileName: string) => void",
-      required: true,
-    },
-    clearFiles: {
-      description: "Remove all attachments",
-      type: "() => void",
-      required: true,
-    },
-    submit: {
-      description: "Submit the message with attachments",
-      type: "() => Promise<void>",
-      required: true,
-    },
-    canSubmit: {
-      description: "Whether the message can be submitted (has content)",
-      type: "boolean",
-      required: true,
-    },
-    isSubmitting: {
-      description: "Whether a submission is in progress",
-      type: "boolean",
-      required: true,
-    },
-    error: {
-      description: "Error from last submission attempt",
-      type: "Error | null",
-      required: true,
-    },
-  }}
 />
 
 ## useFileUpload
@@ -819,18 +454,17 @@ Hook for handling file uploads with progress tracking.
 import { useFileUpload } from "@cossistant/next";
 
 export function FileUploader() {
-  const upload = useFileUpload({
-    onUploadComplete: (result) => console.log("Uploaded:", result),
-    onError: (error) => console.error("Upload failed:", error),
-  });
+  const upload = useFileUpload();
+  const conversationId = "conv_123";
 
   return (
     <div>
       <input
         type="file"
-        onChange={(e) => {
-          if (e.target.files?.[0]) {
-            upload.uploadFile(e.target.files[0]);
+        multiple
+        onChange={async (e) => {
+          if (e.target.files?.length) {
+            await upload.uploadFiles(Array.from(e.target.files), conversationId);
           }
         }}
       />
@@ -848,40 +482,10 @@ export function FileUploader() {
 
 ### Return Values
 
-<TypeTable
+<auto-type-table
+  path="packages/react/src/hooks/use-file-upload.ts"
+  name="UseFileUploadReturn"
   variant="return"
-  type={{
-    uploadFile: {
-      description: "Upload a single file",
-      type: "(file: File) => Promise<UploadResult>",
-      required: true,
-    },
-    uploadFiles: {
-      description: "Upload multiple files",
-      type: "(files: File[]) => Promise<UploadResult[]>",
-      required: true,
-    },
-    isUploading: {
-      description: "Whether an upload is in progress",
-      type: "boolean",
-      required: true,
-    },
-    progress: {
-      description: "Upload progress percentage (0-100)",
-      type: "number",
-      required: true,
-    },
-    error: {
-      description: "Error from last upload attempt",
-      type: "Error | null",
-      required: true,
-    },
-    reset: {
-      description: "Reset upload state",
-      type: "() => void",
-      required: true,
-    },
-  }}
 />
 
 ## useSupportText
@@ -896,37 +500,30 @@ Access the localization system for the support widget.
 import { useSupportText } from "@cossistant/next/support";
 
 export function LocalizedButton() {
-  const text = useSupportText();
+  const format = useSupportText();
 
   return (
     <button>
-      {text.get("common.actions.askQuestion")}
+      {format("common.actions.askQuestion")}
     </button>
   );
 }
 ```
 
-### Return Values
+### Returned Formatter
 
-<TypeTable
+`useSupportText()` returns a formatter function. The table below documents that
+function reference.
+
+<auto-type-table
+  path="packages/react/src/support/text/locales/keys.ts"
+  name="UseSupportTextReturn"
   variant="return"
-  type={{
-    get: {
-      description: "Get a localized string by key",
-      type: '(key: TextKey, variables?: Record<string, string>) => string',
-      required: true,
-    },
-    locale: {
-      description: "Current locale code",
-      type: "string",
-      required: true,
-    },
-  }}
 />
 
 ## useSupportEvents
 
-Access the events context for subscribing to widget lifecycle events.
+Access the events context for subscribing to widget lifecycle events. The hook returns `null` when used outside the widget's event provider, and the table below documents the event context when present.
 
 ### Basic Example
 
@@ -958,20 +555,10 @@ export function AnalyticsTracker() {
 
 ### Return Values
 
-<TypeTable
+<auto-type-table
+  path="packages/react/src/support/context/events.tsx"
+  name="SupportEventsContextValue"
   variant="return"
-  type={{
-    emit: {
-      description: "Emit an event to all listeners",
-      type: "(event: SupportEvent) => void",
-      required: true,
-    },
-    subscribe: {
-      description: "Subscribe to a specific event type",
-      type: "(type: EventType, callback: (event) => void) => () => void",
-      required: true,
-    },
-  }}
 />
 
 ## useSupportEventEmitter
@@ -980,35 +567,10 @@ Convenience hook for emitting events from within the widget.
 
 ### Return Values
 
-<TypeTable
+<auto-type-table
+  path="packages/react/src/support/context/events.tsx"
+  name="UseSupportEventEmitterResult"
   variant="return"
-  type={{
-    emitConversationStart: {
-      description: "Emit a conversation start event",
-      type: "(conversationId: string, conversation?: Conversation) => void",
-      required: true,
-    },
-    emitConversationEnd: {
-      description: "Emit a conversation end event",
-      type: "(conversationId: string, conversation?: Conversation) => void",
-      required: true,
-    },
-    emitMessageSent: {
-      description: "Emit a message sent event",
-      type: "(conversationId: string, message: TimelineItem) => void",
-      required: true,
-    },
-    emitMessageReceived: {
-      description: "Emit a message received event",
-      type: "(conversationId: string, message: TimelineItem) => void",
-      required: true,
-    },
-    emitError: {
-      description: "Emit an error event",
-      type: "(error: Error, context?: string) => void",
-      required: true,
-    },
-  }}
 />
 
 ## Types
@@ -1017,434 +579,120 @@ Convenience hook for emitting events from within the widget.
 
 The visitor object returned by the widget, representing an anonymous or identified visitor.
 
-<TypeTable
+<auto-type-table
+  path="packages/types/src/api/visitor.ts"
+  name="PublicVisitor"
   variant="property"
-  type={{
-    id: {
-      description: "The visitor's unique identifier (ULID)",
-      type: "string",
-      required: true,
-    },
-    isBlocked: {
-      description: "Whether the visitor is currently blocked from support",
-      type: "boolean",
-      required: true,
-    },
-    language: {
-      description: "The visitor's preferred language code",
-      type: "string | null",
-      required: true,
-    },
-    contact: {
-      description:
-        "Contact information if the visitor has been identified via identify(). Null for anonymous visitors.",
-      type: "PublicContact | null",
-      typeDescriptionLink: "#publiccontact",
-      required: true,
-    },
-  }}
 />
 
 ### PublicContact
 
 Contact information for an identified visitor.
 
-<TypeTable
+<auto-type-table
+  path="packages/types/src/api/visitor.ts"
+  name="PublicContact"
   variant="property"
-  type={{
-    id: {
-      description: "The contact's unique identifier (ULID)",
-      type: "string",
-      required: true,
-    },
-    name: {
-      description: "The contact's display name",
-      type: "string | null",
-      required: true,
-    },
-    email: {
-      description: "The contact's email address",
-      type: "string | null",
-      required: true,
-    },
-    image: {
-      description: "URL to the contact's avatar/profile image",
-      type: "string | null",
-      required: true,
-    },
-    metadataHash: {
-      description: "Hash of the contact's metadata for change detection",
-      type: "string",
-      required: false,
-    },
-  }}
 />
 
 ### PublicWebsiteResponse
 
 Website configuration and agent availability information.
 
-<TypeTable
+<auto-type-table
+  path="packages/types/src/api/website.ts"
+  name="PublicWebsiteResponse"
   variant="property"
-  type={{
-    id: {
-      description: "The website's unique identifier",
-      type: "string",
-      required: true,
-    },
-    name: {
-      description: "The website's name",
-      type: "string",
-      required: true,
-    },
-    domain: {
-      description: "The website's domain",
-      type: "string",
-      required: true,
-    },
-    description: {
-      description: "The website's description",
-      type: "string | null",
-      required: true,
-    },
-    logoUrl: {
-      description: "The website's logo URL",
-      type: "string | null",
-      required: true,
-    },
-    organizationId: {
-      description: "The organization's unique identifier",
-      type: "string",
-      required: true,
-    },
-    status: {
-      description: "The website's status (active/inactive)",
-      type: "string",
-      required: true,
-    },
-    lastOnlineAt: {
-      description: "When support was last online",
-      type: "string | null",
-      required: true,
-    },
-    availableHumanAgents: {
-      description: "List of available human support agents",
-      type: "HumanAgent[]",
-      typeDescriptionLink: "#humanagent",
-      required: true,
-    },
-    availableAIAgents: {
-      description: "List of available AI agents",
-      type: "AIAgent[]",
-      typeDescriptionLink: "#aiagent",
-      required: true,
-    },
-    visitor: {
-      description: "The current visitor information",
-      type: "PublicVisitor",
-      typeDescriptionLink: "#publicvisitor",
-      required: true,
-    },
-  }}
 />
 
 ### HumanAgent
 
 Information about a human support agent.
 
-<TypeTable
+<auto-type-table
+  path="packages/types/src/api/website.ts"
+  name="HumanAgent"
   variant="property"
-  type={{
-    id: {
-      description: "The agent's unique identifier",
-      type: "string",
-      required: true,
-    },
-    name: {
-      description: "The agent's display name",
-      type: "string",
-      required: true,
-    },
-    image: {
-      description: "URL to the agent's avatar",
-      type: "string | null",
-      required: true,
-    },
-    lastSeenAt: {
-      description:
-        "Timestamp of when the agent was last online. Null or older than 5 minutes means offline.",
-      type: "string | null",
-      required: true,
-    },
-  }}
 />
 
 ### AIAgent
 
 Information about an AI support agent.
 
-<TypeTable
+<auto-type-table
+  path="packages/types/src/api/website.ts"
+  name="AIAgent"
   variant="property"
-  type={{
-    id: {
-      description: "The AI agent's unique identifier",
-      type: "string",
-      required: true,
-    },
-    name: {
-      description: "The AI agent's display name",
-      type: "string",
-      required: true,
-    },
-    image: {
-      description: "URL to the AI agent's avatar",
-      type: "string | null",
-      required: true,
-    },
-  }}
 />
 
 ### CossistantClient
 
-The underlying client instance for direct API access. Used for advanced programmatic control.
+The low-level client instance for advanced programmatic control. The table
+below highlights the main public stores and methods exposed by the client.
 
-<TypeTable
+<auto-type-table
+  path="packages/core/src/client.ts"
+  name="CossistantClientReference"
   variant="property"
-  type={{
-    conversations: {
-      description: "Methods for managing conversations",
-      type: "object",
-      typeDescription:
-        "{ list(), get(id), create(), sendMessage(id, content), markAsRead(id) }",
-      required: true,
-    },
-    visitors: {
-      description: "Methods for managing visitor data",
-      type: "object",
-      typeDescription: "{ identify(params), updateMetadata(metadata) }",
-      required: true,
-    },
-  }}
 />
 
 ### IdentifyParams
 
 Parameters for the identify() function.
 
-<TypeTable
+<auto-type-table
+  path="packages/react/src/hooks/use-visitor.ts"
+  name="IdentifyParams"
   variant="property"
-  type={{
-    externalId: {
-      description: "Your internal user ID (required if email not provided)",
-      type: "string",
-      required: false,
-    },
-    email: {
-      description: "User's email address (required if externalId not provided)",
-      type: "string",
-      required: false,
-    },
-    name: {
-      description: "User's display name",
-      type: "string",
-      required: false,
-    },
-    image: {
-      description: "URL to user's avatar image",
-      type: "string",
-      required: false,
-    },
-    metadata: {
-      description: "Initial metadata to attach to the contact",
-      type: "VisitorMetadata",
-      typeDescription: "Record<string, string | number | boolean | null>",
-      typeDescriptionLink: "#visitormetadata",
-      required: false,
-    },
-  }}
 />
 
 ### VisitorMetadata
 
 Key-value pairs for storing custom data about contacts.
 
-<TypeTable
+<auto-type-table
+  path="packages/types/src/api/visitor.ts"
+  name="VisitorMetadataReference"
   variant="property"
-  type={{
-    "[key: string]": {
-      description:
-        "Any string key can map to a string, number, boolean, or null value. Common examples include plan, company, role, MRR, etc.",
-      type: "string | number | boolean | null",
-      required: false,
-    },
-  }}
 />
-
-**Type Definition:** `Record<string, string | number | boolean | null>`
 
 ### SenderType
 
 Enum defining who can send messages.
 
-<TypeTable
+<auto-type-table
+  path="packages/types/src/enums.ts"
+  name="SenderTypeReference"
+  type="typeof SenderType"
   variant="property"
-  type={{
-    VISITOR: {
-      description: "Message from an end user/visitor",
-      type: '"visitor"',
-      required: true,
-    },
-    TEAM_MEMBER: {
-      description: "Message from a human support agent",
-      type: '"team_member"',
-      required: true,
-    },
-    AI: {
-      description: "Message from an AI agent",
-      type: '"ai"',
-      required: true,
-    },
-  }}
 />
-
-**Type Definition:** `"visitor" | "team_member" | "ai"`
 
 ### MessageComposer
 
 State and actions returned by `useConversationPage` for message composition.
 
-<TypeTable
+<auto-type-table
+  path="packages/react/src/hooks/use-conversation-page.ts"
+  name="MessageComposer"
   variant="property"
-  type={{
-    message: {
-      description: "Current message text being composed",
-      type: "string",
-      required: true,
-    },
-    setMessage: {
-      description: "Update the message text",
-      type: "(message: string) => void",
-      required: true,
-    },
-    attachments: {
-      description: "List of attached files",
-      type: "File[]",
-      required: true,
-    },
-    addFiles: {
-      description: "Add files to the message",
-      type: "(files: File[]) => void",
-      required: true,
-    },
-    removeFile: {
-      description: "Remove an attached file by name",
-      type: "(fileName: string) => void",
-      required: true,
-    },
-    submit: {
-      description: "Send the message with attachments",
-      type: "() => Promise<void>",
-      required: true,
-    },
-    canSubmit: {
-      description: "Whether the message can be sent",
-      type: "boolean",
-      required: true,
-    },
-    isSubmitting: {
-      description: "Whether a submission is in progress",
-      type: "boolean",
-      required: true,
-    },
-  }}
 />
 
 ### SupportHandle
 
 Imperative handle for programmatic widget control via refs.
 
-<TypeTable
+<auto-type-table
+  path="packages/react/src/support/context/handle.tsx"
+  name="SupportHandle"
   variant="property"
-  type={{
-    open: {
-      description: "Open the support widget",
-      type: "() => void",
-      required: true,
-    },
-    close: {
-      description: "Close the support widget",
-      type: "() => void",
-      required: true,
-    },
-    toggle: {
-      description: "Toggle the widget open/closed",
-      type: "() => void",
-      required: true,
-    },
-    navigate: {
-      description: "Navigate to a specific page with optional params",
-      type: "(options: { page: string; params?: RouteParams }) => void",
-      required: true,
-    },
-    goBack: {
-      description: "Go back to the previous page",
-      type: "() => void",
-      required: true,
-    },
-    openConversation: {
-      description: "Open a specific conversation by ID",
-      type: "(conversationId: string) => void",
-      required: true,
-    },
-    startConversation: {
-      description: "Start a new conversation with optional initial message",
-      type: "(initialMessage?: string) => void",
-      required: true,
-    },
-    goHome: {
-      description: "Navigate to the home page",
-      type: "() => void",
-      required: true,
-    },
-  }}
 />
 
 ### SupportEvent
 
 Union type of all possible widget events.
 
-<TypeTable
+<auto-type-table
+  path="packages/react/src/support/context/events.tsx"
+  name="SupportEventReference"
   variant="property"
-  type={{
-    type: {
-      description: "Event type identifier",
-      type: '"conversationStart" | "conversationEnd" | "messageSent" | "messageReceived" | "error"',
-      required: true,
-    },
-    conversationId: {
-      description: "ID of the related conversation (not present on error events)",
-      type: "string",
-      required: false,
-    },
-    conversation: {
-      description: "Conversation object (on start/end events)",
-      type: "Conversation",
-      required: false,
-    },
-    message: {
-      description: "Message object (on sent/received events)",
-      type: "TimelineItem",
-      required: false,
-    },
-    error: {
-      description: "Error object (on error events)",
-      type: "Error",
-      required: false,
-    },
-    context: {
-      description: "Additional context for errors",
-      type: "string",
-      required: false,
-    },
-  }}
 />

@@ -2,10 +2,12 @@ import type { ImageProps } from "fumadocs-core/framework";
 // TODO: Uncomment when OpenAPI docs are needed (requires fumadocs-openapi v10 migration)
 // import { APIPage } from "./api-page";
 import defaultMdxComponents from "fumadocs-ui/mdx";
+import type { MDXComponents } from "mdx/types";
 import Image from "next/image";
 import Link from "next/link";
 import type { ImgHTMLAttributes, JSX } from "react";
 import type { UncontrolledProps } from "react-medium-image-zoom";
+import { AutoTypeTable } from "@/components/auto-type-table";
 import { CodeBlockCommand } from "@/components/code-block-command";
 import { CodeBlockWrapper } from "@/components/code-block-wrapper";
 import { CodeCollapsibleWrapper } from "@/components/code-collapsible-wrapper";
@@ -365,6 +367,7 @@ export const mdxComponents = {
 	CodeBlockWrapper: ({ ...props }) => (
 		<CodeBlockWrapper className="rounded-md border" {...props} />
 	),
+	AutoTypeTable,
 	TypeTable,
 	StyleTokenCascade,
 	QuickstartAIPrompt,
@@ -376,4 +379,4 @@ export const mdxComponents = {
 	HighlightLine,
 	XEmbed,
 	SignUpCTA,
-};
+} as MDXComponents;

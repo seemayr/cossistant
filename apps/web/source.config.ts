@@ -5,9 +5,14 @@ import {
 	frontmatterSchema,
 	metaSchema,
 } from "fumadocs-mdx/config";
+import { remarkAutoTypeTable } from "fumadocs-typescript";
 import rehypePrettyCode from "rehype-pretty-code";
 import { z } from "zod";
 
+import {
+	DOCS_TYPE_TABLE_BASE_PATH,
+	docsTypeTableGenerator,
+} from "@/lib/fumadocs-typescript";
 import { transformers } from "@/lib/highlight-code";
 
 const searchKindSchema = z.enum([
@@ -22,6 +27,19 @@ const searchKindSchema = z.enum([
 
 export default defineConfig({
 	mdxOptions: {
+		remarkPlugins: (plugins) => [
+			...plugins,
+			[
+				remarkAutoTypeTable,
+				{
+					generator: docsTypeTableGenerator,
+					outputName: "TypeTable",
+					options: {
+						basePath: DOCS_TYPE_TABLE_BASE_PATH,
+					},
+				},
+			],
+		],
 		rehypePlugins: (plugins) => {
 			plugins.shift();
 			plugins.push([

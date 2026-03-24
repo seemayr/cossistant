@@ -68,100 +68,50 @@ export function SupportWidget() {
 
 Fired when a new conversation is created.
 
-<TypeTable
+<auto-type-table
+  path="packages/react/src/support/context/events.tsx"
+  name="ConversationStartEvent"
   variant="parameter"
-  type={{
-    conversationId: {
-      description: "Unique identifier of the new conversation",
-      type: "string",
-      required: true,
-    },
-    conversation: {
-      description: "Full conversation object (if available)",
-      type: "Conversation",
-      required: false,
-    },
-  }}
 />
 
 ### onConversationEnd
 
 Fired when a conversation is closed or resolved.
 
-<TypeTable
+<auto-type-table
+  path="packages/react/src/support/context/events.tsx"
+  name="ConversationEndEvent"
   variant="parameter"
-  type={{
-    conversationId: {
-      description: "Unique identifier of the ended conversation",
-      type: "string",
-      required: true,
-    },
-    conversation: {
-      description: "Full conversation object (if available)",
-      type: "Conversation",
-      required: false,
-    },
-  }}
 />
 
 ### onMessageSent
 
 Fired when the visitor sends a message.
 
-<TypeTable
+<auto-type-table
+  path="packages/react/src/support/context/events.tsx"
+  name="MessageSentEvent"
   variant="parameter"
-  type={{
-    conversationId: {
-      description: "Conversation the message was sent to",
-      type: "string",
-      required: true,
-    },
-    message: {
-      description: "The sent message object",
-      type: "TimelineItem",
-      required: true,
-    },
-  }}
 />
 
 ### onMessageReceived
 
 Fired when a message is received from an agent (human or AI).
 
-<TypeTable
+<auto-type-table
+  path="packages/react/src/support/context/events.tsx"
+  name="MessageReceivedEvent"
   variant="parameter"
-  type={{
-    conversationId: {
-      description: "Conversation the message was received in",
-      type: "string",
-      required: true,
-    },
-    message: {
-      description: "The received message object",
-      type: "TimelineItem",
-      required: true,
-    },
-  }}
 />
 
 ### onError
 
 Fired when an error occurs within the widget.
 
-<TypeTable
+<auto-type-table
+  path="packages/react/src/support/context/events.tsx"
+  name="ErrorEvent"
   variant="parameter"
-  type={{
-    error: {
-      description: "The error object",
-      type: "Error",
-      required: true,
-    },
-    context: {
-      description: "Additional context about where the error occurred",
-      type: "string",
-      required: false,
-    },
-  }}
 />
 
 ## Programmatic Event Handling
@@ -326,7 +276,9 @@ export function SupportWithSegment() {
         analytics.track("Support Message Sent", {
           conversationId,
           messageId: message.id,
-          hasAttachments: message.attachments?.length > 0,
+          hasAttachments: message.parts.some(
+            (part) => part.type === "image" || part.type === "file"
+          ),
         });
       }}
     />
@@ -379,23 +331,9 @@ import type {
 } from "@cossistant/next/support";
 ```
 
-<TypeTable
+<auto-type-table
+  path="packages/react/src/support/context/events.tsx"
+  name="EventTypeExports"
+  type="{ SupportEvent: SupportEvent; SupportEventType: SupportEventType; SupportEventCallbacks: SupportEventCallbacks }"
   variant="property"
-  type={{
-    SupportEvent: {
-      description: "Union type of all possible events",
-      type: "ConversationStartEvent | ConversationEndEvent | MessageSentEvent | MessageReceivedEvent | ErrorEvent",
-      required: true,
-    },
-    SupportEventType: {
-      description: "String literal type of event names",
-      type: '"conversationStart" | "conversationEnd" | "messageSent" | "messageReceived" | "error"',
-      required: true,
-    },
-    SupportEventCallbacks: {
-      description: "Object type for all callback props",
-      type: "{ onConversationStart?, onConversationEnd?, onMessageSent?, onMessageReceived?, onError? }",
-      required: true,
-    },
-  }}
 />

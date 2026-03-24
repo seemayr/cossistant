@@ -6,18 +6,60 @@ import type {
 import { useCallback } from "react";
 import { useSupport } from "../provider";
 
+export type IdentifyParams = {
+	/**
+	 * Your internal user ID. Required when `email` is not provided.
+	 */
+	externalId?: string;
+	/**
+	 * The visitor's email address. Required when `externalId` is not provided.
+	 */
+	email?: string;
+	/**
+	 * Display name for the identified contact.
+	 */
+	name?: string;
+	/**
+	 * URL to the visitor's avatar image.
+	 */
+	image?: string;
+	/**
+	 * Initial metadata to attach to the contact.
+	 *
+	 * @remarks `VisitorMetadata`
+	 * @fumadocsType `VisitorMetadata`
+	 * @fumadocsHref #visitormetadata
+	 */
+	metadata?: VisitorMetadata;
+};
+
 export type UseVisitorReturn = {
+	/**
+	 * Current visitor object, including contact data when identified.
+	 *
+	 * @remarks `PublicVisitor | null`
+	 * @fumadocsType `PublicVisitor | null`
+	 * @fumadocsHref #publicvisitor
+	 */
 	visitor: PublicVisitor | null;
+	/**
+	 * Update metadata for the identified contact.
+	 *
+	 * @param metadata - Metadata object to merge into the contact's existing metadata.
+	 * @returns Promise<VisitorResponse | null>
+	 */
 	setVisitorMetadata: (
 		metadata: VisitorMetadata
 	) => Promise<VisitorResponse | null>;
-	identify: (params: {
-		externalId?: string;
-		email?: string;
-		name?: string;
-		image?: string;
-		metadata?: Record<string, unknown>;
-	}) => Promise<{ contactId: string; visitorId: string } | null>;
+	/**
+	 * Convert an anonymous visitor into an identified contact.
+	 *
+	 * @param params - Identification parameters including externalId, email, name, image, and metadata.
+	 * @returns Promise<{ contactId: string; visitorId: string } | null>
+	 */
+	identify: (
+		params: IdentifyParams
+	) => Promise<{ contactId: string; visitorId: string } | null>;
 };
 
 function safeWarn(message: string): void {
@@ -66,13 +108,9 @@ export function useVisitor(): UseVisitorReturn {
 	);
 
 	const identify = useCallback<
-		(params: {
-			externalId?: string;
-			email?: string;
-			name?: string;
-			image?: string;
-			metadata?: Record<string, unknown>;
-		}) => Promise<{ contactId: string; visitorId: string } | null>
+		(
+			params: IdentifyParams
+		) => Promise<{ contactId: string; visitorId: string } | null>
 	>(
 		async (params) => {
 			if (!(visitorId && client)) {

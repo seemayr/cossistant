@@ -337,18 +337,22 @@ export type CheckWebsiteDomainRequest = z.infer<
 >;
 
 export const availableHumanAgentSchema = z.object({
+	/** The agent's unique identifier. */
 	id: z.ulid().openapi({
 		description: "The human agent's unique identifier.",
 		example: "01JG000000000000000000000",
 	}),
+	/** The agent's display name. */
 	name: z.string().nullable().openapi({
 		description: "The agent's name.",
 		example: "John Doe",
 	}),
+	/** URL to the agent's avatar image. */
 	image: z.string().nullable().openapi({
 		description: "The agent's avatar URL.",
 		example: "https://cossistant.com/avatar.png",
 	}),
+	/** Timestamp used to determine whether the agent is online. */
 	lastSeenAt: z.string().nullable().openapi({
 		description:
 			"The agent's last online timestamp, used to determine if the agent is online. If the agent is offline, this will be null or more than 5 minutes ago.",
@@ -357,14 +361,17 @@ export const availableHumanAgentSchema = z.object({
 });
 
 export const AvailableAIAgentSchema = z.object({
+	/** The AI agent's unique identifier. */
 	id: z.ulid().openapi({
 		description: "The AI agent's unique identifier.",
 		example: "01JG000000000000000000000",
 	}),
+	/** The AI agent's display name. */
 	name: z.string().openapi({
 		description: "The AI agent's name.",
 		example: "John Doe",
 	}),
+	/** URL to the AI agent's avatar image. */
 	image: z.string().nullable().openapi({
 		description: "The AI agent's avatar URL.",
 		example: "https://cossistant.com/avatar.png",
@@ -375,40 +382,69 @@ export const AvailableAIAgentSchema = z.object({
  * Website information response schema
  */
 export const publicWebsiteResponseSchema = z.object({
+	/** The website's unique identifier. */
 	id: z.ulid().openapi({
 		description: "The website's unique identifier.",
 		example: "01JG000000000000000000000",
 	}),
+	/** The website's name. */
 	name: z.string().openapi({
 		description: "The website's name.",
 		example: "Dub",
 	}),
+	/** The website's domain. */
 	domain: z.string().openapi({
 		description: "The website's domain.",
 		example: "dub.co",
 	}),
+	/** The website's public description. */
 	description: z.string().nullable().openapi({
 		description: "The website's description.",
 		example: "Link management for modern marketing teams.",
 	}),
+	/** URL to the website's logo. */
 	logoUrl: z.string().nullable().openapi({
 		description: "The website's logo URL.",
 		example: "https://dub.co/logo.png",
 	}),
+	/** The owning organization's unique identifier. */
 	organizationId: z.ulid().openapi({
 		description: "The organization's unique identifier.",
 		example: "01JG000000000000000000000",
 	}),
+	/** Current website status. */
 	status: z.string().openapi({
 		description: "The website's status.",
 		example: "active",
 	}),
+	/** When support was last online for this website. */
 	lastOnlineAt: z.string().nullable().openapi({
 		description: "The website's support last online date.",
 		example: "2021-01-01T00:00:00.000Z",
 	}),
+	/**
+	 * List of currently available human agents.
+	 *
+	 * @remarks `HumanAgent[]`
+	 * @fumadocsType `HumanAgent[]`
+	 * @fumadocsHref #humanagent
+	 */
 	availableHumanAgents: z.array(availableHumanAgentSchema),
+	/**
+	 * List of currently available AI agents.
+	 *
+	 * @remarks `AIAgent[]`
+	 * @fumadocsType `AIAgent[]`
+	 * @fumadocsHref #aiagent
+	 */
 	availableAIAgents: z.array(AvailableAIAgentSchema),
+	/**
+	 * Current visitor information for the active session.
+	 *
+	 * @remarks `PublicVisitor`
+	 * @fumadocsType `PublicVisitor`
+	 * @fumadocsHref #publicvisitor
+	 */
 	visitor: publicVisitorResponseSchema.openapi({
 		description:
 			"The visitor information. Either existing visitor data or newly created visitor.",
@@ -418,6 +454,8 @@ export const publicWebsiteResponseSchema = z.object({
 export type PublicWebsiteResponse = z.infer<typeof publicWebsiteResponseSchema>;
 export type AvailableHumanAgent = z.infer<typeof availableHumanAgentSchema>;
 export type AvailableAIAgent = z.infer<typeof AvailableAIAgentSchema>;
+export type HumanAgent = AvailableHumanAgent;
+export type AIAgent = AvailableAIAgent;
 
 /**
  * List websites by organization request schema

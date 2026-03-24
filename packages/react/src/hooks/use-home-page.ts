@@ -27,19 +27,57 @@ export type UseHomePageOptions = {
 };
 
 export type UseHomePageReturn = {
-	// Conversations data
+	/**
+	 * List of conversations that should be displayed on the home page.
+	 *
+	 * @remarks `Conversation[]`
+	 * @fumadocsType `Conversation[]`
+	 */
 	conversations: Conversation[];
+	/**
+	 * Whether conversations are still loading.
+	 */
 	isLoading: boolean;
+	/**
+	 * Error from the most recent conversations fetch.
+	 */
 	error: Error | null;
 
-	// Derived state
+	/**
+	 * Most recent open conversation, or the most recent conversation overall.
+	 *
+	 * @remarks `Conversation | undefined`
+	 * @fumadocsType `Conversation | undefined`
+	 */
 	lastOpenConversation: Conversation | undefined;
+	/**
+	 * Number of additional conversations available beyond the highlighted one.
+	 */
 	availableConversationsCount: number;
+	/**
+	 * Whether there are any conversations to display.
+	 */
 	hasConversations: boolean;
 
-	// Actions
+	/**
+	 * Start a new conversation.
+	 *
+	 * @param initialMessage - Optional initial message to seed the conversation with.
+	 * @returns void
+	 */
 	startConversation: (initialMessage?: string) => void;
+	/**
+	 * Open an existing conversation by ID.
+	 *
+	 * @param conversationId - Conversation to open.
+	 * @returns void
+	 */
 	openConversation: (conversationId: string) => void;
+	/**
+	 * Navigate to the conversation history page.
+	 *
+	 * @returns void
+	 */
 	openConversationHistory: () => void;
 };
 
