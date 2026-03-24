@@ -132,7 +132,7 @@ export function Footer() {
 					<ThemeToggle />
 				</div>
 				<div className="container-wrapper mx-auto flex flex-col items-center justify-between gap-6 px-4 pt-4 pb-20 md:flex-row md:items-start md:gap-0">
-					<ThreeLogo className="size-full w-full opacity-40" />
+					<ThreeLogo className="mx-auto max-w-[180px] opacity-55 sm:max-w-[200px] md:max-w-[220px]" />
 				</div>
 			</div>
 		</footer>

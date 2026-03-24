@@ -7,6 +7,7 @@ import {
 import * as AvatarPrimitive from "@radix-ui/react-avatar";
 import { Facehash as FacehashComponent } from "facehash";
 import type * as React from "react";
+import { useEffect, useState } from "react";
 import { formatTimeAgo } from "@/lib/date";
 import { COSSISTANT_FACEHASH_COLOR_CLASSES } from "@/lib/facehash-palette";
 import { cn } from "@/lib/utils";
@@ -107,6 +108,73 @@ function AvatarFallback({
 	);
 }
 
+type AvatarPresenceStatus = "online" | "away";
+
+function resolveAvatarPresenceStatus({
+	lastOnlineAt,
+	nowMs,
+	status,
+}: {
+	lastOnlineAt?: string | null;
+	nowMs?: number;
+	status?: AvatarPresenceStatus;
+}): AvatarPresenceStatus | null {
+	if (status === "online" || status === "away") {
+		return status;
+	}
+
+	if (!lastOnlineAt || nowMs === undefined) {
+		return null;
+	}
+
+	const lastOnlineTime = Date.parse(lastOnlineAt);
+	if (Number.isNaN(lastOnlineTime)) {
+		return null;
+	}
+
+	if (lastOnlineTime >= nowMs - PRESENCE_ONLINE_WINDOW_MS) {
+		return "online";
+	}
+
+	if (lastOnlineTime >= nowMs - PRESENCE_AWAY_WINDOW_MS) {
+		return "away";
+	}
+
+	return null;
+}
+
+function getDefaultTooltipContent({
+	allowRelativeTime,
+	fallbackName,
+	lastOnlineDate,
+	presenceStatus,
+}: {
+	allowRelativeTime: boolean;
+	fallbackName: string;
+	lastOnlineDate: Date | null;
+	presenceStatus: AvatarPresenceStatus | null;
+}): string | null {
+	if (!lastOnlineDate) {
+		return null;
+	}
+
+	const awayWindowMinutes = Math.round(PRESENCE_AWAY_WINDOW_MS / 60_000);
+
+	if (presenceStatus === "online") {
+		return `${fallbackName} is online`;
+	}
+
+	if (presenceStatus === "away") {
+		return `${fallbackName} last seen less than ${awayWindowMinutes} minutes ago`;
+	}
+
+	if (!allowRelativeTime) {
+		return null;
+	}
+
+	return `${fallbackName} last seen ${formatTimeAgo(lastOnlineDate)}`;
+}
+
 function Avatar({
 	className,
 	url,
@@ -124,35 +192,30 @@ function Avatar({
 	status?: "online" | "away";
 	tooltipContent?: React.ReactNode | null;
 }) {
-	const now = Date.now();
-	const lastOnlineDate = lastOnlineAt ? new Date(lastOnlineAt) : null;
-	const lastOnlineTime = lastOnlineDate ? lastOnlineDate.getTime() : null;
+	const [hasHydrated, setHasHydrated] = useState(false);
+	const lastOnlineTime = lastOnlineAt ? Date.parse(lastOnlineAt) : Number.NaN;
+	const lastOnlineDate = Number.isNaN(lastOnlineTime)
+		? null
+		: new Date(lastOnlineTime);
+	const hasExplicitStatus = status === "online" || status === "away";
 
-	let computedStatus: "online" | "away" | null = status ?? null;
+	useEffect(() => {
+		setHasHydrated(true);
+	}, []);
 
-	if (
-		!computedStatus &&
-		lastOnlineTime !== null &&
-		!Number.isNaN(lastOnlineTime)
-	) {
-		if (lastOnlineTime >= now - PRESENCE_ONLINE_WINDOW_MS) {
-			computedStatus = "online";
-		} else if (lastOnlineTime >= now - PRESENCE_AWAY_WINDOW_MS) {
-			computedStatus = "away";
-		}
-	}
-
+	const computedStatus = resolveAvatarPresenceStatus({
+		lastOnlineAt,
+		nowMs: hasHydrated ? Date.now() : undefined,
+		status,
+	});
 	const isOnline = computedStatus === "online";
 	const isAway = computedStatus === "away";
-	const awayWindowMinutes = Math.round(PRESENCE_AWAY_WINDOW_MS / 60_000);
-
-	const defaultTooltipContent = lastOnlineDate
-		? isOnline
-			? `${fallbackName} is online`
-			: isAway
-				? `${fallbackName} last seen less than ${awayWindowMinutes} minutes ago`
-				: `${fallbackName} last seen ${formatTimeAgo(lastOnlineDate)}`
-		: null;
+	const defaultTooltipContent = getDefaultTooltipContent({
+		allowRelativeTime: hasHydrated || hasExplicitStatus,
+		fallbackName,
+		lastOnlineDate,
+		presenceStatus: computedStatus,
+	});
 	const resolvedTooltipContent =
 		tooltipContent === undefined ? defaultTooltipContent : tooltipContent;
 
@@ -182,6 +245,7 @@ function Avatar({
 								"block bg-cossistant-orange": isAway,
 							}
 						)}
+						data-slot="avatar-presence"
 					/>
 				)}
 			</div>

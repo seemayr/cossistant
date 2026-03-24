@@ -36,6 +36,21 @@ describe("FakeConversationList", () => {
 		expect(html).toContain("Can you help me verify this production fix?");
 	});
 
+	it("does not render inferred presence badges in server markup for the Marc landing row", () => {
+		const conversation = createMarcConversation(
+			"Can you help me verify this production fix?",
+			new Date("2026-01-01T10:00:00.000Z")
+		);
+
+		const html = renderToStaticMarkup(
+			<React.StrictMode>
+				<FakeConversationList conversations={[conversation]} />
+			</React.StrictMode>
+		);
+
+		expect(html).not.toContain('data-slot="avatar-presence"');
+	});
+
 	it("adds subtle spacing above the analytics slot", () => {
 		const conversation = createMarcConversation(
 			"Can you help me verify this production fix?",
