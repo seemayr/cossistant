@@ -508,6 +508,8 @@ function PrecisionFlowRightPanel({ children }: { children: React.ReactNode }) {
 			data-precision-background-trail="enabled"
 		>
 			<Background fieldOpacity={0.06} interactive={true} pointerTrail={true} />
+			<div className="pointer-events-none absolute inset-y-0 left-0 z-0 w-full bg-linear-to-r from-background to-transparent" />
+			<div className="pointer-events-none absolute inset-y-0 left-0 z-0 w-full bg-linear-to-r from-background to-transparent" />
 			<div className="pointer-events-none relative z-10 flex h-full w-full flex-1 px-4 pb-16 lg:px-8 lg:py-16 xl:px-1">
 				{children}
 			</div>

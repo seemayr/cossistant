@@ -55,7 +55,7 @@ export function PrecisionFlowSection({
 					<PrecisionFlowPlaybackControls />
 				</div>
 
-				<div className="flex min-h-[560px] min-w-0 flex-1 items-stretch lg:w-1/2 lg:flex-[0_0_50%] dark:bg-background-50">
+				<div className="relative flex min-h-[560px] min-w-0 flex-1 items-stretch lg:w-1/2 lg:flex-[0_0_50%] dark:bg-background-50">
 					<PrecisionFlowPlaybackStage />
 				</div>
 			</PrecisionFlowPlaybackProvider>
