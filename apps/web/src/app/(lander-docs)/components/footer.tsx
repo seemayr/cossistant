@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { Logo } from "@/components/ui/logo";
+import { Background } from "@/components/ui/background";
+import { Logo, LogoText, LogoTextSVG } from "@/components/ui/logo";
 import { ThreeLogo } from "@/components/ui/three-logo";
 import { DISCORD_INVITE, X_URL } from "@/constants";
 import { GitHubLink } from "./github-link";
@@ -101,8 +102,8 @@ export function Footer() {
 				</div>
 			</div>
 			<div className="flex flex-col items-center justify-between border-t border-dashed md:items-start">
-				<div className="container-wrapper mx-auto flex flex-col items-center justify-between gap-6 px-4 pt-4 pb-20 md:flex-row md:items-start md:gap-0">
-					<div className="flex flex-col gap-4">
+				<div className="container-wrapper relative mx-auto">
+					<div className="absolute inset-x-0 top-0 z-50 flex justify-between gap-4 p-4">
 						<p className="px-6 text-center font-mono text-foreground/60 text-sm md:text-left lg:px-0">
 							© 2025 cossistant. open source under GPL-3.0 license.
 						</p>
@@ -127,12 +128,22 @@ export function Footer() {
 							>
 								Security
 							</a>
+							<ThemeToggle />
 						</div>
 					</div>
-					<ThemeToggle />
-				</div>
-				<div className="container-wrapper mx-auto flex flex-col items-center justify-between gap-6 px-4 pt-4 pb-20 md:flex-row md:items-start md:gap-0">
-					<ThreeLogo className="mx-auto max-w-[180px] opacity-55 sm:max-w-[200px] md:max-w-[220px]" />
+					<div className="pointer-events-none h-100 min-h-100 w-full" />
+					<Background
+						asciiOpacity={1}
+						className="absolute inset-0 z-0"
+						fieldOpacity={0.06}
+						interactive={true}
+						pointerTrail={true}
+						resolution={0.13}
+					/>
+
+					<div className="pointer-events-none absolute inset-x-0 top-0 z-0 h-40 w-full bg-linear-to-b from-background to-transparent" />
+					<div className="pointer-events-none absolute inset-x-0 top-0 z-0 h-20 w-full bg-linear-to-b from-background to-transparent" />
+					<LogoTextSVG className="pointer-events-none absolute inset-x-0 bottom-20 z-50 w-full text-background" />
 				</div>
 			</div>
 		</footer>

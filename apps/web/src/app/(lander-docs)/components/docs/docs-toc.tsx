@@ -107,7 +107,7 @@ export function DocsTableOfContents({
 
 	return (
 		<div className={cn("flex flex-col gap-2 p-4 pt-0 text-sm", className)}>
-			<p className="sticky top-0 h-6 bg-background font-medium text-primary/80 text-xs uppercase">
+			<p className="sticky top-0 h-6 bg-background font-medium text-primary/80 text-xs">
 				On this page
 			</p>
 			{toc.map((item) => (
@@ -120,7 +120,7 @@ export function DocsTableOfContents({
 				>
 					{item.url === `#${activeHeading}` && (
 						<motion.div className="-left-7 absolute" layoutId="logo">
-							<Logo className="size-4 text-cossistant-green" />
+							<Logo className="size-4 text-cossistant-orange" />
 						</motion.div>
 					)}
 					{item.title}
