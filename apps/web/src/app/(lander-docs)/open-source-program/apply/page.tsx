@@ -19,20 +19,17 @@ export const metadata = utilityNoindex({
 export default function OpenSourceProgramApplyPage() {
 	return (
 		<div className="px-4 pt-28 pb-16 md:px-0 md:pt-32">
-			<div className="mx-auto flex w-full max-w-4xl flex-col gap-8">
+			<div className="mx-auto flex w-full max-w-xl flex-col gap-8">
 				<div className="flex flex-col gap-4">
 					<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 						<div className="space-y-3">
-							<p className="font-mono text-cossistant-orange text-xs uppercase tracking-[0.2em]">
-								Open source program
-							</p>
+							<Button asChild className="w-fit px-4" variant="outline">
+								<Link href="/open-source-program">Back to program</Link>
+							</Button>
 							<h1 className="font-f37-stout text-3xl leading-tight md:text-5xl">
 								Apply to the OSS Program
 							</h1>
 						</div>
-						<Button asChild className="h-11 px-5" variant="outline">
-							<Link href="/open-source-program">Back to program</Link>
-						</Button>
 					</div>
 
 					<p className="max-w-3xl text-muted-foreground leading-7">

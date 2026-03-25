@@ -1,5 +1,6 @@
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { FullWidthBorder } from "./full-width-border";
 
 type ParticipationData = {
 	all: number[];
@@ -79,9 +80,9 @@ function ActivityCell({
 	return (
 		<div
 			className={cn(
-				"aspect-square w-full",
-				"border border-dashed",
+				"aspect-square w-full border-[0.5px] border-background border-dashed",
 				ACTIVITY_COLORS[level],
+				"hover:bg-cossistant-orange",
 				level === 0 && "border-primary/5"
 			)}
 			title={`Week ${weekIndex + 1}, Day ${dayIndex + 1}: ${count} commits`}
@@ -100,7 +101,7 @@ export function GitHubActivityGraphSkeleton() {
 
 			{/* Grid skeleton */}
 			<div className="w-full">
-				<div className="w-full rounded border border-dashed p-3 md:p-4">
+				<div className="w-full p-3 md:p-4">
 					<div className="grid w-full grid-flow-col grid-cols-52 grid-rows-7 gap-0.5 md:gap-1">
 						{Array.from({ length: 52 * 7 }).map((_, i) => (
 							<Skeleton
@@ -147,9 +148,9 @@ export async function GitHubActivityGraph() {
 		const maxDailyCommits = Math.max(...dailyData.flat(), 1);
 
 		return (
-			<div className="flex flex-col gap-6 py-8 md:py-12">
+			<div className="flex flex-col gap-6 pt-3">
 				{/* Header */}
-				<div className="flex flex-col gap-2 px-4">
+				<div className="relative flex flex-col gap-2 px-4">
 					<h2 className="font-f37-stout text-xl md:text-2xl">Changelog</h2>
 					<p className="text-muted-foreground">
 						We&apos;re shipping a lot,{" "}
@@ -166,8 +167,9 @@ export async function GitHubActivityGraph() {
 
 				{/* Activity Grid */}
 				<div className="w-full">
-					<div className="w-full p-3 md:p-4">
-						<div className="grid w-full grid-flow-col grid-cols-52 grid-rows-7 gap-0.5 md:gap-2.5">
+					<div className="relative w-full">
+						<FullWidthBorder className="top-0" />
+						<div className="grid w-full grid-flow-col grid-cols-52 grid-rows-7 gap-0 md:gap-0">
 							{dailyData.map((week, weekIndex) =>
 								week.map((dayCount, dayIndex) => (
 									<ActivityCell
@@ -180,25 +182,24 @@ export async function GitHubActivityGraph() {
 								))
 							)}
 						</div>
+						<FullWidthBorder className="bottom-0" />
+						<div className="-bottom-6 absolute right-3 flex items-center justify-center gap-2 text-muted-foreground text-xs">
+							<span>Less</span>
+							<div className="flex gap-0.5">
+								{([0, 1, 2, 3, 4] as ActivityLevel[]).map((level) => (
+									<div
+										className={cn(
+											"size-2 md:size-2.5 lg:size-3",
+											"border border-dashed",
+											ACTIVITY_COLORS[level]
+										)}
+										key={level}
+									/>
+								))}
+							</div>
+							<span>More</span>
+						</div>
 					</div>
-				</div>
-
-				{/* Legend */}
-				<div className="flex items-center justify-center gap-2 px-4 text-muted-foreground text-xs">
-					<span>Less</span>
-					<div className="flex gap-0.5">
-						{([0, 1, 2, 3, 4] as ActivityLevel[]).map((level) => (
-							<div
-								className={cn(
-									"size-2 md:size-2.5 lg:size-3",
-									"border border-dashed",
-									ACTIVITY_COLORS[level]
-								)}
-								key={level}
-							/>
-						))}
-					</div>
-					<span>More</span>
 				</div>
 			</div>
 		);
