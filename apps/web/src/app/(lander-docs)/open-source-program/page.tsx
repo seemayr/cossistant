@@ -62,7 +62,7 @@ function Section({
 	children: React.ReactNode;
 }) {
 	return (
-		<section className="border-t border-dashed px-4 py-12 md:px-0" id={id}>
+		<section className="px-4 py-12 md:px-0" id={id}>
 			<div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
 				<div className="space-y-2">
 					<h2 className="font-f37-stout text-2xl leading-tight md:text-3xl">
@@ -115,12 +115,12 @@ export default function OpenSourceProgramPage() {
 			<div className="px-4 pt-28 pb-16 md:px-0 md:pt-32">
 				<div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
 					<h1 className="max-w-4xl text-balance font-f37-stout text-[40px] leading-tight md:text-6xl">
-						Get Cossistant Pro for free for your open source project.
+						Support your open source project users with Cossistant.
 					</h1>
 					<p className="max-w-3xl text-lg text-muted-foreground leading-8">
-						We want to help active public projects ship better support. If your
-						project is real and already helping people, apply and we&apos;ll
-						review it.
+						We want to help open source projects ship better customer support.
+						If your project is real and already helping people, apply to get
+						Cossistant Pro plan for free and extra benefits.
 					</p>
 					<div className="flex flex-col gap-3 sm:flex-row">
 						<Button asChild className="h-11 px-5">
@@ -129,7 +129,7 @@ export default function OpenSourceProgramPage() {
 							</Link>
 						</Button>
 						<Button asChild className="h-11 px-5" variant="outline">
-							<Link href="#featured-projects">See featured OSS friends</Link>
+							<Link href="#featured-projects">See featured projects</Link>
 						</Button>
 					</div>
 				</div>
@@ -164,9 +164,10 @@ export default function OpenSourceProgramPage() {
 				</ul>
 
 				<div className="space-y-4">
-					<div className="inline-flex rounded border border-dashed fill-primary px-3 py-3 text-primary">
+					<div className="inline-flex rounded border border-dashed px-3 py-3">
 						<Image
 							alt="Cossistant OSS Program badge"
+							className="h-auto w-auto dark:invert"
 							height={48}
 							src="https://cdn.cossistant.com/oss/oss-friends.svg"
 							width={220}

@@ -47,7 +47,7 @@ export function Footer() {
 									className="font-mono text-foreground/60 text-sm transition-colors hover:text-foreground"
 									href="/open-source-program"
 								>
-									Open Source
+									Open Source Program
 								</Link>
 							</li>
 							<li>

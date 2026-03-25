@@ -145,7 +145,6 @@ export function TopBar({
 	const searchCatalog = buildSearchCatalog();
 	const navigationLinks = [
 		{ href: "/docs", label: "Docs" },
-		{ href: "/open-source-program", label: "Open Source" },
 		{ href: "/blog", label: "Blog" },
 		{ href: "/pricing", label: "Pricing" },
 		{ href: "/changelog", label: "Changelog" },

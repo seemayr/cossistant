@@ -402,6 +402,22 @@ export default function PricingPage() {
 							for instructions.
 						</AccordionContent>
 					</AccordionItem>
+					<AccordionItem value="item-oss">
+						<AccordionTrigger>
+							Do you offer anything for open source projects?
+						</AccordionTrigger>
+						<AccordionContent>
+							Yes. If you run an eligible open source project, you can apply to
+							our{" "}
+							<Link
+								className="text-primary underline"
+								href="/open-source-program"
+							>
+								Open Source Program
+							</Link>{" "}
+							to get Cossistant Pro for free.
+						</AccordionContent>
+					</AccordionItem>
 					<AccordionItem value="item-2">
 						<AccordionTrigger>Do you offer annual billing?</AccordionTrigger>
 						<AccordionContent>
