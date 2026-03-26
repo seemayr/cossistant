@@ -137,6 +137,7 @@ export function ReadIndicator({
 								image={reader.participant.image}
 								isAI
 								name={reader.participant.name}
+								showBackground={!!reader.participant.image}
 							/>
 						)}
 					</div>

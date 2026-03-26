@@ -430,7 +430,7 @@ describe("ConversationTimelineList live activity", () => {
 			],
 		});
 
-		expect(secondHtml).toContain('aria-label="Seen by Alex');
+		expect(secondHtml).toContain('title="Seen by Alex');
 		expect(secondHtml).not.toContain("visitor-1");
 	});
 });

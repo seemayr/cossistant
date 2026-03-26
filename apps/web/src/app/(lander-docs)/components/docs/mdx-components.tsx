@@ -24,6 +24,7 @@ import {
 	AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Background } from "@/components/ui/background";
 import { Button } from "@/components/ui/button";
 import Icon from "@/components/ui/icons";
 import { getIconForLanguageExtension } from "@/components/ui/logos";
@@ -355,14 +356,23 @@ export const mdxComponents = {
 			{...props}
 		/>
 	),
-	LinkedCard: ({ className, ...props }: React.ComponentProps<typeof Link>) => (
+	LinkedCard: ({
+		className,
+		children,
+		...props
+	}: React.ComponentProps<typeof Link>) => (
 		<Link
 			className={cn(
-				"flex w-full flex-col items-start gap-2 rounded-[1px] border bg-background-100 p-4 text-surface-foreground transition-colors hover:bg-background-200 sm:p-6",
+				"group relative w-full rounded-[1px] border bg-background-100 p-4 text-surface-foreground transition-colors hover:bg-background-200 sm:p-6",
 				className
 			)}
 			{...props}
-		/>
+		>
+			<Background className="z-0 opacity-0 transition-all duration-300 group-hover:opacity-100" />
+			<div className="pointer-events-none relative inset-0 z-10 flex flex-col items-start gap-2 from-background-200 via-background-200 to-transparent transition-colors group-hover:bg-linear-to-t">
+				{children}
+			</div>
+		</Link>
 	),
 	CodeBlockWrapper: ({ ...props }) => (
 		<CodeBlockWrapper className="rounded-md border" {...props} />

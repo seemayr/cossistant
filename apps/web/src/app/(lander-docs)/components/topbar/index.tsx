@@ -25,6 +25,7 @@ import {
 import { blog, changelog, source } from "@/lib/source";
 import { cn } from "@/lib/utils";
 import { FullWidthBorder } from "../full-width-border";
+import { DocsMobileNavigation } from "./docs-mobile-navigation";
 import { SearchBar } from "./search-bar";
 
 type SearchablePage = {
@@ -156,10 +157,35 @@ export function TopBar({
 			<div className="container-wrapper relative mx-auto bg-background">
 				<div className="container z-50 mx-auto flex items-center bg-background py-4 lg:justify-between">
 					<div className="flex items-center gap-3 sm:gap-6">
+						<div className="w-14 lg:w-[280px]">
+							<Link className="flex items-center" href="/">
+								<LogoText className="hidden lg:flex" />
+								<Logo className="size-5.5 text-primary lg:hidden" />
+							</Link>
+						</div>
+					</div>
+					<div className="hidden items-center space-x-4 lg:flex lg:flex-1 lg:justify-center">
+						{navigationLinks.map((link) => (
+							<TopbarButton
+								className="text-foreground"
+								href={link.href}
+								key={link.href}
+							>
+								{link.label}
+							</TopbarButton>
+						))}
+					</div>
+
+					<div
+						className="ml-auto flex min-w-0 items-center justify-end gap-2 sm:gap-3"
+						data-slot="topbar-controls"
+					>
+						<SearchBar catalog={searchCatalog} />
 						<Sheet>
 							<SheetTrigger asChild>
 								<Button
-									className="size-8 border border-dashed md:hidden"
+									className="size-8 shrink-0 border border-dashed lg:hidden"
+									data-slot="topbar-mobile-menu-trigger"
 									size="icon"
 									type="button"
 									variant="ghost"
@@ -168,13 +194,21 @@ export function TopBar({
 									<span className="sr-only">Open navigation menu</span>
 								</Button>
 							</SheetTrigger>
-							<SheetContent className="w-full border-dashed bg-background p-6 sm:max-w-sm">
+							<SheetContent className="inset-0 h-svh w-screen max-w-none overflow-y-auto rounded-none border-0 border-dashed bg-background p-6 sm:max-w-none">
 								<SheetHeader>
 									<SheetTitle>Navigation</SheetTitle>
 									<SheetDescription>
 										Browse docs, product pages, and updates.
 									</SheetDescription>
 								</SheetHeader>
+								{children ? (
+									<div
+										className="mt-6 flex flex-wrap items-center gap-3 px-2"
+										data-slot="topbar-mobile-sheet-actions"
+									>
+										{children}
+									</div>
+								) : null}
 								<div className="mt-6 flex flex-col gap-2 px-2">
 									{navigationLinks.map((link) => (
 										<SheetClose asChild key={link.href}>
@@ -187,34 +221,9 @@ export function TopBar({
 										</SheetClose>
 									))}
 								</div>
-								{children ? (
-									<div className="mt-6 flex flex-wrap items-center gap-3">
-										{children}
-									</div>
-								) : null}
+								<DocsMobileNavigation tree={source.pageTree} />
 							</SheetContent>
 						</Sheet>
-						<div className="w-14 lg:w-[280px]">
-							<Link className="flex items-center" href="/">
-								<LogoText className="hidden lg:flex" />
-								<Logo className="size-5.5 text-primary lg:hidden" />
-							</Link>
-						</div>
-					</div>
-					<div className="hidden items-center space-x-4 md:flex lg:flex-1 lg:justify-center">
-						{navigationLinks.map((link) => (
-							<TopbarButton
-								className="text-foreground"
-								href={link.href}
-								key={link.href}
-							>
-								{link.label}
-							</TopbarButton>
-						))}
-					</div>
-
-					<div className="ml-auto flex min-w-0 items-center justify-end gap-2 sm:gap-3">
-						<SearchBar catalog={searchCatalog} />
 						<div className="hidden items-center gap-2 md:flex">{children}</div>
 					</div>
 					<FullWidthBorder className="bottom-0" />

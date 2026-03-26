@@ -501,15 +501,35 @@ function PrecisionFlowConversationStage({
 	);
 }
 
-function PrecisionFlowRightPanel({ children }: { children: React.ReactNode }) {
+function PrecisionFlowRightPanel({
+	children,
+	showOpeningMessageRadial = false,
+}: {
+	children: React.ReactNode;
+	showOpeningMessageRadial?: boolean;
+}) {
 	return (
 		<div
 			className="relative flex h-full w-full flex-1 overflow-hidden bg-background dark:bg-background-50"
 			data-precision-background-trail="enabled"
 		>
 			<Background fieldOpacity={0.06} interactive={true} pointerTrail={true} />
-			<div className="pointer-events-none absolute inset-y-0 left-0 z-0 w-full bg-linear-to-r from-background to-transparent" />
-			<div className="pointer-events-none absolute inset-y-0 left-0 z-0 w-full bg-linear-to-r from-background to-transparent" />
+			<div className="pointer-events-none absolute inset-y-0 left-0 z-[1] w-full bg-linear-to-r from-background to-transparent" />
+			<div className="pointer-events-none absolute inset-y-0 left-0 z-[1] w-full bg-linear-to-r from-background to-transparent" />
+			{showOpeningMessageRadial ? (
+				<div
+					className="pointer-events-none absolute inset-0 z-[2] flex justify-center px-4 pb-16 lg:px-8 lg:py-16 xl:px-1"
+					data-precision-opening-radial="true"
+				>
+					<div
+						className={cn(
+							"my-auto h-full w-full max-w-2xl",
+							"bg-[radial-gradient(ellipse_68%_52%_at_50%_44%,var(--background)_0%,var(--background)_30%,transparent_74%)]",
+							"dark:bg-[radial-gradient(ellipse_68%_52%_at_50%_44%,var(--background-50)_0%,var(--background-50)_30%,transparent_74%)]"
+						)}
+					/>
+				</div>
+			) : null}
 			<div className="pointer-events-none relative z-10 flex h-full w-full flex-1 px-4 pb-16 lg:px-8 lg:py-16 xl:px-1">
 				{children}
 			</div>
@@ -863,9 +883,16 @@ export function PrecisionFlowPlaybackStage() {
 		phase === "gap_search_result" ||
 		phase === "human_handoff" ||
 		phase === "clarify_transition";
+	const showOpeningMessageRadial =
+		phase === "visitor_question" ||
+		phase === "gap_search_loading" ||
+		phase === "gap_search_result" ||
+		phase === "human_handoff";
 
 	return (
-		<PrecisionFlowRightPanel>
+		<PrecisionFlowRightPanel
+			showOpeningMessageRadial={showOpeningMessageRadial}
+		>
 			{phase === "faq_created" ? (
 				<PrecisionFlowFaqCreatedCard draft={scene.faqDraft} />
 			) : (

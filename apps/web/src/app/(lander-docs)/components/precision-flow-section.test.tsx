@@ -45,6 +45,7 @@ describe("PrecisionFlowSection", () => {
 		expect(html).toContain('data-fake-conversation-layout-mode="centered"');
 		expect(html).toContain('data-precision-stage-layout="centered"');
 		expect(html).toContain('data-precision-background-trail="enabled"');
+		expect(html).toContain('data-precision-opening-radial="true"');
 		expect(html).toContain('data-background="aurora-ascii"');
 		expect(html).not.toContain('data-composer-frame="default"');
 		expect(html).not.toContain('data-composer-layout-mode="inline"');
@@ -83,6 +84,7 @@ describe("PrecisionFlowSection", () => {
 		expect(html).toContain(
 			"No saved answer for &quot;delete account&quot; yet"
 		);
+		expect(html).toContain('data-precision-opening-radial="true"');
 		expect(html).not.toContain("Type your message...");
 		expect(html).not.toContain('type="file"');
 	});
@@ -107,6 +109,7 @@ describe("PrecisionFlowSection", () => {
 		expect(html).toContain("Reply");
 		expect(html).toContain("Private note");
 		expect(html).toContain('type="file"');
+		expect(html).not.toContain('data-precision-opening-radial="true"');
 		expect(html).not.toContain("autofocus");
 		expect(html).not.toContain("How do I delete my account?");
 		expect(html).not.toContain(
@@ -161,6 +164,7 @@ describe("PrecisionFlowSection", () => {
 			"I don&#x27;t know this one yet, so I&#x27;m asking the team and saving the answer for next time."
 		);
 		expect(html).toContain("Clarification");
+		expect(html).not.toContain('data-precision-opening-radial="true"');
 	});
 
 	it("shows the first-step next cursor before advancing to the follow-up question", () => {
@@ -258,6 +262,7 @@ describe("PrecisionFlowSection", () => {
 		expect(html).toContain("w-[84%]");
 		expect(html).toContain("w-[86%]");
 		expect(html).toContain("self-center");
+		expect(html).not.toContain('data-precision-opening-radial="true"');
 		expect(html).not.toContain('data-clarification-slot="draft-ready-banner"');
 		expect(html).not.toContain("Knowledge base updated");
 	});

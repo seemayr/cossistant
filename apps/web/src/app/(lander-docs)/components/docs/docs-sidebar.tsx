@@ -1,24 +1,13 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-	Sidebar,
-	SidebarContent,
-	SidebarGroup,
-	SidebarGroupContent,
-	SidebarGroupLabel,
-	SidebarMenu,
-	SidebarMenuButton,
-	SidebarMenuItem,
-} from "@/components/ui/sidebar";
-
-import type { source } from "@/lib/source";
+import { Sidebar, SidebarContent } from "@/components/ui/sidebar";
+import { DocsNavTree, type DocsPageTree } from "./docs-nav-tree";
 
 export function DocsSidebar({
 	tree,
 	...props
-}: React.ComponentProps<typeof Sidebar> & { tree: typeof source.pageTree }) {
+}: React.ComponentProps<typeof Sidebar> & { tree: DocsPageTree }) {
 	const pathname = usePathname();
 
 	return (
@@ -29,33 +18,7 @@ export function DocsSidebar({
 		>
 			<SidebarContent className="no-scrollbar px-0 pb-12">
 				<div className="h-(--top-spacing) shrink-0" />
-				{tree.children.map((item: (typeof tree.children)[number]) => (
-					<SidebarGroup key={item.$id}>
-						<SidebarGroupLabel className="font-medium text-muted-foreground">
-							{item.name}
-						</SidebarGroupLabel>
-						<SidebarGroupContent>
-							{item.type === "folder" && (
-								<SidebarMenu className="gap-0.5">
-									{item.children.map(
-										(subItem: (typeof item.children)[number]) =>
-											subItem.type === "page" && (
-												<SidebarMenuItem key={subItem.url}>
-													<SidebarMenuButton
-														asChild
-														className="after:-inset-y-1 relative h-[30px] 3xl:fixed:w-full w-full 3xl:fixed:max-w-48 overflow-visible border border-transparent font-medium text-[0.8rem] after:absolute after:inset-x-0 after:z-0 after:rounded data-[active=true]:border-transparent data-[active=true]:bg-background-300"
-														isActive={subItem.url === pathname}
-													>
-														<Link href={subItem.url}>{subItem.name}</Link>
-													</SidebarMenuButton>
-												</SidebarMenuItem>
-											)
-									)}
-								</SidebarMenu>
-							)}
-						</SidebarGroupContent>
-					</SidebarGroup>
-				))}
+				<DocsNavTree pathname={pathname} tree={tree} />
 			</SidebarContent>
 		</Sidebar>
 	);

@@ -346,7 +346,7 @@ export default function OpenSourceProgramPage() {
 						{FEATURED_OPEN_SOURCE_PROJECTS.map((project, index) => (
 							<a
 								className="group relative flex flex-col transition-colors hover:bg-background-100"
-								href={project.websiteUrl}
+								href={`${project.websiteUrl}?utm_source=cossistant&utm_medium=oss-program`}
 								key={project.id}
 								rel="noreferrer"
 								target="_blank"
@@ -405,6 +405,7 @@ export default function OpenSourceProgramPage() {
 										className="aspect-[1.91/1] h-auto w-full object-cover grayscale group-hover:grayscale-0"
 										height={630}
 										src={project.ogImageUrl}
+										unoptimized
 										width={1200}
 									/>
 								</div>

@@ -123,6 +123,69 @@ describe("SearchKnowledgeTimelineTool", () => {
 		expect(html).not.toContain("rounded-full");
 	});
 
+	it("renders repeated titles for distinct URLs while collapsing duplicate URLs", () => {
+		const html = renderToStaticMarkup(
+			<SearchKnowledgeTimelineTool
+				conversationId="conv-1"
+				item={createToolTimelineItem({
+					text: "Found 3 sources",
+					parts: [
+						{
+							type: "tool-searchKnowledgeBase",
+							toolCallId: "call-2",
+							toolName: "searchKnowledgeBase",
+							input: { query: "pricing" },
+							state: "result",
+							output: {
+								success: true,
+								data: {
+									totalFound: 4,
+									articles: [
+										{
+											title: "Pricing Guide",
+											sourceUrl: "https://example.com/pricing",
+											sourceType: "url",
+										},
+										{
+											title: "Pricing Guide",
+											sourceUrl: "https://docs.example.com/pricing",
+											sourceType: "url",
+										},
+										{
+											title: "Billing FAQ",
+											sourceUrl: "https://example.com/billing",
+											sourceType: "url",
+										},
+										{
+											title: "Billing FAQ duplicate",
+											sourceUrl: "https://example.com/billing/",
+											sourceType: "url",
+										},
+									],
+								},
+							},
+						},
+					],
+				})}
+			/>
+		);
+
+		expect(countOccurrences(html, 'target="_blank"')).toBe(3);
+		expect(countOccurrences(html, 'title="Pricing Guide"')).toBe(2);
+		expect(countOccurrences(html, 'href="https://example.com/pricing"')).toBe(
+			1
+		);
+		expect(
+			countOccurrences(html, 'href="https://docs.example.com/pricing"')
+		).toBe(1);
+		expect(countOccurrences(html, 'href="https://example.com/billing"')).toBe(
+			1
+		);
+		expect(countOccurrences(html, 'href="https://example.com/billing/"')).toBe(
+			0
+		);
+	});
+
 	it("replaces zero-source summaries with the executed query", () => {
 		const html = renderToStaticMarkup(
 			<SearchKnowledgeTimelineTool
