@@ -38,26 +38,24 @@ export function ClarificationPromptCard({
 }: ClarificationPromptCardProps) {
 	return (
 		<div className={cn("px-2 pt-2 pb-2", className)}>
-			<div className="flex items-start justify-between gap-4">
-				<div className="space-y-1">
-					<div className="flex w-full items-center justify-between gap-2">
-						<div className="font-medium text-sm">Clarification</div>
-						{onDismiss ? (
-							<Button
-								disabled={isPending}
-								onClick={onDismiss}
-								size="icon-small"
-								type="button"
-								variant="ghost"
-							>
-								<Icon className="size-3.5" name="x" variant="filled" />
-							</Button>
-						) : null}
-					</div>
-					<p className="max-w-[90%] text-balance text-muted-foreground text-sm">
-						{topicSummary}
-					</p>
+			<div className="flex w-full flex-col gap-1">
+				<div className="flex w-full items-center justify-between gap-2">
+					<div className="font-medium text-sm">Clarification</div>
+					{onDismiss ? (
+						<Button
+							disabled={isPending}
+							onClick={onDismiss}
+							size="icon-small"
+							type="button"
+							variant="ghost"
+						>
+							<Icon className="size-3.5" name="x" variant="filled" />
+						</Button>
+					) : null}
 				</div>
+				<p className="max-w-[90%] text-balance text-muted-foreground text-sm">
+					{topicSummary}
+				</p>
 			</div>
 
 			<div className="mt-6 flex flex-wrap items-center justify-end gap-2">
