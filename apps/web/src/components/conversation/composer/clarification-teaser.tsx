@@ -40,7 +40,7 @@ export function ClarificationPromptCard({
 		<div className={cn("px-2 pt-2 pb-2", className)}>
 			<div className="flex items-start justify-between gap-4">
 				<div className="space-y-1">
-					<div className="flex items-center justify-between gap-2">
+					<div className="flex w-full items-center justify-between gap-2">
 						<div className="font-medium text-sm">Clarification</div>
 						{onDismiss ? (
 							<Button
