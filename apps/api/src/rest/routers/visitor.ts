@@ -13,12 +13,13 @@ import {
 	resolveFirstTouchAttribution,
 } from "@api/lib/visitor-attribution";
 import { realtime } from "@api/realtime/emitter";
+import { lookupGeoIp } from "@api/services/geoip";
 import { markVisitorPresence } from "@api/services/presence";
+import { extractClientIpFromRequest } from "@api/utils/client-ip";
 import {
 	safelyExtractRequestData,
 	validateResponse,
 } from "@api/utils/validate";
-import { resolveCountryDetails } from "@cossistant/location/country-utils";
 import {
 	type UpdateVisitorRequest,
 	updateVisitorMetadataRequestSchema,
@@ -38,6 +39,20 @@ import type { RestContext } from "../types";
 
 export const visitorRouter = new OpenAPIHono<RestContext>();
 const COUNTRY_CODE_REGEX = /^[A-Z]{2}$/;
+const MAX_PRECISE_GEO_ACCURACY_RADIUS_KM = 100;
+
+type PersistedGeoUpdate = {
+	ip?: string;
+	city?: string | null;
+	region?: string | null;
+	country?: string | null;
+	countryCode?: string | null;
+	latitude?: number | null;
+	longitude?: number | null;
+	geoSource?: "maxmind" | "edge_header" | null;
+	geoAccuracyRadiusKm?: number | null;
+	geoResolvedAt?: string | null;
+};
 
 function formatVisitorResponse(record: VisitorRecord): VisitorResponse {
 	return {
@@ -88,6 +103,7 @@ function parsePreferredLocale(headerValue: string | null): string | null {
 	if (!headerValue) {
 		return null;
 	}
+
 	return headerValue.split(",").at(0) ?? null;
 }
 
@@ -95,71 +111,23 @@ function normalizeCountryCode(code?: string | null): string | null {
 	if (!code) {
 		return null;
 	}
+
 	const trimmed = code.trim();
 	if (trimmed.length !== 2) {
 		return null;
 	}
+
 	const normalizedCode = trimmed.toUpperCase();
 	return COUNTRY_CODE_REGEX.test(normalizedCode) ? normalizedCode : null;
-}
-
-// RFC 7239 Forwarded header can contain multiple comma-separated entries. Each entry can
-// hold a `for=` directive that may include quotes, IPv6 brackets, or port information.
-function parseForwardedHeader(headerValue: string | null): string | null {
-	if (!headerValue) {
-		return null;
-	}
-
-	for (const segment of headerValue.split(",")) {
-		const forDirective = segment
-			.split(";")
-			.map((part) => part.trim())
-			.find((part) => part.toLowerCase().startsWith("for="));
-
-		if (!forDirective) {
-			continue;
-		}
-
-		let value = forDirective.slice(4).trim();
-
-		if (value.startsWith('"') && value.endsWith('"')) {
-			value = value.slice(1, -1);
-		}
-
-		if (value.startsWith("[")) {
-			const closingBracketIndex = value.indexOf("]");
-			if (closingBracketIndex !== -1) {
-				value = value.slice(1, closingBracketIndex);
-			}
-		} else {
-			const colonIndex = value.indexOf(":");
-			if (colonIndex !== -1 && !value.includes("::")) {
-				value = value.slice(0, colonIndex);
-			}
-		}
-
-		if (value.length > 0) {
-			return value;
-		}
-	}
-
-	return null;
 }
 
 function parseCoordinate(value: string | null): number | null {
 	if (!value) {
 		return null;
 	}
+
 	const parsed = Number.parseFloat(value);
 	return Number.isFinite(parsed) ? parsed : null;
-}
-
-function inferCityFromTimezoneHeader(timezone: string | null): string | null {
-	if (!timezone?.includes("/")) {
-		return null;
-	}
-	const [, city] = timezone.split("/");
-	return city ? city.replace(/_/g, " ") : null;
 }
 
 function setIfPresent<T extends keyof UpdateVisitorRequest>(
@@ -172,56 +140,265 @@ function setIfPresent<T extends keyof UpdateVisitorRequest>(
 	}
 }
 
-function getEdgeIp(request: Context<RestContext>["req"]): string | null {
-	const header = (name: string) => getHeaderValue(request, name);
-	const forwardedFor = header("x-forwarded-for");
-	const primaryForwarded = forwardedFor?.split(",").at(0)?.trim() ?? null;
-	return pickFirstHeader([
-		header("cf-connecting-ip"),
-		header("x-real-ip"),
-		header("x-client-ip"),
-		header("fastly-client-ip"),
-		header("true-client-ip"),
-		header("x-cluster-client-ip"),
-		parseForwardedHeader(header("forwarded")),
-		primaryForwarded,
-	]);
+function getCountryDisplayName(
+	countryCode: string | null,
+	locale: string | null
+): string | null {
+	if (!countryCode || typeof Intl.DisplayNames === "undefined") {
+		return null;
+	}
+
+	try {
+		const display = new Intl.DisplayNames([locale || "en"], {
+			type: "region",
+		});
+		return display.of(countryCode) ?? null;
+	} catch {
+		return null;
+	}
 }
 
-function getEdgeLocation(request: Context<RestContext>["req"]): {
-	city: string | null;
-	region: string | null;
-	countryCode: string | null;
+function extractEdgeGeoUpdate(
+	request: Context<RestContext>["req"],
+	preferredLocale: string | null
+): PersistedGeoUpdate {
+	const header = (name: string) => getHeaderValue(request, name);
+	const city = pickFirstHeader([
+		header("cf-ipcity"),
+		header("x-vercel-ip-city"),
+	]);
+	const region = pickFirstHeader([
+		header("cf-ipregion"),
+		header("x-vercel-ip-country-region"),
+	]);
+	const countryCode = normalizeCountryCode(
+		pickFirstHeader([header("cf-ipcountry"), header("x-vercel-ip-country")])
+	);
+	const latitude = parseCoordinate(
+		pickFirstHeader([
+			getHeaderValue(request, "cf-iplatitude"),
+			getHeaderValue(request, "x-vercel-ip-latitude"),
+		])
+	);
+	const longitude = parseCoordinate(
+		pickFirstHeader([
+			getHeaderValue(request, "cf-iplongitude"),
+			getHeaderValue(request, "x-vercel-ip-longitude"),
+		])
+	);
+
+	const edgeUpdate: PersistedGeoUpdate = {};
+	if (city) {
+		edgeUpdate.city = city;
+	}
+	if (region) {
+		edgeUpdate.region = region;
+	}
+	if (countryCode) {
+		edgeUpdate.countryCode = countryCode;
+		const countryName = getCountryDisplayName(countryCode, preferredLocale);
+		if (countryName) {
+			edgeUpdate.country = countryName;
+		}
+	}
+	if (latitude !== null && longitude !== null) {
+		edgeUpdate.latitude = latitude;
+		edgeUpdate.longitude = longitude;
+	}
+
+	return edgeUpdate;
+}
+
+function extractRequestContext(request: Context<RestContext>["req"]): {
+	preferredLocale: string | null;
+	preferredLanguage: string | null;
+	edgeGeoUpdate: PersistedGeoUpdate;
+	edgeTimezone: string | null;
+	canonicalIp: string | null;
+	publicIp: string | null;
 } {
 	const header = (name: string) => getHeaderValue(request, name);
+	const preferredLocale = parsePreferredLocale(header("accept-language"));
+	const ipInfo = extractClientIpFromRequest(request);
+
 	return {
-		city: pickFirstHeader([header("cf-ipcity"), header("x-vercel-ip-city")]),
-		region: pickFirstHeader([
-			header("cf-ipregion"),
-			header("x-vercel-ip-country-region"),
-		]),
-		countryCode: pickFirstHeader([
-			header("cf-ipcountry"),
-			header("x-vercel-ip-country"),
-		]),
+		preferredLocale,
+		preferredLanguage: preferredLocale,
+		edgeGeoUpdate: extractEdgeGeoUpdate(request, preferredLocale),
+		edgeTimezone: header("x-vercel-ip-timezone"),
+		canonicalIp: ipInfo.canonicalIp,
+		publicIp: ipInfo.publicIp,
 	};
 }
 
-function getEdgeCoordinates(request: Context<RestContext>["req"]): {
-	latitude: number | null;
-	longitude: number | null;
-} {
-	const latitudeSource = pickFirstHeader([
-		getHeaderValue(request, "cf-iplatitude"),
-		getHeaderValue(request, "x-vercel-ip-latitude"),
-	]);
-	const longitudeSource = pickFirstHeader([
-		getHeaderValue(request, "cf-iplongitude"),
-		getHeaderValue(request, "x-vercel-ip-longitude"),
-	]);
+function hasPersistedGeo(update: PersistedGeoUpdate): boolean {
+	return Boolean(
+		update.countryCode ||
+			update.country ||
+			update.region ||
+			update.city ||
+			update.latitude !== undefined ||
+			update.longitude !== undefined
+	);
+}
+
+function stripServerOwnedGeoFields(
+	body: UpdateVisitorRequest
+): Partial<UpdateVisitorRequest> {
+	const {
+		ip: _ip,
+		city: _city,
+		region: _region,
+		country: _country,
+		countryCode: _countryCode,
+		latitude: _latitude,
+		longitude: _longitude,
+		...rest
+	} = body;
+
+	return rest;
+}
+
+function extractManualGeoFallback(
+	body: UpdateVisitorRequest,
+	preferredLocale: string | null
+): Partial<UpdateVisitorRequest> {
+	const manualGeo: Partial<UpdateVisitorRequest> = {};
+	setIfPresent(manualGeo, "city", body.city);
+	setIfPresent(manualGeo, "region", body.region);
+	setIfPresent(manualGeo, "country", body.country);
+	setIfPresent(manualGeo, "latitude", body.latitude);
+	setIfPresent(manualGeo, "longitude", body.longitude);
+
+	const normalizedBodyCountryCode = normalizeCountryCode(body.countryCode);
+	if (normalizedBodyCountryCode) {
+		manualGeo.countryCode = normalizedBodyCountryCode;
+		if (!manualGeo.country) {
+			const countryName = getCountryDisplayName(
+				normalizedBodyCountryCode,
+				preferredLocale
+			);
+			if (countryName) {
+				manualGeo.country = countryName;
+			}
+		}
+	}
+
+	return manualGeo;
+}
+
+async function resolveServerGeoUpdate(params: {
+	existingVisitor: VisitorRecord;
+	canonicalIp: string | null;
+	publicIp: string | null;
+	edgeGeoUpdate: PersistedGeoUpdate;
+	edgeTimezone: string | null;
+	resolvedAt: string;
+}): Promise<{
+	geoUpdate: PersistedGeoUpdate;
+	timezoneFallback: string | null;
+}> {
+	const geoUpdate: PersistedGeoUpdate = {};
+	if (params.canonicalIp) {
+		geoUpdate.ip = params.canonicalIp;
+	}
+
+	const ipChanged =
+		params.canonicalIp !== null &&
+		params.canonicalIp !== params.existingVisitor.ip;
+	const shouldLookupGeo =
+		Boolean(params.publicIp) &&
+		(ipChanged ||
+			!params.existingVisitor.geoSource ||
+			params.existingVisitor.geoSource !== "maxmind");
+
+	if (shouldLookupGeo && params.publicIp) {
+		const lookup = await lookupGeoIp(params.publicIp);
+		if (lookup?.found) {
+			const normalizedLookupCountryCode = normalizeCountryCode(
+				lookup.country_code
+			);
+			const hasLookupGeoPayload = Boolean(
+				normalizedLookupCountryCode ||
+					lookup.country ||
+					lookup.region ||
+					lookup.city ||
+					lookup.timezone ||
+					lookup.latitude !== null ||
+					lookup.longitude !== null
+			);
+
+			if (hasLookupGeoPayload) {
+				if (normalizedLookupCountryCode) {
+					geoUpdate.countryCode = normalizedLookupCountryCode;
+				}
+				if (lookup.country) {
+					geoUpdate.country = lookup.country;
+				}
+				if (lookup.region) {
+					geoUpdate.region = lookup.region;
+				}
+				if (lookup.city) {
+					geoUpdate.city = lookup.city;
+				}
+
+				const shouldPersistPreciseCoordinates =
+					lookup.accuracy_radius_km !== null &&
+					lookup.accuracy_radius_km <= MAX_PRECISE_GEO_ACCURACY_RADIUS_KM &&
+					lookup.latitude !== null &&
+					lookup.longitude !== null;
+				geoUpdate.latitude = shouldPersistPreciseCoordinates
+					? lookup.latitude
+					: null;
+				geoUpdate.longitude = shouldPersistPreciseCoordinates
+					? lookup.longitude
+					: null;
+				geoUpdate.geoSource = "maxmind";
+				geoUpdate.geoAccuracyRadiusKm = lookup.accuracy_radius_km;
+				geoUpdate.geoResolvedAt = lookup.resolved_at;
+
+				return {
+					geoUpdate,
+					timezoneFallback: lookup.timezone ?? params.edgeTimezone,
+				};
+			}
+		}
+	}
+
+	if (hasPersistedGeo(params.edgeGeoUpdate)) {
+		return {
+			geoUpdate: {
+				...geoUpdate,
+				...params.edgeGeoUpdate,
+				geoSource: "edge_header",
+				geoAccuracyRadiusKm: null,
+				geoResolvedAt: params.resolvedAt,
+			},
+			timezoneFallback: params.edgeTimezone,
+		};
+	}
+
+	if (ipChanged) {
+		return {
+			geoUpdate: {
+				...geoUpdate,
+				city: null,
+				region: null,
+				country: null,
+				countryCode: null,
+				latitude: null,
+				longitude: null,
+				geoSource: null,
+				geoAccuracyRadiusKm: null,
+				geoResolvedAt: null,
+			},
+			timezoneFallback: params.edgeTimezone,
+		};
+	}
+
 	return {
-		latitude: parseCoordinate(latitudeSource),
-		longitude: parseCoordinate(longitudeSource),
+		geoUpdate,
+		timezoneFallback: params.edgeTimezone,
 	};
 }
 
@@ -243,65 +420,6 @@ function toOptionalString(
 	}
 
 	return value;
-}
-
-function extractNetworkContext(request: Context<RestContext>["req"]): {
-	context: Partial<UpdateVisitorRequest>;
-	preferredLocale: string | null;
-	timezone: string | null;
-} {
-	const header = (name: string) => getHeaderValue(request, name);
-
-	const ip = getEdgeIp(request);
-	const { city, region, countryCode } = getEdgeLocation(request);
-	const { latitude, longitude } = getEdgeCoordinates(request);
-	const preferredLocale = parsePreferredLocale(header("accept-language"));
-	const timezoneHeader = header("x-vercel-ip-timezone");
-
-	const networkContext: Partial<UpdateVisitorRequest> = {};
-
-	setIfPresent(networkContext, "ip", ip);
-	setIfPresent(networkContext, "city", city);
-	setIfPresent(networkContext, "region", region);
-	setIfPresent(networkContext, "timezone", timezoneHeader);
-
-	const normalizedEdgeCountryCode = normalizeCountryCode(countryCode);
-	if (normalizedEdgeCountryCode) {
-		networkContext.countryCode = normalizedEdgeCountryCode;
-	}
-	// Country name is only reliable when provided by edge headers.
-	// Attempt a display name when a code exists to enrich analytics, but avoid guesses otherwise.
-	if (normalizedEdgeCountryCode && typeof Intl.DisplayNames !== "undefined") {
-		try {
-			const display = new Intl.DisplayNames([preferredLocale || "en"], {
-				type: "region",
-			});
-			networkContext.country =
-				display.of(normalizedEdgeCountryCode) ?? networkContext.country;
-		} catch (_error) {
-			// Ignore failures silently
-		}
-	}
-
-	setIfPresent(networkContext, "latitude", latitude);
-	setIfPresent(networkContext, "longitude", longitude);
-
-	if (!networkContext.language && preferredLocale) {
-		networkContext.language = preferredLocale;
-	}
-
-	if (!networkContext.city) {
-		const inferredCity = inferCityFromTimezoneHeader(timezoneHeader);
-		setIfPresent(networkContext, "city", inferredCity);
-		if (networkContext.region === undefined || networkContext.region === null) {
-			setIfPresent(networkContext, "region", inferredCity);
-		}
-	}
-	return {
-		context: networkContext,
-		preferredLocale,
-		timezone: timezoneHeader,
-	};
 }
 
 visitorRouter.use("/*", ...protectedPublicApiKeyMiddleware);
@@ -631,71 +749,51 @@ visitorRouter.openapi(
 			};
 
 			const now = new Date();
-			const {
-				context: networkContext,
-				preferredLocale,
-				timezone: timezoneFromHeaders,
-			} = extractNetworkContext(c.req);
-
-			const isCountryStringInBody = typeof body.country === "string";
-			const hasCountryInBody =
-				isCountryStringInBody && body.country && body.country.trim().length > 0;
-
-			const hasCountryCodeInBody = normalizedBodyCountryCode !== null;
-
-			const localeCandidate =
-				normalizedBody.language ?? networkContext.language ?? preferredLocale;
-			const timezoneCandidate =
-				normalizedBody.timezone ??
-				networkContext.timezone ??
-				timezoneFromHeaders;
-			const cityCandidate = normalizedBody.city ?? networkContext.city ?? null;
-
-			const countryDetails = resolveCountryDetails({
-				country: normalizedBody.country ?? networkContext.country ?? null,
-				countryCode:
-					normalizedBodyCountryCode ?? networkContext.countryCode ?? null,
-				locale: localeCandidate ?? null,
-				timezone: timezoneCandidate ?? null,
-				city: cityCandidate,
+			const nowIso = now.toISOString();
+			const requestContext = extractRequestContext(c.req);
+			const { geoUpdate, timezoneFallback } = await resolveServerGeoUpdate({
+				existingVisitor,
+				canonicalIp: requestContext.canonicalIp,
+				publicIp: requestContext.publicIp,
+				edgeGeoUpdate: requestContext.edgeGeoUpdate,
+				edgeTimezone: requestContext.edgeTimezone,
+				resolvedAt: nowIso,
 			});
-			const normalizedDerivedCountryCode = normalizeCountryCode(
-				countryDetails.code
-			);
 
-			const derivedCountryUpdate: Partial<UpdateVisitorRequest> = {};
-
-			if (hasCountryCodeInBody) {
-				// Country code already provided in request body
-			} else if (networkContext.countryCode) {
-				// Country code already available from network context
-			} else if (normalizedDerivedCountryCode) {
-				derivedCountryUpdate.countryCode = normalizedDerivedCountryCode;
+			const baseVisitorUpdate = stripServerOwnedGeoFields(normalizedBody);
+			if (
+				baseVisitorUpdate.language === undefined &&
+				requestContext.preferredLanguage
+			) {
+				baseVisitorUpdate.language = requestContext.preferredLanguage;
+			}
+			if (baseVisitorUpdate.timezone === undefined && timezoneFallback) {
+				baseVisitorUpdate.timezone = timezoneFallback;
 			}
 
-			if (hasCountryInBody) {
-				// Country name already provided in request body
-			} else if (networkContext.country) {
-				// Country name already available from network context
-			} else if (countryDetails.name) {
-				derivedCountryUpdate.country = countryDetails.name;
-			}
+			const manualGeoFallback =
+				requestContext.canonicalIp === null
+					? extractManualGeoFallback(
+							normalizedBody,
+							requestContext.preferredLocale
+						)
+					: {};
 
 			const updatedVisitor = await updateVisitorForWebsite(db, {
 				visitorId,
 				websiteId: website.id,
 				data: {
-					...networkContext,
-					...normalizedBody,
-					...derivedCountryUpdate,
+					...baseVisitorUpdate,
+					...manualGeoFallback,
+					...geoUpdate,
 					attribution: resolveFirstTouchAttribution({
 						existingAttribution: existingVisitor.attribution,
 						incomingAttribution: normalizedBody.attribution,
 					}),
 					currentPage:
 						normalizedBody.currentPage ?? existingVisitor.currentPage,
-					lastSeenAt: now.toISOString(),
-					updatedAt: now.toISOString(),
+					lastSeenAt: nowIso,
+					updatedAt: nowIso,
 				},
 			});
 
@@ -858,7 +956,6 @@ visitorRouter.openapi(
 				);
 			}
 
-			// Get the contact associated with this visitor
 			const contact = await getContactForVisitor(db, {
 				visitorId,
 				websiteId: website.id,
@@ -875,14 +972,12 @@ visitorRouter.openapi(
 				);
 			}
 
-			// Update the contact metadata
 			await mergeContactMetadata(db, {
 				contactId: contact.id,
 				websiteId: website.id,
 				metadata: body.metadata,
 			});
 
-			// Return the visitor response for backward compatibility
 			const visitor = await findVisitorForWebsite(db, {
 				visitorId,
 				websiteId: website.id,

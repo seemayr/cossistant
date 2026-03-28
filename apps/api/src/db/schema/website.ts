@@ -217,6 +217,9 @@ export const visitor = pgTable(
 		countryCode: varchar("country_code", { length: 2 }),
 		latitude: real("latitude"),
 		longitude: real("longitude"),
+		geoSource: varchar("geo_source", { length: 50 }),
+		geoAccuracyRadiusKm: real("geo_accuracy_radius_km"),
+		geoResolvedAt: timestamp("geo_resolved_at"),
 		// User Preferences
 		language: varchar("language", { length: 10 }),
 		timezone: varchar("timezone", { length: 100 }),

@@ -1,5 +1,6 @@
 import { env } from "@api/env";
 import { getRateLimitStore } from "@api/lib/rate-limit-store";
+import { extractClientIpFromRequest } from "@api/utils/client-ip";
 import type { Context, Next } from "hono";
 import { rateLimiter } from "hono-rate-limiter";
 
@@ -15,18 +16,7 @@ export const defaultRateLimiter = rateLimiter({
 	limit: isDevelopment ? 300 : 100,
 	standardHeaders: "draft-6",
 	keyGenerator: (c: Context) => {
-		// Use IP address as the key
-		// Try different headers that might contain the real IP
-		const ip =
-			c.req.header("x-forwarded-for")?.split(",")[0] ||
-			c.req.header("x-real-ip") ||
-			c.req.header("cf-connecting-ip") || // Cloudflare
-			c.req.header("x-client-ip") ||
-			c.req.header("x-original-forwarded-for") ||
-			c.req.header("x-forwarded") ||
-			c.req.header("forwarded-for") ||
-			c.req.header("forwarded") ||
-			"unknown";
+		const ip = extractClientIpFromRequest(c.req).canonicalIp || "unknown";
 		return ip;
 	},
 	store: getRateLimitStore(),
@@ -46,12 +36,7 @@ export const authRateLimiter = rateLimiter({
 	limit: 30, // 5 requests per minute
 	standardHeaders: "draft-6",
 	keyGenerator: (c: Context) => {
-		const ip =
-			c.req.header("x-forwarded-for")?.split(",")[0] ||
-			c.req.header("x-real-ip") ||
-			c.req.header("cf-connecting-ip") ||
-			c.req.header("x-client-ip") ||
-			"unknown";
+		const ip = extractClientIpFromRequest(c.req).canonicalIp || "unknown";
 		return `auth:${ip}`;
 	},
 	store: getRateLimitStore(),
@@ -68,12 +53,7 @@ export const trpcRateLimiter = rateLimiter({
 	limit: isDevelopment ? 200 : 100, // More forgiving in development
 	standardHeaders: "draft-6",
 	keyGenerator: (c: Context) => {
-		const ip =
-			c.req.header("x-forwarded-for")?.split(",")[0] ||
-			c.req.header("x-real-ip") ||
-			c.req.header("cf-connecting-ip") ||
-			c.req.header("x-client-ip") ||
-			"unknown";
+		const ip = extractClientIpFromRequest(c.req).canonicalIp || "unknown";
 		return `trpc:${ip}`;
 	},
 	store: getRateLimitStore(),
@@ -94,12 +74,7 @@ export const websocketRateLimiter = rateLimiter({
 	limit: isDevelopment ? 30 : 10,
 	standardHeaders: "draft-6",
 	keyGenerator: (c: Context) => {
-		const ip =
-			c.req.header("x-forwarded-for")?.split(",")[0] ||
-			c.req.header("x-real-ip") ||
-			c.req.header("cf-connecting-ip") ||
-			c.req.header("x-client-ip") ||
-			"unknown";
+		const ip = extractClientIpFromRequest(c.req).canonicalIp || "unknown";
 		return `ws:${ip}`;
 	},
 	store: getRateLimitStore(),
@@ -120,12 +95,7 @@ export function createCustomRateLimiter(options: {
 		limit: options.limit,
 		standardHeaders: "draft-6",
 		keyGenerator: (c: Context) => {
-			const ip =
-				c.req.header("x-forwarded-for")?.split(",")[0] ||
-				c.req.header("x-real-ip") ||
-				c.req.header("cf-connecting-ip") ||
-				c.req.header("x-client-ip") ||
-				"unknown";
+			const ip = extractClientIpFromRequest(c.req).canonicalIp || "unknown";
 			return options.keyPrefix ? `${options.keyPrefix}:${ip}` : ip;
 		},
 		store: getRateLimitStore(),

@@ -21,6 +21,9 @@ const realtimeEmitMock = mock((async () => {}) as (
 const markVisitorPresenceMock = mock((async () => {}) as (
 	...args: unknown[]
 ) => Promise<void>);
+const lookupGeoIpMock = mock(
+	(async () => null) as (...args: unknown[]) => Promise<unknown>
+);
 
 const getContactForVisitorMock = mock(
 	(async () => null) as (...args: unknown[]) => Promise<unknown>
@@ -59,6 +62,10 @@ mock.module("@api/services/presence", () => ({
 	markVisitorPresence: markVisitorPresenceMock,
 }));
 
+mock.module("@api/services/geoip", () => ({
+	lookupGeoIp: lookupGeoIpMock,
+}));
+
 mock.module("../middleware", () => ({
 	protectedPublicApiKeyMiddleware: [],
 }));
@@ -83,6 +90,9 @@ function createVisitorRecord(
 		countryCode: null,
 		latitude: null,
 		longitude: null,
+		geoSource: null,
+		geoAccuracyRadiusKm: null,
+		geoResolvedAt: null,
 		language: null,
 		timezone: null,
 		screenResolution: null,
@@ -116,6 +126,7 @@ describe("visitor route PATCH /:id countryCode handling", () => {
 		trackVisitorActivityMock.mockReset();
 		realtimeEmitMock.mockReset();
 		markVisitorPresenceMock.mockReset();
+		lookupGeoIpMock.mockReset();
 
 		validateResponseMock.mockImplementation((value) => value);
 		findVisitorForWebsiteMock.mockResolvedValue(createVisitorRecord());
@@ -124,6 +135,7 @@ describe("visitor route PATCH /:id countryCode handling", () => {
 		mergeContactMetadataMock.mockResolvedValue();
 		realtimeEmitMock.mockResolvedValue(undefined);
 		markVisitorPresenceMock.mockResolvedValue(undefined);
+		lookupGeoIpMock.mockResolvedValue(null);
 	});
 
 	it("does not persist locale macro-region values like es-419 as countryCode", async () => {
@@ -211,6 +223,169 @@ describe("visitor route PATCH /:id countryCode handling", () => {
 			data: { countryCode?: string };
 		};
 		expect(updateArg.data.countryCode).toBe("MX");
+	});
+
+	it("prefers Railway x-real-ip geo over browser-supplied city", async () => {
+		safelyExtractRequestDataMock.mockResolvedValue({
+			db: {},
+			website: { id: "site-1" },
+			body: {
+				city: "Bangkok",
+				timezone: "Asia/Bangkok",
+				language: "th-TH",
+			},
+		});
+		lookupGeoIpMock.mockResolvedValue({
+			ip: "8.8.8.8",
+			found: true,
+			is_public: true,
+			country_code: "US",
+			country: "United States",
+			region: "California",
+			city: "Mountain View",
+			latitude: 37.386,
+			longitude: -122.0838,
+			timezone: "America/Los_Angeles",
+			accuracy_radius_km: 20,
+			asn: 15_169,
+			asn_organization: "Google LLC",
+			source: "maxmind",
+			resolved_at: "2026-03-28T00:00:00.000Z",
+		});
+		updateVisitorForWebsiteMock.mockResolvedValue(
+			createVisitorRecord({
+				ip: "8.8.8.8",
+				city: "Mountain View",
+				region: "California",
+				country: "United States",
+				countryCode: "US",
+				latitude: 37.386,
+				longitude: -122.0838,
+				timezone: "Asia/Bangkok",
+			})
+		);
+
+		const { visitorRouter } = await visitorRouterModulePromise;
+		const response = await visitorRouter.request(
+			new Request("http://localhost/visitor-1", {
+				method: "PATCH",
+				headers: {
+					"x-real-ip": "8.8.8.8",
+				},
+			})
+		);
+
+		expect(response.status).toBe(200);
+		expect(lookupGeoIpMock).toHaveBeenCalledWith("8.8.8.8");
+
+		const updateArg = updateVisitorForWebsiteMock.mock.calls[0]?.[1] as {
+			data: {
+				ip?: string;
+				city?: string | null;
+				region?: string | null;
+				country?: string | null;
+				countryCode?: string | null;
+				timezone?: string | null;
+				geoSource?: string | null;
+			};
+		};
+		expect(updateArg.data.ip).toBe("8.8.8.8");
+		expect(updateArg.data.city).toBe("Mountain View");
+		expect(updateArg.data.region).toBe("California");
+		expect(updateArg.data.countryCode).toBe("US");
+		expect(updateArg.data.timezone).toBe("Asia/Bangkok");
+		expect(updateArg.data.geoSource).toBe("maxmind");
+	});
+
+	it("falls back to edge header geo when the geo service is unavailable", async () => {
+		safelyExtractRequestDataMock.mockResolvedValue({
+			db: {},
+			website: { id: "site-1" },
+			body: {},
+		});
+
+		const { visitorRouter } = await visitorRouterModulePromise;
+		const response = await visitorRouter.request(
+			new Request("http://localhost/visitor-1", {
+				method: "PATCH",
+				headers: {
+					"x-real-ip": "8.8.8.8",
+					"cf-ipcity": "Paris",
+					"cf-ipcountry": "FR",
+					"cf-ipregion": "Ile-de-France",
+				},
+			})
+		);
+
+		expect(response.status).toBe(200);
+
+		const updateArg = updateVisitorForWebsiteMock.mock.calls[0]?.[1] as {
+			data: {
+				ip?: string;
+				city?: string | null;
+				region?: string | null;
+				countryCode?: string | null;
+				geoSource?: string | null;
+			};
+		};
+		expect(updateArg.data.ip).toBe("8.8.8.8");
+		expect(updateArg.data.city).toBe("Paris");
+		expect(updateArg.data.region).toBe("Ile-de-France");
+		expect(updateArg.data.countryCode).toBe("FR");
+		expect(updateArg.data.geoSource).toBe("edge_header");
+	});
+
+	it("clears stale geo when the visitor IP changes and no replacement geo is available", async () => {
+		findVisitorForWebsiteMock.mockResolvedValue(
+			createVisitorRecord({
+				ip: "1.1.1.1",
+				city: "Paris",
+				region: "Ile-de-France",
+				country: "France",
+				countryCode: "FR",
+				latitude: 48.8566,
+				longitude: 2.3522,
+				geoSource: "maxmind",
+			})
+		);
+		safelyExtractRequestDataMock.mockResolvedValue({
+			db: {},
+			website: { id: "site-1" },
+			body: {},
+		});
+
+		const { visitorRouter } = await visitorRouterModulePromise;
+		const response = await visitorRouter.request(
+			new Request("http://localhost/visitor-1", {
+				method: "PATCH",
+				headers: {
+					"x-real-ip": "8.8.8.8",
+				},
+			})
+		);
+
+		expect(response.status).toBe(200);
+
+		const updateArg = updateVisitorForWebsiteMock.mock.calls[0]?.[1] as {
+			data: {
+				ip?: string;
+				city?: string | null;
+				region?: string | null;
+				country?: string | null;
+				countryCode?: string | null;
+				latitude?: number | null;
+				longitude?: number | null;
+				geoSource?: string | null;
+			};
+		};
+		expect(updateArg.data.ip).toBe("8.8.8.8");
+		expect(updateArg.data.city).toBeNull();
+		expect(updateArg.data.region).toBeNull();
+		expect(updateArg.data.country).toBeNull();
+		expect(updateArg.data.countryCode).toBeNull();
+		expect(updateArg.data.latitude).toBeNull();
+		expect(updateArg.data.longitude).toBeNull();
+		expect(updateArg.data.geoSource).toBeNull();
 	});
 
 	it("preserves first-touch attribution while updating current page and tracks page views", async () => {

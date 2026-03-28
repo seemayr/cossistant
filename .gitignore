@@ -36,6 +36,10 @@ yarn-error.log*
 # Misc
 .DS_Store
 *.pem
+.pytest_cache/
+*.pyc
+__pycache__/
+.venv/
 apps/api/server
 .devtools
 tinybird.log

@@ -147,6 +147,11 @@ export const env = {
 	),
 	// RAG service URL for chunking
 	RAG_SERVICE_URL: getEnvVariable("RAG_SERVICE_URL", "http://localhost:8082"),
+	// Private GeoIP service URL
+	GEOIP_SERVICE_URL: getEnvVariable(
+		"GEOIP_SERVICE_URL",
+		"http://localhost:8083"
+	),
 	// Firecrawl API key for web scraping
 	FIRECRAWL_API_KEY: getEnvVariable("FIRECRAWL_API_KEY", ""),
 };

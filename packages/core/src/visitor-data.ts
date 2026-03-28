@@ -266,14 +266,6 @@ function isBrowser(): boolean {
 	return typeof window !== "undefined" && typeof navigator !== "undefined";
 }
 
-function inferCityFromTimezone(timezone: string | null): string | null {
-	if (!timezone?.includes("/")) {
-		return null;
-	}
-	const [, city] = timezone.split("/");
-	return city ? city.replace(/_/g, " ") : null;
-}
-
 function toNullableString(value: string | null | undefined): string | null {
 	if (typeof value !== "string") {
 		return null;
@@ -525,7 +517,6 @@ export async function collectVisitorData(): Promise<VisitorData | null> {
 	const { os, version: osVersion } = parseOS(userAgent);
 	const language = navigator.language || null;
 	const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || null;
-	const inferredCity = inferCityFromTimezone(timezone);
 	const timestamp = new Date().toISOString();
 	const trackingSnapshot = buildAttributionSnapshot(timestamp);
 
@@ -547,7 +538,7 @@ export async function collectVisitorData(): Promise<VisitorData | null> {
 				? `${window.innerWidth}x${window.innerHeight}`
 				: null,
 		ip: null,
-		city: inferredCity,
+		city: null,
 		region: null,
 		country: null,
 		countryCode: null,
