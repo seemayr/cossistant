@@ -510,17 +510,17 @@ function PrecisionFlowRightPanel({
 }) {
 	return (
 		<div
-			className="relative flex h-full w-full flex-1 overflow-hidden bg-background dark:bg-background-50"
+			className="relative flex h-full w-full flex-1 overflow-clip bg-background dark:bg-background-50"
 			data-precision-background-trail="enabled"
 		>
 			<Background fieldOpacity={0.06} interactive={true} pointerTrail={true} />
-			<div className="pointer-events-none absolute inset-y-0 left-0 z-[1] w-full bg-linear-to-r from-background to-transparent" />
-			<div className="pointer-events-none absolute inset-y-0 left-0 z-[1] w-full bg-linear-to-r from-background to-transparent" />
 			{showOpeningMessageRadial ? (
 				<div
-					className="pointer-events-none absolute inset-0 z-[2] flex justify-center px-4 pb-16 lg:px-8 lg:py-16 xl:px-1"
+					className="pointer-events-none absolute inset-[1px] flex justify-center px-4 pb-16 lg:px-8 lg:py-16 xl:px-1"
 					data-precision-opening-radial="true"
 				>
+					<div className="pointer-events-none absolute inset-y-0 left-0 z-[1] w-full bg-linear-to-r from-background to-transparent" />
+					<div className="pointer-events-none absolute inset-y-0 left-0 z-[1] w-full bg-linear-to-r from-background to-transparent" />
 					<div
 						className={cn(
 							"my-auto h-full w-full max-w-2xl",
