@@ -17,8 +17,25 @@ let onlineNowQueryState = {
 	isLoading: false,
 };
 
+const useInboxAnalyticsMock = mock(
+	((_: { websiteSlug: string; rangeDays: number; enabled?: boolean }) =>
+		inboxAnalyticsQueryState) as (args: {
+		websiteSlug: string;
+		rangeDays: number;
+		enabled?: boolean;
+	}) => typeof inboxAnalyticsQueryState
+);
+const useOnlineNowMock = mock(
+	((_: { websiteSlug: string; minutes?: number; enabled?: boolean }) =>
+		onlineNowQueryState) as (args: {
+		websiteSlug: string;
+		minutes?: number;
+		enabled?: boolean;
+	}) => typeof onlineNowQueryState
+);
+
 mock.module("@/data/use-inbox-analytics", () => ({
-	useInboxAnalytics: () => inboxAnalyticsQueryState,
+	useInboxAnalytics: useInboxAnalyticsMock,
 }));
 
 mock.module("@/data/use-online-now", () => ({
@@ -27,7 +44,7 @@ mock.module("@/data/use-online-now", () => ({
 		["tinybird", "online-now", websiteSlug] as const,
 	isVisitorOnlineEntity: (entity: { entity_type: string }) =>
 		entity.entity_type === "visitor",
-	useOnlineNow: () => onlineNowQueryState,
+	useOnlineNow: useOnlineNowMock,
 }));
 
 const modulePromise = import("./inbox-analytics");
@@ -35,6 +52,8 @@ const modulePromise = import("./inbox-analytics");
 describe("InboxAnalytics", () => {
 	beforeEach(() => {
 		capturedControllerState = null;
+		useInboxAnalyticsMock.mockClear();
+		useOnlineNowMock.mockClear();
 		inboxAnalyticsQueryState = {
 			data: null,
 			isError: false,
@@ -75,6 +94,90 @@ describe("InboxAnalytics", () => {
 		expect(capturedControllerState?.livePresence).toEqual({
 			count: 2,
 			isFetching: true,
+			isLoading: false,
+		});
+	});
+
+	it("keeps unique visitors separate from the live presence count", async () => {
+		inboxAnalyticsQueryState = {
+			data: {
+				range: {
+					rangeDays: 7,
+					currentStart: "2026-03-21T00:00:00.000Z",
+					currentEnd: "2026-03-28T00:00:00.000Z",
+					previousStart: "2026-03-14T00:00:00.000Z",
+					previousEnd: "2026-03-21T00:00:00.000Z",
+				},
+				current: {
+					medianResponseTimeSeconds: 120,
+					medianResolutionTimeSeconds: 1800,
+					aiHandledRate: 60,
+					satisfactionIndex: 75,
+					uniqueVisitors: 987,
+				},
+				previous: {
+					medianResponseTimeSeconds: 150,
+					medianResolutionTimeSeconds: 2100,
+					aiHandledRate: 55,
+					satisfactionIndex: 70,
+					uniqueVisitors: 654,
+				},
+			},
+			isError: false,
+			isFetching: false,
+			isLoading: false,
+		};
+		onlineNowQueryState = {
+			data: [
+				{ entity_id: "entity_1", entity_type: "visitor" },
+				{ entity_id: "entity_2", entity_type: "visitor" },
+				{ entity_id: "entity_3", entity_type: "user" },
+			],
+			isFetching: false,
+			isLoading: false,
+		};
+
+		const { useInboxAnalyticsController } = await modulePromise;
+
+		function ControllerProbe() {
+			capturedControllerState = useInboxAnalyticsController({
+				websiteSlug: "acme",
+			}) as Record<string, unknown>;
+			return null;
+		}
+
+		renderToStaticMarkup(<ControllerProbe />);
+
+		const inboxAnalyticsArgs = useInboxAnalyticsMock.mock.calls[0]?.[0] as
+			| {
+					websiteSlug: string;
+					rangeDays: number;
+					enabled: boolean;
+			  }
+			| undefined;
+		const onlineNowArgs = useOnlineNowMock.mock.calls[0]?.[0] as
+			| {
+					websiteSlug: string;
+					enabled: boolean;
+			  }
+			| undefined;
+
+		expect(inboxAnalyticsArgs).toEqual({
+			websiteSlug: "acme",
+			rangeDays: 7,
+			enabled: true,
+		});
+		expect(onlineNowArgs).toEqual({
+			websiteSlug: "acme",
+			enabled: true,
+		});
+		expect(
+			(capturedControllerState?.data as InboxAnalyticsResponse | null)?.current
+				.uniqueVisitors
+		).toBe(987);
+		expect(capturedControllerState?.livePresence).toEqual({
+			count: 2,
+			isFetching: false,
 			isLoading: false,
 		});
 	});

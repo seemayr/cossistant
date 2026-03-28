@@ -58,7 +58,7 @@ const numberFormatter = new Intl.NumberFormat("en-US", {
 const rangeOptions = [
 	{ value: "7", label: "7d" },
 	{ value: "14", label: "14d" },
-	{ value: "30", label: "Month" },
+	{ value: "30", label: "30d" },
 ] as const satisfies readonly SegmentedControlOption<string>[];
 
 const formatDuration = (value: number | null): string => {
@@ -149,7 +149,8 @@ const metricConfigs: MetricConfig[] = [
 	{
 		key: "uniqueVisitors",
 		label: "Unique visitors",
-		description: "Number of distinct widget visitors active in this period.",
+		description:
+			"Number of distinct website visitors who loaded the widget during this period.",
 		higherIsBetter: true,
 		formatValue: formatCount,
 	},

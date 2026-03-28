@@ -9,14 +9,14 @@ const analyticsData = {
 		medianResolutionTimeSeconds: 3600,
 		aiHandledRate: 80,
 		satisfactionIndex: 73,
-		uniqueVisitors: 42,
+		uniqueVisitors: 987,
 	},
 	previous: {
 		medianResponseTimeSeconds: 250,
 		medianResolutionTimeSeconds: 5400,
 		aiHandledRate: 60,
 		satisfactionIndex: 68,
-		uniqueVisitors: 21,
+		uniqueVisitors: 321,
 	},
 } as InboxAnalyticsResponse;
 
@@ -59,6 +59,7 @@ describe("InboxAnalyticsDisplay", () => {
 		expect(html).toContain('data-slot="inbox-analytics-live-dot-pulse"');
 		expect(html).toContain("bg-emerald-600");
 		expect(html).toContain("1,234");
+		expect(html).toContain("987");
 		expect(html).toContain("Median response time");
 		expect(
 			html.indexOf('data-slot="inbox-analytics-live-presence"')
@@ -79,6 +80,7 @@ describe("InboxAnalyticsDisplay", () => {
 		expect(html).toContain("1h");
 		expect(html).toContain("80%");
 		expect(html).toContain('aria-label="Analytics date range"');
+		expect(html).toContain(">30d<");
 		expect(html).toContain("shrink-0");
 	});
 
