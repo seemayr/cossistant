@@ -332,12 +332,11 @@ describe("ContactVisitorDetailView", () => {
 		);
 	});
 
-	it("omits the globe when the hero visitor has no coordinates", async () => {
+	it("omits the globe when the hero visitor is missing part of the coordinate pair", async () => {
 		const html = await renderView({
 			heroVisitor: {
 				...heroVisitor,
 				latitude: null,
-				longitude: null,
 			},
 		});
 

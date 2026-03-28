@@ -133,6 +133,21 @@ export function Globe({
 		() => getCobeMarkers(resolvedVisitors, visualConfig.baseColor),
 		[resolvedVisitors, visualConfig.baseColor]
 	);
+	const latestCreateOptionsRef = useRef({
+		focus,
+		longitude,
+		markers,
+		tilt,
+		visualConfig,
+	});
+
+	latestCreateOptionsRef.current = {
+		focus,
+		longitude,
+		markers,
+		tilt,
+		visualConfig,
+	};
 
 	function updateGlobeView(nextView: GlobeView) {
 		viewRef.current = {
@@ -149,39 +164,38 @@ export function Globe({
 	useEffect(() => {
 		const canvas = canvasRef.current;
 		const container = containerRef.current;
-		if (!(canvas && container) || globeRef.current) {
+		if (!(canvas && container)) {
 			return;
 		}
-
-		const initialWidth = Math.round(container.clientWidth);
-		const initialHeight = Math.round(container.clientHeight);
-		if (initialWidth <= 0 || initialHeight <= 0) {
-			return;
-		}
-
-		sizeRef.current = {
-			height: initialHeight,
-			width: initialWidth,
-		};
-
-		const globe = createGlobe(canvas, {
-			...visualConfig,
-			devicePixelRatio: getDevicePixelRatio(),
-			height: initialHeight,
-			markers,
-			phi: getPhiFromLongitudeDegrees(viewRef.current.longitude),
-			theta: getThetaFromTiltDegrees(viewRef.current.tilt),
-			width: initialWidth,
-		});
-
-		globeRef.current = globe;
-		const host = canvas.parentElement;
-		setOverlayHost(host instanceof HTMLElement ? host : null);
 
 		const syncSize = () => {
 			const width = Math.round(container.clientWidth);
 			const height = Math.round(container.clientHeight);
 			if (width <= 0 || height <= 0) {
+				return;
+			}
+
+			if (!globeRef.current) {
+				viewRef.current = getInitialView({
+					focus: latestCreateOptionsRef.current.focus,
+					longitude: latestCreateOptionsRef.current.longitude,
+					tilt: latestCreateOptionsRef.current.tilt,
+				});
+				sizeRef.current = { height, width };
+
+				const globe = createGlobe(canvas, {
+					...latestCreateOptionsRef.current.visualConfig,
+					devicePixelRatio: getDevicePixelRatio(),
+					height,
+					markers: latestCreateOptionsRef.current.markers,
+					phi: getPhiFromLongitudeDegrees(viewRef.current.longitude),
+					theta: getThetaFromTiltDegrees(viewRef.current.tilt),
+					width,
+				});
+
+				globeRef.current = globe;
+				const host = canvas.parentElement;
+				setOverlayHost(host instanceof HTMLElement ? host : null);
 				return;
 			}
 
@@ -193,7 +207,7 @@ export function Globe({
 			}
 
 			sizeRef.current = { height, width };
-			globe.update({
+			globeRef.current.update({
 				devicePixelRatio: getDevicePixelRatio(),
 				height,
 				width,
@@ -205,12 +219,13 @@ export function Globe({
 			resizeObserver = new ResizeObserver(syncSize);
 			resizeObserver.observe(container);
 		}
+		syncSize();
 
 		return () => {
 			resizeObserver?.disconnect();
 			lastFrameRef.current = null;
 			setOverlayHost(null);
-			globe.destroy();
+			globeRef.current?.destroy();
 			globeRef.current = null;
 		};
 	}, []);
