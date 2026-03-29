@@ -10,7 +10,7 @@ import uvicorn
 
 from .config import Settings
 from .database import GeoIPDatabaseManager
-from .models import HealthResponse, LookupRequest, LookupResponse
+from .models import HealthResponse, LiveResponse, LookupRequest, LookupResponse
 
 
 logging.basicConfig(level=logging.INFO)
@@ -47,6 +47,10 @@ def create_app(manager: GeoIPDatabaseManager | None = None) -> FastAPI:
 			await asyncio.to_thread(manager.close)
 
 	app = FastAPI(title="Cossistant GeoIP Service", lifespan=lifespan)
+
+	@app.get("/live", response_model=LiveResponse)
+	async def live() -> LiveResponse:
+		return LiveResponse(status="ok")
 
 	@app.get("/health", response_model=HealthResponse)
 	async def health(response: Response) -> HealthResponse:

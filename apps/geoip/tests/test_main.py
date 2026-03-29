@@ -65,10 +65,17 @@ def test_health_returns_503_when_not_ready() -> None:
 	assert response.json()["ready"] is False
 
 
+def test_live_returns_200_even_when_not_ready() -> None:
+	with TestClient(create_app(FakeManager(ready=False))) as client:
+		response = client.get("/live")
+
+	assert response.status_code == 200
+	assert response.json() == {"status": "ok"}
+
+
 def test_lookup_returns_payload() -> None:
 	with TestClient(create_app(FakeManager(ready=True))) as client:
 		response = client.post("/v1/lookup", json={"ip": "8.8.8.8"})
 
 	assert response.status_code == 200
 	assert response.json()["city"] == "Mountain View"
-

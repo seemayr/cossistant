@@ -6,6 +6,10 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
+class LiveResponse(BaseModel):
+	status: Literal["ok"]
+
+
 class HealthResponse(BaseModel):
 	status: Literal["healthy", "degraded", "unhealthy"]
 	ready: bool
@@ -35,4 +39,3 @@ class LookupResponse(BaseModel):
 	asn_organization: str | None = None
 	source: str
 	resolved_at: datetime
-
