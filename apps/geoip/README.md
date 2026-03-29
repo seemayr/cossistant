@@ -59,7 +59,7 @@ GEOIP_SERVICE_URL=http://localhost:8083
 
 Deploy this app as its own Railway service named `geoip`.
 
-The service binds to `::` by default so Railway private networking can reach it in both new dual-stack environments and older IPv6-only ones.
+The service uses Hypercorn and binds both `0.0.0.0` and `::` by default so Railway's public deployment healthchecks and private networking can both reach it.
 
 Use `/live` as the Railway deployment healthcheck path. `/health` remains a readiness endpoint and can return `503` until the MaxMind databases have been downloaded and loaded.
 

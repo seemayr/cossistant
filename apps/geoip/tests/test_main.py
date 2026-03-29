@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from fastapi.testclient import TestClient
 
-from src.main import create_app
+from src.main import build_bind_addresses, create_app
 from src.models import HealthResponse, LookupResponse
 
 
@@ -71,6 +71,10 @@ def test_live_returns_200_even_when_not_ready() -> None:
 
 	assert response.status_code == 200
 	assert response.json() == {"status": "ok"}
+
+
+def test_build_bind_addresses_defaults_to_dual_stack_for_railway() -> None:
+	assert build_bind_addresses("::", 8080) == ["0.0.0.0:8080", "[::]:8080"]
 
 
 def test_lookup_returns_payload() -> None:

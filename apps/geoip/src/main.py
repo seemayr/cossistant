@@ -6,7 +6,6 @@ from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
 from fastapi import FastAPI, HTTPException, Response
-import uvicorn
 
 from .config import Settings
 from .database import GeoIPDatabaseManager
@@ -24,6 +23,17 @@ async def refresh_databases_forever(manager: GeoIPDatabaseManager) -> None:
 			await asyncio.to_thread(manager.refresh_databases)
 		except Exception:
 			logger.exception("Periodic GeoIP database refresh failed")
+
+
+def build_bind_addresses(host: str, port: int) -> list[str]:
+	normalized_host = host.strip()
+	if not normalized_host or normalized_host == "::":
+		return [f"0.0.0.0:{port}", f"[::]:{port}"]
+
+	if ":" in normalized_host and not normalized_host.startswith("["):
+		return [f"[{normalized_host}]:{port}"]
+
+	return [f"{normalized_host}:{port}"]
 
 
 def create_app(manager: GeoIPDatabaseManager | None = None) -> FastAPI:
@@ -73,5 +83,12 @@ app = create_app()
 
 
 if __name__ == "__main__":
+	from hypercorn.asyncio import serve
+	from hypercorn.config import Config
+
 	settings = Settings.from_env()
-	uvicorn.run("src.main:app", host=settings.host, port=settings.port)
+	config = Config()
+	config.bind = build_bind_addresses(settings.host, settings.port)
+	config.accesslog = "-"
+	config.errorlog = "-"
+	asyncio.run(serve(app, config))
