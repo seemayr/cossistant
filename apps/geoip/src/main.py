@@ -17,12 +17,23 @@ logger = logging.getLogger(__name__)
 
 
 async def refresh_databases_forever(manager: GeoIPDatabaseManager) -> None:
+	logger.info(
+		"GeoIP periodic refresh loop started with interval=%ss",
+		manager.settings.update_interval_seconds,
+	)
 	while True:
 		await asyncio.sleep(manager.settings.update_interval_seconds)
 		try:
 			await asyncio.to_thread(manager.refresh_databases)
 		except Exception:
 			logger.exception("Periodic GeoIP database refresh failed")
+
+
+async def initialize_databases(manager: GeoIPDatabaseManager) -> None:
+	try:
+		await asyncio.to_thread(manager.initialize)
+	except Exception:
+		logger.exception("GeoIP bootstrap task failed unexpectedly")
 
 
 def build_bind_addresses(host: str, port: int) -> list[str]:
@@ -43,17 +54,18 @@ def create_app(manager: GeoIPDatabaseManager | None = None) -> FastAPI:
 	@asynccontextmanager
 	async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 		app.state.geoip_manager = manager
-		await asyncio.to_thread(manager.initialize)
+		bootstrap_task = asyncio.create_task(initialize_databases(manager))
 		refresh_task = asyncio.create_task(refresh_databases_forever(manager))
 
 		try:
 			yield
 		finally:
-			refresh_task.cancel()
-			try:
-				await refresh_task
-			except asyncio.CancelledError:
-				pass
+			for task in (bootstrap_task, refresh_task):
+				task.cancel()
+				try:
+					await task
+				except asyncio.CancelledError:
+					pass
 			await asyncio.to_thread(manager.close)
 
 	app = FastAPI(title="Cossistant GeoIP Service", lifespan=lifespan)

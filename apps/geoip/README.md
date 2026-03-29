@@ -63,6 +63,17 @@ The service uses Hypercorn and binds both `0.0.0.0` and `::` by default so Railw
 
 Use `/live` as the Railway deployment healthcheck path. `/health` remains a readiness endpoint and can return `503` until the MaxMind databases have been downloaded and loaded.
 
+The service now starts serving `/live` immediately while the initial MaxMind bootstrap runs in the background. Inspect `/health` for readiness and bootstrap state:
+
+- `phase`: `starting`, `downloading`, `loading`, `ready`, or `error`
+- `update_in_progress`: whether a download/load cycle is active
+- `current_update_started_at`: when the active update began
+- `last_update_error`: the latest refresh/bootstrap failure, if any
+
+Railway environment variable values should be entered as raw values without wrapping quotes. For example, use `HOST=::`, not `HOST="::"`.
+
+Railway logs will now include `geoipupdate` output, which makes it easier to confirm whether the MaxMind databases are actively downloading.
+
 The main API should use:
 
 ```env

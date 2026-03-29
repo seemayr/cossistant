@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Literal, TypeAlias
 
 from pydantic import BaseModel, Field
+
+
+HealthPhase: TypeAlias = Literal[
+	"starting", "downloading", "loading", "ready", "error"
+]
 
 
 class LiveResponse(BaseModel):
@@ -13,6 +18,9 @@ class LiveResponse(BaseModel):
 class HealthResponse(BaseModel):
 	status: Literal["healthy", "degraded", "unhealthy"]
 	ready: bool
+	phase: HealthPhase
+	update_in_progress: bool
+	current_update_started_at: datetime | None = None
 	edition_ids: list[str]
 	db_loaded_at: datetime | None = None
 	last_successful_update_at: datetime | None = None
