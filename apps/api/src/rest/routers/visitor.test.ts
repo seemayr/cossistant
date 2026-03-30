@@ -31,6 +31,10 @@ const getContactForVisitorMock = mock(
 const mergeContactMetadataMock = mock((async () => {}) as (
 	...args: unknown[]
 ) => Promise<void>);
+const mockEnv = {
+	NODE_ENV: "development",
+	LOCAL_VISITOR_IP_OVERRIDE: "",
+};
 
 mock.module("@api/utils/validate", () => ({
 	safelyExtractRequestData: safelyExtractRequestDataMock,
@@ -64,6 +68,10 @@ mock.module("@api/services/presence", () => ({
 
 mock.module("@api/services/geoip", () => ({
 	lookupGeoIp: lookupGeoIpMock,
+}));
+
+mock.module("@api/env", () => ({
+	env: mockEnv,
 }));
 
 mock.module("../middleware", () => ({
@@ -136,6 +144,8 @@ describe("visitor route PATCH /:id countryCode handling", () => {
 		realtimeEmitMock.mockResolvedValue(undefined);
 		markVisitorPresenceMock.mockResolvedValue(undefined);
 		lookupGeoIpMock.mockResolvedValue(null);
+		mockEnv.NODE_ENV = "development";
+		mockEnv.LOCAL_VISITOR_IP_OVERRIDE = "";
 	});
 
 	it("does not persist locale macro-region values like es-419 as countryCode", async () => {
@@ -295,6 +305,79 @@ describe("visitor route PATCH /:id countryCode handling", () => {
 		expect(updateArg.data.region).toBe("California");
 		expect(updateArg.data.countryCode).toBe("US");
 		expect(updateArg.data.timezone).toBe("Asia/Bangkok");
+		expect(updateArg.data.geoSource).toBe("maxmind");
+	});
+
+	it("uses the local development IP override when localhost traffic has no public IP", async () => {
+		mockEnv.LOCAL_VISITOR_IP_OVERRIDE = "8.8.8.8";
+		safelyExtractRequestDataMock.mockResolvedValue({
+			db: {},
+			website: { id: "site-1" },
+			body: {},
+		});
+		lookupGeoIpMock.mockResolvedValue({
+			ip: "8.8.8.8",
+			found: true,
+			is_public: true,
+			country_code: "US",
+			country: "United States",
+			region: "California",
+			city: "Mountain View",
+			latitude: 37.386,
+			longitude: -122.0838,
+			timezone: "America/Los_Angeles",
+			accuracy_radius_km: 20,
+			asn: 15_169,
+			asn_organization: "Google LLC",
+			source: "maxmind",
+			resolved_at: "2026-03-28T00:00:00.000Z",
+		});
+		updateVisitorForWebsiteMock.mockResolvedValue(
+			createVisitorRecord({
+				ip: "8.8.8.8",
+				city: "Mountain View",
+				region: "California",
+				country: "United States",
+				countryCode: "US",
+				latitude: 37.386,
+				longitude: -122.0838,
+				timezone: "America/Los_Angeles",
+				geoSource: "maxmind",
+			})
+		);
+
+		const { visitorRouter } = await visitorRouterModulePromise;
+		const response = await visitorRouter.request(
+			new Request("http://localhost/visitor-1", {
+				method: "PATCH",
+				headers: {
+					"x-real-ip": "127.0.0.1",
+				},
+			})
+		);
+
+		expect(response.status).toBe(200);
+		expect(lookupGeoIpMock).toHaveBeenCalledWith("8.8.8.8");
+
+		const updateArg = updateVisitorForWebsiteMock.mock.calls[0]?.[1] as {
+			data: {
+				ip?: string;
+				city?: string | null;
+				region?: string | null;
+				countryCode?: string | null;
+				latitude?: number | null;
+				longitude?: number | null;
+				timezone?: string | null;
+				geoSource?: string | null;
+			};
+		};
+		expect(updateArg.data.ip).toBe("8.8.8.8");
+		expect(updateArg.data.city).toBe("Mountain View");
+		expect(updateArg.data.region).toBe("California");
+		expect(updateArg.data.countryCode).toBe("US");
+		expect(updateArg.data.latitude).toBe(37.386);
+		expect(updateArg.data.longitude).toBe(-122.0838);
+		expect(updateArg.data.timezone).toBe("America/Los_Angeles");
 		expect(updateArg.data.geoSource).toBe("maxmind");
 	});
 

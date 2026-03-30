@@ -247,7 +247,7 @@ describe("ContactVisitorDetailView", () => {
 		expect(html).toContain('data-slot="contact-visitor-detail-overlay"');
 		expect(html).toContain('data-slot="contact-visitor-detail-layout"');
 		expect(html).toContain("grid-cols-1 lg:grid-cols-2");
-		expect(html.match(/max-w-sm/g)?.length).toBe(3);
+		expect(html.match(/max-w-sm/g)?.length).toBe(2);
 		expect(html).toContain("size-10 rounded-[2px]");
 		expect(html).toContain('data-slot="contact-visitor-summary-copy"');
 		expect(html).toContain('data-slot="contact-visitor-summary-location"');
@@ -289,8 +289,20 @@ describe("ContactVisitorDetailView", () => {
 		expect(html).toContain(
 			'data-slot="contact-visitor-detail-desktop-globe-wrapper"'
 		);
+		expect(
+			html.match(/data-slot="contact-visitor-detail-globe-entrance"/g)?.length
+		).toBe(2);
+		expect(
+			html.match(/data-slot="contact-visitor-detail-globe-frame"/g)?.length
+		).toBe(2);
+		expect(
+			html.match(/data-slot="contact-visitor-detail-globe-crop"/g)?.length
+		).toBe(2);
+		expect(
+			html.match(/data-slot="contact-visitor-detail-globe-stage"/g)?.length
+		).toBe(2);
 		expect(html).toContain('data-slot="mock-globe"');
-		expect(html).toContain('data-allow-drag="false"');
+		expect(html).toContain('data-allow-drag="true"');
 		expect(html).toContain('data-auto-rotate="false"');
 		expect(html).toContain(
 			'data-focus="{&quot;latitude&quot;:13.7563,&quot;longitude&quot;:100.5018}"'

@@ -41,6 +41,12 @@ export type ClientIpInfo = {
 	publicIp: string | null;
 };
 
+export type DevelopmentClientIpOverrideOptions = {
+	nodeEnv: string | null | undefined;
+	overrideIp: string | null | undefined;
+	warn?: (message: string) => void;
+};
+
 function stripQuotes(value: string): string {
 	if (value.startsWith('"') && value.endsWith('"')) {
 		return value.slice(1, -1);
@@ -181,6 +187,33 @@ export function extractClientIp(getHeader: HeaderGetter): ClientIpInfo {
 	return {
 		canonicalIp: canonicalCandidates.find(Boolean) ?? null,
 		publicIp: publicCandidates.find(Boolean) ?? null,
+	};
+}
+
+export function applyDevelopmentClientIpOverride(
+	ipInfo: ClientIpInfo,
+	options: DevelopmentClientIpOverrideOptions
+): ClientIpInfo {
+	const overrideIp = options.overrideIp?.trim();
+	if (options.nodeEnv !== "development" || !overrideIp) {
+		return ipInfo;
+	}
+
+	const normalizedOverride = normalizeIpCandidate(overrideIp);
+	if (!(normalizedOverride && isPublicIp(normalizedOverride))) {
+		options.warn?.(
+			`Ignoring LOCAL_VISITOR_IP_OVERRIDE="${overrideIp}" because it is not a valid public IP address.`
+		);
+		return ipInfo;
+	}
+
+	if (isPublicIp(ipInfo.canonicalIp) || isPublicIp(ipInfo.publicIp)) {
+		return ipInfo;
+	}
+
+	return {
+		canonicalIp: normalizedOverride,
+		publicIp: normalizedOverride,
 	};
 }
 

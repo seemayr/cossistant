@@ -55,6 +55,14 @@ The API should use:
 GEOIP_SERVICE_URL=http://localhost:8083
 ```
 
+If local widget/API traffic only ever resolves to `127.0.0.1` or `::1`, you can force deterministic GeoIP testing by setting `LOCAL_VISITOR_IP_OVERRIDE` in your local API env. Use a stable public IP that MaxMind resolves predictably, for example:
+
+```env
+LOCAL_VISITOR_IP_OVERRIDE=8.8.8.8
+```
+
+Set it in `apps/api/.env` or your root `.env`. This override is intended for local development only and lets the normal MaxMind lookup path run end-to-end even when requests originate from localhost.
+
 ## Railway
 
 Deploy this app as its own Railway service named `geoip`.

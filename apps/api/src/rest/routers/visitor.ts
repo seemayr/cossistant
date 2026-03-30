@@ -7,6 +7,7 @@ import {
 	findVisitorForWebsite,
 	updateVisitorForWebsite,
 } from "@api/db/queries/visitor";
+import { env } from "@api/env";
 import { trackVisitorActivity, trackVisitorEvent } from "@api/lib/tinybird-sdk";
 import {
 	flattenVisitorTrackingContext,
@@ -15,7 +16,10 @@ import {
 import { realtime } from "@api/realtime/emitter";
 import { lookupGeoIp } from "@api/services/geoip";
 import { markVisitorPresence } from "@api/services/presence";
-import { extractClientIpFromRequest } from "@api/utils/client-ip";
+import {
+	applyDevelopmentClientIpOverride,
+	extractClientIpFromRequest,
+} from "@api/utils/client-ip";
 import {
 	safelyExtractRequestData,
 	validateResponse,
@@ -219,7 +223,14 @@ function extractRequestContext(request: Context<RestContext>["req"]): {
 } {
 	const header = (name: string) => getHeaderValue(request, name);
 	const preferredLocale = parsePreferredLocale(header("accept-language"));
-	const ipInfo = extractClientIpFromRequest(request);
+	const ipInfo = applyDevelopmentClientIpOverride(
+		extractClientIpFromRequest(request),
+		{
+			nodeEnv: env.NODE_ENV,
+			overrideIp: env.LOCAL_VISITOR_IP_OVERRIDE,
+			warn: console.warn,
+		}
+	);
 
 	return {
 		preferredLocale,

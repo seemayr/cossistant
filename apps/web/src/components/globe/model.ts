@@ -69,7 +69,6 @@ export type GlobeView = {
 export type ResolvedGlobeVisitor = GlobeVisitor & {
 	facehashSeed: string;
 	locationLabel: string | null;
-	markerId: string;
 	pageLabel: string | null;
 };
 
@@ -78,7 +77,7 @@ export const DEFAULT_GLOBE_TILT = 12;
 export const DEFAULT_GLOBE_ROTATION_SPEED = 10;
 export const MAX_GLOBE_TILT = 89;
 export const MIN_GLOBE_TILT = -89;
-export const GLOBE_MARKER_SIZE = 0.001;
+export const GLOBE_MARKER_SIZE = 0.035;
 
 const LIGHT_GLOBE_PRESET: ResolvedGlobeConfig = {
 	baseColor: [0.84, 0.87, 0.93],
@@ -86,10 +85,10 @@ const LIGHT_GLOBE_PRESET: ResolvedGlobeConfig = {
 	diffuse: 1.08,
 	glowColor: [1, 1, 1],
 	mapBaseBrightness: 0.06,
-	mapBrightness: 3.2,
-	mapSamples: 16_000,
+	mapBrightness: 2,
+	mapSamples: 20_000,
 	markerColor: [0.18, 0.22, 0.29],
-	markerElevation: 0.014,
+	markerElevation: 0.02,
 	opacity: 1,
 	scale: 1,
 };
@@ -99,11 +98,11 @@ const DARK_GLOBE_PRESET: ResolvedGlobeConfig = {
 	dark: 1,
 	diffuse: 1.15,
 	glowColor: [0.07, 0.09, 0.14],
-	mapBaseBrightness: 0.02,
-	mapBrightness: 4.8,
-	mapSamples: 16_000,
+	mapBaseBrightness: 0.0,
+	mapBrightness: 2,
+	mapSamples: 20_000,
 	markerColor: [0.95, 0.97, 1],
-	markerElevation: 0.014,
+	markerElevation: 0.02,
 	opacity: 1,
 	scale: 1,
 };
@@ -119,10 +118,6 @@ function getNonEmptyString(value: string | null | undefined): string | null {
 
 function isFiniteCoordinate(value: number): boolean {
 	return Number.isFinite(value);
-}
-
-function sanitizeMarkerSegment(value: string): string {
-	return value.replace(/[^a-zA-Z0-9_-]/g, "-").replace(/-+/g, "-");
 }
 
 export function normalizeLongitudeDegrees(longitude: number): number {
@@ -147,7 +142,8 @@ export function getShortestAngleDeltaDegrees(from: number, to: number): number {
 }
 
 export function getPhiFromLongitudeDegrees(longitude: number): number {
-	return degreesToRadians(90 - normalizeLongitudeDegrees(longitude));
+	// COBE's front-facing zero is offset from geographic longitude by 270deg.
+	return degreesToRadians(normalizeLongitudeDegrees(270 - longitude));
 }
 
 export function getThetaFromTiltDegrees(tilt: number): number {
@@ -157,7 +153,7 @@ export function getThetaFromTiltDegrees(tilt: number): number {
 export function getFocusView(focus: GlobeFocus): GlobeView {
 	return {
 		longitude: normalizeLongitudeDegrees(focus.longitude),
-		tilt: clampTiltDegrees(-focus.latitude),
+		tilt: clampTiltDegrees(focus.latitude),
 	};
 }
 
@@ -192,11 +188,9 @@ export function resolveGlobeThemeConfig(
 }
 
 export function normalizeGlobeVisitors(params: {
-	idPrefix: string;
 	visitors?: readonly GlobeVisitor[] | null;
 }): ResolvedGlobeVisitor[] {
 	const visitors = params.visitors ?? [];
-	const markerCounts = new Map<string, number>();
 
 	return visitors.flatMap((visitor, index) => {
 		if (
@@ -210,13 +204,6 @@ export function normalizeGlobeVisitors(params: {
 
 		const safeName =
 			getNonEmptyString(visitor.name) ?? `Visitor ${String(index + 1)}`;
-		const rawMarkerId = sanitizeMarkerSegment(
-			`${params.idPrefix}-${visitor.id || `visitor-${String(index + 1)}`}`
-		);
-		const seenCount = markerCounts.get(rawMarkerId) ?? 0;
-		markerCounts.set(rawMarkerId, seenCount + 1);
-		const markerId =
-			seenCount === 0 ? rawMarkerId : `${rawMarkerId}-${String(seenCount + 1)}`;
 
 		return [
 			{
@@ -226,7 +213,6 @@ export function normalizeGlobeVisitors(params: {
 					getNonEmptyString(visitor.name) ??
 					visitor.id,
 				locationLabel: getNonEmptyString(visitor.locationLabel),
-				markerId,
 				name: safeName,
 				pageLabel: getNonEmptyString(visitor.pageLabel),
 			},
@@ -236,11 +222,11 @@ export function normalizeGlobeVisitors(params: {
 
 export function getCobeMarkers(
 	visitors: readonly ResolvedGlobeVisitor[],
-	baseColor: GlobeRgb
+	markerColor: GlobeRgb
 ): Marker[] {
 	return visitors.map((visitor) => ({
-		color: baseColor,
-		id: visitor.markerId,
+		color: markerColor,
+		id: visitor.id,
 		location: [visitor.latitude, visitor.longitude],
 		size: GLOBE_MARKER_SIZE,
 	}));

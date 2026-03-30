@@ -27,7 +27,7 @@ mock.module("@/components/ui/avatar", () => ({
 const modulePromise = import("./overlay");
 
 describe("GlobeVisitorOverlay", () => {
-	it("renders anchor-positioned visitor pins and cards", async () => {
+	it("renders anchor-positioned visitor pins using the visitor id", async () => {
 		const { GlobeVisitorOverlay } = await modulePromise;
 		const html = renderToStaticMarkup(
 			<GlobeVisitorOverlay
@@ -39,7 +39,6 @@ describe("GlobeVisitorOverlay", () => {
 						latitude: 48.8566,
 						locationLabel: "Paris, France",
 						longitude: 2.3522,
-						markerId: "demo-visitor-1",
 						name: "Alice",
 						pageLabel: "/pricing",
 						status: "online",
@@ -48,13 +47,17 @@ describe("GlobeVisitorOverlay", () => {
 			/>
 		);
 
-		expect(html).toContain('data-slot="globe-visitor-overlay"');
 		expect(html).toContain('data-slot="globe-visitor-pin"');
-		expect(html).toContain("position-anchor:--cobe-demo-visitor-1");
-		expect(html).toContain("Alice");
-		expect(html).toContain("Paris, France");
-		expect(html).toContain("/pricing");
+		expect(html).toContain("position:absolute");
+		expect(html).toContain("position-anchor:--cobe-visitor-1");
+		expect(html).toContain("bottom:anchor(top)");
+		expect(html).toContain("left:anchor(center)");
+		expect(html).toContain("opacity:var(--cobe-visible-visitor-1, 0)");
+		expect(html).not.toContain("--globe-pin-visibility");
+		expect(html).not.toContain('data-slot="globe-visitor-card"');
+		expect(html).not.toContain("rounded-full");
 		expect(html).toContain('data-facehash-seed="visitor-facehash"');
+		expect(html).toContain('data-name="Alice"');
 		expect(html).toContain('data-status="online"');
 	});
 });

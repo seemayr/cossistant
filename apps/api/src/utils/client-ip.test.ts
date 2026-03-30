@@ -1,5 +1,6 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, mock } from "bun:test";
 import {
+	applyDevelopmentClientIpOverride,
 	extractClientIp,
 	normalizeIpCandidate,
 	parseForwardedHeader,
@@ -48,5 +49,80 @@ describe("client IP helpers", () => {
 
 		expect(result.canonicalIp).toBe("10.0.0.3");
 		expect(result.publicIp).toBe("8.8.8.8");
+	});
+
+	it("uses the local development override when the request IP is private", () => {
+		const result = applyDevelopmentClientIpOverride(
+			{
+				canonicalIp: "127.0.0.1",
+				publicIp: null,
+			},
+			{
+				nodeEnv: "development",
+				overrideIp: "8.8.8.8",
+			}
+		);
+
+		expect(result).toEqual({
+			canonicalIp: "8.8.8.8",
+			publicIp: "8.8.8.8",
+		});
+	});
+
+	it("keeps the real public IP when one is already available", () => {
+		const result = applyDevelopmentClientIpOverride(
+			{
+				canonicalIp: "8.8.4.4",
+				publicIp: "8.8.4.4",
+			},
+			{
+				nodeEnv: "development",
+				overrideIp: "8.8.8.8",
+			}
+		);
+
+		expect(result).toEqual({
+			canonicalIp: "8.8.4.4",
+			publicIp: "8.8.4.4",
+		});
+	});
+
+	it("ignores invalid local overrides and warns in development", () => {
+		const warn = mock(() => {});
+		const result = applyDevelopmentClientIpOverride(
+			{
+				canonicalIp: "127.0.0.1",
+				publicIp: null,
+			},
+			{
+				nodeEnv: "development",
+				overrideIp: "127.0.0.1",
+				warn,
+			}
+		);
+
+		expect(result).toEqual({
+			canonicalIp: "127.0.0.1",
+			publicIp: null,
+		});
+		expect(warn).toHaveBeenCalledTimes(1);
+	});
+
+	it("ignores the override outside development", () => {
+		const result = applyDevelopmentClientIpOverride(
+			{
+				canonicalIp: "127.0.0.1",
+				publicIp: null,
+			},
+			{
+				nodeEnv: "production",
+				overrideIp: "8.8.8.8",
+			}
+		);
+
+		expect(result).toEqual({
+			canonicalIp: "127.0.0.1",
+			publicIp: null,
+		});
 	});
 });

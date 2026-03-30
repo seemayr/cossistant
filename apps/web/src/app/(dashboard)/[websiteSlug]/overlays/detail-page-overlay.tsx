@@ -39,7 +39,7 @@ type VisitorDetail = NonNullable<
 type HeroDetails = ReturnType<typeof buildHeroDetails>;
 type HeroGlobeData = {
 	focus: GlobeFocus;
-	visitor: GlobeVisitor;
+	visitors: readonly GlobeVisitor[];
 };
 type DeviceKind = "desktop" | "mobile";
 type DeviceDetailById = Record<
@@ -298,19 +298,64 @@ function buildHeroGlobeData(params: {
 			latitude: globeVisitor.latitude,
 			longitude: globeVisitor.longitude,
 		},
-		visitor: {
-			avatarUrl: hero.avatarUrl,
-			id: globeVisitor.id,
-			latitude: globeVisitor.latitude,
-			locationLabel,
-			longitude: globeVisitor.longitude,
-			name: hero.title,
-			pageLabel:
-				globeVisitor.currentPage?.path ??
-				globeVisitor.currentPage?.title ??
-				null,
-		},
+		visitors: [
+			{
+				avatarUrl: hero.avatarUrl,
+				id: globeVisitor.id,
+				latitude: globeVisitor.latitude,
+				locationLabel,
+				longitude: globeVisitor.longitude,
+				name: hero.title,
+				pageLabel:
+					globeVisitor.currentPage?.path ??
+					globeVisitor.currentPage?.title ??
+					null,
+			},
+		],
 	};
+}
+
+function DetailHeroGlobe({
+	frameClassName,
+	globeData,
+	heightClassName,
+}: {
+	frameClassName?: string;
+	globeData: HeroGlobeData;
+	heightClassName?: string;
+}) {
+	return (
+		<div
+			className="fade-in zoom-in-95 slide-in-from-bottom-2 animate-in duration-300 ease-out"
+			data-slot="contact-visitor-detail-globe-entrance"
+		>
+			<div
+				className={cn("relative overflow-hidden", frameClassName)}
+				data-slot="contact-visitor-detail-globe-frame"
+			>
+				<div
+					className={cn("relative w-full", heightClassName)}
+					data-slot="contact-visitor-detail-globe-crop"
+				>
+					<div
+						className="absolute inset-0"
+						data-slot="contact-visitor-detail-globe-stage"
+					>
+						<Globe
+							allowDrag
+							autoRotate={false}
+							className="h-full w-full"
+							focus={globeData.focus}
+							minHeight={null}
+							renderOffset={{ y: "0%" }}
+							renderScale={1.25}
+							visitors={globeData.visitors}
+						/>
+					</div>
+				</div>
+			</div>
+		</div>
+	);
 }
 
 type DetailMetricProps = {
@@ -639,7 +684,7 @@ function DetailPrimaryPanel({
 				<div
 					className={cn(
 						"mx-auto flex w-full max-w-sm flex-col gap-8",
-						heroGlobeData ? "pb-8 lg:pb-64" : undefined
+						heroGlobeData ? "pb-8 lg:pb-72" : undefined
 					)}
 					data-slot="contact-visitor-detail-primary-panel"
 				>
@@ -723,15 +768,10 @@ function DetailPrimaryPanel({
 							className="lg:hidden"
 							data-slot="contact-visitor-detail-mobile-globe-wrapper"
 						>
-							<div className="overflow-hidden rounded-[18px] border border-primary/10 bg-background/95 shadow-sm">
-								<Globe
-									allowDrag={false}
-									autoRotate={false}
-									focus={heroGlobeData.focus}
-									minHeight={240}
-									visitors={[heroGlobeData.visitor]}
-								/>
-							</div>
+							<DetailHeroGlobe
+								globeData={heroGlobeData}
+								heightClassName="h-80"
+							/>
 						</div>
 					) : null}
 				</div>
@@ -739,19 +779,14 @@ function DetailPrimaryPanel({
 
 			{heroGlobeData ? (
 				<div
-					className="pointer-events-none absolute inset-x-0 bottom-0 hidden px-8 pb-8 lg:block"
+					className="-bottom-30 pointer-events-none absolute inset-x-0 hidden lg:block"
 					data-slot="contact-visitor-detail-desktop-globe-wrapper"
 				>
-					<div className="pointer-events-auto mx-auto max-w-sm">
-						<div className="overflow-hidden rounded-[18px] border border-primary/10 bg-background/95 shadow-sm">
-							<Globe
-								allowDrag={false}
-								autoRotate={false}
-								focus={heroGlobeData.focus}
-								minHeight={240}
-								visitors={[heroGlobeData.visitor]}
-							/>
-						</div>
+					<div className="pointer-events-auto mx-auto max-w-lg">
+						<DetailHeroGlobe
+							globeData={heroGlobeData}
+							heightClassName="h-110"
+						/>
 					</div>
 				</div>
 			) : null}

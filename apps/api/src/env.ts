@@ -152,6 +152,8 @@ export const env = {
 		"GEOIP_SERVICE_URL",
 		"http://localhost:8083"
 	),
+	// Development-only override to simulate a public visitor IP locally
+	LOCAL_VISITOR_IP_OVERRIDE: getEnvVariable("LOCAL_VISITOR_IP_OVERRIDE", ""),
 	// Firecrawl API key for web scraping
 	FIRECRAWL_API_KEY: getEnvVariable("FIRECRAWL_API_KEY", ""),
 };
