@@ -3,6 +3,8 @@ import type * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 let isAnalyticsSheetOpen = false;
+const renderedButtonHandlers: Array<() => void> = [];
+const openLiveVisitorsOverlayCalls: string[] = [];
 
 mock.module("facehash", () => ({
 	Facehash: ({ className }: { className?: string }) => (
@@ -58,7 +60,32 @@ mock.module("@/contexts/inboxes", () => ({
 	useOptionalInboxes: () => null,
 }));
 
+mock.module("@/hooks/use-live-visitors-overlay-state", () => ({
+	useLiveVisitorsOverlayState: () => ({
+		openLiveVisitorsOverlay: () => {
+			openLiveVisitorsOverlayCalls.push("open");
+			return Promise.resolve(new URLSearchParams());
+		},
+	}),
+}));
+
 mock.module("@/components/inbox-analytics", () => ({
+	InboxAnalyticsDesktopHeaderActions: ({
+		actionIconName,
+		actionLabel,
+	}: {
+		actionIconName: string;
+		actionLabel: string;
+	}) => (
+		<div
+			data-action-icon={actionIconName}
+			data-action-label={actionLabel}
+			data-slot="mock-inbox-analytics-desktop-header-actions"
+		>
+			<div data-slot={`icon-${actionIconName}`} />
+			<div data-slot="mock-inbox-analytics-range-control" />
+		</div>
+	),
 	InboxAnalyticsDisplay: ({
 		layout = "inline",
 		livePresence,
@@ -97,6 +124,39 @@ mock.module("@/components/plan/upgrade-modal", () => ({
 	UpgradeModal: () => null,
 }));
 
+mock.module("../ui/button", () => ({
+	Button: ({
+		asChild,
+		children,
+		onClick,
+		...props
+	}: React.ButtonHTMLAttributes<HTMLButtonElement> & { asChild?: boolean }) => {
+		if (onClick) {
+			renderedButtonHandlers.push(() => {
+				onClick({
+					preventDefault() {},
+					stopPropagation() {},
+				} as never);
+			});
+		}
+
+		if (asChild) {
+			return <>{children}</>;
+		}
+
+		return (
+			<button {...props} type={props.type ?? "button"}>
+				{children}
+			</button>
+		);
+	},
+}));
+
+mock.module("../ui/icons", () => ({
+	__esModule: true,
+	default: ({ name }: { name: string }) => <span data-slot={`icon-${name}`} />,
+}));
+
 mock.module("../ui/tooltip", () => ({
 	TooltipOnHover: ({ children }: { children: React.ReactNode }) => (
 		<>{children}</>
@@ -112,6 +172,8 @@ const modulePromise = import("./index");
 async function renderList(
 	selectedConversationStatus: "archived" | "resolved" | null
 ) {
+	renderedButtonHandlers.length = 0;
+	openLiveVisitorsOverlayCalls.length = 0;
 	const { ConversationsList } = await modulePromise;
 
 	return renderToStaticMarkup(
@@ -136,9 +198,18 @@ describe("ConversationsList analytics controls", () => {
 		expect(html).toContain('data-slot="inbox-desktop-analytics-slot"');
 		expect(html).toContain('data-slot="mock-inbox-analytics"');
 		expect(html).toContain('data-live-count="6"');
+		expect(html).toContain(
+			'data-slot="mock-inbox-analytics-desktop-header-actions"'
+		);
+		expect(html).toContain('data-action-icon="globe"');
+		expect(html).toContain('data-action-label="Open live visitors overlay"');
 		expect(html).toContain('data-slot="mock-inbox-analytics-range-control"');
+		expect(html).toContain('data-slot="icon-globe"');
 		expect(html).toContain("hidden px-1 pt-2 lg:block");
-		expect(html).toContain("hidden lg:flex");
+
+		renderedButtonHandlers[0]?.();
+
+		expect(openLiveVisitorsOverlayCalls).toEqual(["open"]);
 	});
 
 	it("hides analytics controls outside the inbox view", async () => {

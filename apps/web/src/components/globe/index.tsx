@@ -126,6 +126,19 @@ function resolveRenderOffsetValue(
 	return Number.isFinite(numeric) ? numeric : 0;
 }
 
+function restorePropertyDescriptor(
+	target: object,
+	key: PropertyKey,
+	descriptor: PropertyDescriptor | undefined
+) {
+	if (descriptor) {
+		Object.defineProperty(target, key, descriptor);
+		return;
+	}
+
+	Reflect.deleteProperty(target, key);
+}
+
 function installTextureLoadObserver(params: {
 	onTextureLoad: () => void;
 }): { restore: () => boolean } | null {
@@ -134,6 +147,14 @@ function installTextureLoadObserver(params: {
 	}
 
 	const NativeImage = window.Image;
+	const originalWindowImageDescriptor = Object.getOwnPropertyDescriptor(
+		window,
+		"Image"
+	);
+	const originalGlobalImageDescriptor =
+		globalThis === window
+			? originalWindowImageDescriptor
+			: Object.getOwnPropertyDescriptor(globalThis, "Image");
 	let observedTextureImage = false;
 	const handleTextureLoad = () => {
 		if (typeof requestAnimationFrame !== "function") {
@@ -148,46 +169,45 @@ function installTextureLoadObserver(params: {
 		});
 	};
 
-	const ObservedImage = ((width?: number, height?: number) => {
+	function ObservedImage(this: unknown, width?: number, height?: number) {
 		const image = new NativeImage(width, height);
 		observedTextureImage = true;
 		image.addEventListener("load", handleTextureLoad, {
 			once: true,
 		});
 		return image;
-	}) as unknown as typeof window.Image;
+	}
 
-	ObservedImage.prototype = NativeImage.prototype;
-	Object.setPrototypeOf(ObservedImage, NativeImage);
+	const ConstructibleObservedImage =
+		ObservedImage as unknown as typeof window.Image;
+
+	ConstructibleObservedImage.prototype = NativeImage.prototype;
+	Object.setPrototypeOf(ConstructibleObservedImage, NativeImage);
 
 	Object.defineProperty(window, "Image", {
 		configurable: true,
-		value: ObservedImage,
+		value: ConstructibleObservedImage,
 		writable: true,
 	});
 
 	if (globalThis !== window) {
 		Object.defineProperty(globalThis, "Image", {
 			configurable: true,
-			value: ObservedImage,
+			value: ConstructibleObservedImage,
 			writable: true,
 		});
 	}
 
 	return {
 		restore() {
-			Object.defineProperty(window, "Image", {
-				configurable: true,
-				value: NativeImage,
-				writable: true,
-			});
+			restorePropertyDescriptor(window, "Image", originalWindowImageDescriptor);
 
 			if (globalThis !== window) {
-				Object.defineProperty(globalThis, "Image", {
-					configurable: true,
-					value: NativeImage,
-					writable: true,
-				});
+				restorePropertyDescriptor(
+					globalThis,
+					"Image",
+					originalGlobalImageDescriptor
+				);
 			}
 
 			return observedTextureImage;

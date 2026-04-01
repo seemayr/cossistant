@@ -9,10 +9,12 @@ const registeredHotkeys: Array<{
 const renderedButtonHandlers: Array<() => void> = [];
 const routerPushCalls: string[] = [];
 const closeDetailCalls: string[] = [];
+const closeLiveVisitorsCalls: string[] = [];
 const setIsChangelogOpenCalls: boolean[] = [];
 
 let pathname = "/acme/inbox";
 let isChangelogOpen = false;
+let isLiveVisitorsOverlayOpen = false;
 let activeDetail:
 	| { type: "contact"; contactId: string }
 	| {
@@ -132,6 +134,16 @@ mock.module("@/hooks/use-contact-visitor-detail-state", () => ({
 	}),
 }));
 
+mock.module("@/hooks/use-live-visitors-overlay-state", () => ({
+	useLiveVisitorsOverlayState: () => ({
+		closeLiveVisitorsOverlay: () => {
+			closeLiveVisitorsCalls.push("close");
+			return Promise.resolve(new URLSearchParams());
+		},
+		isOpen: isLiveVisitorsOverlayOpen,
+	}),
+}));
+
 mock.module("./use-changelog-overlay-state", () => ({
 	useChangelogOverlayState: () => ({
 		isChangelogOpen,
@@ -186,9 +198,11 @@ function resetState() {
 	renderedButtonHandlers.length = 0;
 	routerPushCalls.length = 0;
 	closeDetailCalls.length = 0;
+	closeLiveVisitorsCalls.length = 0;
 	setIsChangelogOpenCalls.length = 0;
 	pathname = "/acme/inbox";
 	isChangelogOpen = false;
+	isLiveVisitorsOverlayOpen = false;
 	activeDetail = null;
 }
 
@@ -234,6 +248,7 @@ describe("NavigationTopbar", () => {
 		renderedButtonHandlers[0]?.();
 
 		expect(closeDetailCalls).toEqual(["close"]);
+		expect(closeLiveVisitorsCalls).toEqual([]);
 		expect(routerPushCalls).toEqual([]);
 	});
 
@@ -249,6 +264,23 @@ describe("NavigationTopbar", () => {
 		renderedButtonHandlers[0]?.();
 
 		expect(setIsChangelogOpenCalls).toEqual([false]);
+		expect(closeDetailCalls).toEqual([]);
+		expect(closeLiveVisitorsCalls).toEqual([]);
+		expect(routerPushCalls).toEqual([]);
+	});
+
+	it("shows the live visitors back button and closes the overlay on click", async () => {
+		resetState();
+		isLiveVisitorsOverlayOpen = true;
+
+		const html = await renderTopbar({ latestRelease: null });
+
+		expect(html).toContain('data-slot="icon-arrow-left"');
+		expect(html).not.toContain('data-slot="logo"');
+
+		renderedButtonHandlers[0]?.();
+
+		expect(closeLiveVisitorsCalls).toEqual(["close"]);
 		expect(closeDetailCalls).toEqual([]);
 		expect(routerPushCalls).toEqual([]);
 	});
@@ -273,6 +305,28 @@ describe("NavigationTopbar", () => {
 		});
 
 		expect(closeDetailCalls).toEqual(["close"]);
+		expect(closeLiveVisitorsCalls).toEqual([]);
+		expect(routerPushCalls).toEqual([]);
+	});
+
+	it("closes the live visitors overlay on Escape before inbox navigation", async () => {
+		resetState();
+		pathname = "/acme/contacts";
+		isLiveVisitorsOverlayOpen = true;
+
+		await renderTopbar();
+
+		const escapeHotkey = registeredHotkeys.find(
+			(entry) => entry.keys === "escape"
+		);
+
+		escapeHotkey?.handler({
+			preventDefault() {},
+			stopPropagation() {},
+		});
+
+		expect(closeLiveVisitorsCalls).toEqual(["close"]);
+		expect(closeDetailCalls).toEqual([]);
 		expect(routerPushCalls).toEqual([]);
 	});
 
@@ -298,6 +352,32 @@ describe("NavigationTopbar", () => {
 
 		expect(setIsChangelogOpenCalls).toEqual([false]);
 		expect(closeDetailCalls).toEqual([]);
+		expect(closeLiveVisitorsCalls).toEqual([]);
+		expect(routerPushCalls).toEqual([]);
+	});
+
+	it("closes the detail overlay before the live visitors overlay on Escape", async () => {
+		resetState();
+		pathname = "/acme/contacts";
+		activeDetail = {
+			type: "visitor",
+			visitorId: "visitor-1",
+		};
+		isLiveVisitorsOverlayOpen = true;
+
+		await renderTopbar({ latestRelease: null });
+
+		const escapeHotkey = registeredHotkeys.find(
+			(entry) => entry.keys === "escape"
+		);
+
+		escapeHotkey?.handler({
+			preventDefault() {},
+			stopPropagation() {},
+		});
+
+		expect(closeDetailCalls).toEqual(["close"]);
+		expect(closeLiveVisitorsCalls).toEqual([]);
 		expect(routerPushCalls).toEqual([]);
 	});
 
@@ -326,5 +406,6 @@ describe("NavigationTopbar", () => {
 
 		expect(routerPushCalls).toEqual(["/acme/inbox"]);
 		expect(closeDetailCalls).toEqual([]);
+		expect(closeLiveVisitorsCalls).toEqual([]);
 	});
 });

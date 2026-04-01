@@ -14,6 +14,7 @@ import {
 } from "@/lib/trpc/server";
 import { isValidWebsiteSlug } from "@/lib/url";
 import { ContactVisitorDetailOverlay } from "./overlays/detail-page-overlay";
+import { LiveVisitorsOverlay } from "./overlays/live-visitors-overlay";
 import { ModalsAndSheets } from "./overlays/modals-and-sheets";
 import { Realtime } from "./providers/realtime";
 import { DashboardWebSocketProvider } from "./providers/websocket";
@@ -113,6 +114,7 @@ export default async function Layout({ children, params }: LayoutProps) {
 										latestRelease={latestRelease}
 									/>
 									<CentralContainer>{children}</CentralContainer>
+									<LiveVisitorsOverlay />
 									<ContactVisitorDetailOverlay />
 									<ModalsAndSheets />
 								</div>

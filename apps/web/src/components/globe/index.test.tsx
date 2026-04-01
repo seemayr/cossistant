@@ -548,6 +548,9 @@ describe("Globe", () => {
 
 		const redrawTextureStates: boolean[] = [];
 		let internalTextureReady = false;
+		const originalWindowImage = window.Image;
+		const originalGlobalImage = globalThis.Image;
+		let initializationError: unknown = null;
 
 		createGlobeMock.mockReset();
 		createGlobeMock.mockImplementation(
@@ -575,17 +578,28 @@ describe("Globe", () => {
 		globeSize = { height: 240, width: 320 };
 
 		await act(async () => {
-			activeRoot?.render(<Globe allowDrag={false} autoRotate={false} />);
+			try {
+				activeRoot?.render(<Globe allowDrag={false} autoRotate={false} />);
+			} catch (error) {
+				initializationError = error;
+			}
 		});
 
 		await act(async () => {
-			MockResizeObserver.trigger();
+			try {
+				MockResizeObserver.trigger();
+			} catch (error) {
+				initializationError = error;
+			}
 		});
 
 		const globeRoot = getGlobeRoot();
 		const globeInstance = getLastGlobeInstance();
 
+		expect(initializationError).toBeNull();
 		expect(createdImages).toHaveLength(1);
+		expect(window.Image).toBe(originalWindowImage);
+		expect(globalThis.Image).toBe(originalGlobalImage);
 		expect(globeRoot?.className).toContain("opacity-0");
 		redrawTextureStates.length = 0;
 		globeInstance?.update.mockReset();
@@ -604,6 +618,14 @@ describe("Globe", () => {
 		expect(globeInstance?.update).toHaveBeenCalled();
 		expect(redrawTextureStates).toEqual([true]);
 		expect(globeRoot?.className).toContain("opacity-100");
+
+		await act(async () => {
+			activeRoot?.unmount();
+		});
+		activeRoot = null;
+
+		expect(window.Image).toBe(originalWindowImage);
+		expect(globalThis.Image).toBe(originalGlobalImage);
 	});
 
 	it("allows dragging while focused and eases back after an idle delay", async () => {

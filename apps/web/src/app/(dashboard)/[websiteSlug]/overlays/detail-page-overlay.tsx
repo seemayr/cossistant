@@ -4,7 +4,7 @@ import type { RouterOutputs } from "@cossistant/api/types";
 import { resolveCountryDetails } from "@cossistant/location/country-utils";
 import type { ContactDetailResponse } from "@cossistant/types";
 import { useQueryNormalizer } from "@normy/react-query";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import * as ReactQuery from "@tanstack/react-query";
 import { Monitor, Smartphone } from "lucide-react";
 import { useMemo } from "react";
 import { Globe, type GlobeFocus, type GlobeVisitor } from "@/components/globe";
@@ -29,6 +29,10 @@ import { formatFullDateTime, formatLastSeenAt } from "@/lib/date";
 import { useTRPC } from "@/lib/trpc/client";
 import { cn } from "@/lib/utils";
 import { getVisitorNameWithFallback } from "@/lib/visitors";
+import {
+	DashboardOverlayCenteredState,
+	DashboardOverlayShell,
+} from "./dashboard-overlay-shell";
 
 type ContactDetail = RouterOutputs["contact"]["get"];
 type DetailContact = ContactDetailResponse["contact"];
@@ -525,24 +529,6 @@ function DetailMetric({ label, tooltip, value }: DetailMetricProps) {
 	return <TooltipOnHover content={tooltip}>{content}</TooltipOnHover>;
 }
 
-function DetailOverlayShell({
-	children,
-	mode,
-}: {
-	children: React.ReactNode;
-	mode: "contact" | "visitor";
-}) {
-	return (
-		<div
-			className="absolute inset-x-0 top-15 bottom-0 z-20 flex flex-col overflow-hidden bg-background"
-			data-mode={mode}
-			data-slot="contact-visitor-detail-overlay"
-		>
-			{children}
-		</div>
-	);
-}
-
 function DevicesSection({
 	deviceDetailsById,
 	heroVisitor,
@@ -957,20 +943,26 @@ export function ContactVisitorDetailView({
 
 	if (isLoading) {
 		return (
-			<DetailOverlayShell mode={mode}>
-				<div className="flex h-full items-center justify-center">
+			<DashboardOverlayShell
+				data-mode={mode}
+				dataSlot="contact-visitor-detail-overlay"
+			>
+				<DashboardOverlayCenteredState>
 					<div className="flex items-center gap-3 text-primary/60 text-sm">
 						<Spinner className="h-5 w-5" />
 						<span>Loading details...</span>
 					</div>
-				</div>
-			</DetailOverlayShell>
+				</DashboardOverlayCenteredState>
+			</DashboardOverlayShell>
 		);
 	}
 
 	if (isError) {
 		return (
-			<DetailOverlayShell mode={mode}>
+			<DashboardOverlayShell
+				data-mode={mode}
+				dataSlot="contact-visitor-detail-overlay"
+			>
 				<div className="px-4 py-6 lg:px-6 lg:py-8">
 					<Alert variant="destructive">
 						<AlertTitle>Unable to load details</AlertTitle>
@@ -980,22 +972,28 @@ export function ContactVisitorDetailView({
 						</AlertDescription>
 					</Alert>
 				</div>
-			</DetailOverlayShell>
+			</DashboardOverlayShell>
 		);
 	}
 
 	if (!(contact || heroVisitor) && visitors.length === 0) {
 		return (
-			<DetailOverlayShell mode={mode}>
-				<div className="flex h-full items-center justify-center px-6 text-center text-primary/60 text-sm">
+			<DashboardOverlayShell
+				data-mode={mode}
+				dataSlot="contact-visitor-detail-overlay"
+			>
+				<DashboardOverlayCenteredState className="px-6 text-center text-primary/60 text-sm">
 					No details are available for this selection.
-				</div>
-			</DetailOverlayShell>
+				</DashboardOverlayCenteredState>
+			</DashboardOverlayShell>
 		);
 	}
 
 	return (
-		<DetailOverlayShell mode={mode}>
+		<DashboardOverlayShell
+			data-mode={mode}
+			dataSlot="contact-visitor-detail-overlay"
+		>
 			<div
 				className="grid h-full grid-cols-1 lg:grid-cols-2"
 				data-slot="contact-visitor-detail-layout"
@@ -1019,7 +1017,7 @@ export function ContactVisitorDetailView({
 					visitors={visitors}
 				/>
 			</div>
-		</DetailOverlayShell>
+		</DashboardOverlayShell>
 	);
 }
 
@@ -1044,7 +1042,7 @@ export function ContactVisitorDetailOverlay() {
 		return isContactDetailResponse(candidate) ? candidate : undefined;
 	}, [activeContactId, queryNormalizer]);
 
-	const contactQuery = useQuery({
+	const contactQuery = ReactQuery.useQuery({
 		...trpc.contact.get.queryOptions({
 			contactId: activeContactId ?? "",
 			websiteSlug: website.slug,
@@ -1064,7 +1062,7 @@ export function ContactVisitorDetailOverlay() {
 		return queryNormalizer.getObjectById<VisitorDetail>(leadVisitorId);
 	}, [leadVisitorId, queryNormalizer]);
 
-	const visitorQuery = useQuery({
+	const visitorQuery = ReactQuery.useQuery({
 		...trpc.conversation.getVisitorById.queryOptions({
 			visitorId: leadVisitorId ?? "",
 			websiteSlug: website.slug,
@@ -1076,7 +1074,7 @@ export function ContactVisitorDetailOverlay() {
 	});
 	const resolvedHeroVisitor = visitorQuery.data ?? null;
 
-	const contactVisitorDetailsQueries = useQueries({
+	const contactVisitorDetailsQueries = ReactQuery.useQueries({
 		queries:
 			activeDetail?.type === "contact"
 				? (contactQuery.data?.visitors ?? []).map((visitor) => ({

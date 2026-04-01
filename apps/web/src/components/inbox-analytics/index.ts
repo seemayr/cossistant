@@ -4,6 +4,7 @@ export type {
 	InboxAnalyticsLivePresence,
 } from "./inbox-analytics-display";
 export {
+	InboxAnalyticsDesktopHeaderActions,
 	InboxAnalyticsDisplay,
 	InboxAnalyticsRangeControl,
 } from "./inbox-analytics-display";

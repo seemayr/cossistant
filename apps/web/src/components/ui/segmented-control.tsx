@@ -43,7 +43,7 @@ const segmentedControlItemVariants = cva(
 	}
 );
 
-const segmentedControlIndicatorVariants = cva(
+export const segmentedControlIndicatorVariants = cva(
 	"pointer-events-none absolute rounded-[2px] border bg-background-100 shadow-xs transition-[left,background-color,border-color] duration-100 ease-out dark:bg-background-300",
 	{
 		variants: {

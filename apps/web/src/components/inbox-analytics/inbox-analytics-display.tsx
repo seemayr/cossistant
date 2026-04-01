@@ -9,6 +9,8 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { TooltipOnHover } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { Button } from "../ui/button";
+import Icon, { type IconName } from "../ui/icons";
 import { INBOX_ANALYTICS_RANGES, type InboxAnalyticsRangeDays } from "./types";
 
 export type InboxAnalyticsDisplayLayout = "inline" | "sheet";
@@ -364,6 +366,16 @@ type InboxAnalyticsRangeControlProps = {
 	className?: string;
 };
 
+type InboxAnalyticsDesktopHeaderActionsProps = {
+	rangeDays: InboxAnalyticsRangeDays;
+	onRangeChange: (rangeDays: InboxAnalyticsRangeDays) => void;
+	actionIconName: IconName;
+	actionLabel: string;
+	actionTooltip?: string;
+	onActionClick: () => void;
+	className?: string;
+};
+
 export function InboxAnalyticsRangeControl({
 	rangeDays,
 	onRangeChange,
@@ -387,6 +399,45 @@ export function InboxAnalyticsRangeControl({
 			size={size}
 			value={String(rangeDays)}
 		/>
+	);
+}
+
+export function InboxAnalyticsDesktopHeaderActions({
+	rangeDays,
+	onRangeChange,
+	actionIconName,
+	actionLabel,
+	actionTooltip,
+	onActionClick,
+	className,
+}: InboxAnalyticsDesktopHeaderActionsProps) {
+	const sharedTriggerClassName = "size-7.5 rounded-[2px] border border-border";
+
+	return (
+		<div
+			className={cn("hidden items-center gap-1.5 lg:flex", className)}
+			data-action-icon={actionIconName}
+			data-action-label={actionLabel}
+			data-slot="inbox-analytics-desktop-header-actions"
+		>
+			<TooltipOnHover content={actionTooltip ?? actionLabel}>
+				<Button
+					className={sharedTriggerClassName}
+					onClick={onActionClick}
+					size="icon-small"
+					type="button"
+					variant="secondary"
+				>
+					<Icon name={actionIconName} />
+					<span className="sr-only">{actionLabel}</span>
+				</Button>
+			</TooltipOnHover>
+			<InboxAnalyticsRangeControl
+				onRangeChange={onRangeChange}
+				rangeDays={rangeDays}
+				size="sm"
+			/>
+		</div>
 	);
 }
 

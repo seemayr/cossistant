@@ -8,6 +8,21 @@ mock.module("facehash", () => ({
 	),
 }));
 
+mock.module("@normy/react-query", () => ({
+	useQueryNormalizer: () => ({
+		getObjectById: () => {},
+	}),
+}));
+
+mock.module("@tanstack/react-query", () => ({
+	useQueries: () => [],
+	useQuery: () => ({
+		data: null,
+		isError: false,
+		isLoading: false,
+	}),
+}));
+
 mock.module("@/components/ui/avatar", () => ({
 	Avatar: ({
 		className,
@@ -89,6 +104,33 @@ mock.module("@/components/ui/layout/sidebars/visitor/utils", () => ({
 	formatLocalTime: () => ({
 		time: "2:30 PM",
 		offset: "+07:00",
+	}),
+}));
+
+mock.module("@/contexts/website", () => ({
+	useWebsite: () => ({
+		slug: "acme",
+	}),
+}));
+
+mock.module("@/hooks/use-contact-visitor-detail-state", () => ({
+	useContactVisitorDetailState: () => ({
+		activeDetail: null,
+	}),
+}));
+
+mock.module("@/lib/trpc/client", () => ({
+	useTRPC: () => ({
+		contact: {
+			get: {
+				queryOptions: () => ({}),
+			},
+		},
+		conversation: {
+			getVisitorById: {
+				queryOptions: () => ({}),
+			},
+		},
 	}),
 }));
 
@@ -245,6 +287,8 @@ describe("ContactVisitorDetailView", () => {
 		const html = await renderView({});
 
 		expect(html).toContain('data-slot="contact-visitor-detail-overlay"');
+		expect(html).toContain("top-15");
+		expect(html).toContain("z-20");
 		expect(html).toContain('data-slot="contact-visitor-detail-layout"');
 		expect(html).toContain("grid-cols-1 lg:grid-cols-2");
 		expect(html.match(/max-w-sm/g)?.length).toBe(2);

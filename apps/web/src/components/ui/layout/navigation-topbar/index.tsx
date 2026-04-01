@@ -11,6 +11,7 @@ import { DashboardTriggerContent } from "@/components/support/custom-trigger";
 import { Button } from "@/components/ui/button";
 import { useWebsite } from "@/contexts/website";
 import { useContactVisitorDetailState } from "@/hooks/use-contact-visitor-detail-state";
+import { useLiveVisitorsOverlayState } from "@/hooks/use-live-visitors-overlay-state";
 import type { LatestRelease } from "@/lib/latest-release";
 import { useTRPC } from "@/lib/trpc/client";
 import Icon from "../../icons";
@@ -33,6 +34,8 @@ export function NavigationTopbar({
 	const website = useWebsite();
 	const trpc = useTRPC();
 	const { activeDetail, closeDetailPage } = useContactVisitorDetailState();
+	const { closeLiveVisitorsOverlay, isOpen: isLiveVisitorsOverlayOpen } =
+		useLiveVisitorsOverlayState();
 	const { isChangelogOpen, setIsChangelogOpen } = useChangelogOverlayState();
 
 	// Data is pre-fetched in the layout, so it will be available immediately
@@ -53,7 +56,14 @@ export function NavigationTopbar({
 	useHotkeys(
 		"escape",
 		(event) => {
-			if (!(isChangelogVisible || isDetailPageOpen || !isOnInboxView)) {
+			if (
+				!(
+					isChangelogVisible ||
+					isDetailPageOpen ||
+					isLiveVisitorsOverlayOpen ||
+					!isOnInboxView
+				)
+			) {
 				return;
 			}
 
@@ -70,10 +80,19 @@ export function NavigationTopbar({
 				return;
 			}
 
+			if (isLiveVisitorsOverlayOpen) {
+				void closeLiveVisitorsOverlay();
+				return;
+			}
+
 			router.push(baseInboxPath);
 		},
 		{
-			enabled: isChangelogVisible || isDetailPageOpen || !isOnInboxView,
+			enabled:
+				isChangelogVisible ||
+				isDetailPageOpen ||
+				isLiveVisitorsOverlayOpen ||
+				!isOnInboxView,
 			preventDefault: true,
 			enableOnContentEditable: false,
 			enableOnFormTags: false,
@@ -81,8 +100,10 @@ export function NavigationTopbar({
 		[
 			baseInboxPath,
 			closeDetailPage,
+			closeLiveVisitorsOverlay,
 			isChangelogVisible,
 			isDetailPageOpen,
+			isLiveVisitorsOverlayOpen,
 			isOnInboxView,
 			router,
 			setIsChangelogOpen,
@@ -125,6 +146,29 @@ export function NavigationTopbar({
 					className="mr-2 size-5.5 rounded-md hover:bg-background-200"
 					onClick={() => {
 						void closeDetailPage();
+					}}
+					size="icon-small"
+					type="button"
+					variant="ghost"
+				>
+					<Icon className="size-4 text-primary" name="arrow-left" />
+					<span className="sr-only">Back</span>
+				</Button>
+			</motion.div>
+		</TooltipOnHover>
+	) : isLiveVisitorsOverlayOpen ? (
+		<TooltipOnHover content="Back" shortcuts={["Esc"]} side="right">
+			<motion.div
+				animate={{ opacity: 1, scale: 1 }}
+				exit={{ opacity: 0, scale: 0.8 }}
+				initial={{ opacity: 0, scale: 0.8 }}
+				key="live-visitors-back"
+				transition={{ duration: 0.1 }}
+			>
+				<Button
+					className="mr-2 size-5.5 rounded-md hover:bg-background-200"
+					onClick={() => {
+						void closeLiveVisitorsOverlay();
 					}}
 					size="icon-small"
 					type="button"

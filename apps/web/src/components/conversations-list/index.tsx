@@ -6,12 +6,13 @@ import { Facehash } from "facehash";
 import Link from "next/link";
 import { useCallback, useState } from "react";
 import {
+	InboxAnalyticsDesktopHeaderActions,
 	InboxAnalyticsDisplay,
-	InboxAnalyticsRangeControl,
 	useInboxAnalyticsController,
 } from "@/components/inbox-analytics";
 import { UpgradeModal } from "@/components/plan/upgrade-modal";
 import { type ConversationHeader, useInboxes } from "@/contexts/inboxes";
+import { useLiveVisitorsOverlayState } from "@/hooks/use-live-visitors-overlay-state";
 import { useTRPC } from "@/lib/trpc/client";
 import { Button } from "../ui/button";
 import Icon from "../ui/icons";
@@ -57,6 +58,7 @@ export function ConversationsList({
 	);
 	const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
 	const { statusCounts } = useInboxes();
+	const { openLiveVisitorsOverlay } = useLiveVisitorsOverlayState();
 	const openLockedConversationUpgradeModal = useCallback(
 		(_conversationId: string) => {
 			setIsUpgradeModalOpen(true);
@@ -126,22 +128,37 @@ export function ConversationsList({
 				</div>
 				{showAnalytics ? (
 					<div className="flex items-center justify-end gap-2">
-						<div className="hidden lg:flex">
-							<InboxAnalyticsRangeControl
-								onRangeChange={analytics.setRangeDays}
-								rangeDays={analytics.rangeDays}
-								size="sm"
-							/>
-						</div>
+						<InboxAnalyticsDesktopHeaderActions
+							actionIconName="globe"
+							actionLabel="Open live visitors overlay"
+							actionTooltip="Open live visitors overlay"
+							onActionClick={() => {
+								void openLiveVisitorsOverlay();
+							}}
+							onRangeChange={analytics.setRangeDays}
+							rangeDays={analytics.rangeDays}
+						/>
 						<Sheet
 							onOpenChange={analytics.setIsSheetOpen}
 							open={analytics.isSheetOpen}
 						>
-							<SheetTrigger asChild>
-								<Button className="lg:hidden" size="sm" variant="ghost">
-									Analytics
+							<div className="flex items-center gap-2 lg:hidden">
+								<Button
+									onClick={() => {
+										void openLiveVisitorsOverlay();
+									}}
+									size="icon-small"
+									variant="ghost"
+								>
+									<Icon name="globe" />
+									<span className="sr-only">Open live visitors overlay</span>
 								</Button>
-							</SheetTrigger>
+								<SheetTrigger asChild>
+									<Button size="sm" variant="ghost">
+										Analytics
+									</Button>
+								</SheetTrigger>
+							</div>
 							<SheetContent
 								className="max-h-[85vh] overflow-y-auto bg-background p-0 lg:hidden"
 								side="bottom"
