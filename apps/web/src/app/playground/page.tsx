@@ -6,6 +6,7 @@ import { useSupport } from "@cossistant/react/index";
 import { type DefaultMessage, SenderType } from "@cossistant/types";
 import Image from "next/image";
 import { AsciiImage } from "@/components/ui/ascii-image";
+import { Background } from "@/components/ui/background";
 import { LogoText } from "@/components/ui/logo";
 
 function PlaygroundPropDisplay({
@@ -44,14 +45,7 @@ export default function Playground() {
 
 	return (
 		<div className="relative flex min-h-screen flex-col items-center justify-center bg-background p-4 md:p-20">
-			<AsciiImage
-				alt="Playground"
-				className="absolute inset-0 z-0 object-fill opacity-100"
-				imageOpacity={0.8}
-				resolution={0.15}
-				src="https://cdn.cossistant.com/neom-t3dlLOhdEzs-unsplash.jpg"
-				strength={1}
-			/>
+			<Background />
 
 			{/* Header */}
 			<div className="absolute top-4 left-4 z-10 md:top-10 md:left-10">
