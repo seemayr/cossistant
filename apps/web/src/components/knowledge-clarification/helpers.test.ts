@@ -3,6 +3,7 @@ import type { KnowledgeClarificationRequest } from "@cossistant/types";
 import {
 	shouldPreferKnowledgeClarificationRequestState,
 	stepFromKnowledgeClarificationRequest,
+	stepFromKnowledgeClarificationStreamResponse,
 } from "./helpers";
 
 function createRequest(
@@ -123,6 +124,45 @@ describe("stepFromKnowledgeClarificationRequest", () => {
 				})
 			)
 		).toBeNull();
+	});
+});
+
+describe("stepFromKnowledgeClarificationStreamResponse", () => {
+	it("builds a preview step from a streamed question decision before the final request lands", () => {
+		const step = stepFromKnowledgeClarificationStreamResponse({
+			request: createRequest({
+				status: "analyzing",
+			}),
+			response: {
+				requestId: "req_1",
+				decision: {
+					kind: "question",
+					topicSummary: "Clarify billing timing",
+					questionPlan: null,
+					question: "Which plan is involved?",
+					suggestedAnswers: ["Free", "Pro", "Enterprise"],
+					inputMode: "suggested_answers",
+					questionScope: "narrow_detail",
+					draftFaqPayload: null,
+					lastError: null,
+				},
+			},
+		});
+
+		expect(step).toEqual({
+			kind: "question",
+			request: createRequest({
+				status: "analyzing",
+				currentQuestion: "Which plan is involved?",
+				currentSuggestedAnswers: ["Free", "Pro", "Enterprise"],
+				currentQuestionInputMode: "suggested_answers",
+				currentQuestionScope: "narrow_detail",
+			}),
+			question: "Which plan is involved?",
+			suggestedAnswers: ["Free", "Pro", "Enterprise"],
+			inputMode: "suggested_answers",
+			questionScope: "narrow_detail",
+		});
 	});
 });
 

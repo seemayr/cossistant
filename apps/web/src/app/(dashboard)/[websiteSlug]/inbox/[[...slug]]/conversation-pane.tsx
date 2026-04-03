@@ -539,6 +539,7 @@ export function ConversationPane({
 	const clarificationPromptContent =
 		activeClarificationSummary && showClarificationPrompt ? (
 			<ClarificationPrompt
+				conversationId={conversationId}
 				onClarify={handleStartClarification}
 				summary={activeClarificationSummary}
 				websiteSlug={websiteSlug}
@@ -546,6 +547,7 @@ export function ConversationPane({
 		) : null;
 
 	const clarificationComposerBlocks = useClarificationComposerFlow({
+		conversationId,
 		onCancel: handleCancelClarification,
 		request: showClarificationDraftBanner
 			? clarificationBannerRequest

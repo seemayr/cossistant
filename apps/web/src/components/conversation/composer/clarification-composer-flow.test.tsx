@@ -20,6 +20,7 @@ mock.module("@tanstack/react-query", () => ({
 		mutate: () => null,
 		mutateAsync: async () => null,
 	}),
+	useQueryClient: () => ({}),
 }));
 
 mock.module(
@@ -67,6 +68,13 @@ function createSummary(
 		status: "awaiting_answer" as const,
 		topicSummary: "Clarify billing timing",
 		question: "Does the billing change immediately?",
+		currentSuggestedAnswers: [
+			"Immediately",
+			"At the next billing cycle",
+			"It depends on the plan",
+		] as [string, string, string],
+		currentQuestionInputMode: "suggested_answers" as const,
+		currentQuestionScope: "narrow_detail" as const,
 		stepIndex: 2,
 		maxSteps: 5,
 		progress: null,
@@ -140,7 +148,7 @@ function createRequest(
 }
 
 describe("useClarificationComposerFlow", () => {
-	it("disables automatic retries for clarification mutations", async () => {
+	it("disables automatic retries for draft approval mutations", async () => {
 		answerMutationOptionsMock.mockClear();
 		skipMutationOptionsMock.mockClear();
 		retryMutationOptionsMock.mockClear();
@@ -150,6 +158,7 @@ describe("useClarificationComposerFlow", () => {
 
 		function FlowHarness() {
 			useClarificationComposerFlow({
+				conversationId: "conv_1",
 				onCancel: () => {},
 				request: createRequest(),
 				summary: createSummary(),
@@ -161,15 +170,6 @@ describe("useClarificationComposerFlow", () => {
 
 		renderToStaticMarkup(<FlowHarness />);
 
-		expect(answerMutationOptionsMock.mock.calls[0]?.[0]).toMatchObject({
-			retry: false,
-		});
-		expect(skipMutationOptionsMock.mock.calls[0]?.[0]).toMatchObject({
-			retry: false,
-		});
-		expect(retryMutationOptionsMock.mock.calls[0]?.[0]).toMatchObject({
-			retry: false,
-		});
 		expect(approveDraftMutationOptionsMock.mock.calls[0]?.[0]).toMatchObject({
 			retry: false,
 		});
@@ -180,6 +180,7 @@ describe("useClarificationComposerFlow", () => {
 
 		function FlowHarness() {
 			const blocks = useClarificationComposerFlow({
+				conversationId: "conv_1",
 				onCancel: () => {},
 				request: createRequest(),
 				summary: createSummary(),
@@ -212,6 +213,7 @@ describe("useClarificationComposerFlow", () => {
 
 		function FlowHarness() {
 			const blocks = useClarificationComposerFlow({
+				conversationId: "conv_1",
 				onCancel: () => {},
 				request: createRequest({
 					currentQuestion: "How does billing-change handling work today?",
@@ -247,6 +249,7 @@ describe("useClarificationComposerFlow", () => {
 
 		function FlowHarness() {
 			const blocks = useClarificationComposerFlow({
+				conversationId: "conv_1",
 				onCancel: () => {},
 				request: null,
 				summary: createSummary({ status: "analyzing", question: null }),
@@ -266,7 +269,7 @@ describe("useClarificationComposerFlow", () => {
 
 		expect(html).toContain("Clarify billing timing");
 		expect(html).toContain('data-clarification-slot="loading"');
-		expect(html).toContain("Reviewing your answer...");
+		expect(html).toContain("Preparing the next step...");
 		expect(html).not.toContain('data-clarification-slot="actions"');
 	});
 
@@ -275,6 +278,7 @@ describe("useClarificationComposerFlow", () => {
 
 		function FlowHarness() {
 			const blocks = useClarificationComposerFlow({
+				conversationId: "conv_1",
 				onCancel: () => {},
 				request: createRequest({
 					status: "analyzing",
@@ -318,6 +322,7 @@ describe("useClarificationComposerFlow", () => {
 
 		function FlowHarness() {
 			const blocks = useClarificationComposerFlow({
+				conversationId: "conv_1",
 				onCancel: () => {},
 				request: createRequest({
 					status: "analyzing",
@@ -357,6 +362,7 @@ describe("useClarificationComposerFlow", () => {
 
 		function FlowHarness() {
 			const blocks = useClarificationComposerFlow({
+				conversationId: "conv_1",
 				onCancel: () => {},
 				request: createRequest({
 					status: "retry_required",
@@ -396,6 +402,7 @@ describe("useClarificationComposerFlow", () => {
 
 		function FlowHarness() {
 			const blocks = useClarificationComposerFlow({
+				conversationId: "conv_1",
 				onCancel: () => {},
 				request: createRequest({
 					status: "draft_ready",

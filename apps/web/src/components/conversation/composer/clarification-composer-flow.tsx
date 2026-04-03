@@ -13,11 +13,13 @@ import {
 	formatClarificationQuestionLabel,
 	shouldPreferKnowledgeClarificationRequestState,
 	stepFromKnowledgeClarificationRequest,
+	stepFromKnowledgeClarificationStreamResponse,
 } from "@/components/knowledge-clarification/helpers";
 import {
 	KnowledgeClarificationQuestionContent,
 	useKnowledgeClarificationAnswerDraft,
 } from "@/components/knowledge-clarification/question-flow";
+import { useKnowledgeClarificationStreamAction } from "@/components/knowledge-clarification/use-clarification-stream";
 import { useKnowledgeClarificationQueryInvalidation } from "@/components/knowledge-clarification/use-query-invalidation";
 import { Button } from "@/components/ui/button";
 import { useTRPC } from "@/lib/trpc/client";
@@ -26,6 +28,7 @@ import { Spinner } from "../../../../../../packages/react/src/support/components
 import Icon from "../../ui/icons";
 import {
 	DEFAULT_CLARIFICATION_PROGRESS_FALLBACK_LABEL,
+	isClarificationTakingLongerThanUsual,
 	resolveClarificationProgressView,
 } from "./clarification-progress";
 import { ComposerBottomBlock } from "./composer-bottom-block";
@@ -33,6 +36,7 @@ import { ComposerCentralBlock } from "./composer-central-block";
 
 type ClarificationComposerFlowProps = {
 	websiteSlug: string;
+	conversationId: string;
 	summary: ConversationClarificationSummary | null;
 	request: KnowledgeClarificationRequest | null;
 	onCancel: () => void;
@@ -137,15 +141,36 @@ export function ClarificationTopicBlock({
 	);
 }
 
-export function ClarificationLoadingBlock({ label }: { label: string }) {
+export function ClarificationLoadingBlock({
+	label,
+	submittedAnswer,
+	showSlowWarning = false,
+}: {
+	label: string;
+	submittedAnswer?: string | null;
+	showSlowWarning?: boolean;
+}) {
 	return (
 		<ComposerCentralBlock>
-			<div
-				className="flex items-center gap-2 p-4 text-muted-foreground text-sm"
-				data-clarification-slot="loading"
-			>
-				<Spinner size={16} />
-				<span>{label}</span>
+			<div className="space-y-3 p-4" data-clarification-slot="loading">
+				<div className="flex items-center gap-2 text-muted-foreground text-sm">
+					<Spinner size={16} />
+					<span>{label}</span>
+				</div>
+				{submittedAnswer ? (
+					<div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2">
+						<div className="font-medium text-[11px] text-muted-foreground uppercase tracking-[0.08em]">
+							Last answer
+						</div>
+						<p className="mt-1 text-sm">{submittedAnswer}</p>
+					</div>
+				) : null}
+				{showSlowWarning ? (
+					<p className="text-muted-foreground text-sm">
+						This is taking longer than usual. The AI should settle this step
+						shortly.
+					</p>
+				) : null}
 			</div>
 		</ComposerCentralBlock>
 	);
@@ -376,6 +401,7 @@ export function ClarificationActionsBlock({
 
 export function useClarificationComposerFlow({
 	websiteSlug,
+	conversationId,
 	summary,
 	request,
 	onCancel,
@@ -410,77 +436,61 @@ export function useClarificationComposerFlow({
 		() => stepFromKnowledgeClarificationRequest(request),
 		[request]
 	);
+	const [optimisticProgressStartedAt, setOptimisticProgressStartedAt] =
+		useState<string | null>(null);
+	const [lastSubmittedAnswer, setLastSubmittedAnswer] = useState<string | null>(
+		null
+	);
+	const clarificationStream = useKnowledgeClarificationStreamAction<
+		"answer" | "skip" | "retry"
+	>({
+		onError: async (error) => {
+			await invalidateClarificationQueries({
+				requestId: request?.id ?? summary?.requestId ?? null,
+				conversationId: request?.conversationId ?? conversationId,
+			});
+			toast.error(
+				error.message ||
+					"The AI hit a temporary issue. You can retry from here."
+			);
+		},
+		onFinish: async (result) => {
+			setLocalStep(stepFromKnowledgeClarificationRequest(result.request));
+			await invalidateClarificationQueries({
+				request: result.request,
+			});
+		},
+	});
+	const streamPreviewStep = useMemo(
+		() =>
+			stepFromKnowledgeClarificationStreamResponse({
+				request: localStep?.request ?? request,
+				response: clarificationStream.object,
+			}),
+		[clarificationStream.object, localStep, request]
+	);
 	const shouldPreferRequestState = useMemo(
 		() =>
+			!streamPreviewStep &&
 			shouldPreferKnowledgeClarificationRequestState({
 				request,
 				step: localStep,
 			}),
-		[localStep, request]
+		[localStep, request, streamPreviewStep]
 	);
 	const step = useMemo(
-		() => (shouldPreferRequestState ? requestStep : (localStep ?? requestStep)),
-		[localStep, requestStep, shouldPreferRequestState]
+		() =>
+			streamPreviewStep ??
+			(shouldPreferRequestState ? requestStep : (localStep ?? requestStep)),
+		[localStep, requestStep, shouldPreferRequestState, streamPreviewStep]
 	);
 
 	const answerDraft = useKnowledgeClarificationAnswerDraft(
-		step?.kind === "question" ? step.question : null,
-		step?.kind === "question" ? step.inputMode : "suggested_answers"
+		step?.kind === "question" ? step.question : (summary?.question ?? null),
+		step?.kind === "question"
+			? step.inputMode
+			: (summary?.currentQuestionInputMode ?? "suggested_answers")
 	);
-	const [optimisticProgressStartedAt, setOptimisticProgressStartedAt] =
-		useState<string | null>(null);
-
-	const handleMutationSuccess = async (result: {
-		step: NonNullable<typeof step>;
-	}) => {
-		setLocalStep(result.step);
-		await invalidateClarificationQueries({
-			request: result.step.request,
-		});
-	};
-
-	const answerMutation = useMutation(
-		trpc.knowledgeClarification.answer.mutationOptions({
-			retry: false,
-			onSuccess: handleMutationSuccess,
-			onError: async (_error, variables) => {
-				await invalidateClarificationQueries({
-					requestId: variables.requestId,
-					conversationId: request?.conversationId ?? null,
-				});
-				toast.error("The AI hit a temporary issue. You can retry from here.");
-			},
-		})
-	);
-
-	const skipMutation = useMutation(
-		trpc.knowledgeClarification.skip.mutationOptions({
-			retry: false,
-			onSuccess: handleMutationSuccess,
-			onError: async (_error, variables) => {
-				await invalidateClarificationQueries({
-					requestId: variables.requestId,
-					conversationId: request?.conversationId ?? null,
-				});
-				toast.error("The AI hit a temporary issue. You can retry from here.");
-			},
-		})
-	);
-
-	const retryMutation = useMutation(
-		trpc.knowledgeClarification.retry.mutationOptions({
-			retry: false,
-			onSuccess: handleMutationSuccess,
-			onError: async (_error, variables) => {
-				await invalidateClarificationQueries({
-					requestId: variables.requestId,
-					conversationId: request?.conversationId ?? null,
-				});
-				toast.error("The AI hit a temporary issue. You can retry from here.");
-			},
-		})
-	);
-
 	const approveMutation = useMutation(
 		trpc.knowledgeClarification.approveDraft.mutationOptions({
 			retry: false,
@@ -504,14 +514,35 @@ export function useClarificationComposerFlow({
 	const currentRequest = shouldPreferRequestState
 		? request
 		: (step?.request ?? request);
-	const isSubmitting = answerMutation.isPending;
-	const isSkipping = skipMutation.isPending;
-	const isRetrying = retryMutation.isPending;
+	const summaryQuestionState =
+		summary?.question &&
+		summary.currentSuggestedAnswers &&
+		summary.currentQuestionInputMode &&
+		summary.currentQuestionScope
+			? {
+					inputMode: summary.currentQuestionInputMode,
+					question: summary.question,
+					questionScope: summary.currentQuestionScope,
+					requestId: summary.requestId,
+					suggestedAnswers: summary.currentSuggestedAnswers,
+				}
+			: null;
+	const displayedQuestion =
+		step?.kind === "question"
+			? {
+					inputMode: step.inputMode,
+					question: step.question,
+					questionScope: step.questionScope,
+					requestId: step.request.id,
+					suggestedAnswers: step.suggestedAnswers,
+				}
+			: summaryQuestionState;
+	const isSubmitting = clarificationStream.isPendingAction("answer");
+	const isSkipping = clarificationStream.isPendingAction("skip");
+	const isRetrying = clarificationStream.isPendingAction("retry");
 	const isAnalyzing = Boolean(
 		summary &&
-			(isSubmitting ||
-				isSkipping ||
-				isRetrying ||
+			(clarificationStream.isLoading ||
 				currentRequest?.status === "analyzing" ||
 				summary.status === "analyzing")
 	);
@@ -525,6 +556,15 @@ export function useClarificationComposerFlow({
 			}),
 		[nowMs, optimisticProgressStartedAt, summary?.progress]
 	);
+	const isTakingLongerThanUsual = useMemo(
+		() =>
+			isClarificationTakingLongerThanUsual({
+				nowMs,
+				serverProgress: summary?.progress,
+				localStartedAt: optimisticProgressStartedAt,
+			}),
+		[nowMs, optimisticProgressStartedAt, summary?.progress]
+	);
 
 	useEffect(() => {
 		if (isAnalyzing) {
@@ -532,6 +572,7 @@ export function useClarificationComposerFlow({
 		}
 
 		setOptimisticProgressStartedAt(null);
+		setLastSubmittedAnswer(null);
 	}, [isAnalyzing]);
 
 	useEffect(() => {
@@ -608,7 +649,7 @@ export function useClarificationComposerFlow({
 
 	const topicSummary = currentRequest?.topicSummary ?? summary.topicSummary;
 	const stepIndex = currentRequest?.stepIndex ?? summary.stepIndex;
-	const canSkip = Boolean(step?.kind === "question");
+	const canSkip = Boolean(displayedQuestion);
 	const retryRequest =
 		step?.kind === "retry_required"
 			? step.request
@@ -621,39 +662,50 @@ export function useClarificationComposerFlow({
 		DEFAULT_CLARIFICATION_PROGRESS_FALLBACK_LABEL;
 
 	const handleSubmit = () => {
-		if (!(step?.kind === "question" && answerDraft.submitPayload)) {
+		if (!(displayedQuestion && answerDraft.submitPayload)) {
 			return;
 		}
 
 		setOptimisticProgressStartedAt(new Date().toISOString());
-		answerMutation.mutate({
+		setLastSubmittedAnswer(
+			answerDraft.submitPayload.freeAnswer ??
+				answerDraft.submitPayload.selectedAnswer ??
+				null
+		);
+		clarificationStream.submitAction("answer", {
+			action: "answer",
 			websiteSlug,
-			requestId: step.request.id,
+			requestId: displayedQuestion.requestId,
 			...answerDraft.submitPayload,
 		});
 	};
 
 	const handleSkip = () => {
-		if (step?.kind !== "question") {
+		if (!displayedQuestion) {
 			return;
 		}
 
 		setOptimisticProgressStartedAt(new Date().toISOString());
-		skipMutation.mutate({
+		setLastSubmittedAnswer("Skipped this question");
+		clarificationStream.submitAction("skip", {
+			action: "skip",
 			websiteSlug,
-			requestId: step.request.id,
+			requestId: displayedQuestion.requestId,
 		});
 	};
 
 	const handleRetry = () => {
-		if (!currentRequest) {
+		const requestId = currentRequest?.id ?? summary.requestId;
+		if (!requestId) {
 			return;
 		}
 
 		setOptimisticProgressStartedAt(new Date().toISOString());
-		retryMutation.mutate({
+		setLastSubmittedAnswer(null);
+		clarificationStream.submitAction("retry", {
+			action: "retry",
 			websiteSlug,
-			requestId: currentRequest.id,
+			requestId,
 		});
 	};
 
@@ -665,7 +717,12 @@ export function useClarificationComposerFlow({
 			/>
 		),
 		centralBlock: isAnalyzing ? (
-			<ClarificationLoadingBlock key="loading" label={loadingLabel} />
+			<ClarificationLoadingBlock
+				key="loading"
+				label={loadingLabel}
+				showSlowWarning={isTakingLongerThanUsual}
+				submittedAnswer={lastSubmittedAnswer}
+			/>
 		) : retryRequest ? (
 			<ClarificationRetryBlock
 				isRetrying={isRetrying}
@@ -673,17 +730,17 @@ export function useClarificationComposerFlow({
 				onRetry={handleRetry}
 				request={retryRequest}
 			/>
-		) : step?.kind === "question" ? (
+		) : displayedQuestion ? (
 			<ClarificationQuestionBlock
 				freeAnswer={answerDraft.freeAnswer}
-				inputMode={step.inputMode}
+				inputMode={displayedQuestion.inputMode}
 				isOtherSelected={answerDraft.isOtherSelected}
 				isPending={false}
 				onFreeAnswerChange={answerDraft.setFreeAnswer}
 				onSelectAnswer={answerDraft.selectAnswer}
-				question={step.question}
+				question={displayedQuestion.question}
 				selectedAnswer={answerDraft.selectedAnswer}
-				suggestedAnswers={step.suggestedAnswers}
+				suggestedAnswers={displayedQuestion.suggestedAnswers}
 			/>
 		) : (
 			<ClarificationLoadingBlock key="loading" label={loadingLabel} />

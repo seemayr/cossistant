@@ -101,6 +101,11 @@ function shouldInvalidateActiveClarification(params: {
 		params.current.status !== params.next.status ||
 		params.current.topicSummary !== params.next.topicSummary ||
 		params.current.question !== params.next.question ||
+		JSON.stringify(params.current.currentSuggestedAnswers) !==
+			JSON.stringify(params.next.currentSuggestedAnswers) ||
+		params.current.currentQuestionInputMode !==
+			params.next.currentQuestionInputMode ||
+		params.current.currentQuestionScope !== params.next.currentQuestionScope ||
 		params.current.stepIndex !== params.next.stepIndex ||
 		params.current.maxSteps !== params.next.maxSteps ||
 		params.current.updatedAt !== params.next.updatedAt

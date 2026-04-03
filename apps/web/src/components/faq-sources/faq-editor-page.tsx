@@ -1,10 +1,11 @@
 "use client";
 
 import type { FaqKnowledgePayload } from "@cossistant/types";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { useKnowledgeClarificationStreamAction } from "@/components/knowledge-clarification/use-clarification-stream";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -100,13 +101,17 @@ export function FaqEditorPage({ knowledgeId }: FaqEditorPageProps) {
 		trainingControls: pageState.trainingControls,
 	});
 
-	const startClarificationMutation = useMutation(
-		trpc.knowledgeClarification.startFromFaq.mutationOptions({
+	const clarificationStream =
+		useKnowledgeClarificationStreamAction<"start_faq">({
 			onError: (error) => {
 				toast.error(error.message || "Failed to start FAQ clarification");
 			},
-		})
-	);
+			onFinish: (result) => {
+				router.push(
+					`/${pageState.websiteSlug}/agent/training/faq/proposals/${result.request.id}`
+				);
+			},
+		});
 
 	useEffect(() => {
 		if (!knowledge || knowledge.type !== "faq") {
@@ -204,13 +209,11 @@ export function FaqEditorPage({ knowledgeId }: FaqEditorPageProps) {
 			return;
 		}
 
-		const result = await startClarificationMutation.mutateAsync({
+		clarificationStream.submitAction("start_faq", {
+			action: "start_faq",
 			websiteSlug: pageState.websiteSlug,
 			knowledgeId,
 		});
-		router.push(
-			`/${pageState.websiteSlug}/agent/training/faq/proposals/${result.step.request.id}`
-		);
 	};
 
 	const canSave =
@@ -230,13 +233,13 @@ export function FaqEditorPage({ knowledgeId }: FaqEditorPageProps) {
 			) : null}
 			{isCreateMode ? null : (
 				<Button
-					disabled={startClarificationMutation.isPending || isLoadingKnowledge}
+					disabled={clarificationStream.isLoading || isLoadingKnowledge}
 					onClick={handleDeepen}
 					size="sm"
 					type="button"
 					variant="ghost"
 				>
-					{startClarificationMutation.isPending ? "Opening..." : "Deepen"}
+					{clarificationStream.isLoading ? "Opening..." : "Deepen"}
 				</Button>
 			)}
 			{isCreateMode ? null : (

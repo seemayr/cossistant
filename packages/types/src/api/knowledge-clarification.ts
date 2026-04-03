@@ -138,6 +138,11 @@ export const conversationClarificationSummarySchema = z.object({
 	status: activeConversationKnowledgeClarificationStatusSchema,
 	topicSummary: z.string(),
 	question: z.string().nullable(),
+	currentSuggestedAnswers:
+		knowledgeClarificationSuggestedAnswersSchema.nullable(),
+	currentQuestionInputMode:
+		knowledgeClarificationQuestionInputModeSchema.nullable(),
+	currentQuestionScope: knowledgeClarificationQuestionScopeSchema.nullable(),
 	stepIndex: z.number().int().min(0),
 	maxSteps: z.number().int().min(1),
 	updatedAt: z.string(),
@@ -251,6 +256,49 @@ export const skipKnowledgeClarificationRequestSchema = z.object({
 	requestId: z.ulid(),
 });
 
+export const knowledgeClarificationStreamStepRequestSchema =
+	z.discriminatedUnion("action", [
+		startConversationKnowledgeClarificationRequestSchema.extend({
+			action: z.literal("start_conversation"),
+		}),
+		startFaqKnowledgeClarificationRequestSchema.extend({
+			action: z.literal("start_faq"),
+		}),
+		answerKnowledgeClarificationRequestSchema.extend({
+			action: z.literal("answer"),
+		}),
+		skipKnowledgeClarificationRequestSchema.extend({
+			action: z.literal("skip"),
+		}),
+		updateKnowledgeClarificationStatusRequestSchema.extend({
+			action: z.literal("retry"),
+		}),
+	]);
+
+export const knowledgeClarificationStreamStepDecisionSchema = z.object({
+	kind: z.enum(["question", "draft_ready", "retry_required"]),
+	topicSummary: z.string(),
+	questionPlan: knowledgeClarificationQuestionPlanSchema.nullable(),
+	question: z.string().nullable(),
+	suggestedAnswers: knowledgeClarificationSuggestedAnswersSchema.nullable(),
+	inputMode: knowledgeClarificationQuestionInputModeSchema.nullable(),
+	questionScope: knowledgeClarificationQuestionScopeSchema.nullable(),
+	draftFaqPayload: knowledgeClarificationDraftFaqSchema.nullable(),
+	lastError: z.string().nullable(),
+});
+
+export const knowledgeClarificationStreamStepResponseSchema = z.object({
+	requestId: z.ulid(),
+	decision: knowledgeClarificationStreamStepDecisionSchema,
+	status: z.union([
+		z.literal("awaiting_answer"),
+		z.literal("retry_required"),
+		z.literal("draft_ready"),
+	]),
+	updatedAt: z.string(),
+	request: knowledgeClarificationRequestSchema,
+});
+
 export const listKnowledgeClarificationProposalsRequestSchema = z.object({
 	websiteSlug: z.string(),
 });
@@ -277,10 +325,6 @@ export const approveKnowledgeClarificationDraftRequestSchema = z.object({
 export const approveKnowledgeClarificationDraftResponseSchema = z.object({
 	request: knowledgeClarificationRequestSchema,
 	knowledge: knowledgeResponseSchema,
-});
-
-export const knowledgeClarificationStepEnvelopeSchema = z.object({
-	step: knowledgeClarificationStepResponseSchema,
 });
 
 export const getActiveKnowledgeClarificationResponseSchema = z.object({
@@ -331,6 +375,15 @@ export type KnowledgeClarificationTurn = z.infer<
 >;
 export type KnowledgeClarificationStepResponse = z.infer<
 	typeof knowledgeClarificationStepResponseSchema
+>;
+export type KnowledgeClarificationStreamStepDecision = z.infer<
+	typeof knowledgeClarificationStreamStepDecisionSchema
+>;
+export type KnowledgeClarificationStreamStepRequest = z.infer<
+	typeof knowledgeClarificationStreamStepRequestSchema
+>;
+export type KnowledgeClarificationStreamStepResponse = z.infer<
+	typeof knowledgeClarificationStreamStepResponseSchema
 >;
 export type StartConversationKnowledgeClarificationRequest = z.infer<
 	typeof startConversationKnowledgeClarificationRequestSchema

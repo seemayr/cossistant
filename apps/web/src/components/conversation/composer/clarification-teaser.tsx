@@ -1,17 +1,19 @@
 "use client";
 
 import type { ConversationClarificationSummary } from "@cossistant/types";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type React from "react";
 import { toast } from "sonner";
 import { useKnowledgeClarificationQueryInvalidation } from "@/components/knowledge-clarification/use-query-invalidation";
 import { Button } from "@/components/ui/button";
+import { clearConversationClarificationInCache } from "@/data/knowledge-clarification-cache";
 import { useTRPC } from "@/lib/trpc/client";
 import { cn } from "@/lib/utils";
 import Icon from "../../ui/icons";
 
 export type ClarificationPromptProps = {
 	websiteSlug: string;
+	conversationId: string;
 	summary: ConversationClarificationSummary;
 	onClarify: () => void;
 	className?: string;
@@ -86,20 +88,32 @@ export function ClarificationPromptCard({
 
 export function ClarificationPrompt({
 	websiteSlug,
+	conversationId,
 	summary,
 	onClarify,
 	className,
 }: ClarificationPromptProps) {
 	const trpc = useTRPC();
+	const queryClient = useQueryClient();
 	const invalidateClarificationQueries =
 		useKnowledgeClarificationQueryInvalidation(websiteSlug);
 	const deferMutation = useMutation(
 		trpc.knowledgeClarification.defer.mutationOptions({
 			retry: false,
+			onMutate: async () => {
+				clearConversationClarificationInCache(queryClient, {
+					websiteSlug,
+					conversationId,
+				});
+			},
 			onSuccess: async (request) => {
 				await invalidateClarificationQueries({ request });
 			},
-			onError: (error) => {
+			onError: async (error) => {
+				await invalidateClarificationQueries({
+					requestId: summary.requestId,
+					conversationId,
+				});
 				toast.error(error.message || "Failed to save clarification for later");
 			},
 		})
@@ -107,10 +121,20 @@ export function ClarificationPrompt({
 	const dismissMutation = useMutation(
 		trpc.knowledgeClarification.dismiss.mutationOptions({
 			retry: false,
+			onMutate: async () => {
+				clearConversationClarificationInCache(queryClient, {
+					websiteSlug,
+					conversationId,
+				});
+			},
 			onSuccess: async (request) => {
 				await invalidateClarificationQueries({ request });
 			},
-			onError: (error) => {
+			onError: async (error) => {
+				await invalidateClarificationQueries({
+					requestId: summary.requestId,
+					conversationId,
+				});
 				toast.error(error.message || "Failed to remove clarification");
 			},
 		})

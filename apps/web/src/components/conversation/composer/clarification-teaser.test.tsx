@@ -8,6 +8,7 @@ mock.module("@tanstack/react-query", () => ({
 		mutate: () => null,
 		mutateAsync: async () => null,
 	}),
+	useQueryClient: () => ({}),
 }));
 
 mock.module(
@@ -44,11 +45,19 @@ describe("ClarificationPrompt", () => {
 					status: "awaiting_answer",
 					topicSummary: "Clarify billing timing",
 					question: "Does the billing change immediately?",
+					currentSuggestedAnswers: [
+						"Immediately",
+						"At the next billing cycle",
+						"It depends on the plan",
+					],
+					currentQuestionInputMode: "suggested_answers",
+					currentQuestionScope: "narrow_detail",
 					stepIndex: 2,
 					maxSteps: 5,
 					progress: null,
 					updatedAt: "2026-03-13T10:00:00.000Z",
 				},
+				conversationId: "conv_1",
 				onClarify: () => {},
 			})
 		);

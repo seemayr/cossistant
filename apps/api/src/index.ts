@@ -7,6 +7,7 @@ import {
 	websocketRateLimiter,
 } from "@api/middleware/rate-limit";
 import { routers } from "@api/rest/routers";
+import { knowledgeClarificationStreamRouter } from "@api/routes/knowledge-clarification-stream";
 import { createTRPCContext } from "@api/trpc/init";
 import { origamiTRPCRouter } from "@api/trpc/routers/_app";
 import { checkHealth } from "@api/utils/health";
@@ -103,6 +104,15 @@ app.use(
 	})
 );
 
+app.use(
+	"/api/knowledge-clarification/*",
+	cors({
+		origin: acceptedOrigins,
+		maxAge: 86_400,
+		credentials: true,
+	})
+);
+
 // CORS middleware for V1 API (public access)
 app.use(
 	"/v1/*",
@@ -115,8 +125,27 @@ app.use(
 
 // Apply rate limiting before session handling
 app.use("/trpc/*", trpcRateLimiter);
+app.use("/api/knowledge-clarification/*", trpcRateLimiter);
 
 app.use("/trpc/*", async (c, next) => {
+	const session = await getTRPCSession(db, {
+		headers: c.req.raw.headers,
+	});
+
+	if (!session) {
+		c.set("user", null);
+		c.set("session", null);
+
+		return next();
+	}
+
+	c.set("user", session.user);
+	c.set("session", session.session);
+
+	return next();
+});
+
+app.use("/api/knowledge-clarification/*", async (c, next) => {
 	const session = await getTRPCSession(db, {
 		headers: c.req.raw.headers,
 	});
@@ -146,6 +175,8 @@ app.use(
 		createContext: createTRPCContext,
 	})
 );
+
+app.route("/api/knowledge-clarification", knowledgeClarificationStreamRouter);
 
 // REST API routes with default rate limiting
 app.use("/v1/*", defaultRateLimiter);

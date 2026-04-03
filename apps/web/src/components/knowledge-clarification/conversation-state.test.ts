@@ -16,6 +16,13 @@ function createSummary(
 		status: "awaiting_answer",
 		topicSummary: "Clarify billing timing",
 		question: "Does the billing change immediately?",
+		currentSuggestedAnswers: [
+			"Immediately",
+			"At the next billing cycle",
+			"It depends on the plan",
+		],
+		currentQuestionInputMode: "suggested_answers",
+		currentQuestionScope: "narrow_detail",
 		stepIndex: 2,
 		maxSteps: 5,
 		progress: null,

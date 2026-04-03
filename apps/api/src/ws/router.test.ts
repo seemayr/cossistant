@@ -602,6 +602,13 @@ describe("conversationUpdated handler", () => {
 						status: "awaiting_answer",
 						topicSummary: "Clarify how credits roll over.",
 						question: "Do credits survive downgrades?",
+						currentSuggestedAnswers: [
+							"Yes, always",
+							"No, they reset",
+							"It depends on the downgrade",
+						],
+						currentQuestionInputMode: "suggested_answers",
+						currentQuestionScope: "narrow_detail",
 						stepIndex: 2,
 						maxSteps: 5,
 						progress: null,

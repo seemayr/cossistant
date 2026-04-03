@@ -154,6 +154,13 @@ describe("buildFakeSmartOrderedList", () => {
 				status: "awaiting_answer",
 				topicSummary: "Clarify how invoice credits apply to plan changes.",
 				question: "Do invoice credits carry over after a downgrade?",
+				currentSuggestedAnswers: [
+					"Yes, always",
+					"No, they reset",
+					"It depends on the change",
+				],
+				currentQuestionInputMode: "suggested_answers",
+				currentQuestionScope: "narrow_detail",
 				stepIndex: 2,
 				maxSteps: 5,
 				progress: null,

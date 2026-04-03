@@ -1,5 +1,4 @@
 import type { Database } from "@api/db";
-import { getAiAgentForWebsite } from "@api/db/queries/ai-agent";
 import {
 	createKnowledge,
 	getKnowledgeById,
@@ -8,7 +7,6 @@ import {
 	updateKnowledge,
 } from "@api/db/queries/knowledge";
 import {
-	createKnowledgeClarificationTurn,
 	getActiveKnowledgeClarificationForConversation,
 	getKnowledgeClarificationRequestById,
 	listKnowledgeClarificationProposals,
@@ -21,17 +19,12 @@ import {
 	createKnowledgeClarificationAuditEntry,
 	emitConversationClarificationUpdate,
 	loadKnowledgeClarificationRuntime,
-	runKnowledgeClarificationStep,
 	serializeKnowledgeClarificationRequest,
-	startConversationKnowledgeClarification,
-	startFaqKnowledgeClarification,
 } from "@api/services/knowledge-clarification";
 import type { KnowledgeClarificationDraftFaq } from "@cossistant/types";
 import {
-	answerKnowledgeClarificationRequestSchema,
 	approveKnowledgeClarificationDraftRequestSchema,
 	approveKnowledgeClarificationDraftResponseSchema,
-	type ConversationClarificationProgress,
 	type FaqKnowledgePayload,
 	getActiveKnowledgeClarificationRequestSchema,
 	getActiveKnowledgeClarificationResponseSchema,
@@ -39,17 +32,12 @@ import {
 	getKnowledgeClarificationProposalResponseSchema,
 	type KnowledgeResponse,
 	knowledgeClarificationRequestSchema,
-	knowledgeClarificationStepEnvelopeSchema,
 	listKnowledgeClarificationProposalsRequestSchema,
 	listKnowledgeClarificationProposalsResponseSchema,
-	skipKnowledgeClarificationRequestSchema,
-	startConversationKnowledgeClarificationRequestSchema,
-	startFaqKnowledgeClarificationRequestSchema,
 	updateKnowledgeClarificationStatusRequestSchema,
 } from "@cossistant/types";
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, protectedProcedure } from "../init";
-import { loadConversationContext } from "../utils/conversation";
 
 function toNumericLimit(value: number | boolean | null): number | null {
 	if (value === null || value === true) {
@@ -101,36 +89,6 @@ function toKnowledgeResponse(entry: {
 		updatedAt: entry.updatedAt,
 		deletedAt: entry.deletedAt,
 	};
-}
-
-async function loadWebsiteAndAiAgent(params: {
-	db: Parameters<typeof getWebsiteBySlugWithAccess>[0];
-	userId: string;
-	websiteSlug: string;
-}) {
-	const website = await getWebsiteBySlugWithAccess(params.db, {
-		userId: params.userId,
-		websiteSlug: params.websiteSlug,
-	});
-	if (!website) {
-		throw new TRPCError({
-			code: "NOT_FOUND",
-			message: "Website not found or access denied",
-		});
-	}
-
-	const aiAgent = await getAiAgentForWebsite(params.db, {
-		websiteId: website.id,
-		organizationId: website.organizationId,
-	});
-	if (!aiAgent) {
-		throw new TRPCError({
-			code: "BAD_REQUEST",
-			message: "AI agent not found for this website",
-		});
-	}
-
-	return { website, aiAgent };
 }
 
 async function loadWebsite(params: {
@@ -196,45 +154,6 @@ async function maybeSerializeClarificationRequest(params: {
 		request: params.request,
 		turns,
 	});
-}
-
-async function emitRetryableConversationClarificationFailure(params: {
-	db: Database;
-	websiteId: string;
-	requestId: string;
-	conversation: Awaited<
-		ReturnType<typeof loadKnowledgeClarificationRuntime>
-	>["conversation"];
-}) {
-	const failedRequest = await getKnowledgeClarificationRequestById(params.db, {
-		requestId: params.requestId,
-		websiteId: params.websiteId,
-	});
-
-	await emitConversationClarificationUpdate({
-		db: params.db,
-		conversation: params.conversation,
-		request: failedRequest,
-		aiAgentId: null,
-	});
-}
-
-function createConversationClarificationProgressReporter(params: {
-	db: Database;
-	conversation: Awaited<
-		ReturnType<typeof loadKnowledgeClarificationRuntime>
-	>["conversation"];
-	request: Awaited<ReturnType<typeof getKnowledgeClarificationRequestById>>;
-}) {
-	return async (progress: ConversationClarificationProgress) => {
-		await emitConversationClarificationUpdate({
-			db: params.db,
-			conversation: params.conversation,
-			request: params.request,
-			aiAgentId: null,
-			progress,
-		});
-	};
 }
 
 async function ensureFaqApprovalWithinLimits(params: {
@@ -349,438 +268,6 @@ export const knowledgeClarificationRouter = createTRPCRouter({
 					turns,
 				}),
 			};
-		}),
-
-	startFromConversation: protectedProcedure
-		.input(startConversationKnowledgeClarificationRequestSchema)
-		.output(knowledgeClarificationStepEnvelopeSchema)
-		.mutation(async ({ ctx: { db, user }, input }) => {
-			const { website, conversation } = await loadConversationContext(
-				db,
-				user.id,
-				{
-					websiteSlug: input.websiteSlug,
-					conversationId: input.conversationId,
-				}
-			);
-			const aiAgent = await getAiAgentForWebsite(db, {
-				websiteId: website.id,
-				organizationId: website.organizationId,
-			});
-			if (!aiAgent) {
-				throw new TRPCError({
-					code: "BAD_REQUEST",
-					message: "AI agent not found for this website",
-				});
-			}
-
-			try {
-				const result = await startConversationKnowledgeClarification({
-					db,
-					organizationId: website.organizationId,
-					websiteId: website.id,
-					aiAgent,
-					conversation,
-					topicSummary: input.topicSummary,
-					actor: { userId: user.id },
-					creationMode: "manual",
-				});
-				if (!result.step) {
-					throw new TRPCError({
-						code: "BAD_REQUEST",
-						message:
-							"This clarification trigger already maps to a completed request",
-					});
-				}
-
-				try {
-					await emitConversationClarificationUpdate({
-						db,
-						conversation,
-						request: result.step.request,
-						aiAgentId: null,
-					});
-				} catch (error) {
-					console.warn(
-						"[KnowledgeClarification] Failed to emit conversation start update",
-						{
-							conversationId: conversation.id,
-							requestId: result.step.request.id,
-							error:
-								error instanceof Error ? error.message : "Unknown emit failure",
-						}
-					);
-				}
-
-				return { step: result.step };
-			} catch (error) {
-				if (error instanceof TRPCError) {
-					throw error;
-				}
-				throw new TRPCError({
-					code: "INTERNAL_SERVER_ERROR",
-					message:
-						error instanceof Error
-							? error.message
-							: "Failed to start clarification flow",
-				});
-			}
-		}),
-
-	startFromFaq: protectedProcedure
-		.input(startFaqKnowledgeClarificationRequestSchema)
-		.output(knowledgeClarificationStepEnvelopeSchema)
-		.mutation(async ({ ctx: { db, user }, input }) => {
-			const { website, aiAgent } = await loadWebsiteAndAiAgent({
-				db,
-				userId: user.id,
-				websiteSlug: input.websiteSlug,
-			});
-			const targetKnowledge = await getKnowledgeById(db, {
-				id: input.knowledgeId,
-				websiteId: website.id,
-			});
-			if (!targetKnowledge) {
-				throw new TRPCError({
-					code: "NOT_FOUND",
-					message: "FAQ not found",
-				});
-			}
-			if (targetKnowledge.type !== "faq") {
-				throw new TRPCError({
-					code: "BAD_REQUEST",
-					message: "Only FAQ knowledge can be deepened in this flow",
-				});
-			}
-
-			const payload =
-				typeof targetKnowledge.payload === "object" &&
-				targetKnowledge.payload !== null
-					? (targetKnowledge.payload as Record<string, unknown>)
-					: null;
-			const defaultTopicSummary =
-				input.topicSummary?.trim() ||
-				(typeof payload?.question === "string"
-					? `Clarify FAQ: ${payload.question}`
-					: "Clarify this FAQ");
-
-			try {
-				const { step } = await startFaqKnowledgeClarification({
-					db,
-					organizationId: website.organizationId,
-					websiteId: website.id,
-					aiAgent,
-					topicSummary: defaultTopicSummary,
-					targetKnowledge,
-				});
-
-				return { step };
-			} catch (error) {
-				throw new TRPCError({
-					code: "INTERNAL_SERVER_ERROR",
-					message:
-						error instanceof Error
-							? error.message
-							: "Failed to start clarification flow",
-				});
-			}
-		}),
-
-	answer: protectedProcedure
-		.input(answerKnowledgeClarificationRequestSchema)
-		.output(knowledgeClarificationStepEnvelopeSchema)
-		.mutation(async ({ ctx: { db, user }, input }) => {
-			const { website, request } = await loadClarificationRequest({
-				db,
-				userId: user.id,
-				websiteSlug: input.websiteSlug,
-				requestId: input.requestId,
-			});
-
-			if (
-				request.status !== "awaiting_answer" &&
-				request.status !== "deferred"
-			) {
-				throw new TRPCError({
-					code: "BAD_REQUEST",
-					message: "This clarification request is not waiting for an answer",
-				});
-			}
-
-			await createKnowledgeClarificationTurn(db, {
-				requestId: request.id,
-				role: "human_answer",
-				selectedAnswer: input.selectedAnswer?.trim() || null,
-				freeAnswer: input.freeAnswer?.trim() || null,
-			});
-
-			const answerText =
-				input.selectedAnswer?.trim() || input.freeAnswer?.trim() || "No answer";
-			const analyzingRequest = await updateKnowledgeClarificationRequest(db, {
-				requestId: request.id,
-				updates: {
-					status: "analyzing",
-					lastError: null,
-				},
-			});
-			if (!analyzingRequest) {
-				throw new TRPCError({
-					code: "INTERNAL_SERVER_ERROR",
-					message: "Failed to update clarification request",
-				});
-			}
-
-			const runtime = await loadKnowledgeClarificationRuntime({
-				db,
-				organizationId: website.organizationId,
-				websiteId: website.id,
-				request: analyzingRequest,
-			});
-			const progressReporter = createConversationClarificationProgressReporter({
-				db,
-				conversation: runtime.conversation,
-				request: analyzingRequest,
-			});
-
-			await emitConversationClarificationUpdate({
-				db,
-				conversation: runtime.conversation,
-				request: analyzingRequest,
-				aiAgentId: null,
-			});
-
-			await createKnowledgeClarificationAuditEntry({
-				db,
-				request: analyzingRequest,
-				conversation: runtime.conversation,
-				actor: { userId: user.id },
-				text: `Knowledge clarification answered: ${answerText}`,
-			});
-
-			try {
-				const step = await runKnowledgeClarificationStep({
-					db,
-					request: analyzingRequest,
-					aiAgent: runtime.aiAgent,
-					conversation: runtime.conversation,
-					targetKnowledge: runtime.targetKnowledge,
-					progressReporter,
-				});
-
-				await emitConversationClarificationUpdate({
-					db,
-					conversation: runtime.conversation,
-					request: step.request,
-					aiAgentId: null,
-				});
-
-				return { step };
-			} catch (error) {
-				await emitRetryableConversationClarificationFailure({
-					db,
-					websiteId: website.id,
-					requestId: analyzingRequest.id,
-					conversation: runtime.conversation,
-				});
-
-				throw new TRPCError({
-					code: "INTERNAL_SERVER_ERROR",
-					message:
-						error instanceof Error
-							? error.message
-							: "Failed to continue clarification flow",
-				});
-			}
-		}),
-
-	skip: protectedProcedure
-		.input(skipKnowledgeClarificationRequestSchema)
-		.output(knowledgeClarificationStepEnvelopeSchema)
-		.mutation(async ({ ctx: { db, user }, input }) => {
-			const { website, request } = await loadClarificationRequest({
-				db,
-				userId: user.id,
-				websiteSlug: input.websiteSlug,
-				requestId: input.requestId,
-			});
-
-			if (
-				request.status !== "awaiting_answer" &&
-				request.status !== "deferred"
-			) {
-				throw new TRPCError({
-					code: "BAD_REQUEST",
-					message: "This clarification request is not waiting for an answer",
-				});
-			}
-
-			await createKnowledgeClarificationTurn(db, {
-				requestId: request.id,
-				role: "human_skip",
-				selectedAnswer: null,
-				freeAnswer: null,
-			});
-
-			const analyzingRequest = await updateKnowledgeClarificationRequest(db, {
-				requestId: request.id,
-				updates: {
-					status: "analyzing",
-					lastError: null,
-				},
-			});
-			if (!analyzingRequest) {
-				throw new TRPCError({
-					code: "INTERNAL_SERVER_ERROR",
-					message: "Failed to update clarification request",
-				});
-			}
-
-			const runtime = await loadKnowledgeClarificationRuntime({
-				db,
-				organizationId: website.organizationId,
-				websiteId: website.id,
-				request: analyzingRequest,
-			});
-			const progressReporter = createConversationClarificationProgressReporter({
-				db,
-				conversation: runtime.conversation,
-				request: analyzingRequest,
-			});
-
-			await emitConversationClarificationUpdate({
-				db,
-				conversation: runtime.conversation,
-				request: analyzingRequest,
-				aiAgentId: null,
-			});
-
-			await createKnowledgeClarificationAuditEntry({
-				db,
-				request: analyzingRequest,
-				conversation: runtime.conversation,
-				actor: { userId: user.id },
-				text: "Knowledge clarification question skipped.",
-			});
-
-			try {
-				const step = await runKnowledgeClarificationStep({
-					db,
-					request: analyzingRequest,
-					aiAgent: runtime.aiAgent,
-					conversation: runtime.conversation,
-					targetKnowledge: runtime.targetKnowledge,
-					progressReporter,
-				});
-
-				await emitConversationClarificationUpdate({
-					db,
-					conversation: runtime.conversation,
-					request: step.request,
-					aiAgentId: null,
-				});
-
-				return { step };
-			} catch (error) {
-				await emitRetryableConversationClarificationFailure({
-					db,
-					websiteId: website.id,
-					requestId: analyzingRequest.id,
-					conversation: runtime.conversation,
-				});
-
-				throw new TRPCError({
-					code: "INTERNAL_SERVER_ERROR",
-					message:
-						error instanceof Error
-							? error.message
-							: "Failed to continue clarification flow",
-				});
-			}
-		}),
-
-	retry: protectedProcedure
-		.input(updateKnowledgeClarificationStatusRequestSchema)
-		.output(knowledgeClarificationStepEnvelopeSchema)
-		.mutation(async ({ ctx: { db, user }, input }) => {
-			const { website, request } = await loadClarificationRequest({
-				db,
-				userId: user.id,
-				websiteSlug: input.websiteSlug,
-				requestId: input.requestId,
-			});
-			if (request.status !== "retry_required") {
-				throw new TRPCError({
-					code: "BAD_REQUEST",
-					message: "This clarification request cannot be retried",
-				});
-			}
-
-			const analyzingRequest = await updateKnowledgeClarificationRequest(db, {
-				requestId: request.id,
-				updates: {
-					status: "analyzing",
-					lastError: null,
-				},
-			});
-			if (!analyzingRequest) {
-				throw new TRPCError({
-					code: "INTERNAL_SERVER_ERROR",
-					message: "Failed to update clarification request",
-				});
-			}
-
-			const runtime = await loadKnowledgeClarificationRuntime({
-				db,
-				organizationId: website.organizationId,
-				websiteId: website.id,
-				request: analyzingRequest,
-			});
-			const progressReporter = createConversationClarificationProgressReporter({
-				db,
-				conversation: runtime.conversation,
-				request: analyzingRequest,
-			});
-
-			await emitConversationClarificationUpdate({
-				db,
-				conversation: runtime.conversation,
-				request: analyzingRequest,
-				aiAgentId: null,
-			});
-
-			try {
-				const step = await runKnowledgeClarificationStep({
-					db,
-					request: analyzingRequest,
-					aiAgent: runtime.aiAgent,
-					conversation: runtime.conversation,
-					targetKnowledge: runtime.targetKnowledge,
-					progressReporter,
-				});
-
-				await emitConversationClarificationUpdate({
-					db,
-					conversation: runtime.conversation,
-					request: step.request,
-					aiAgentId: null,
-				});
-				return { step };
-			} catch (error) {
-				await emitRetryableConversationClarificationFailure({
-					db,
-					websiteId: website.id,
-					requestId: analyzingRequest.id,
-					conversation: runtime.conversation,
-				});
-
-				throw new TRPCError({
-					code: "INTERNAL_SERVER_ERROR",
-					message:
-						error instanceof Error
-							? error.message
-							: "Failed to retry clarification flow",
-				});
-			}
 		}),
 
 	defer: protectedProcedure
