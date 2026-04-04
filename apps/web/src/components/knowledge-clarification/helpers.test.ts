@@ -18,9 +18,12 @@ function createRequest(
 		source: "conversation",
 		status: "awaiting_answer",
 		topicSummary: "Clarify billing timing",
+		engagementMode: "owner",
+		linkedConversationCount: 1,
 		stepIndex: 1,
 		maxSteps: 3,
 		targetKnowledgeId: null,
+		targetKnowledgeSummary: null,
 		currentQuestion: "When does the billing change take effect?",
 		currentSuggestedAnswers: [
 			"Immediately",

@@ -1,51 +1,15 @@
 "use client";
 
-import {
-	createSupportStore,
-	type SupportConfig,
-	type SupportNavigation,
-	type SupportStore,
-	type SupportStoreState,
+import type {
+	SupportConfig,
+	SupportNavigation,
+	SupportStore,
+	SupportStoreState,
 } from "@cossistant/core";
-import { useCallback, useMemo, useRef, useSyncExternalStore } from "react";
+import { useCallback, useMemo } from "react";
+import { useSupportController } from "../../controller-context";
+import { useStoreSelector } from "../../hooks/private/store/use-store-selector";
 import { useControlledState } from "../context/controlled-state";
-
-const storage = typeof window !== "undefined" ? window.localStorage : undefined;
-const store = createSupportStore({ storage });
-
-type Selector<T> = (state: SupportStoreState) => T;
-
-type EqualityChecker<T> = (previous: T, next: T) => boolean;
-
-// Stable subscribe function — store is module-level so this never changes
-const stableSubscribe = (onStoreChange: () => void) =>
-	store.subscribe(() => {
-		onStoreChange();
-	});
-
-function useSelector<TSelected>(
-	selector: Selector<TSelected>,
-	isEqual: EqualityChecker<TSelected> = Object.is
-): TSelected {
-	const selectionRef = useRef<TSelected>(undefined);
-
-	const snapshot = useSyncExternalStore(
-		stableSubscribe,
-		store.getState,
-		store.getState
-	);
-
-	const selected = selector(snapshot);
-
-	if (
-		selectionRef.current === undefined ||
-		!isEqual(selectionRef.current, selected)
-	) {
-		selectionRef.current = selected;
-	}
-
-	return selectionRef.current as TSelected;
-}
 
 export type UseSupportStoreResult = SupportStoreState &
 	Pick<
@@ -67,21 +31,22 @@ export type UseSupportStoreResult = SupportStoreState &
  * const { isOpen, navigate, toggle } = useSupportStore();
  */
 export function useSupportStore(): UseSupportStoreResult {
-	const state = useSelector((current) => current);
+	const controller = useSupportController();
+	const state = useStoreSelector(controller.supportStore, (current) => current);
 
 	return useMemo(
 		() => ({
 			...state,
-			navigate: store.navigate,
-			replace: store.replace,
-			goBack: store.goBack,
-			open: store.open,
-			close: store.close,
-			toggle: store.toggle,
-			updateConfig: store.updateConfig,
-			reset: store.reset,
+			navigate: controller.navigate,
+			replace: controller.replace,
+			goBack: controller.goBack,
+			open: controller.open,
+			close: controller.close,
+			toggle: controller.toggle,
+			updateConfig: controller.updateSupportConfig,
+			reset: controller.supportStore.reset,
 		}),
-		[state]
+		[controller, state]
 	);
 }
 
@@ -192,7 +157,11 @@ export type UseSupportNavigationResult = {
  * </Support>
  */
 export const useSupportConfig = (): UseSupportConfigResult => {
-	const config = useSelector((state) => state.config);
+	const controller = useSupportController();
+	const config = useStoreSelector(
+		controller.supportStore,
+		(state) => state.config
+	);
 	const controlledState = useControlledState();
 
 	// Determine if we're in controlled mode
@@ -208,25 +177,25 @@ export const useSupportConfig = (): UseSupportConfigResult => {
 		if (isControlled && onOpenChange) {
 			onOpenChange(true);
 		} else {
-			store.open();
+			controller.open();
 		}
-	}, [isControlled, onOpenChange]);
+	}, [controller, isControlled, onOpenChange]);
 
 	const close = useCallback(() => {
 		if (isControlled && onOpenChange) {
 			onOpenChange(false);
 		} else {
-			store.close();
+			controller.close();
 		}
-	}, [isControlled, onOpenChange]);
+	}, [controller, isControlled, onOpenChange]);
 
 	const toggle = useCallback(() => {
 		if (isControlled && onOpenChange) {
 			onOpenChange(!controlledOpen);
 		} else {
-			store.toggle();
+			controller.toggle();
 		}
-	}, [isControlled, onOpenChange, controlledOpen]);
+	}, [controller, isControlled, onOpenChange, controlledOpen]);
 
 	return useMemo(
 		() => ({
@@ -247,7 +216,11 @@ export const useSupportConfig = (): UseSupportConfigResult => {
  * const { navigate, goBack, page, params } = useSupportNavigation();
  */
 export const useSupportNavigation = (): UseSupportNavigationResult => {
-	const navigation = useSelector((state) => state.navigation);
+	const controller = useSupportController();
+	const navigation = useStoreSelector(
+		controller.supportStore,
+		(state) => state.navigation
+	);
 	const { current, previousPages } = navigation;
 
 	return useMemo(
@@ -256,33 +229,11 @@ export const useSupportNavigation = (): UseSupportNavigationResult => {
 			page: current.page,
 			params: current.params,
 			previousPages,
-			navigate: store.navigate,
-			replace: store.replace,
-			goBack: store.goBack,
+			navigate: controller.navigate,
+			replace: controller.replace,
+			goBack: controller.goBack,
 			canGoBack: previousPages.length > 0,
 		}),
-		[current, previousPages]
+		[controller, current, previousPages]
 	);
-};
-
-/**
- * Initialize store with default configuration (used internally by Support component).
- */
-export const initializeSupportStore = (props: {
-	size?: SupportConfig["size"];
-	defaultOpen?: boolean;
-}) => {
-	const patch: Partial<SupportConfig> = {};
-
-	if (props.size !== undefined) {
-		patch.size = props.size;
-	}
-
-	if (props.defaultOpen !== undefined) {
-		patch.isOpen = props.defaultOpen;
-	}
-
-	if (Object.keys(patch).length > 0) {
-		store.updateConfig(patch);
-	}
 };

@@ -56,6 +56,8 @@ function createSummary(
 		requestId: string;
 		status: "analyzing" | "awaiting_answer" | "retry_required" | "draft_ready";
 		topicSummary: string;
+		engagementMode: "owner" | "linked";
+		linkedConversationCount: number;
 		question: string | null;
 		stepIndex: number;
 		maxSteps: number;
@@ -67,6 +69,8 @@ function createSummary(
 		requestId: "req_1",
 		status: "awaiting_answer" as const,
 		topicSummary: "Clarify billing timing",
+		engagementMode: "owner" as const,
+		linkedConversationCount: 1,
 		question: "Does the billing change immediately?",
 		currentSuggestedAnswers: [
 			"Immediately",
@@ -100,9 +104,16 @@ function createRequest(
 			| "applied"
 			| "dismissed";
 		topicSummary: string;
+		engagementMode: "owner" | "linked";
+		linkedConversationCount: number;
 		stepIndex: number;
 		maxSteps: number;
 		targetKnowledgeId: string | null;
+		targetKnowledgeSummary: {
+			id: string;
+			question: string | null;
+			sourceTitle: string | null;
+		} | null;
 		currentQuestion: string | null;
 		currentSuggestedAnswers: [string, string, string] | null;
 		currentQuestionInputMode: "textarea_first" | "suggested_answers" | null;
@@ -128,9 +139,12 @@ function createRequest(
 		source: "conversation" as const,
 		status: "awaiting_answer" as const,
 		topicSummary: "Clarify billing timing",
+		engagementMode: "owner" as const,
+		linkedConversationCount: 1,
 		stepIndex: 2,
 		maxSteps: 5,
 		targetKnowledgeId: null,
+		targetKnowledgeSummary: null,
 		currentQuestion: "Does the billing change immediately?",
 		currentSuggestedAnswers: [
 			"Immediately",

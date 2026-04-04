@@ -2,6 +2,7 @@
 
 import type { ConversationClarificationSummary } from "@cossistant/types";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import type React from "react";
 import { toast } from "sonner";
 import { useKnowledgeClarificationQueryInvalidation } from "@/components/knowledge-clarification/use-query-invalidation";
@@ -139,6 +140,42 @@ export function ClarificationPrompt({
 			},
 		})
 	);
+
+	if (summary.engagementMode === "linked") {
+		const joinedConversationLabel =
+			summary.linkedConversationCount > 1
+				? `${summary.linkedConversationCount} conversations joined this shared clarification.`
+				: "This conversation joined a shared clarification.";
+		const linkedDescription =
+			summary.status === "draft_ready"
+				? `${joinedConversationLabel} Review the proposal instead of answering here.`
+				: `${joinedConversationLabel} Another conversation owns the active question flow.`;
+
+		return (
+			<div className={cn("px-2 pt-2 pb-2", className)}>
+				<div className="flex w-full flex-col gap-1">
+					<div className="font-medium text-sm">Shared clarification</div>
+					<p className="max-w-[90%] text-balance text-muted-foreground text-sm">
+						{summary.topicSummary}
+					</p>
+					<p className="max-w-[90%] text-balance text-muted-foreground text-sm">
+						{linkedDescription}
+					</p>
+				</div>
+
+				<div className="mt-6 flex justify-end">
+					<Button asChild size="xs" type="button">
+						<Link
+							href={`/${websiteSlug}/agent/training/faq/proposals/${summary.requestId}`}
+							prefetch={false}
+						>
+							View proposal
+						</Link>
+					</Button>
+				</div>
+			</div>
+		);
+	}
 	const isPending = deferMutation.isPending || dismissMutation.isPending;
 
 	return (

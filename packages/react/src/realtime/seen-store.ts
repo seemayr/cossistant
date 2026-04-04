@@ -6,7 +6,7 @@ import {
 	type SeenEntry,
 	type SeenState,
 	upsertConversationSeen as upsertStore,
-} from "@cossistant/core";
+} from "@cossistant/core/store/seen-store";
 import type { RealtimeEvent } from "@cossistant/types/realtime-events";
 import type { ConversationSeen } from "@cossistant/types/schemas";
 import { useRef, useSyncExternalStore } from "react";

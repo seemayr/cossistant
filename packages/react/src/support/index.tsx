@@ -2,6 +2,7 @@ import "./support.css";
 
 import type { DefaultMessage } from "@cossistant/types";
 import * as React from "react";
+import { useSupportController } from "../controller-context";
 import * as Primitive from "../primitives";
 import { useSupport } from "../provider";
 import { SupportRealtimeProvider } from "../realtime";
@@ -23,7 +24,6 @@ import {
 import { type SupportHandle, SupportHandleProvider } from "./context/handle";
 import { FooterSlot, HeaderSlot } from "./context/slots";
 import { type CustomPage, Page, Router } from "./router";
-import { initializeSupportStore } from "./store/support-store";
 import type { SupportLocale, SupportTextContentOverrides } from "./text";
 import { SupportTextProvider } from "./text";
 import type {
@@ -303,14 +303,15 @@ function SupportComponentInner<Locale extends string = SupportLocale>(
 	ref: React.Ref<SupportHandle>
 ): React.ReactElement | null {
 	const { website, configurationError } = useSupport();
+	const controller = useSupportController();
 	const isVisitorBlocked = website?.visitor?.isBlocked ?? false;
 
 	// Initialize store for uncontrolled mode (when open prop is not provided)
 	React.useEffect(() => {
 		if (open === undefined && defaultOpen !== undefined) {
-			initializeSupportStore({ defaultOpen });
+			controller.updateSupportConfig({ isOpen: defaultOpen });
 		}
-	}, [open, defaultOpen]);
+	}, [controller, open, defaultOpen]);
 
 	// If visitor is blocked, don't render anything
 	if (website && isVisitorBlocked) {
@@ -684,14 +685,15 @@ const SupportRoot = React.forwardRef<SupportHandle, SupportRootProps>(
 		ref
 	) => {
 		const { website, configurationError } = useSupport();
+		const controller = useSupportController();
 		const isVisitorBlocked = website?.visitor?.isBlocked ?? false;
 
 		// Initialize store for uncontrolled mode
 		React.useEffect(() => {
 			if (open === undefined && defaultOpen !== undefined) {
-				initializeSupportStore({ defaultOpen });
+				controller.updateSupportConfig({ isOpen: defaultOpen });
 			}
-		}, [open, defaultOpen]);
+		}, [controller, open, defaultOpen]);
 
 		// If visitor is blocked, don't render anything
 		if (website && isVisitorBlocked) {

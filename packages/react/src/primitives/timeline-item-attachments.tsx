@@ -1,6 +1,6 @@
 "use client";
 
-import { formatFileSize } from "@cossistant/core";
+import { formatFileSize } from "@cossistant/core/upload-constants";
 import type {
 	TimelineItemParts,
 	TimelinePartFile,

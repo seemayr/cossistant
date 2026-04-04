@@ -73,6 +73,24 @@ export const knowledgeClarificationQuestionScopeSchema = z
 		example: "broad_discovery",
 	});
 
+export const knowledgeClarificationEngagementModeSchema = z
+	.enum(["owner", "linked"])
+	.openapi({
+		description:
+			"Whether the current conversation owns the clarification flow or is only linked to it.",
+		example: "owner",
+	});
+
+export const knowledgeClarificationTargetKnowledgeSummarySchema = z
+	.object({
+		id: z.ulid(),
+		question: z.string().nullable(),
+		sourceTitle: z.string().nullable(),
+	})
+	.openapi({
+		description: "Summary of the FAQ currently targeted by this clarification.",
+	});
+
 export const knowledgeClarificationPlannedQuestionSchema = z
 	.object({
 		id: z.string().min(1).max(80),
@@ -137,6 +155,8 @@ export const conversationClarificationSummarySchema = z.object({
 	requestId: z.ulid(),
 	status: activeConversationKnowledgeClarificationStatusSchema,
 	topicSummary: z.string(),
+	engagementMode: knowledgeClarificationEngagementModeSchema,
+	linkedConversationCount: z.number().int().min(0),
 	question: z.string().nullable(),
 	currentSuggestedAnswers:
 		knowledgeClarificationSuggestedAnswersSchema.nullable(),
@@ -158,9 +178,13 @@ export const knowledgeClarificationRequestSchema = z.object({
 	source: knowledgeClarificationSourceSchema,
 	status: knowledgeClarificationStatusSchema,
 	topicSummary: z.string(),
+	engagementMode: knowledgeClarificationEngagementModeSchema,
+	linkedConversationCount: z.number().int().min(0),
 	stepIndex: z.number().int().min(0),
 	maxSteps: z.number().int().min(1),
 	targetKnowledgeId: z.ulid().nullable(),
+	targetKnowledgeSummary:
+		knowledgeClarificationTargetKnowledgeSummarySchema.nullable(),
 	questionPlan: knowledgeClarificationQuestionPlanSchema.nullable().optional(),
 	currentQuestion: z.string().nullable(),
 	currentSuggestedAnswers:

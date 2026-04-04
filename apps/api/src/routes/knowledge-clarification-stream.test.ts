@@ -17,9 +17,12 @@ function createRequestRecord(overrides: Record<string, unknown> = {}) {
 		source: "conversation",
 		status: "awaiting_answer",
 		topicSummary: "Billing clarification",
+		engagementMode: "owner",
+		linkedConversationCount: 1,
 		stepIndex: 1,
 		maxSteps: 3,
 		targetKnowledgeId: null,
+		targetKnowledgeSummary: null,
 		questionPlan: null,
 		currentQuestion: "What plan are they asking about?",
 		currentSuggestedAnswers: ["Free", "Pro", "Enterprise"],
@@ -192,7 +195,10 @@ function createDeps() {
 		resolution: "created" as const,
 	}));
 	const prepareFaqKnowledgeClarificationStartMock = mock(async () => ({
+		kind: "stream" as const,
 		request: createDraftStep().request,
+		created: true,
+		resolution: "created" as const,
 	}));
 	const startKnowledgeClarificationStepStreamMock = mock((async () => ({
 		textStream: createTextStream(
@@ -600,5 +606,76 @@ describe("knowledgeClarificationStreamRouter", () => {
 			updatedAt: "2026-04-02T00:00:00.000Z",
 			request: createRetryStep().request,
 		});
+	});
+
+	it("returns an immediate JSON step when FAQ deepen reuses an existing clarification", async () => {
+		deps.prepareFaqKnowledgeClarificationStartMock.mockResolvedValue({
+			kind: "step",
+			request: createDraftStep().request,
+			step: createDraftStep(),
+			created: false,
+			resolution: "reused",
+		} as never);
+
+		const { createKnowledgeClarificationStreamRouter } =
+			await routeModulePromise;
+		const router = createKnowledgeClarificationStreamRouter({
+			db: deps.db,
+			createKnowledgeClarificationTurn:
+				deps.createKnowledgeClarificationTurnMock as never,
+			getKnowledgeClarificationRequestById:
+				deps.getKnowledgeClarificationRequestByIdMock as never,
+			updateKnowledgeClarificationRequest:
+				deps.updateKnowledgeClarificationRequestMock as never,
+			getAiAgentForWebsite: deps.getAiAgentForWebsiteMock as never,
+			getKnowledgeById: deps.getKnowledgeByIdMock as never,
+			getWebsiteBySlugWithAccess: deps.getWebsiteBySlugWithAccessMock as never,
+			createKnowledgeClarificationAuditEntry:
+				deps.createKnowledgeClarificationAuditEntryMock as never,
+			emitConversationClarificationUpdate:
+				deps.emitConversationClarificationUpdateMock as never,
+			loadKnowledgeClarificationRuntime:
+				deps.loadKnowledgeClarificationRuntimeMock as never,
+			prepareConversationKnowledgeClarificationStart:
+				deps.prepareConversationKnowledgeClarificationStartMock as never,
+			prepareFaqKnowledgeClarificationStart:
+				deps.prepareFaqKnowledgeClarificationStartMock as never,
+			startKnowledgeClarificationStepStream:
+				deps.startKnowledgeClarificationStepStreamMock as never,
+			loadConversationContext: deps.loadConversationContextMock as never,
+			toKnowledgeClarificationStreamStepResponse:
+				deps.toKnowledgeClarificationStreamStepResponseMock as never,
+		});
+		const app = createAuthenticatedApp(router);
+
+		const response = await app.request(
+			buildWebsiteRequest({
+				action: "start_faq",
+				websiteSlug: "acme",
+				knowledgeId: KNOWLEDGE_ID,
+			})
+		);
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({
+			requestId: FAQ_REQUEST_ID,
+			decision: {
+				kind: "draft_ready",
+				topicSummary: "Billing clarification",
+				questionPlan: null,
+				question: null,
+				suggestedAnswers: null,
+				inputMode: null,
+				questionScope: null,
+				draftFaqPayload: createDraftStep().draftFaqPayload,
+				lastError: null,
+			},
+			status: "draft_ready",
+			updatedAt: "2026-04-02T00:00:00.000Z",
+			request: createDraftStep().request,
+		});
+		expect(
+			deps.startKnowledgeClarificationStepStreamMock
+		).not.toHaveBeenCalled();
 	});
 });

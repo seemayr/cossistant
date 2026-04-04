@@ -5,7 +5,7 @@ import {
 	formatFileSize,
 	MAX_FILE_SIZE,
 	MAX_FILES_PER_MESSAGE,
-} from "@cossistant/core";
+} from "@cossistant/core/upload-constants";
 import type React from "react";
 import { useRef } from "react";
 import { useComposerRefocus } from "../../hooks/use-composer-refocus";

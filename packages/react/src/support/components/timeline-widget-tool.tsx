@@ -3,7 +3,7 @@
 import {
 	getWidgetToolDefaultProgressMessage,
 	isWidgetTimelineTool,
-} from "@cossistant/types";
+} from "@cossistant/types/tool-timeline-policy";
 import type React from "react";
 import { ToolActivityRow } from "../../primitives/tool-activity-row";
 import {

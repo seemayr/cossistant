@@ -1,4 +1,4 @@
-import { resolveHumanAgentDisplay } from "@cossistant/core";
+import { resolveHumanAgentDisplay } from "@cossistant/core/human-agent-display";
 import type { AvailableHumanAgent } from "@cossistant/types";
 
 export function resolveSupportHumanAgentDisplay(

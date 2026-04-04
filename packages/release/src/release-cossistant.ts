@@ -228,6 +228,7 @@ async function createCossistantChangeset(
 "@cossistant/core": ${releaseType}
 "@cossistant/react": ${releaseType}
 "@cossistant/next": ${releaseType}
+"@cossistant/browser": ${releaseType}
 "@cossistant/types": ${releaseType}
 ---
 

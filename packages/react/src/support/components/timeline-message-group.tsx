@@ -1,6 +1,9 @@
-import type { AvailableAIAgent, AvailableHumanAgent } from "@cossistant/types";
-import { SenderType } from "@cossistant/types";
 import type { TimelineItem } from "@cossistant/types/api/timeline-item";
+import type {
+	AvailableAIAgent,
+	AvailableHumanAgent,
+} from "@cossistant/types/api/website";
+import { SenderType } from "@cossistant/types/enums";
 import type { ConversationSeen } from "@cossistant/types/schemas";
 import type React from "react";
 import {

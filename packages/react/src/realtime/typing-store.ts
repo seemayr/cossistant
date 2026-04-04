@@ -8,7 +8,7 @@ import {
 	type TypingActorType,
 	type TypingEntry,
 	type TypingState,
-} from "@cossistant/core";
+} from "@cossistant/core/store/typing-store";
 import type { RealtimeEvent } from "@cossistant/types/realtime-events";
 import { useRef, useSyncExternalStore } from "react";
 

@@ -1,11 +1,11 @@
-import {
-	SenderType,
-	type SenderType as SenderTypeValue,
-} from "@cossistant/types";
 import type {
 	TimelineItem,
 	TimelinePartEvent,
 } from "@cossistant/types/api/timeline-item";
+import {
+	SenderType,
+	type SenderType as SenderTypeValue,
+} from "@cossistant/types/enums";
 
 export type TimelineItemSender = {
 	senderId: string;

@@ -1,4 +1,5 @@
-import { type Conversation, ConversationStatus } from "@cossistant/types";
+import { ConversationStatus } from "@cossistant/types/enums";
+import type { Conversation } from "@cossistant/types/schemas";
 import type React from "react";
 import {
 	type ConversationPreviewLastMessage,

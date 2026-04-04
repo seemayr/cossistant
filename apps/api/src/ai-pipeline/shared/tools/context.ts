@@ -93,6 +93,7 @@ export function createSearchKnowledgeBaseTool(ctx: PipelineToolContext) {
 			PipelineToolResult<{
 				articles: Array<{
 					content: string;
+					knowledgeId: string | null;
 					similarity: number;
 					title: string | null;
 					sourceUrl: string | null;
@@ -120,6 +121,7 @@ export function createSearchKnowledgeBaseTool(ctx: PipelineToolContext) {
 
 				return {
 					content: item.content,
+					knowledgeId: item.knowledgeId,
 					similarity: Math.round(item.similarity * 100) / 100,
 					title:
 						typeof metadata?.title === "string"

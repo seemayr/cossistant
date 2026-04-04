@@ -1,4 +1,4 @@
-import { isWidgetTimelineTool } from "@cossistant/types";
+import { isWidgetTimelineTool } from "@cossistant/types/tool-timeline-policy";
 import type React from "react";
 import type {
 	ConversationTimelineToolProps,

@@ -4,7 +4,7 @@ import {
 	clearProcessingFromTimelineItem as clearFromItem,
 	createProcessingStore,
 	type ProcessingState,
-} from "@cossistant/core";
+} from "@cossistant/core/store/processing-store";
 import type { RealtimeEvent } from "@cossistant/types/realtime-events";
 import { useRef, useSyncExternalStore } from "react";
 

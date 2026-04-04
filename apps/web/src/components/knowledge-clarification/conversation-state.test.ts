@@ -15,6 +15,8 @@ function createSummary(
 		requestId: "req_1",
 		status: "awaiting_answer",
 		topicSummary: "Clarify billing timing",
+		engagementMode: "owner",
+		linkedConversationCount: 1,
 		question: "Does the billing change immediately?",
 		currentSuggestedAnswers: [
 			"Immediately",
@@ -43,9 +45,12 @@ function createRequest(
 		source: "conversation",
 		status: "awaiting_answer",
 		topicSummary: "Clarify billing timing",
+		engagementMode: "owner",
+		linkedConversationCount: 1,
 		stepIndex: 2,
 		maxSteps: 5,
 		targetKnowledgeId: null,
+		targetKnowledgeSummary: null,
 		currentQuestion: "Does the billing change immediately?",
 		currentSuggestedAnswers: [
 			"Immediately",
@@ -116,6 +121,29 @@ describe("resolveConversationClarificationDisplayState", () => {
 			showPrompt: true,
 			showAction: false,
 			actionRequest: null,
+		});
+	});
+
+	it("keeps linked conversations passive even when the clarification is active", () => {
+		expect(
+			resolveConversationClarificationDisplayState({
+				summary: createSummary({
+					engagementMode: "linked",
+					linkedConversationCount: 3,
+				}),
+				request: createRequest({
+					engagementMode: "linked",
+					linkedConversationCount: 3,
+				}),
+				engagedRequestId: "req_1",
+				hasEscalation: false,
+				hasLimitAction: false,
+			})
+		).toMatchObject({
+			engagedRequestId: null,
+			showPrompt: true,
+			showAction: false,
+			showDraftBanner: false,
 		});
 	});
 

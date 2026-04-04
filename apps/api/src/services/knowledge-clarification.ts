@@ -6,10 +6,15 @@ import { getConversationById } from "@api/db/queries/conversation";
 import { getKnowledgeById } from "@api/db/queries/knowledge";
 import {
 	createKnowledgeClarificationRequest,
+	createKnowledgeClarificationSignal,
 	createKnowledgeClarificationTurn,
-	getActiveKnowledgeClarificationForConversation,
+	getActiveKnowledgeClarificationAssociationForConversation,
+	getJoinableKnowledgeClarificationByTargetKnowledgeId,
+	getJoinableKnowledgeClarificationByTopicFingerprint,
 	getLatestKnowledgeClarificationForConversationBySourceTriggerMessageId,
-	getLatestKnowledgeClarificationForConversationByTopicFingerprint,
+	listJoinableKnowledgeClarificationRequestsMissingTopicEmbeddings,
+	listJoinableKnowledgeClarificationVectorMatches,
+	listKnowledgeClarificationSignals,
 	listKnowledgeClarificationTurns,
 	REUSABLE_CONVERSATION_TOPIC_FINGERPRINT_STATUSES,
 	updateKnowledgeClarificationRequest,
@@ -19,12 +24,15 @@ import type { ConversationSelect } from "@api/db/schema/conversation";
 import type { KnowledgeSelect } from "@api/db/schema/knowledge";
 import type {
 	KnowledgeClarificationRequestSelect,
+	KnowledgeClarificationSignalSelect,
 	KnowledgeClarificationTurnSelect,
 } from "@api/db/schema/knowledge-clarification";
 import {
 	APICallError,
 	createStructuredOutputModel,
 	EmptyResponseBodyError,
+	generateEmbedding,
+	generateEmbeddings,
 	NoContentGeneratedError,
 	NoObjectGeneratedError,
 	NoOutputGeneratedError,
@@ -142,6 +150,7 @@ type StartConversationKnowledgeClarificationParams = {
 	topicSummary: string;
 	actor: KnowledgeClarificationActor;
 	contextSnapshot?: KnowledgeClarificationContextSnapshot | null;
+	targetKnowledge?: KnowledgeSelect | null;
 	maxSteps?: number;
 	creationMode?: "manual" | "automation";
 };
@@ -293,9 +302,20 @@ type PreparedConversationKnowledgeClarificationStartResult =
 			resolution: "suppressed_duplicate";
 	  };
 
-type PreparedFaqKnowledgeClarificationStartResult = {
-	request: KnowledgeClarificationRequestSelect;
-};
+type PreparedFaqKnowledgeClarificationStartResult =
+	| {
+			kind: "step";
+			request: KnowledgeClarificationRequest;
+			step: KnowledgeClarificationStepResponse;
+			created: false;
+			resolution: "reused";
+	  }
+	| {
+			kind: "stream";
+			request: KnowledgeClarificationRequestSelect;
+			created: boolean;
+			resolution: "created" | "reused";
+	  };
 
 type KnowledgeClarificationStepStreamResult = {
 	textStream: AsyncIterable<string>;
@@ -861,39 +881,157 @@ export async function emitConversationClarificationUpdate(params: {
 	turns?: KnowledgeClarificationTurnSelect[];
 	progress?: ConversationClarificationProgress | null;
 }): Promise<void> {
-	if (!params.conversation) {
+	if (!(params.conversation || params.request?.conversationId)) {
 		return;
 	}
 
 	let turns = params.turns ?? [];
+	let signals: KnowledgeClarificationSignalSelect[] = [];
 	if (params.request && !params.turns) {
 		turns = await listKnowledgeClarificationTurns(params.db, {
 			requestId: params.request.id,
 		});
 	}
+	if (params.request) {
+		signals = await listKnowledgeClarificationSignals(params.db, {
+			requestId: params.request.id,
+		});
+	}
 
-	await realtime.emit("conversationUpdated", {
-		websiteId: params.conversation.websiteId,
-		organizationId: params.conversation.organizationId,
-		visitorId: params.conversation.visitorId,
-		userId: null,
-		conversationId: params.conversation.id,
-		updates: {
-			activeClarification: params.request
-				? buildConversationClarificationSummary({
-						request: params.request,
-						turns,
-						progress: params.progress ?? null,
+	const conversationsById = new Map<string, ConversationSelect>();
+	if (params.conversation) {
+		conversationsById.set(params.conversation.id, params.conversation);
+	}
+
+	if (params.request) {
+		const relatedConversationIds = new Set<string>();
+
+		if (params.request.conversationId) {
+			relatedConversationIds.add(params.request.conversationId);
+		}
+
+		for (const signal of signals) {
+			if (signal.conversationId) {
+				relatedConversationIds.add(signal.conversationId);
+			}
+		}
+
+		const missingConversationIds = [...relatedConversationIds].filter(
+			(conversationId) => !conversationsById.has(conversationId)
+		);
+		if (missingConversationIds.length > 0) {
+			const conversations = await Promise.all(
+				missingConversationIds.map((conversationId) =>
+					getConversationById(params.db, {
+						conversationId,
 					})
-				: null,
-		},
-		aiAgentId: params.aiAgentId,
-	});
+				)
+			);
+
+			for (const conversation of conversations) {
+				if (conversation) {
+					conversationsById.set(conversation.id, conversation);
+				}
+			}
+		}
+	}
+
+	if (conversationsById.size === 0) {
+		return;
+	}
+
+	const linkedConversationCount = params.request
+		? countLinkedConversationCount({
+				request: params.request,
+				signals,
+			})
+		: 0;
+
+	for (const conversation of conversationsById.values()) {
+		const engagementMode =
+			params.request?.conversationId &&
+			params.request.conversationId !== conversation.id
+				? "linked"
+				: "owner";
+
+		await realtime.emit("conversationUpdated", {
+			websiteId: conversation.websiteId,
+			organizationId: conversation.organizationId,
+			visitorId: conversation.visitorId,
+			userId: null,
+			conversationId: conversation.id,
+			updates: {
+				activeClarification: params.request
+					? buildConversationClarificationSummary({
+							request: params.request,
+							turns,
+							conversationId: conversation.id,
+							engagementMode,
+							linkedConversationCount,
+							progress: params.progress ?? null,
+						})
+					: null,
+			},
+			aiAgentId: params.aiAgentId,
+		});
+	}
+}
+
+function countLinkedConversationCount(params: {
+	request: Pick<KnowledgeClarificationRequestSelect, "conversationId">;
+	signals: Pick<KnowledgeClarificationSignalSelect, "conversationId">[];
+}): number {
+	const conversationIds = new Set<string>();
+
+	if (params.request.conversationId) {
+		conversationIds.add(params.request.conversationId);
+	}
+
+	for (const signal of params.signals) {
+		if (signal.conversationId) {
+			conversationIds.add(signal.conversationId);
+		}
+	}
+
+	return conversationIds.size;
+}
+
+function buildTargetKnowledgeSummary(params: {
+	request: Pick<
+		KnowledgeClarificationRequestSelect,
+		"targetKnowledgeId" | "contextSnapshot"
+	>;
+	targetKnowledge?: KnowledgeSelect | null;
+}): KnowledgeClarificationRequest["targetKnowledgeSummary"] {
+	if (params.targetKnowledge) {
+		const linkedFaq = extractLinkedFaqSnapshot(params.targetKnowledge);
+		return {
+			id: params.targetKnowledge.id,
+			question: linkedFaq?.question ?? null,
+			sourceTitle: params.targetKnowledge.sourceTitle ?? null,
+		};
+	}
+
+	if (
+		params.request.targetKnowledgeId &&
+		params.request.contextSnapshot?.linkedFaq
+	) {
+		return {
+			id: params.request.targetKnowledgeId,
+			question: params.request.contextSnapshot.linkedFaq.question,
+			sourceTitle: params.request.contextSnapshot.linkedFaq.sourceTitle,
+		};
+	}
+
+	return null;
 }
 
 export function serializeKnowledgeClarificationRequest(params: {
 	request: KnowledgeClarificationRequestSelect;
 	turns: KnowledgeClarificationTurnSelect[];
+	engagementMode?: KnowledgeClarificationRequest["engagementMode"];
+	linkedConversationCount?: number;
+	targetKnowledge?: KnowledgeSelect | null;
 }): KnowledgeClarificationRequest {
 	const currentQuestionTurn =
 		params.request.status === "deferred"
@@ -919,9 +1057,16 @@ export function serializeKnowledgeClarificationRequest(params: {
 		source: params.request.source,
 		status: params.request.status,
 		topicSummary: params.request.topicSummary,
+		engagementMode: params.engagementMode ?? "owner",
+		linkedConversationCount:
+			params.linkedConversationCount ?? (params.request.conversationId ? 1 : 0),
 		stepIndex: params.request.stepIndex,
 		maxSteps: params.request.maxSteps,
 		targetKnowledgeId: params.request.targetKnowledgeId,
+		targetKnowledgeSummary: buildTargetKnowledgeSummary({
+			request: params.request,
+			targetKnowledge: params.targetKnowledge ?? null,
+		}),
 		questionPlan: params.request.questionPlan ?? null,
 		currentQuestion: currentQuestionTurn?.question ?? null,
 		currentSuggestedAnswers:
@@ -938,6 +1083,47 @@ export function serializeKnowledgeClarificationRequest(params: {
 		createdAt: params.request.createdAt,
 		updatedAt: params.request.updatedAt,
 	};
+}
+
+export async function serializeKnowledgeClarificationRequestWithMetadata(params: {
+	db: Database;
+	request: KnowledgeClarificationRequestSelect;
+	turns?: KnowledgeClarificationTurnSelect[];
+	signals?: KnowledgeClarificationSignalSelect[];
+	engagementMode?: KnowledgeClarificationRequest["engagementMode"];
+	targetKnowledge?: KnowledgeSelect | null;
+}): Promise<KnowledgeClarificationRequest> {
+	const [turns, signals, targetKnowledge] = await Promise.all([
+		params.turns
+			? Promise.resolve(params.turns)
+			: listKnowledgeClarificationTurns(params.db, {
+					requestId: params.request.id,
+				}),
+		params.signals
+			? Promise.resolve(params.signals)
+			: listKnowledgeClarificationSignals(params.db, {
+					requestId: params.request.id,
+				}),
+		params.targetKnowledge !== undefined
+			? Promise.resolve(params.targetKnowledge)
+			: params.request.targetKnowledgeId
+				? getKnowledgeById(params.db, {
+						id: params.request.targetKnowledgeId,
+						websiteId: params.request.websiteId,
+					})
+				: Promise.resolve(null),
+	]);
+
+	return serializeKnowledgeClarificationRequest({
+		request: params.request,
+		turns,
+		engagementMode: params.engagementMode,
+		linkedConversationCount: countLinkedConversationCount({
+			request: params.request,
+			signals,
+		}),
+		targetKnowledge,
+	});
 }
 
 export function toKnowledgeClarificationStep(params: {
@@ -978,6 +1164,16 @@ export function toKnowledgeClarificationStep(params: {
 	}
 
 	return null;
+}
+
+function withSerializedKnowledgeClarificationStepRequest(params: {
+	step: KnowledgeClarificationStepResponse;
+	request: KnowledgeClarificationRequest;
+}): KnowledgeClarificationStepResponse {
+	return {
+		...params.step,
+		request: params.request,
+	};
 }
 
 export function toKnowledgeClarificationStreamDecision(
@@ -2004,61 +2200,300 @@ export async function startKnowledgeClarificationStepStream(
 	};
 }
 
+function withTargetKnowledgeContextSnapshot(params: {
+	requestTopicSummary: string;
+	contextSnapshot: KnowledgeClarificationContextSnapshot | null;
+	targetKnowledge?: KnowledgeSelect | null;
+}): KnowledgeClarificationContextSnapshot | null {
+	if (!params.targetKnowledge) {
+		return params.contextSnapshot;
+	}
+
+	const linkedFaq = extractLinkedFaqSnapshot(params.targetKnowledge);
+	if (!linkedFaq) {
+		return params.contextSnapshot;
+	}
+
+	if (params.contextSnapshot) {
+		return {
+			...params.contextSnapshot,
+			linkedFaq,
+		};
+	}
+
+	return buildFaqClarificationContextSnapshot({
+		topicSummary: params.requestTopicSummary,
+		linkedFaq,
+	});
+}
+
+async function ensureJoinableClarificationRequestTopicEmbeddings(params: {
+	db: Database;
+	websiteId: string;
+	aiAgentId: string;
+}): Promise<void> {
+	const requests =
+		await listJoinableKnowledgeClarificationRequestsMissingTopicEmbeddings(
+			params.db,
+			{
+				websiteId: params.websiteId,
+				aiAgentId: params.aiAgentId,
+			}
+		);
+
+	if (requests.length === 0) {
+		return;
+	}
+
+	const topicSummaries = requests
+		.map((request) => request.topicSummary.trim())
+		.filter(Boolean);
+	if (topicSummaries.length === 0) {
+		return;
+	}
+
+	const embeddings = await generateEmbeddings(topicSummaries);
+	await Promise.all(
+		requests.map((request, index) =>
+			updateKnowledgeClarificationRequest(params.db, {
+				requestId: request.id,
+				updates: {
+					topicEmbedding: embeddings[index] ?? null,
+				},
+			})
+		)
+	);
+}
+
 async function resolveConversationClarificationDuplicate(params: {
 	db: Database;
 	conversationId: string;
 	websiteId: string;
 	sourceTriggerMessageId: string | null;
-	topicFingerprint: string | null;
 }): Promise<{
 	request: KnowledgeClarificationRequestSelect;
 	resolution: ConversationClarificationStartResolution;
 } | null> {
-	if (params.sourceTriggerMessageId) {
-		const request =
-			await getLatestKnowledgeClarificationForConversationBySourceTriggerMessageId(
-				params.db,
-				{
-					conversationId: params.conversationId,
-					websiteId: params.websiteId,
-					sourceTriggerMessageId: params.sourceTriggerMessageId,
-				}
-			);
-		if (request) {
+	if (!params.sourceTriggerMessageId) {
+		return null;
+	}
+
+	const request =
+		await getLatestKnowledgeClarificationForConversationBySourceTriggerMessageId(
+			params.db,
+			{
+				conversationId: params.conversationId,
+				websiteId: params.websiteId,
+				sourceTriggerMessageId: params.sourceTriggerMessageId,
+			}
+		);
+	if (!request) {
+		return null;
+	}
+
+	return {
+		request,
+		resolution: isTerminalClarificationStatus(request.status)
+			? "suppressed_duplicate"
+			: "reused",
+	};
+}
+
+function isCompatibleReusableClarification(params: {
+	request: Pick<KnowledgeClarificationRequestSelect, "targetKnowledgeId">;
+	targetKnowledgeId: string | null;
+}): boolean {
+	if (!params.targetKnowledgeId) {
+		return true;
+	}
+
+	return (
+		!params.request.targetKnowledgeId ||
+		params.request.targetKnowledgeId === params.targetKnowledgeId
+	);
+}
+
+async function resolveSharedReusableClarification(params: {
+	db: Database;
+	websiteId: string;
+	aiAgentId: string;
+	targetKnowledgeId: string | null;
+	topicFingerprint: string | null;
+	topicSummary: string;
+}): Promise<{
+	request: KnowledgeClarificationRequestSelect | null;
+	topicEmbedding: number[] | null;
+}> {
+	if (params.targetKnowledgeId) {
+		const targetedRequest =
+			await getJoinableKnowledgeClarificationByTargetKnowledgeId(params.db, {
+				websiteId: params.websiteId,
+				aiAgentId: params.aiAgentId,
+				targetKnowledgeId: params.targetKnowledgeId,
+			});
+		if (targetedRequest) {
 			return {
-				request,
-				resolution: isTerminalClarificationStatus(request.status)
-					? "suppressed_duplicate"
-					: "reused",
+				request: targetedRequest,
+				topicEmbedding: null,
 			};
 		}
 	}
 
 	if (params.topicFingerprint) {
-		const request =
-			await getLatestKnowledgeClarificationForConversationByTopicFingerprint(
-				params.db,
-				{
-					conversationId: params.conversationId,
-					websiteId: params.websiteId,
-					topicFingerprint: params.topicFingerprint,
-					statuses: REUSABLE_CONVERSATION_TOPIC_FINGERPRINT_STATUSES,
-				}
-			);
-		if (request) {
+		const exactFingerprintRequest =
+			await getJoinableKnowledgeClarificationByTopicFingerprint(params.db, {
+				websiteId: params.websiteId,
+				aiAgentId: params.aiAgentId,
+				topicFingerprint: params.topicFingerprint,
+				statuses: REUSABLE_CONVERSATION_TOPIC_FINGERPRINT_STATUSES,
+			});
+		if (
+			exactFingerprintRequest &&
+			isCompatibleReusableClarification({
+				request: exactFingerprintRequest,
+				targetKnowledgeId: params.targetKnowledgeId,
+			})
+		) {
 			return {
-				request,
-				resolution: "reused",
+				request: exactFingerprintRequest,
+				topicEmbedding: null,
 			};
 		}
 	}
 
-	return null;
+	const trimmedTopicSummary = params.topicSummary.trim();
+	if (!trimmedTopicSummary) {
+		return {
+			request: null,
+			topicEmbedding: null,
+		};
+	}
+
+	const topicEmbedding = await generateEmbedding(trimmedTopicSummary);
+	await ensureJoinableClarificationRequestTopicEmbeddings({
+		db: params.db,
+		websiteId: params.websiteId,
+		aiAgentId: params.aiAgentId,
+	});
+
+	const compatibleMatches = (
+		await listJoinableKnowledgeClarificationVectorMatches(params.db, {
+			websiteId: params.websiteId,
+			aiAgentId: params.aiAgentId,
+			topicEmbedding,
+			limit: 5,
+		})
+	).filter((match) =>
+		isCompatibleReusableClarification({
+			request: match.request,
+			targetKnowledgeId: params.targetKnowledgeId,
+		})
+	);
+
+	const topMatch = compatibleMatches[0] ?? null;
+	const nextMatch = compatibleMatches[1] ?? null;
+	const isStrongTopMatch =
+		topMatch &&
+		topMatch.similarity >= 0.9 &&
+		(!nextMatch || topMatch.similarity - nextMatch.similarity >= 0.04);
+
+	return {
+		request: isStrongTopMatch ? topMatch.request : null,
+		topicEmbedding,
+	};
 }
 
-async function getConversationClarificationStartTarget(params: {
+async function maybeUpgradeReusableClarificationTargetKnowledge(params: {
 	db: Database;
 	request: KnowledgeClarificationRequestSelect;
+	targetKnowledge?: KnowledgeSelect | null;
+}): Promise<KnowledgeClarificationRequestSelect> {
+	if (
+		!(
+			params.targetKnowledge &&
+			!params.request.targetKnowledgeId &&
+			params.targetKnowledge.id
+		)
+	) {
+		return params.request;
+	}
+
+	const contextSnapshot = withTargetKnowledgeContextSnapshot({
+		requestTopicSummary: params.request.topicSummary,
+		contextSnapshot: params.request.contextSnapshot ?? null,
+		targetKnowledge: params.targetKnowledge,
+	});
+	const updatedRequest = await updateKnowledgeClarificationRequest(params.db, {
+		requestId: params.request.id,
+		updates: {
+			targetKnowledgeId: params.targetKnowledge.id,
+			contextSnapshot,
+		},
+	});
+
+	if (!updatedRequest) {
+		throw new Error("Failed to upgrade clarification target knowledge.");
+	}
+
+	return updatedRequest;
+}
+
+async function maybeCreateClarificationReuseSignal(params: {
+	db: Database;
+	request: KnowledgeClarificationRequestSelect;
+	sourceKind: "conversation" | "faq";
+	conversationId?: string | null;
+	knowledgeId?: string | null;
+	triggerMessageId?: string | null;
+	summary: string;
+	searchEvidence?: KnowledgeClarificationContextSnapshot["kbSearchEvidence"];
+}): Promise<void> {
+	if (
+		params.sourceKind === "conversation" &&
+		params.conversationId &&
+		params.request.conversationId === params.conversationId &&
+		!params.knowledgeId
+	) {
+		return;
+	}
+
+	try {
+		await createKnowledgeClarificationSignal(params.db, {
+			requestId: params.request.id,
+			sourceKind: params.sourceKind,
+			conversationId: params.conversationId ?? null,
+			knowledgeId: params.knowledgeId ?? null,
+			triggerMessageId: params.triggerMessageId ?? null,
+			summary: params.summary,
+			searchEvidence: params.searchEvidence ?? null,
+		});
+	} catch (error) {
+		if (
+			!(
+				isUniqueViolationError(
+					error,
+					"knowledge_clarification_signal_request_conv_trigger_unique"
+				) ||
+				isUniqueViolationError(
+					error,
+					"knowledge_clarification_signal_request_conv_unique"
+				) ||
+				isUniqueViolationError(
+					error,
+					"knowledge_clarification_signal_request_faq_unique"
+				)
+			)
+		) {
+			throw error;
+		}
+	}
+}
+
+async function getKnowledgeClarificationStartTarget(params: {
+	db: Database;
+	request: KnowledgeClarificationRequestSelect;
+	targetKnowledge?: KnowledgeSelect | null;
+	engagementMode?: KnowledgeClarificationRequest["engagementMode"];
 }): Promise<
 	| {
 			kind: "step";
@@ -2078,10 +2513,20 @@ async function getConversationClarificationStartTarget(params: {
 		turns,
 	});
 	if (existingStep) {
+		const request = await serializeKnowledgeClarificationRequestWithMetadata({
+			db: params.db,
+			request: params.request,
+			turns,
+			targetKnowledge: params.targetKnowledge,
+			engagementMode: params.engagementMode,
+		});
 		return {
 			kind: "step",
-			request: existingStep.request,
-			step: existingStep,
+			request,
+			step: withSerializedKnowledgeClarificationStepRequest({
+				step: existingStep,
+				request,
+			}),
 		};
 	}
 
@@ -2108,7 +2553,7 @@ async function getConversationClarificationStartTarget(params: {
 export async function prepareConversationKnowledgeClarificationStart(
 	params: StartConversationKnowledgeClarificationParams
 ): Promise<PreparedConversationKnowledgeClarificationStartResult> {
-	const contextSnapshot =
+	const baseContextSnapshot =
 		params.contextSnapshot ??
 		buildConversationClarificationContextSnapshot({
 			conversationHistory: await buildConversationTranscript(params.db, {
@@ -2117,15 +2562,20 @@ export async function prepareConversationKnowledgeClarificationStart(
 				websiteId: params.websiteId,
 			}),
 		});
+	const contextSnapshot = withTargetKnowledgeContextSnapshot({
+		requestTopicSummary: params.topicSummary,
+		contextSnapshot: baseContextSnapshot,
+		targetKnowledge: params.targetKnowledge ?? null,
+	});
 	const topicSummary = buildSpecificClarificationTopicSummary({
-		triggerText: contextSnapshot.sourceTrigger.text,
-		searchEvidence: contextSnapshot.kbSearchEvidence,
-		linkedFaq: contextSnapshot.linkedFaq,
+		triggerText: contextSnapshot?.sourceTrigger.text,
+		searchEvidence: contextSnapshot?.kbSearchEvidence,
+		linkedFaq: contextSnapshot?.linkedFaq,
 		fallback: params.topicSummary,
 	});
 	const sourceTriggerMessageId =
 		params.creationMode === "automation"
-			? getClarificationSourceTriggerMessageId(contextSnapshot)
+			? getClarificationSourceTriggerMessageId(contextSnapshot ?? null)
 			: null;
 	const topicFingerprint = buildClarificationTopicFingerprint(topicSummary);
 	const duplicate = await resolveConversationClarificationDuplicate({
@@ -2133,19 +2583,16 @@ export async function prepareConversationKnowledgeClarificationStart(
 		conversationId: params.conversation.id,
 		websiteId: params.websiteId,
 		sourceTriggerMessageId,
-		topicFingerprint,
 	});
 
 	if (duplicate) {
 		if (duplicate.resolution === "suppressed_duplicate") {
-			const turns = await listKnowledgeClarificationTurns(params.db, {
-				requestId: duplicate.request.id,
-			});
 			return {
 				kind: "suppressed_duplicate",
-				request: serializeKnowledgeClarificationRequest({
+				request: await serializeKnowledgeClarificationRequestWithMetadata({
+					db: params.db,
 					request: duplicate.request,
-					turns,
+					targetKnowledge: params.targetKnowledge ?? null,
 				}),
 				step: null,
 				created: false,
@@ -2153,9 +2600,20 @@ export async function prepareConversationKnowledgeClarificationStart(
 			};
 		}
 
-		const target = await getConversationClarificationStartTarget({
+		const reusableRequest =
+			await maybeUpgradeReusableClarificationTargetKnowledge({
+				db: params.db,
+				request: duplicate.request,
+				targetKnowledge: params.targetKnowledge ?? null,
+			});
+		const target = await getKnowledgeClarificationStartTarget({
 			db: params.db,
-			request: duplicate.request,
+			request: reusableRequest,
+			targetKnowledge: params.targetKnowledge ?? null,
+			engagementMode:
+				reusableRequest.conversationId === params.conversation.id
+					? "owner"
+					: "linked",
 		});
 		return target.kind === "step"
 			? {
@@ -2173,18 +2631,75 @@ export async function prepareConversationKnowledgeClarificationStart(
 				};
 	}
 
-	const existing = await getActiveKnowledgeClarificationForConversation(
-		params.db,
-		{
+	const activeAssociation =
+		await getActiveKnowledgeClarificationAssociationForConversation(params.db, {
 			conversationId: params.conversation.id,
 			websiteId: params.websiteId,
-		}
-	);
+		});
 
-	if (existing) {
-		const target = await getConversationClarificationStartTarget({
+	if (activeAssociation?.request) {
+		const reusableRequest =
+			await maybeUpgradeReusableClarificationTargetKnowledge({
+				db: params.db,
+				request: activeAssociation.request,
+				targetKnowledge: params.targetKnowledge ?? null,
+			});
+		const target = await getKnowledgeClarificationStartTarget({
 			db: params.db,
-			request: existing,
+			request: reusableRequest,
+			targetKnowledge: params.targetKnowledge ?? null,
+			engagementMode: activeAssociation.engagementMode,
+		});
+		return target.kind === "step"
+			? {
+					kind: "step",
+					request: target.request,
+					step: target.step,
+					created: false,
+					resolution: "reused",
+				}
+			: {
+					kind: "stream",
+					request: target.request,
+					created: false,
+					resolution: "reused",
+				};
+	}
+
+	const reusable = await resolveSharedReusableClarification({
+		db: params.db,
+		websiteId: params.websiteId,
+		aiAgentId: params.aiAgent.id,
+		targetKnowledgeId: params.targetKnowledge?.id ?? null,
+		topicFingerprint,
+		topicSummary,
+	});
+
+	if (reusable.request) {
+		const reusableRequest =
+			await maybeUpgradeReusableClarificationTargetKnowledge({
+				db: params.db,
+				request: reusable.request,
+				targetKnowledge: params.targetKnowledge ?? null,
+			});
+		await maybeCreateClarificationReuseSignal({
+			db: params.db,
+			request: reusableRequest,
+			sourceKind: "conversation",
+			conversationId: params.conversation.id,
+			knowledgeId: params.targetKnowledge?.id ?? null,
+			triggerMessageId: sourceTriggerMessageId,
+			summary: topicSummary,
+			searchEvidence: contextSnapshot?.kbSearchEvidence,
+		});
+		const target = await getKnowledgeClarificationStartTarget({
+			db: params.db,
+			request: reusableRequest,
+			targetKnowledge: params.targetKnowledge ?? null,
+			engagementMode:
+				reusableRequest.conversationId === params.conversation.id
+					? "owner"
+					: "linked",
 		});
 		return target.kind === "step"
 			? {
@@ -2214,7 +2729,9 @@ export async function prepareConversationKnowledgeClarificationStart(
 			topicSummary,
 			sourceTriggerMessageId,
 			topicFingerprint,
+			topicEmbedding: reusable.topicEmbedding,
 			contextSnapshot,
+			targetKnowledgeId: params.targetKnowledge?.id ?? null,
 			maxSteps: params.maxSteps ?? DEFAULT_MAX_CLARIFICATION_STEPS,
 		});
 	} catch (error) {
@@ -2238,31 +2755,89 @@ export async function prepareConversationKnowledgeClarificationStart(
 			conversationId: params.conversation.id,
 			websiteId: params.websiteId,
 			sourceTriggerMessageId,
-			topicFingerprint,
 		});
-		if (!winner) {
+		if (winner) {
+			if (winner.resolution === "suppressed_duplicate") {
+				return {
+					kind: "suppressed_duplicate",
+					request: await serializeKnowledgeClarificationRequestWithMetadata({
+						db: params.db,
+						request: winner.request,
+						targetKnowledge: params.targetKnowledge ?? null,
+					}),
+					step: null,
+					created: false,
+					resolution: "suppressed_duplicate",
+				};
+			}
+
+			const reusableRequest =
+				await maybeUpgradeReusableClarificationTargetKnowledge({
+					db: params.db,
+					request: winner.request,
+					targetKnowledge: params.targetKnowledge ?? null,
+				});
+			const target = await getKnowledgeClarificationStartTarget({
+				db: params.db,
+				request: reusableRequest,
+				targetKnowledge: params.targetKnowledge ?? null,
+				engagementMode:
+					reusableRequest.conversationId === params.conversation.id
+						? "owner"
+						: "linked",
+			});
+			return target.kind === "step"
+				? {
+						kind: "step",
+						request: target.request,
+						step: target.step,
+						created: false,
+						resolution: "reused",
+					}
+				: {
+						kind: "stream",
+						request: target.request,
+						created: false,
+						resolution: "reused",
+					};
+		}
+
+		const fallbackReusable = await resolveSharedReusableClarification({
+			db: params.db,
+			websiteId: params.websiteId,
+			aiAgentId: params.aiAgent.id,
+			targetKnowledgeId: params.targetKnowledge?.id ?? null,
+			topicFingerprint,
+			topicSummary,
+		});
+		if (!fallbackReusable.request) {
 			throw error;
 		}
 
-		if (winner.resolution === "suppressed_duplicate") {
-			const turns = await listKnowledgeClarificationTurns(params.db, {
-				requestId: winner.request.id,
+		const reusableRequest =
+			await maybeUpgradeReusableClarificationTargetKnowledge({
+				db: params.db,
+				request: fallbackReusable.request,
+				targetKnowledge: params.targetKnowledge ?? null,
 			});
-			return {
-				kind: "suppressed_duplicate",
-				request: serializeKnowledgeClarificationRequest({
-					request: winner.request,
-					turns,
-				}),
-				step: null,
-				created: false,
-				resolution: "suppressed_duplicate",
-			};
-		}
-
-		const target = await getConversationClarificationStartTarget({
+		await maybeCreateClarificationReuseSignal({
 			db: params.db,
-			request: winner.request,
+			request: reusableRequest,
+			sourceKind: "conversation",
+			conversationId: params.conversation.id,
+			knowledgeId: params.targetKnowledge?.id ?? null,
+			triggerMessageId: sourceTriggerMessageId,
+			summary: topicSummary,
+			searchEvidence: contextSnapshot?.kbSearchEvidence,
+		});
+		const target = await getKnowledgeClarificationStartTarget({
+			db: params.db,
+			request: reusableRequest,
+			targetKnowledge: params.targetKnowledge ?? null,
+			engagementMode:
+				reusableRequest.conversationId === params.conversation.id
+					? "owner"
+					: "linked",
 		});
 		return target.kind === "step"
 			? {
@@ -2349,6 +2924,52 @@ export async function prepareFaqKnowledgeClarificationStart(
 		linkedFaq: contextSnapshot.linkedFaq,
 		fallback: params.topicSummary,
 	});
+	const topicFingerprint = buildClarificationTopicFingerprint(topicSummary);
+	const reusable = await resolveSharedReusableClarification({
+		db: params.db,
+		websiteId: params.websiteId,
+		aiAgentId: params.aiAgent.id,
+		targetKnowledgeId: params.targetKnowledge.id,
+		topicFingerprint,
+		topicSummary,
+	});
+
+	if (reusable.request) {
+		const reusableRequest =
+			await maybeUpgradeReusableClarificationTargetKnowledge({
+				db: params.db,
+				request: reusable.request,
+				targetKnowledge: params.targetKnowledge,
+			});
+		await maybeCreateClarificationReuseSignal({
+			db: params.db,
+			request: reusableRequest,
+			sourceKind: "faq",
+			knowledgeId: params.targetKnowledge.id,
+			summary: topicSummary,
+			searchEvidence: contextSnapshot.kbSearchEvidence,
+		});
+		const target = await getKnowledgeClarificationStartTarget({
+			db: params.db,
+			request: reusableRequest,
+			targetKnowledge: params.targetKnowledge,
+		});
+		return target.kind === "step"
+			? {
+					kind: "step",
+					request: target.request,
+					step: target.step,
+					created: false,
+					resolution: "reused",
+				}
+			: {
+					kind: "stream",
+					request: target.request,
+					created: false,
+					resolution: "reused",
+				};
+	}
+
 	const request = await createKnowledgeClarificationRequest(params.db, {
 		organizationId: params.organizationId,
 		websiteId: params.websiteId,
@@ -2356,12 +2977,19 @@ export async function prepareFaqKnowledgeClarificationStart(
 		source: "faq",
 		status: "analyzing",
 		topicSummary,
+		topicFingerprint,
+		topicEmbedding: reusable.topicEmbedding,
 		contextSnapshot,
 		maxSteps: params.maxSteps ?? DEFAULT_MAX_CLARIFICATION_STEPS,
 		targetKnowledgeId: params.targetKnowledge.id,
 	});
 
-	return { request };
+	return {
+		kind: "stream",
+		request,
+		created: true,
+		resolution: "created",
+	};
 }
 
 export async function startFaqKnowledgeClarification(
@@ -2371,6 +2999,13 @@ export async function startFaqKnowledgeClarification(
 	step: KnowledgeClarificationStepResponse;
 }> {
 	const prepared = await prepareFaqKnowledgeClarificationStart(params);
+
+	if (prepared.kind === "step") {
+		return {
+			request: prepared.request,
+			step: prepared.step,
+		};
+	}
 
 	const step = await runKnowledgeClarificationStep({
 		db: params.db,

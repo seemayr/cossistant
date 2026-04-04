@@ -100,6 +100,9 @@ function shouldInvalidateActiveClarification(params: {
 		params.current.requestId !== params.next.requestId ||
 		params.current.status !== params.next.status ||
 		params.current.topicSummary !== params.next.topicSummary ||
+		params.current.engagementMode !== params.next.engagementMode ||
+		params.current.linkedConversationCount !==
+			params.next.linkedConversationCount ||
 		params.current.question !== params.next.question ||
 		JSON.stringify(params.current.currentSuggestedAnswers) !==
 			JSON.stringify(params.next.currentSuggestedAnswers) ||

@@ -1,5 +1,9 @@
 import type { Database } from "@api/db";
 import {
+	getAiAgentById,
+	updateAiAgentTrainingStatus,
+} from "@api/db/queries/ai-agent";
+import {
 	createKnowledge,
 	getKnowledgeById,
 	getKnowledgeCountByType,
@@ -7,10 +11,10 @@ import {
 	updateKnowledge,
 } from "@api/db/queries/knowledge";
 import {
-	getActiveKnowledgeClarificationForConversation,
+	getActiveKnowledgeClarificationAssociationForConversation,
 	getKnowledgeClarificationRequestById,
 	listKnowledgeClarificationProposals,
-	listKnowledgeClarificationTurns,
+	type listKnowledgeClarificationTurns,
 	updateKnowledgeClarificationRequest,
 } from "@api/db/queries/knowledge-clarification";
 import { getWebsiteBySlugWithAccess } from "@api/db/queries/website";
@@ -19,8 +23,9 @@ import {
 	createKnowledgeClarificationAuditEntry,
 	emitConversationClarificationUpdate,
 	loadKnowledgeClarificationRuntime,
-	serializeKnowledgeClarificationRequest,
+	serializeKnowledgeClarificationRequestWithMetadata,
 } from "@api/services/knowledge-clarification";
+import { triggerAiTraining } from "@api/utils/queue-triggers";
 import type { KnowledgeClarificationDraftFaq } from "@cossistant/types";
 import {
 	approveKnowledgeClarificationDraftRequestSchema,
@@ -144,15 +149,53 @@ async function loadClarificationRequest(params: {
 async function maybeSerializeClarificationRequest(params: {
 	db: Parameters<typeof listKnowledgeClarificationTurns>[0];
 	request: NonNullable<
-		Awaited<ReturnType<typeof getActiveKnowledgeClarificationForConversation>>
-	>;
+		Awaited<
+			ReturnType<
+				typeof getActiveKnowledgeClarificationAssociationForConversation
+			>
+		>
+	>["request"];
+	engagementMode?: "owner" | "linked";
 }) {
-	const turns = await listKnowledgeClarificationTurns(params.db, {
-		requestId: params.request.id,
-	});
-	return serializeKnowledgeClarificationRequest({
+	return serializeKnowledgeClarificationRequestWithMetadata({
+		db: params.db as Database,
 		request: params.request,
-		turns,
+		engagementMode: params.engagementMode,
+	});
+}
+
+async function maybeTriggerClarificationTraining(params: {
+	db: Database;
+	aiAgentId: string;
+	websiteId: string;
+	organizationId: string;
+	triggeredBy: string;
+}) {
+	const agent = await getAiAgentById(params.db, {
+		aiAgentId: params.aiAgentId,
+	});
+	if (!agent) {
+		return;
+	}
+
+	if (
+		agent.trainingStatus === "pending" ||
+		agent.trainingStatus === "training"
+	) {
+		return;
+	}
+
+	await updateAiAgentTrainingStatus(params.db, {
+		aiAgentId: params.aiAgentId,
+		trainingStatus: "pending",
+		trainingProgress: 0,
+		trainingError: null,
+	});
+	await triggerAiTraining({
+		websiteId: params.websiteId,
+		organizationId: params.organizationId,
+		aiAgentId: params.aiAgentId,
+		triggeredBy: params.triggeredBy,
 	});
 }
 
@@ -224,19 +267,21 @@ export const knowledgeClarificationRouter = createTRPCRouter({
 				userId: user.id,
 				websiteSlug: input.websiteSlug,
 			});
-			const request = await getActiveKnowledgeClarificationForConversation(db, {
-				conversationId: input.conversationId,
-				websiteId: website.id,
-			});
+			const association =
+				await getActiveKnowledgeClarificationAssociationForConversation(db, {
+					conversationId: input.conversationId,
+					websiteId: website.id,
+				});
 
-			if (!request) {
+			if (!association) {
 				return { request: null };
 			}
 
 			return {
 				request: await maybeSerializeClarificationRequest({
 					db,
-					request,
+					request: association.request,
+					engagementMode: association.engagementMode,
 				}),
 			};
 		}),
@@ -258,14 +303,10 @@ export const knowledgeClarificationRouter = createTRPCRouter({
 				return { request: null };
 			}
 
-			const turns = await listKnowledgeClarificationTurns(db, {
-				requestId: request.id,
-			});
-
 			return {
-				request: serializeKnowledgeClarificationRequest({
+				request: await serializeKnowledgeClarificationRequestWithMetadata({
+					db,
 					request,
-					turns,
 				}),
 			};
 		}),
@@ -316,16 +357,13 @@ export const knowledgeClarificationRouter = createTRPCRouter({
 			await emitConversationClarificationUpdate({
 				db,
 				conversation: runtime.conversation,
-				request: null,
+				request: updatedRequest,
 				aiAgentId: null,
 			});
 
-			const turns = await listKnowledgeClarificationTurns(db, {
-				requestId: updatedRequest.id,
-			});
-			return serializeKnowledgeClarificationRequest({
+			return serializeKnowledgeClarificationRequestWithMetadata({
+				db,
 				request: updatedRequest,
-				turns,
 			});
 		}),
 
@@ -375,16 +413,13 @@ export const knowledgeClarificationRouter = createTRPCRouter({
 			await emitConversationClarificationUpdate({
 				db,
 				conversation: runtime.conversation,
-				request: null,
+				request: updatedRequest,
 				aiAgentId: null,
 			});
 
-			const turns = await listKnowledgeClarificationTurns(db, {
-				requestId: updatedRequest.id,
-			});
-			return serializeKnowledgeClarificationRequest({
+			return serializeKnowledgeClarificationRequestWithMetadata({
+				db,
 				request: updatedRequest,
-				turns,
 			});
 		}),
 
@@ -401,15 +436,12 @@ export const knowledgeClarificationRouter = createTRPCRouter({
 				websiteId: website.id,
 			});
 			const items = await Promise.all(
-				requests.map(async (request) => {
-					const turns = await listKnowledgeClarificationTurns(db, {
-						requestId: request.id,
-					});
-					return serializeKnowledgeClarificationRequest({
+				requests.map(async (request) =>
+					serializeKnowledgeClarificationRequestWithMetadata({
+						db,
 						request,
-						turns,
-					});
-				})
+					})
+				)
 			);
 
 			return { items };
@@ -517,17 +549,23 @@ export const knowledgeClarificationRouter = createTRPCRouter({
 			await emitConversationClarificationUpdate({
 				db,
 				conversation: runtime.conversation,
-				request: null,
+				request: updatedRequest,
 				aiAgentId: null,
 			});
 
-			const turns = await listKnowledgeClarificationTurns(db, {
-				requestId: updatedRequest.id,
+			await maybeTriggerClarificationTraining({
+				db,
+				aiAgentId: updatedRequest.aiAgentId,
+				websiteId: website.id,
+				organizationId: website.organizationId,
+				triggeredBy: user.id,
 			});
+
 			return {
-				request: serializeKnowledgeClarificationRequest({
+				request: await serializeKnowledgeClarificationRequestWithMetadata({
+					db,
 					request: updatedRequest,
-					turns,
+					targetKnowledge: knowledgeEntry,
 				}),
 				knowledge: toKnowledgeResponse(knowledgeEntry),
 			};

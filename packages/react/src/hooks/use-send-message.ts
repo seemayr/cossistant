@@ -1,9 +1,9 @@
-import type { CossistantClient } from "@cossistant/core";
+import type { CossistantClient } from "@cossistant/core/client";
 import {
-	generateMessageId,
 	isImageMimeType,
 	validateFiles,
-} from "@cossistant/core";
+} from "@cossistant/core/upload-constants";
+import { generateMessageId } from "@cossistant/core/utils";
 import type { CreateConversationResponseBody } from "@cossistant/types/api/conversation";
 import type {
 	TimelineItem,

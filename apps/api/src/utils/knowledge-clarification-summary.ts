@@ -226,8 +226,12 @@ export function buildConversationClarificationSummary(params: {
 	request: ActiveConversationClarificationRequest;
 	turns: ClarificationTurnLike[];
 	progress?: ConversationClarificationProgress | null;
+	conversationId?: string | null;
+	engagementMode?: ConversationClarificationSummary["engagementMode"];
+	linkedConversationCount?: number;
 }): ConversationClarificationSummary | null {
-	if (!params.request.conversationId) {
+	const conversationId = params.conversationId ?? params.request.conversationId;
+	if (!conversationId) {
 		return null;
 	}
 
@@ -254,6 +258,8 @@ export function buildConversationClarificationSummary(params: {
 		requestId: params.request.id,
 		status: params.request.status,
 		topicSummary: params.request.topicSummary,
+		engagementMode: params.engagementMode ?? "owner",
+		linkedConversationCount: params.linkedConversationCount ?? 1,
 		question: currentQuestion,
 		currentSuggestedAnswers:
 			normalizeSuggestedAnswersTuple(currentQuestionTurn?.suggestedAnswers) ??

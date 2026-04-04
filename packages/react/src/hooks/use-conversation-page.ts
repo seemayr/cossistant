@@ -1,4 +1,5 @@
-import { CossistantAPIError, type CossistantClient } from "@cossistant/core";
+import type { CossistantClient } from "@cossistant/core/client";
+import { CossistantAPIError } from "@cossistant/core/types";
 import type { TimelineItem } from "@cossistant/types/api/timeline-item";
 import {
 	ConversationTimelineType,

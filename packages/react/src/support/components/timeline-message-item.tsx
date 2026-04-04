@@ -1,4 +1,4 @@
-import { formatFileSize } from "@cossistant/core";
+import { formatFileSize } from "@cossistant/core/upload-constants";
 import type { TimelineItem } from "@cossistant/types/api/timeline-item";
 import type React from "react";
 import { useMemo, useState } from "react";

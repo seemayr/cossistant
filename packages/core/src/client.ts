@@ -1,9 +1,5 @@
-import type {
-	AnyRealtimeEvent,
-	DefaultMessage,
-	IdentifyContactResponse,
-	RealtimeEvent,
-} from "@cossistant/types";
+import type { DefaultMessage } from "@cossistant/types";
+import type { IdentifyContactResponse } from "@cossistant/types/api/contact";
 import type {
 	CreateConversationRequestBody,
 	CreateConversationResponseBody,
@@ -34,6 +30,10 @@ import {
 	SenderType,
 	TimelineItemVisibility,
 } from "@cossistant/types/enums";
+import type {
+	AnyRealtimeEvent,
+	RealtimeEvent,
+} from "@cossistant/types/realtime-events";
 import type { Conversation } from "@cossistant/types/schemas";
 import { RealtimeClient } from "./realtime-client";
 import { shouldDeliverEvent } from "./realtime-event-filter";

@@ -573,6 +573,13 @@ export function createKnowledgeClarificationStreamRouter(
 						topicSummary: defaultTopicSummary,
 						targetKnowledge,
 					});
+
+					if (prepared.kind === "step") {
+						return createJsonResponse(
+							deps.toKnowledgeClarificationStreamStepResponse(prepared.step)
+						);
+					}
+
 					const stream = await deps.startKnowledgeClarificationStepStream({
 						db: deps.db,
 						request: prepared.request,

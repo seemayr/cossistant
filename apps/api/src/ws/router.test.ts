@@ -601,6 +601,8 @@ describe("conversationUpdated handler", () => {
 						requestId: "01JKCLARIFICATION0000000001",
 						status: "awaiting_answer",
 						topicSummary: "Clarify how credits roll over.",
+						engagementMode: "owner",
+						linkedConversationCount: 1,
 						question: "Do credits survive downgrades?",
 						currentSuggestedAnswers: [
 							"Yes, always",

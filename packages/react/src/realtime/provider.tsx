@@ -1,6 +1,7 @@
 "use client";
 
-import { type RealtimeAuthConfig, RealtimeClient } from "@cossistant/core";
+import type { RealtimeAuthConfig } from "@cossistant/core/realtime-client";
+import { RealtimeClient } from "@cossistant/core/realtime-client";
 import type { AnyRealtimeEvent } from "@cossistant/types/realtime-events";
 import type React from "react";
 import {

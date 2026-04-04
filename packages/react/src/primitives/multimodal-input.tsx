@@ -1,4 +1,4 @@
-import { extractFilesFromClipboard } from "@cossistant/core";
+import { extractFilesFromClipboard } from "@cossistant/core/upload-constants";
 import * as React from "react";
 import { useRenderElement } from "../utils/use-render-element";
 

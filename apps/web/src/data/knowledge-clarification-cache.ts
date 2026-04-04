@@ -55,6 +55,8 @@ export function buildConversationClarificationSummaryFromRequest(params: {
 		requestId: params.request.id,
 		status: params.request.status,
 		topicSummary: params.request.topicSummary,
+		engagementMode: params.request.engagementMode,
+		linkedConversationCount: params.request.linkedConversationCount,
 		question: params.request.currentQuestion,
 		currentSuggestedAnswers: params.request.currentSuggestedAnswers,
 		currentQuestionInputMode: params.request.currentQuestionInputMode,
@@ -171,7 +173,7 @@ export function syncConversationClarificationRequestInCache(
 	}
 ): void {
 	const conversationId =
-		params.request?.conversationId ?? params.conversationId ?? null;
+		params.conversationId ?? params.request?.conversationId ?? null;
 	if (!conversationId) {
 		return;
 	}

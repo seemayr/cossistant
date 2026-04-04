@@ -1,10 +1,12 @@
 import type {
+	TimelineItem,
+	TimelinePartEvent,
+} from "@cossistant/types/api/timeline-item";
+import type {
 	AvailableAIAgent,
 	AvailableHumanAgent,
-	TimelinePartEvent,
-} from "@cossistant/types";
-import { SenderType } from "@cossistant/types";
-import type { TimelineItem } from "@cossistant/types/api/timeline-item";
+} from "@cossistant/types/api/website";
+import { SenderType } from "@cossistant/types/enums";
 import type React from "react";
 import { useMemo } from "react";
 import type { GroupedActivity } from "../../hooks/private/use-grouped-messages";

@@ -1,4 +1,5 @@
-import { type Conversation, ConversationStatus } from "@cossistant/types";
+import { ConversationStatus } from "@cossistant/types/enums";
+import type { Conversation } from "@cossistant/types/schemas";
 import { useCallback, useMemo } from "react";
 import { shouldDisplayConversation } from "../utils/conversation";
 import { useConversations } from "./use-conversations";

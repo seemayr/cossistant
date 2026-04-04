@@ -1,6 +1,7 @@
-import { generateMessageId } from "@cossistant/core";
-import { type DefaultMessage, SenderType } from "@cossistant/types";
+import { generateMessageId } from "@cossistant/core/utils";
+import type { DefaultMessage } from "@cossistant/types";
 import type { TimelineItem } from "@cossistant/types/api/timeline-item";
+import { SenderType } from "@cossistant/types/enums";
 import { useMemo, useRef } from "react";
 import { useSupport } from "../../provider";
 

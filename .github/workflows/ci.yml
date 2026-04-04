@@ -36,5 +36,11 @@ jobs:
       - name: Check types
         run: bun run check-types
 
+      - name: Build browser embed package
+        run: bun run build --filter @cossistant/browser
+
+      - name: Check browser embed bundle size
+        run: bun run check:browser-embed-size
+
       - name: Build example integration app
         run: bun run build --filter @cossistant/example-nextjs-tailwind

@@ -16,13 +16,27 @@ const getConversationTimelineItemsAfterCursorMock = mock(async () => ({
 	nextCursor: null,
 }));
 const createKnowledgeClarificationRequestMock = mock(async () => null);
+const createKnowledgeClarificationSignalMock = mock(async () => null);
 const getActiveKnowledgeClarificationForConversationMock = mock(
+	async () => null
+);
+const getActiveKnowledgeClarificationAssociationForConversationMock = mock(
 	async () => null
 );
 const getLatestKnowledgeClarificationForConversationBySourceTriggerMessageIdMock =
 	mock(async () => null);
-const getLatestKnowledgeClarificationForConversationByTopicFingerprintMock =
-	mock(async () => null);
+const getJoinableKnowledgeClarificationByTargetKnowledgeIdMock = mock(
+	async () => null
+);
+const getJoinableKnowledgeClarificationByTopicFingerprintMock = mock(
+	async () => null
+);
+const listJoinableKnowledgeClarificationRequestsMissingTopicEmbeddingsMock =
+	mock(async () => []);
+const listJoinableKnowledgeClarificationVectorMatchesMock = mock(
+	async () => []
+);
+const listKnowledgeClarificationSignalsMock = mock(async () => []);
 const listKnowledgeClarificationTurnsMock = mock(async () => []);
 const updateKnowledgeClarificationRequestMock = mock(async () => null);
 const createKnowledgeClarificationTurnMock = mock(async () => null);
@@ -41,6 +55,10 @@ const generateTextMock = mock((async () => ({
 	output: null,
 	usage: undefined,
 })) as (...args: unknown[]) => Promise<unknown>);
+const generateEmbeddingMock = mock(async () => new Array(1536).fill(0));
+const generateEmbeddingsMock = mock(async (values: string[]) =>
+	values.map(() => new Array(1536).fill(0))
+);
 const streamTextMock = mock((options: unknown) => {
 	const resultPromise = Promise.resolve(generateTextMock(options)).then(
 		(result) => result as { output?: unknown; usage?: unknown }
@@ -102,16 +120,26 @@ mock.module("@api/db/queries/knowledge-clarification", () => ({
 		"draft_ready",
 	],
 	createKnowledgeClarificationRequest: createKnowledgeClarificationRequestMock,
+	createKnowledgeClarificationSignal: createKnowledgeClarificationSignalMock,
 	createKnowledgeClarificationTurn: createKnowledgeClarificationTurnMock,
+	getActiveKnowledgeClarificationAssociationForConversation:
+		getActiveKnowledgeClarificationAssociationForConversationMock,
 	getActiveKnowledgeClarificationForConversation:
 		getActiveKnowledgeClarificationForConversationMock,
 	getLatestKnowledgeClarificationForConversationBySourceTriggerMessageId:
 		getLatestKnowledgeClarificationForConversationBySourceTriggerMessageIdMock,
-	getLatestKnowledgeClarificationForConversationByTopicFingerprint:
-		getLatestKnowledgeClarificationForConversationByTopicFingerprintMock,
+	getJoinableKnowledgeClarificationByTargetKnowledgeId:
+		getJoinableKnowledgeClarificationByTargetKnowledgeIdMock,
+	getJoinableKnowledgeClarificationByTopicFingerprint:
+		getJoinableKnowledgeClarificationByTopicFingerprintMock,
 	getKnowledgeClarificationRequestById:
 		getKnowledgeClarificationRequestByIdMock,
+	listJoinableKnowledgeClarificationRequestsMissingTopicEmbeddings:
+		listJoinableKnowledgeClarificationRequestsMissingTopicEmbeddingsMock,
+	listJoinableKnowledgeClarificationVectorMatches:
+		listJoinableKnowledgeClarificationVectorMatchesMock,
 	listKnowledgeClarificationProposals: listKnowledgeClarificationProposalsMock,
+	listKnowledgeClarificationSignals: listKnowledgeClarificationSignalsMock,
 	listKnowledgeClarificationTurns: listKnowledgeClarificationTurnsMock,
 	updateKnowledgeClarificationRequest: updateKnowledgeClarificationRequestMock,
 }));
@@ -129,6 +157,8 @@ mock.module("@api/lib/ai", () => ({
 	createModel: createModelMock,
 	createStructuredOutputModel: createStructuredOutputModelMock,
 	EmptyResponseBodyError: EmptyResponseBodyErrorMock,
+	generateEmbedding: generateEmbeddingMock,
+	generateEmbeddings: generateEmbeddingsMock,
 	generateText: generateTextMock,
 	NoContentGeneratedError: NoContentGeneratedErrorMock,
 	NoObjectGeneratedError: NoObjectGeneratedErrorMock,
@@ -407,9 +437,15 @@ describe("knowledge clarification usage tracking", () => {
 		getConversationTimelineItemsMock.mockReset();
 		getConversationTimelineItemsAfterCursorMock.mockReset();
 		createKnowledgeClarificationRequestMock.mockReset();
+		createKnowledgeClarificationSignalMock.mockReset();
 		getActiveKnowledgeClarificationForConversationMock.mockReset();
+		getActiveKnowledgeClarificationAssociationForConversationMock.mockReset();
 		getLatestKnowledgeClarificationForConversationBySourceTriggerMessageIdMock.mockReset();
-		getLatestKnowledgeClarificationForConversationByTopicFingerprintMock.mockReset();
+		getJoinableKnowledgeClarificationByTargetKnowledgeIdMock.mockReset();
+		getJoinableKnowledgeClarificationByTopicFingerprintMock.mockReset();
+		listJoinableKnowledgeClarificationRequestsMissingTopicEmbeddingsMock.mockReset();
+		listJoinableKnowledgeClarificationVectorMatchesMock.mockReset();
+		listKnowledgeClarificationSignalsMock.mockReset();
 		listKnowledgeClarificationTurnsMock.mockReset();
 		updateKnowledgeClarificationRequestMock.mockReset();
 		createKnowledgeClarificationTurnMock.mockReset();
@@ -421,6 +457,8 @@ describe("knowledge clarification usage tracking", () => {
 		getTotalKnowledgeSizeBytesMock.mockReset();
 		updateKnowledgeMock.mockReset();
 		createStructuredOutputModelMock.mockReset();
+		generateEmbeddingMock.mockReset();
+		generateEmbeddingsMock.mockReset();
 		generateTextMock.mockReset();
 		streamTextMock.mockReset();
 		outputObjectMock.mockReset();
@@ -438,9 +476,17 @@ describe("knowledge clarification usage tracking", () => {
 		getLatestKnowledgeClarificationForConversationBySourceTriggerMessageIdMock.mockResolvedValue(
 			null
 		);
-		getLatestKnowledgeClarificationForConversationByTopicFingerprintMock.mockResolvedValue(
+		getJoinableKnowledgeClarificationByTargetKnowledgeIdMock.mockResolvedValue(
 			null
 		);
+		getJoinableKnowledgeClarificationByTopicFingerprintMock.mockResolvedValue(
+			null
+		);
+		listJoinableKnowledgeClarificationRequestsMissingTopicEmbeddingsMock.mockResolvedValue(
+			[]
+		);
+		listJoinableKnowledgeClarificationVectorMatchesMock.mockResolvedValue([]);
+		listKnowledgeClarificationSignalsMock.mockResolvedValue([]);
 		createModelMock.mockImplementation((modelId: string) => modelId);
 		createStructuredOutputModelMock.mockImplementation((modelId: string) => ({
 			modelId,
@@ -477,8 +523,12 @@ describe("knowledge clarification usage tracking", () => {
 		const { startConversationKnowledgeClarification } = await modulePromise;
 		const request = createRequest();
 
-		getActiveKnowledgeClarificationForConversationMock.mockResolvedValue(
-			request
+		getActiveKnowledgeClarificationAssociationForConversationMock.mockResolvedValue(
+			{
+				conversationId: "conv_1",
+				request,
+				engagementMode: "owner",
+			} as never
 		);
 		listKnowledgeClarificationTurnsMock.mockResolvedValue([createTurn()]);
 
@@ -567,7 +617,7 @@ describe("knowledge clarification usage tracking", () => {
 			}),
 		});
 
-		getLatestKnowledgeClarificationForConversationByTopicFingerprintMock.mockResolvedValue(
+		getJoinableKnowledgeClarificationByTopicFingerprintMock.mockResolvedValue(
 			existingRequest
 		);
 		listKnowledgeClarificationTurnsMock.mockResolvedValue([createTurn()]);
@@ -693,10 +743,12 @@ describe("knowledge clarification usage tracking", () => {
 			expect.objectContaining({
 				conversationId: "conv_1",
 				updates: {
-					activeClarification: {
+					activeClarification: expect.objectContaining({
 						requestId: "clar_req_1",
 						status: "retry_required",
 						topicSummary: "Clarify billing timing",
+						engagementMode: "owner",
+						linkedConversationCount: 1,
 						question: null,
 						currentSuggestedAnswers: null,
 						currentQuestionInputMode: null,
@@ -705,7 +757,7 @@ describe("knowledge clarification usage tracking", () => {
 						maxSteps: 3,
 						progress: null,
 						updatedAt: "2026-03-13T10:00:00.000Z",
-					},
+					}),
 				},
 			})
 		);

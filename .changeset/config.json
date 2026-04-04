@@ -12,7 +12,8 @@
       "@cossistant/core",
       "@cossistant/react",
       "@cossistant/types",
-      "@cossistant/next"
+      "@cossistant/next",
+      "@cossistant/browser"
     ]
   ],
   "linked": [],

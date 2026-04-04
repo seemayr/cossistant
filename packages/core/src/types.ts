@@ -1,10 +1,24 @@
-// Re-export all types from the shared types package
-export * from "@cossistant/types";
+export type {
+	CossistantConfig,
+	CossistantError,
+	DefaultMessage,
+} from "@cossistant/types";
+export type {
+	AttributionChannel,
+	UpdateVisitorRequest,
+	VisitorActivityRequest,
+	VisitorAttribution,
+	VisitorAttributionClickIds,
+	VisitorAttributionUtm,
+	VisitorCurrentPage,
+	VisitorMetadata,
+	VisitorResponse,
+} from "@cossistant/types/api/visitor";
+export type { PublicWebsiteResponse } from "@cossistant/types/api/website";
+export { PRESENCE_PING_INTERVAL_MS } from "@cossistant/types/presence";
 
-// Import the error interface for the error class
 import type { CossistantError } from "@cossistant/types";
 
-// Core-specific error class (runtime code)
 export class CossistantAPIError extends Error {
 	code: string;
 	details?: Record<string, unknown>;

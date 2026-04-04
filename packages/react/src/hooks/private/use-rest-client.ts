@@ -1,10 +1,10 @@
 "use client";
 
+import { CossistantClient } from "@cossistant/core/client";
 import {
-	CossistantClient,
 	getEnvVarName,
 	resolvePublicKey,
-} from "@cossistant/core";
+} from "@cossistant/core/resolve-public-key";
 import type { CossistantConfig } from "@cossistant/types";
 import { useMemo } from "react";
 import { processingStoreSingleton } from "../../realtime/processing-store";

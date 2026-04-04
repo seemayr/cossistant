@@ -1,11 +1,11 @@
 "use client";
 
-import type { CossistantClient } from "@cossistant/core";
+import type { CossistantClient } from "@cossistant/core/client";
 import {
 	isImageMimeType,
 	MAX_FILES_PER_MESSAGE,
 	validateFiles,
-} from "@cossistant/core";
+} from "@cossistant/core/upload-constants";
 import type {
 	TimelinePartFile,
 	TimelinePartImage,
