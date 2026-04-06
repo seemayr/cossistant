@@ -1,8 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { PageContent } from "@/components/ui/layout";
 import {
@@ -10,45 +9,32 @@ import {
 	SettingsPage,
 	SettingsRow,
 } from "@/components/ui/layout/settings-layout";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useWebsite } from "@/contexts/website";
 import { useTRPC } from "@/lib/trpc/client";
 import { AIAgentForm } from "../ai-agent-form";
 import { DeleteAgentDialog } from "../delete-agent-dialog";
 import { ToolInvocationBudgetForm } from "./behavior/tool-invocation-budget-form";
 
-export default function AgentsPage() {
+export default function GeneralSettingsPage() {
 	const website = useWebsite();
-	const router = useRouter();
 	const trpc = useTRPC();
 	const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
-	// Data is pre-fetched in the layout, so it will be available immediately
 	const { data: aiAgent } = useQuery(
 		trpc.aiAgent.get.queryOptions({
 			websiteSlug: website.slug,
 		})
 	);
-	const {
-		data: behaviorSettings,
-		isLoading: isLoadingBehaviorSettings,
-		isError: isBehaviorSettingsError,
-	} = useQuery({
-		...trpc.aiAgent.getBehaviorSettings.queryOptions({
-			websiteSlug: website.slug,
-		}),
-		enabled: Boolean(aiAgent?.onboardingCompletedAt),
-	});
-
-	// Redirect to create page if no agent exists OR onboarding not complete
-	useEffect(() => {
-		if (!aiAgent?.onboardingCompletedAt) {
-			router.replace(`/${website.slug}/agent/create`);
+	const { data: behaviorSettings, isError: isBehaviorSettingsError } = useQuery(
+		{
+			...trpc.aiAgent.getBehaviorSettings.queryOptions({
+				websiteSlug: website.slug,
+			}),
+			enabled: Boolean(aiAgent?.onboardingCompletedAt),
 		}
-	}, [aiAgent, router, website.slug]);
+	);
 
-	// Return null while redirecting (no skeleton needed - loading.tsx handles initial load)
-	if (!aiAgent?.onboardingCompletedAt) {
+	if (!aiAgent) {
 		return null;
 	}
 
@@ -67,18 +53,7 @@ export default function AgentsPage() {
 					/>
 				</SettingsRow>
 
-				{isLoadingBehaviorSettings ? (
-					<div className="space-y-8">
-						<SettingsRow
-							description="Loading behavior settings..."
-							title="Tool Invocation Budget"
-						>
-							<div className="space-y-3 p-4">
-								<Skeleton className="h-10 w-full" />
-							</div>
-						</SettingsRow>
-					</div>
-				) : isBehaviorSettingsError ? (
+				{isBehaviorSettingsError || !behaviorSettings ? (
 					<SettingsRow
 						description="Control how many non-finish tool invocations the AI can use per run."
 						title="Tool Invocation Budget"
@@ -89,7 +64,7 @@ export default function AgentsPage() {
 							</p>
 						</div>
 					</SettingsRow>
-				) : behaviorSettings ? (
+				) : (
 					<SettingsRow
 						description="Control how many non-finish tool invocations the AI can use per run."
 						title="Tool Invocation Budget"
@@ -100,7 +75,7 @@ export default function AgentsPage() {
 							websiteSlug={website.slug}
 						/>
 					</SettingsRow>
-				) : null}
+				)}
 
 				<SettingsRow
 					description="Permanently delete this AI agent and all associated data. This action cannot be undone."

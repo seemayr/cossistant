@@ -66,12 +66,6 @@ function areFaqDraftsEqual(
 export function FaqEditorPage({ knowledgeId }: FaqEditorPageProps) {
 	const router = useRouter();
 	const trpc = useTRPC();
-	const [question, setQuestion] = useState("");
-	const [answer, setAnswer] = useState("");
-	const [categories, setCategories] = useState("");
-	const [relatedQuestions, setRelatedQuestions] = useState("");
-	const [initialDraft, setInitialDraft] =
-		useState<NormalizedFaqDraft>(EMPTY_FAQ_DRAFT);
 	const pageState = useTrainingPageState({
 		highlightedFeatureKey: "ai-agent-training-faqs",
 	});
@@ -85,6 +79,36 @@ export function FaqEditorPage({ knowledgeId }: FaqEditorPageProps) {
 		}),
 		enabled: Boolean(knowledgeId),
 	});
+	const initialDraftFromKnowledge = useMemo(() => {
+		if (!knowledge || knowledge.type !== "faq") {
+			return EMPTY_FAQ_DRAFT;
+		}
+
+		const payload = knowledge.payload as FaqKnowledgePayload;
+		return normalizeFaqDraft({
+			question: payload.question,
+			answer: payload.answer,
+			categories: payload.categories.join(", "),
+			relatedQuestions: payload.relatedQuestions.join(", "),
+		});
+	}, [knowledge]);
+	const [question, setQuestion] = useState(
+		() => initialDraftFromKnowledge.question
+	);
+	const [answer, setAnswer] = useState(() => initialDraftFromKnowledge.answer);
+	const [categories, setCategories] = useState(() =>
+		initialDraftFromKnowledge.categories.length > 0
+			? initialDraftFromKnowledge.categories.join(", ")
+			: ""
+	);
+	const [relatedQuestions, setRelatedQuestions] = useState(() =>
+		initialDraftFromKnowledge.relatedQuestions.length > 0
+			? initialDraftFromKnowledge.relatedQuestions.join(", ")
+			: ""
+	);
+	const [initialDraft, setInitialDraft] = useState<NormalizedFaqDraft>(
+		() => initialDraftFromKnowledge
+	);
 
 	const {
 		handleCreate,
@@ -118,22 +142,20 @@ export function FaqEditorPage({ knowledgeId }: FaqEditorPageProps) {
 			return;
 		}
 
-		const payload = knowledge.payload as FaqKnowledgePayload;
-		const nextCategories = payload.categories.join(", ");
-		const nextRelatedQuestions = payload.relatedQuestions.join(", ");
-		const nextDraft = normalizeFaqDraft({
-			question: payload.question,
-			answer: payload.answer,
-			categories: nextCategories,
-			relatedQuestions: nextRelatedQuestions,
-		});
-
-		setQuestion(payload.question);
-		setAnswer(payload.answer);
-		setCategories(nextCategories);
-		setRelatedQuestions(nextRelatedQuestions);
-		setInitialDraft(nextDraft);
-	}, [knowledge]);
+		setQuestion(initialDraftFromKnowledge.question);
+		setAnswer(initialDraftFromKnowledge.answer);
+		setCategories(
+			initialDraftFromKnowledge.categories.length > 0
+				? initialDraftFromKnowledge.categories.join(", ")
+				: ""
+		);
+		setRelatedQuestions(
+			initialDraftFromKnowledge.relatedQuestions.length > 0
+				? initialDraftFromKnowledge.relatedQuestions.join(", ")
+				: ""
+		);
+		setInitialDraft(initialDraftFromKnowledge);
+	}, [initialDraftFromKnowledge, knowledge]);
 
 	const isAtFaqLimit =
 		pageState.stats?.planLimitFaqs !== null &&
