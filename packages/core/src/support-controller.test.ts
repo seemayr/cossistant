@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import type { PublicWebsiteResponse } from "@cossistant/types";
 import { SenderType } from "@cossistant/types/enums";
+import { createProcessingStore } from "./store/processing-store";
+import { createSeenStore } from "./store/seen-store";
+import { createTypingStore } from "./store/typing-store";
 import {
 	createSupportController,
 	type SupportControllerSnapshot,
@@ -88,6 +91,26 @@ describe("support controller", () => {
 		expect(snapshots.length).toBeGreaterThan(0);
 
 		unsubscribe();
+	});
+
+	it("reuses injected client stores", () => {
+		const processingStore = createProcessingStore();
+		const seenStore = createSeenStore();
+		const typingStore = createTypingStore();
+		const controller = createSupportController({
+			publicKey: "pk_test_widget",
+			clientOptions: {
+				processingStore,
+				seenStore,
+				typingStore,
+			},
+		});
+		const client = controller.getState().client;
+
+		expect(client).not.toBeNull();
+		expect(client?.processingStore).toBe(processingStore);
+		expect(client?.seenStore).toBe(seenStore);
+		expect(client?.typingStore).toBe(typingStore);
 	});
 
 	it("hydrates website state and connects realtime once visitor context exists", async () => {

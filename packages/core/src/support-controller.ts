@@ -4,7 +4,7 @@ import type { TimelineItem } from "@cossistant/types/api/timeline-item";
 import type { PublicWebsiteResponse } from "@cossistant/types/api/website";
 import { ConversationTimelineType } from "@cossistant/types/enums";
 import type { Conversation } from "@cossistant/types/schemas";
-import { CossistantClient } from "./client";
+import { CossistantClient, type CossistantClientOptions } from "./client";
 import { getEnvVarName, resolvePublicKey } from "./resolve-public-key";
 import { createStore, type StoreListener } from "./store/create-store";
 import {
@@ -120,6 +120,7 @@ export type SupportControllerOptions = {
 	apiUrl?: string;
 	wsUrl?: string;
 	publicKey?: string;
+	clientOptions?: CossistantClientOptions;
 	defaultMessages?: DefaultMessage[];
 	quickOptions?: string[];
 	autoConnect?: boolean;
@@ -358,11 +359,14 @@ export function createSupportController(
 
 	if (publicKey) {
 		try {
-			client = new CossistantClient({
-				apiUrl: options.apiUrl ?? DEFAULT_API_URL,
-				wsUrl: options.wsUrl ?? DEFAULT_WS_URL,
-				publicKey,
-			});
+			client = new CossistantClient(
+				{
+					apiUrl: options.apiUrl ?? DEFAULT_API_URL,
+					wsUrl: options.wsUrl ?? DEFAULT_WS_URL,
+					publicKey,
+				},
+				options.clientOptions
+			);
 		} catch (error) {
 			configurationError = createConfigurationError(
 				"missing_api_key",

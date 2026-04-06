@@ -269,12 +269,14 @@ export default function App() {
 }
 `,
 		cssTailwindFileName: "src/index.css",
-		cssTailwindCode: `@import "tailwindcss";
+		cssTailwindCode: `/* Only use this entrypoint if your app already runs Tailwind CSS v4. */
+@import "tailwindcss";
 
 @import "@cossistant/react/support.css";
 `,
 		cssPlainFileName: "src/main.tsx",
-		cssPlainCode: `import React from "react";
+		cssPlainCode: `// Plain Vite and other non-Tailwind React apps should start here.
+import React from "react";
 import ReactDOM from "react-dom/client";
 import { SupportProvider } from "@cossistant/react";
 import "@cossistant/react/styles.css";

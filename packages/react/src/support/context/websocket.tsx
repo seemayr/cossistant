@@ -42,6 +42,11 @@ type WebSocketProviderProps = {
 };
 
 const WebSocketContext = createContext<WebSocketContextValue | null>(null);
+const DISCONNECTED_STATE = {
+	status: "disconnected" as const,
+	error: null,
+	connectionId: null,
+};
 
 /**
  * Support-specific realtime provider that authenticates visitors using the
@@ -66,18 +71,8 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
 				realtime?.onStateChange(onStoreChange) ?? (() => {}),
 			[realtime]
 		),
-		() =>
-			realtime?.getState() ?? {
-				status: "disconnected" as const,
-				error: null,
-				connectionId: null,
-			},
-		() =>
-			realtime?.getState() ?? {
-				status: "disconnected" as const,
-				error: null,
-				connectionId: null,
-			}
+		() => realtime?.getState() ?? DISCONNECTED_STATE,
+		() => realtime?.getState() ?? DISCONNECTED_STATE
 	);
 
 	// Track last event via subscription

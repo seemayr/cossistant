@@ -10,6 +10,7 @@ import { useCallback, useMemo } from "react";
 import { useSupportController } from "../../controller-context";
 import { useStoreSelector } from "../../hooks/private/store/use-store-selector";
 import { useControlledState } from "../context/controlled-state";
+import { useSupportMode } from "../context/mode";
 
 export type UseSupportStoreResult = SupportStoreState &
 	Pick<
@@ -141,6 +142,8 @@ export type UseSupportNavigationResult = {
 /**
  * Access widget configuration (isOpen, size) and toggle helpers.
  * Supports both controlled and uncontrolled modes.
+ * In responsive mode, the widget is treated as always open and
+ * open/close/toggle become no-ops.
  *
  * In controlled mode (when `open` prop is provided to Support),
  * the `isOpen` state is driven by the prop, and `open`/`close`/`toggle`
@@ -163,39 +166,57 @@ export const useSupportConfig = (): UseSupportConfigResult => {
 		(state) => state.config
 	);
 	const controlledState = useControlledState();
+	const mode = useSupportMode();
 
 	// Determine if we're in controlled mode
 	const isControlled = controlledState?.isControlled ?? false;
 	const controlledOpen = controlledState?.open;
 	const onOpenChange = controlledState?.onOpenChange;
+	const isResponsive = mode === "responsive";
 
 	// Use controlled state if available, otherwise use store state
-	const isOpen = isControlled ? (controlledOpen ?? false) : config.isOpen;
+	const isOpen = isResponsive
+		? true
+		: isControlled
+			? (controlledOpen ?? false)
+			: config.isOpen;
 
 	// Create wrapped actions that respect controlled mode
 	const open = useCallback(() => {
+		if (isResponsive) {
+			return;
+		}
+
 		if (isControlled && onOpenChange) {
 			onOpenChange(true);
 		} else {
 			controller.open();
 		}
-	}, [controller, isControlled, onOpenChange]);
+	}, [controller, isControlled, isResponsive, onOpenChange]);
 
 	const close = useCallback(() => {
+		if (isResponsive) {
+			return;
+		}
+
 		if (isControlled && onOpenChange) {
 			onOpenChange(false);
 		} else {
 			controller.close();
 		}
-	}, [controller, isControlled, onOpenChange]);
+	}, [controller, isControlled, isResponsive, onOpenChange]);
 
 	const toggle = useCallback(() => {
+		if (isResponsive) {
+			return;
+		}
+
 		if (isControlled && onOpenChange) {
 			onOpenChange(!controlledOpen);
 		} else {
 			controller.toggle();
 		}
-	}, [controller, isControlled, onOpenChange, controlledOpen]);
+	}, [controller, isControlled, isResponsive, onOpenChange, controlledOpen]);
 
 	return useMemo(
 		() => ({

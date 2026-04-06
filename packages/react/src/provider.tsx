@@ -1,4 +1,7 @@
-import type { CossistantClient } from "@cossistant/core/client";
+import type {
+	CossistantClient,
+	CossistantClientOptions,
+} from "@cossistant/core/client";
 import { normalizeLocale } from "@cossistant/core/locale-utils";
 import {
 	createSupportController,
@@ -10,6 +13,9 @@ import type { PublicWebsiteResponse } from "@cossistant/types/api/website";
 import React from "react";
 import { SupportControllerContext } from "./controller-context";
 import { useStoreSelector } from "./hooks/private/store/use-store-selector";
+import { processingStoreSingleton } from "./realtime/processing-store";
+import { seenStoreSingleton } from "./realtime/seen-store";
+import { typingStoreSingleton } from "./realtime/typing-store";
 import { IdentificationProvider } from "./support/context/identification";
 import { WebSocketProvider } from "./support/context/websocket";
 import { useSupportStore } from "./support/store/support-store";
@@ -120,6 +126,12 @@ type VisitorWithLocale = WebsiteData["visitor"] extends null | undefined
 	? undefined
 	: NonNullable<WebsiteData["visitor"]> & { locale: string | null };
 
+const sharedClientOptions = {
+	processingStore: processingStoreSingleton,
+	seenStore: seenStoreSingleton,
+	typingStore: typingStoreSingleton,
+} satisfies CossistantClientOptions;
+
 export type UseSupportValue = CossistantContextValue & {
 	/**
 	 * List of human support agents currently available.
@@ -180,6 +192,7 @@ function SupportProviderInner({
 				apiUrl,
 				wsUrl,
 				publicKey,
+				clientOptions: sharedClientOptions,
 				autoConnect,
 				defaultMessages: defaultMessages ?? [],
 				quickOptions: quickOptions ?? [],
