@@ -54,6 +54,10 @@
       ],
       "outputs": ["server"]
     },
+    "@cossistant/workers#build": {
+      "dependsOn": ["^build"],
+      "outputs": ["server"]
+    },
     "@cossistant/transactional#build": {
       "outputs": ["dist/**"]
     },

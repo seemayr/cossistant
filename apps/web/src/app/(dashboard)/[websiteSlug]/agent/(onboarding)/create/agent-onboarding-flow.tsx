@@ -137,6 +137,7 @@ export function AgentOnboardingFlow({
 				const optimisticAgent: AiAgentResponse = {
 					id: `optimistic-${Date.now()}`,
 					name: newAgent.name,
+					image: newAgent.image ?? null,
 					description: newAgent.description ?? null,
 					basePrompt: newAgent.basePrompt,
 					model: newAgent.model,
@@ -194,6 +195,7 @@ export function AgentOnboardingFlow({
 					const optimisticAgent: AiAgentResponse = {
 						...previousAgent,
 						name: updatedData.name,
+						image: updatedData.image ?? previousAgent.image,
 						description: updatedData.description ?? previousAgent.description,
 						basePrompt: updatedData.basePrompt,
 						model: updatedData.model,

@@ -166,6 +166,7 @@ websiteRouter.openapi(
 					columns: {
 						id: true,
 						name: true,
+						image: true,
 					},
 				}),
 			]);
@@ -183,7 +184,7 @@ websiteRouter.openapi(
 		const availableAIAgents = websiteAiAgents.map((agent) => ({
 			id: agent.id,
 			name: agent.name,
-			image: null, // AI agents don't have avatars yet
+			image: agent.image ?? null,
 		}));
 
 		// iso string indicating support activity - uses most recent lastSeenAt from available human agents

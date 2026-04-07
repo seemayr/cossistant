@@ -48,6 +48,8 @@ export default function GeneralSettingsPage() {
 				>
 					<AIAgentForm
 						initialData={aiAgent}
+						organizationId={website.organizationId}
+						websiteId={website.id}
 						websiteName={website.name}
 						websiteSlug={website.slug}
 					/>

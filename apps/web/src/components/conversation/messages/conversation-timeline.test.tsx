@@ -31,13 +31,17 @@ mock.module("@cossistant/next/primitives", () => ({
 		maskHeight: _maskHeight,
 		onScrollStart: _onScrollStart,
 		...props
-	}: {
+	}: React.HTMLAttributes<HTMLDivElement> & {
 		children: React.ReactNode;
+		autoScroll?: boolean;
+		items?: unknown[];
+		maskHeight?: string;
+		onScrollStart?: () => void;
 	}) => <div {...props}>{children}</div>,
 	ConversationTimelineContainer: ({
 		children,
 		...props
-	}: {
+	}: React.HTMLAttributes<HTMLDivElement> & {
 		children: React.ReactNode;
 	}) => <div {...props}>{children}</div>,
 	DaySeparator: ({ children }: { children: React.ReactNode }) => (
@@ -92,8 +96,9 @@ mock.module("@/components/ui/avatar", () => ({
 		fallbackName,
 		lastOnlineAt: _lastOnlineAt,
 		...props
-	}: {
+	}: React.HTMLAttributes<HTMLDivElement> & {
 		fallbackName: string;
+		lastOnlineAt?: string | null;
 	}) => (
 		<div data-fallback-name={fallbackName} data-slot="avatar" {...props}>
 			{fallbackName}

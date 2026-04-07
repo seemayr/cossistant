@@ -96,10 +96,7 @@ export function ConversationPane({
 			{
 				id: aiAgent.id,
 				name: aiAgent.name,
-				image:
-					"image" in aiAgent
-						? ((aiAgent as { image?: string | null }).image ?? null)
-						: null,
+				image: aiAgent.image ?? null,
 			},
 		];
 	}, [aiAgent]);
@@ -676,10 +673,7 @@ export function ConversationPane({
 							id: aiAgent.id,
 							name: aiAgent.name,
 							isActive: aiAgent.isActive,
-							image:
-								"image" in aiAgent
-									? ((aiAgent as { image?: string | null }).image ?? null)
-									: null,
+							image: aiAgent.image ?? null,
 						}
 					: null,
 				teamMembers: members.map((member) => ({

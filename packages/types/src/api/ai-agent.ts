@@ -124,6 +124,10 @@ export const aiAgentResponseSchema = z.object({
 		description: "The AI agent's display name.",
 		example: "Support Assistant",
 	}),
+	image: z.string().nullable().openapi({
+		description: "The AI agent's profile image URL.",
+		example: "https://cdn.example.com/agent-avatar.png",
+	}),
 	description: z.string().nullable().openapi({
 		description: "A brief description of the AI agent's purpose.",
 		example: "Helps users with common support questions.",
@@ -195,6 +199,11 @@ export const createAiAgentRequestSchema = z
 				description: "The AI agent's display name.",
 				example: "Support Assistant",
 			}),
+		image: z.string().url().nullable().optional().openapi({
+			description:
+				"The AI agent's profile image URL. Set to null to use the default Cossistant logo.",
+			example: "https://cdn.example.com/agent-avatar.png",
+		}),
 		description: z
 			.string()
 			.max(500, { message: "Description must be 500 characters or fewer." })
@@ -268,6 +277,11 @@ export const updateAiAgentRequestSchema = z
 				description: "The AI agent's display name.",
 				example: "Support Assistant",
 			}),
+		image: z.string().url().nullable().optional().openapi({
+			description:
+				"The AI agent's profile image URL. Set to null to use the default Cossistant logo.",
+			example: "https://cdn.example.com/agent-avatar.png",
+		}),
 		description: z
 			.string()
 			.max(500, { message: "Description must be 500 characters or fewer." })
