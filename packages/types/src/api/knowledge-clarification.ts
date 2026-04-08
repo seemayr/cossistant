@@ -1,4 +1,5 @@
 import { z } from "@hono/zod-openapi";
+import { apiTimestampSchema } from "./common";
 import {
 	faqKnowledgePayloadSchema,
 	knowledgeResponseSchema,
@@ -148,7 +149,7 @@ export const conversationClarificationProgressSchema = z.object({
 	detail: z.string().nullable(),
 	attempt: z.number().int().min(1).nullable(),
 	toolName: z.string().nullable(),
-	startedAt: z.string(),
+	startedAt: apiTimestampSchema,
 });
 
 export const conversationClarificationSummarySchema = z.object({
@@ -165,7 +166,7 @@ export const conversationClarificationSummarySchema = z.object({
 	currentQuestionScope: knowledgeClarificationQuestionScopeSchema.nullable(),
 	stepIndex: z.number().int().min(0),
 	maxSteps: z.number().int().min(1),
-	updatedAt: z.string(),
+	updatedAt: apiTimestampSchema,
 	progress: conversationClarificationProgressSchema.nullable(),
 });
 
@@ -194,8 +195,8 @@ export const knowledgeClarificationRequestSchema = z.object({
 	currentQuestionScope: knowledgeClarificationQuestionScopeSchema.nullable(),
 	draftFaqPayload: knowledgeClarificationDraftFaqSchema.nullable(),
 	lastError: z.string().nullable(),
-	createdAt: z.string(),
-	updatedAt: z.string(),
+	createdAt: apiTimestampSchema,
+	updatedAt: apiTimestampSchema,
 });
 
 export const knowledgeClarificationTurnSchema = z.object({
@@ -206,8 +207,8 @@ export const knowledgeClarificationTurnSchema = z.object({
 	suggestedAnswers: knowledgeClarificationSuggestedAnswersSchema.nullable(),
 	selectedAnswer: z.string().nullable(),
 	freeAnswer: z.string().nullable(),
-	createdAt: z.string(),
-	updatedAt: z.string(),
+	createdAt: apiTimestampSchema,
+	updatedAt: apiTimestampSchema,
 });
 
 export const knowledgeClarificationQuestionStepSchema = z.object({
@@ -319,7 +320,7 @@ export const knowledgeClarificationStreamStepResponseSchema = z.object({
 		z.literal("retry_required"),
 		z.literal("draft_ready"),
 	]),
-	updatedAt: z.string(),
+	updatedAt: apiTimestampSchema,
 	request: knowledgeClarificationRequestSchema,
 });
 

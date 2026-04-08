@@ -6,6 +6,7 @@ import {
 	trpcRateLimiter,
 	websocketRateLimiter,
 } from "@api/middleware/rate-limit";
+import { openApiSecuritySchemes } from "@api/rest/openapi";
 import { routers } from "@api/rest/routers";
 import { knowledgeClarificationStreamRouter } from "@api/routes/knowledge-clarification-stream";
 import { createTRPCContext } from "@api/trpc/init";
@@ -191,7 +192,7 @@ app.route("/workflow", workflowsRouters);
 app.use("/ws", websocketRateLimiter);
 app.get("/ws", upgradedWebsocket);
 
-app.doc("/openapi", {
+const openApiDocument = {
 	openapi: "3.1.0",
 	info: {
 		version: "0.0.1",
@@ -208,12 +209,12 @@ app.doc("/openapi", {
 			description: "Production server",
 		},
 	],
-	security: [
-		{
-			bearerAuth: [],
-		},
-	],
-});
+	components: {
+		securitySchemes: openApiSecuritySchemes,
+	},
+};
+
+app.doc("/openapi", openApiDocument as Parameters<typeof app.doc>[1]);
 
 app.get(
 	"/docs",
