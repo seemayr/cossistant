@@ -6,6 +6,11 @@ import type { EmailTransportProvider } from "./types";
 
 const DEFAULT_EMAIL_TRANSPORT_PROVIDER: EmailTransportProvider = "resend";
 
+/**
+ * This flag only selects the transactional transport and the active reply
+ * domain for newly sent mail. Resend-specific audience, contact, and
+ * unsubscribe helpers intentionally stay outside this switch.
+ */
 export function getEmailTransportProvider(): EmailTransportProvider {
 	const rawProvider =
 		process.env.EMAIL_TRANSPORT_PROVIDER?.trim().toLowerCase();

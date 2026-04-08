@@ -258,6 +258,7 @@ export const answerKnowledgeClarificationRequestSchema = z
 	.object({
 		websiteSlug: z.string(),
 		requestId: z.ulid(),
+		expectedStepIndex: z.number().int().positive(),
 		selectedAnswer: z.string().min(1).optional(),
 		freeAnswer: z.string().min(1).optional(),
 	})
@@ -279,6 +280,7 @@ export const updateKnowledgeClarificationStatusRequestSchema = z.object({
 export const skipKnowledgeClarificationRequestSchema = z.object({
 	websiteSlug: z.string(),
 	requestId: z.ulid(),
+	expectedStepIndex: z.number().int().positive(),
 });
 
 export const knowledgeClarificationStreamStepRequestSchema =
@@ -316,6 +318,7 @@ export const knowledgeClarificationStreamStepResponseSchema = z.object({
 	requestId: z.ulid(),
 	decision: knowledgeClarificationStreamStepDecisionSchema,
 	status: z.union([
+		z.literal("analyzing"),
 		z.literal("awaiting_answer"),
 		z.literal("retry_required"),
 		z.literal("draft_ready"),

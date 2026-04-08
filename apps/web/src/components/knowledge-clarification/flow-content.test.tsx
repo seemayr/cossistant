@@ -89,6 +89,7 @@ describe("KnowledgeClarificationFlowContent terminal states", () => {
 				pageDraftReviewState={createDraftReviewState()}
 				showPageApprovalPendingState
 				variant="page"
+				websiteSlug="acme"
 			/>
 		);
 
@@ -124,6 +125,7 @@ describe("KnowledgeClarificationFlowContent terminal states", () => {
 				onDismiss={() => {}}
 				onRetry={() => {}}
 				variant="page"
+				websiteSlug="acme"
 			/>
 		);
 
@@ -147,6 +149,7 @@ describe("KnowledgeClarificationFlowContent terminal states", () => {
 				onDismiss={() => {}}
 				onRetry={() => {}}
 				variant="page"
+				websiteSlug="acme"
 			/>
 		);
 

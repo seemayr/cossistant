@@ -1,12 +1,14 @@
-import { db as defaultDb } from "@api/db";
+import { type DatabaseClient, db as defaultDb } from "@api/db";
 import { getAiAgentForWebsite } from "@api/db/queries/ai-agent";
 import { getKnowledgeById } from "@api/db/queries/knowledge";
 import {
 	createKnowledgeClarificationTurn,
 	getKnowledgeClarificationRequestById,
+	listKnowledgeClarificationTurns,
 	updateKnowledgeClarificationRequest,
 } from "@api/db/queries/knowledge-clarification";
 import { getWebsiteBySlugWithAccess } from "@api/db/queries/website";
+import type { KnowledgeClarificationRequestSelect } from "@api/db/schema/knowledge-clarification";
 import type { auth } from "@api/lib/auth";
 import {
 	createKnowledgeClarificationAuditEntry,
@@ -15,6 +17,7 @@ import {
 	prepareConversationKnowledgeClarificationStart,
 	prepareFaqKnowledgeClarificationStart,
 	startKnowledgeClarificationStepStream,
+	toKnowledgeClarificationStep,
 	toKnowledgeClarificationStreamStepResponse,
 } from "@api/services/knowledge-clarification";
 import { loadConversationContext } from "@api/trpc/utils/conversation";
@@ -36,6 +39,7 @@ type KnowledgeClarificationStreamRouterDeps = {
 	getAiAgentForWebsite: typeof getAiAgentForWebsite;
 	createKnowledgeClarificationTurn: typeof createKnowledgeClarificationTurn;
 	getKnowledgeClarificationRequestById: typeof getKnowledgeClarificationRequestById;
+	listKnowledgeClarificationTurns: typeof listKnowledgeClarificationTurns;
 	updateKnowledgeClarificationRequest: typeof updateKnowledgeClarificationRequest;
 	getKnowledgeById: typeof getKnowledgeById;
 	getWebsiteBySlugWithAccess: typeof getWebsiteBySlugWithAccess;
@@ -46,6 +50,7 @@ type KnowledgeClarificationStreamRouterDeps = {
 	prepareFaqKnowledgeClarificationStart: typeof prepareFaqKnowledgeClarificationStart;
 	startKnowledgeClarificationStepStream: typeof startKnowledgeClarificationStepStream;
 	loadConversationContext: typeof loadConversationContext;
+	toKnowledgeClarificationStep: typeof toKnowledgeClarificationStep;
 	toKnowledgeClarificationStreamStepResponse: typeof toKnowledgeClarificationStreamStepResponse;
 };
 
@@ -54,6 +59,7 @@ const defaultDeps: KnowledgeClarificationStreamRouterDeps = {
 	getAiAgentForWebsite,
 	createKnowledgeClarificationTurn,
 	getKnowledgeClarificationRequestById,
+	listKnowledgeClarificationTurns,
 	updateKnowledgeClarificationRequest,
 	getKnowledgeById,
 	getWebsiteBySlugWithAccess,
@@ -64,6 +70,7 @@ const defaultDeps: KnowledgeClarificationStreamRouterDeps = {
 	prepareFaqKnowledgeClarificationStart,
 	startKnowledgeClarificationStepStream,
 	loadConversationContext,
+	toKnowledgeClarificationStep,
 	toKnowledgeClarificationStreamStepResponse,
 };
 
@@ -346,9 +353,11 @@ async function handleInteractiveClarificationAction(
 		userId: string;
 		websiteSlug: string;
 		requestId: string;
-		allowedStatuses: string[];
+		expectedStepIndex?: number;
+		allowedStatuses: KnowledgeClarificationRequestSelect["status"][];
 		invalidStatusMessage: string;
-		createTurn?: () => Promise<void>;
+		action: "answer" | "skip" | "retry";
+		createTurn?: (db: DatabaseClient) => Promise<void>;
 		auditText?: string;
 	}
 ): Promise<Response> {
@@ -358,30 +367,87 @@ async function handleInteractiveClarificationAction(
 		requestId: params.requestId,
 	});
 
-	if (!params.allowedStatuses.includes(request.status)) {
+	if (request.status === "applied" || request.status === "dismissed") {
 		throw new HTTPException(400, {
-			message: params.invalidStatusMessage,
+			message: "This clarification request can no longer be changed",
 		});
 	}
 
-	if (params.createTurn) {
-		await params.createTurn();
-	}
-
-	const analyzingRequest = await deps.updateKnowledgeClarificationRequest(
-		deps.db,
-		{
+	const analyzingRequest = await deps.db.transaction(async (tx) => {
+		const claimedRequest = await deps.updateKnowledgeClarificationRequest(tx, {
 			requestId: request.id,
+			currentStatuses: params.allowedStatuses,
+			expectedStepIndex: params.expectedStepIndex,
 			updates: {
 				status: "analyzing",
 				lastError: null,
 			},
-		}
-	);
-	if (!analyzingRequest) {
-		throw new HTTPException(500, {
-			message: "Failed to update clarification request",
 		});
+		if (!claimedRequest) {
+			return null;
+		}
+
+		if (params.createTurn) {
+			await params.createTurn(tx);
+		}
+
+		return claimedRequest;
+	});
+
+	if (!analyzingRequest) {
+		const currentRequest = await deps.getKnowledgeClarificationRequestById(
+			deps.db,
+			{
+				requestId: request.id,
+				websiteId: website.id,
+			}
+		);
+		if (!currentRequest) {
+			throw new HTTPException(404, {
+				message: "Clarification request not found",
+			});
+		}
+
+		if (
+			currentRequest.status === "applied" ||
+			currentRequest.status === "dismissed"
+		) {
+			throw new HTTPException(400, {
+				message: "This clarification request can no longer be changed",
+			});
+		}
+
+		const turns = await deps.listKnowledgeClarificationTurns(deps.db, {
+			requestId: currentRequest.id,
+		});
+		const currentStep = deps.toKnowledgeClarificationStep({
+			request: currentRequest,
+			turns,
+		});
+
+		console.warn(
+			"[KnowledgeClarification] Interactive submit missed status claim",
+			{
+				requestId: currentRequest.id,
+				action: params.action,
+				expectedStepIndex: params.expectedStepIndex,
+				currentStatus: currentRequest.status,
+				currentStepIndex: currentRequest.stepIndex,
+				hasHumanTurn: turns.some(
+					(turn) => turn.role === "human_answer" || turn.role === "human_skip"
+				),
+			}
+		);
+
+		if (!currentStep) {
+			throw new HTTPException(400, {
+				message: params.invalidStatusMessage,
+			});
+		}
+
+		return createJsonResponse(
+			deps.toKnowledgeClarificationStreamStepResponse(currentStep)
+		);
 	}
 
 	const runtime = await deps.loadKnowledgeClarificationRuntime({
@@ -433,8 +499,12 @@ async function handleInteractiveClarificationAction(
 }
 
 export function createKnowledgeClarificationStreamRouter(
-	deps: KnowledgeClarificationStreamRouterDeps = defaultDeps
+	depsInput: Partial<KnowledgeClarificationStreamRouterDeps> = {}
 ) {
+	const deps: KnowledgeClarificationStreamRouterDeps = {
+		...defaultDeps,
+		...depsInput,
+	};
 	const router = new OpenAPIHono<StreamRouterContext>();
 
 	router.post("/stream-step", async (c) => {
@@ -602,14 +672,16 @@ export function createKnowledgeClarificationStreamRouter(
 						"No answer";
 
 					return handleInteractiveClarificationAction(deps, {
+						action: "answer",
 						userId: user.id,
 						websiteSlug: input.websiteSlug,
 						requestId: input.requestId,
+						expectedStepIndex: input.expectedStepIndex,
 						allowedStatuses: ["awaiting_answer", "deferred"],
 						invalidStatusMessage:
 							"This clarification request is not waiting for an answer",
-						createTurn: async () => {
-							await deps.createKnowledgeClarificationTurn(deps.db, {
+						createTurn: async (db) => {
+							await deps.createKnowledgeClarificationTurn(db, {
 								requestId: input.requestId,
 								role: "human_answer",
 								selectedAnswer: input.selectedAnswer?.trim() || null,
@@ -622,14 +694,16 @@ export function createKnowledgeClarificationStreamRouter(
 
 				case "skip":
 					return handleInteractiveClarificationAction(deps, {
+						action: "skip",
 						userId: user.id,
 						websiteSlug: input.websiteSlug,
 						requestId: input.requestId,
+						expectedStepIndex: input.expectedStepIndex,
 						allowedStatuses: ["awaiting_answer", "deferred"],
 						invalidStatusMessage:
 							"This clarification request is not waiting for an answer",
-						createTurn: async () => {
-							await deps.createKnowledgeClarificationTurn(deps.db, {
+						createTurn: async (db) => {
+							await deps.createKnowledgeClarificationTurn(db, {
 								requestId: input.requestId,
 								role: "human_skip",
 								selectedAnswer: null,
@@ -641,6 +715,7 @@ export function createKnowledgeClarificationStreamRouter(
 
 				case "retry":
 					return handleInteractiveClarificationAction(deps, {
+						action: "retry",
 						userId: user.id,
 						websiteSlug: input.websiteSlug,
 						requestId: input.requestId,

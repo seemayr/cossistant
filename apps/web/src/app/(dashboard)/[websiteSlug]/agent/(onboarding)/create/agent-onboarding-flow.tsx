@@ -191,6 +191,12 @@ export function AgentOnboardingFlow({
 				);
 
 				if (previousAgent) {
+					const optimisticOnboardingCompletedAt =
+						typeof updatedData.onboardingCompletedAt === "string" ||
+						updatedData.onboardingCompletedAt === null
+							? updatedData.onboardingCompletedAt
+							: previousAgent.onboardingCompletedAt;
+
 					// Optimistically update the agent
 					const optimisticAgent: AiAgentResponse = {
 						...previousAgent,
@@ -203,9 +209,7 @@ export function AgentOnboardingFlow({
 						maxOutputTokens:
 							updatedData.maxOutputTokens ?? previousAgent.maxOutputTokens,
 						goals: updatedData.goals ?? previousAgent.goals,
-						onboardingCompletedAt:
-							updatedData.onboardingCompletedAt ??
-							previousAgent.onboardingCompletedAt,
+						onboardingCompletedAt: optimisticOnboardingCompletedAt,
 						updatedAt: new Date().toISOString(),
 					};
 

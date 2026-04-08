@@ -100,6 +100,9 @@ uploadRouter.openapi(
 			expiresInSeconds: body.expiresInSeconds,
 		});
 
-		return c.json(validateResponse(result, generateUploadUrlResponseSchema));
+		return c.json(
+			validateResponse(result, generateUploadUrlResponseSchema),
+			200
+		);
 	}
 );

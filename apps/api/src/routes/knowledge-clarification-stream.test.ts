@@ -113,7 +113,10 @@ function createJsonEnvelope(step: ReturnType<typeof createQuestionStep>) {
 			draftFaqPayload: null,
 			lastError: step.request.lastError,
 		},
-		status: "awaiting_answer" as const,
+		status:
+			step.request.status === "analyzing"
+				? ("analyzing" as const)
+				: ("awaiting_answer" as const),
 		updatedAt: step.request.updatedAt,
 		request: step.request,
 	};
@@ -148,10 +151,26 @@ function buildWebsiteRequest(body: Record<string, unknown>): Request {
 }
 
 function createDeps() {
+	const transactionMock = mock(
+		async (callback: (tx: unknown) => Promise<unknown>) => callback({} as never)
+	);
 	const createKnowledgeClarificationTurnMock = mock(async () => {});
 	const getKnowledgeClarificationRequestByIdMock = mock(async () =>
 		createRequestRecord()
 	);
+	const listKnowledgeClarificationTurnsMock = mock(async () => [
+		{
+			id: "turn-1",
+			requestId: REQUEST_ID,
+			role: "ai_question",
+			question: "What plan are they asking about?",
+			suggestedAnswers: ["Free", "Pro", "Enterprise"],
+			selectedAnswer: null,
+			freeAnswer: null,
+			createdAt: "2026-04-02T00:00:00.000Z",
+			updatedAt: "2026-04-02T00:00:00.000Z",
+		},
+	]);
 	const updateKnowledgeClarificationRequestMock = mock(async () =>
 		createRequestRecord({
 			status: "analyzing",
@@ -267,9 +286,13 @@ function createDeps() {
 	);
 
 	return {
-		db: {} as never,
+		db: {
+			transaction: transactionMock,
+		} as never,
+		transactionMock,
 		createKnowledgeClarificationTurnMock,
 		getKnowledgeClarificationRequestByIdMock,
+		listKnowledgeClarificationTurnsMock,
 		updateKnowledgeClarificationRequestMock,
 		getAiAgentForWebsiteMock,
 		getKnowledgeByIdMock,
@@ -400,6 +423,7 @@ describe("knowledgeClarificationStreamRouter", () => {
 				action: "answer",
 				websiteSlug: "acme",
 				requestId: REQUEST_ID,
+				expectedStepIndex: 1,
 				selectedAnswer: "Pro",
 			})
 		);
@@ -423,6 +447,117 @@ describe("knowledgeClarificationStreamRouter", () => {
 		expect(
 			deps.startKnowledgeClarificationStepStreamMock
 		).toHaveBeenCalledTimes(1);
+	});
+
+	it("returns the current analyzing step instead of erroring when an answer submit misses the status claim", async () => {
+		deps.updateKnowledgeClarificationRequestMock.mockResolvedValue(
+			null as never
+		);
+		deps.getKnowledgeClarificationRequestByIdMock
+			.mockResolvedValueOnce(createRequestRecord())
+			.mockResolvedValueOnce(
+				createRequestRecord({
+					status: "analyzing",
+					updatedAt: "2026-04-02T00:00:05.000Z",
+				})
+			);
+
+		const { createKnowledgeClarificationStreamRouter } =
+			await routeModulePromise;
+		const router = createKnowledgeClarificationStreamRouter({
+			db: deps.db,
+			createKnowledgeClarificationTurn:
+				deps.createKnowledgeClarificationTurnMock as never,
+			getKnowledgeClarificationRequestById:
+				deps.getKnowledgeClarificationRequestByIdMock as never,
+			listKnowledgeClarificationTurns:
+				deps.listKnowledgeClarificationTurnsMock as never,
+			updateKnowledgeClarificationRequest:
+				deps.updateKnowledgeClarificationRequestMock as never,
+			getAiAgentForWebsite: deps.getAiAgentForWebsiteMock as never,
+			getKnowledgeById: deps.getKnowledgeByIdMock as never,
+			getWebsiteBySlugWithAccess: deps.getWebsiteBySlugWithAccessMock as never,
+			createKnowledgeClarificationAuditEntry:
+				deps.createKnowledgeClarificationAuditEntryMock as never,
+			emitConversationClarificationUpdate:
+				deps.emitConversationClarificationUpdateMock as never,
+			loadKnowledgeClarificationRuntime:
+				deps.loadKnowledgeClarificationRuntimeMock as never,
+			prepareConversationKnowledgeClarificationStart:
+				deps.prepareConversationKnowledgeClarificationStartMock as never,
+			prepareFaqKnowledgeClarificationStart:
+				deps.prepareFaqKnowledgeClarificationStartMock as never,
+			startKnowledgeClarificationStepStream:
+				deps.startKnowledgeClarificationStepStreamMock as never,
+			loadConversationContext: deps.loadConversationContextMock as never,
+			toKnowledgeClarificationStreamStepResponse:
+				deps.toKnowledgeClarificationStreamStepResponseMock as never,
+		});
+		const app = createAuthenticatedApp(router);
+
+		const response = await app.request(
+			buildWebsiteRequest({
+				action: "answer",
+				websiteSlug: "acme",
+				requestId: REQUEST_ID,
+				expectedStepIndex: 1,
+				selectedAnswer: "Pro",
+			})
+		);
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toMatchObject({
+			requestId: REQUEST_ID,
+			status: "analyzing",
+			request: {
+				id: REQUEST_ID,
+				status: "analyzing",
+				stepIndex: 1,
+			},
+		});
+		expect(deps.createKnowledgeClarificationTurnMock).not.toHaveBeenCalled();
+		expect(
+			deps.startKnowledgeClarificationStepStreamMock
+		).not.toHaveBeenCalled();
+	});
+
+	it("keeps terminal clarification requests as hard errors for answer submits", async () => {
+		deps.getKnowledgeClarificationRequestByIdMock.mockResolvedValue(
+			createRequestRecord({
+				status: "applied",
+				currentQuestion: null,
+				currentSuggestedAnswers: null,
+				currentQuestionInputMode: null,
+				currentQuestionScope: null,
+			})
+		);
+
+		const { createKnowledgeClarificationStreamRouter } =
+			await routeModulePromise;
+		const router = createKnowledgeClarificationStreamRouter({
+			db: deps.db,
+			getKnowledgeClarificationRequestById:
+				deps.getKnowledgeClarificationRequestByIdMock as never,
+			getWebsiteBySlugWithAccess: deps.getWebsiteBySlugWithAccessMock as never,
+			updateKnowledgeClarificationRequest:
+				deps.updateKnowledgeClarificationRequestMock as never,
+		});
+		const app = createAuthenticatedApp(router);
+
+		const response = await app.request(
+			buildWebsiteRequest({
+				action: "answer",
+				websiteSlug: "acme",
+				requestId: REQUEST_ID,
+				expectedStepIndex: 1,
+				selectedAnswer: "Pro",
+			})
+		);
+
+		expect(response.status).toBe(400);
+		expect(await response.text()).toContain(
+			"This clarification request can no longer be changed"
+		);
 	});
 
 	it("routes skip through the shared interactive handler", async () => {
@@ -462,6 +597,7 @@ describe("knowledgeClarificationStreamRouter", () => {
 				action: "skip",
 				websiteSlug: "acme",
 				requestId: REQUEST_ID,
+				expectedStepIndex: 1,
 			})
 		);
 

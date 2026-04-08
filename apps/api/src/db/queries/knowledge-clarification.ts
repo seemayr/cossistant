@@ -749,6 +749,8 @@ export async function updateKnowledgeClarificationRequest(
 	db: DatabaseClient,
 	params: {
 		requestId: string;
+		currentStatuses?: KnowledgeClarificationRequestSelect["status"][];
+		expectedStepIndex?: number;
 		updates: Partial<{
 			status: KnowledgeClarificationRequestSelect["status"];
 			topicSummary: string;
@@ -763,13 +765,27 @@ export async function updateKnowledgeClarificationRequest(
 		}>;
 	}
 ): Promise<KnowledgeClarificationRequestSelect | null> {
+	const whereClauses = [eq(knowledgeClarificationRequest.id, params.requestId)];
+
+	if (params.currentStatuses && params.currentStatuses.length > 0) {
+		whereClauses.push(
+			inArray(knowledgeClarificationRequest.status, params.currentStatuses)
+		);
+	}
+
+	if (params.expectedStepIndex !== undefined) {
+		whereClauses.push(
+			eq(knowledgeClarificationRequest.stepIndex, params.expectedStepIndex)
+		);
+	}
+
 	const [request] = await db
 		.update(knowledgeClarificationRequest)
 		.set({
 			...params.updates,
 			updatedAt: new Date().toISOString(),
 		})
-		.where(eq(knowledgeClarificationRequest.id, params.requestId))
+		.where(and(...whereClauses))
 		.returning();
 
 	return request ?? null;

@@ -1227,11 +1227,13 @@ export function toKnowledgeClarificationStreamStepResponse(
 		requestId: step.request.id,
 		decision: toKnowledgeClarificationStreamDecision(step),
 		status:
-			step.request.status === "draft_ready"
-				? "draft_ready"
-				: step.request.status === "retry_required"
-					? "retry_required"
-					: "awaiting_answer",
+			step.request.status === "analyzing"
+				? "analyzing"
+				: step.request.status === "draft_ready"
+					? "draft_ready"
+					: step.request.status === "retry_required"
+						? "retry_required"
+						: "awaiting_answer",
 		updatedAt: step.request.updatedAt,
 		request: step.request,
 	};

@@ -330,7 +330,8 @@ messagesRouter.openapi(
 			validateResponse(
 				{ item: createdTimelineItem as TimelineItem },
 				sendTimelineItemResponseSchema
-			)
+			),
+			200
 		);
 	}
 );

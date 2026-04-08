@@ -164,6 +164,7 @@ export function ConversationPane({
 		removeFile,
 		submit,
 	} = useMultimodalInput({
+		draftPersistenceId: `conversation-composer:${websiteSlug}:${conversationId}`,
 		onSubmit: async (payload) => {
 			if (isMessageLimitReached) {
 				handleMessageLimitReached();

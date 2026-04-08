@@ -18,6 +18,7 @@ export * from "./use-conversations";
 export * from "./use-create-conversation";
 export * from "./use-file-upload";
 export * from "./use-home-page";
+export * from "./use-local-storage-draft-value";
 export * from "./use-message-composer";
 export * from "./use-new-message-sound";
 export * from "./use-realtime-support";

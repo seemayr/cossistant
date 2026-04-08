@@ -1,5 +1,6 @@
 "use client";
 
+import { clearLocalStorageDraftValue } from "@cossistant/react";
 import type {
 	ConversationClarificationSummary,
 	KnowledgeClarificationRequest,
@@ -7,7 +8,7 @@ import type {
 import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import type React from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
 	formatClarificationQuestionLabel,
@@ -16,7 +17,9 @@ import {
 	stepFromKnowledgeClarificationStreamResponse,
 } from "@/components/knowledge-clarification/helpers";
 import {
+	buildKnowledgeClarificationAnswerDraftPersistenceId,
 	KnowledgeClarificationQuestionContent,
+	shouldClearKnowledgeClarificationAnswerDraft,
 	useKnowledgeClarificationAnswerDraft,
 } from "@/components/knowledge-clarification/question-flow";
 import { useKnowledgeClarificationStreamAction } from "@/components/knowledge-clarification/use-clarification-stream";
@@ -455,6 +458,23 @@ export function useClarificationComposerFlow({
 			);
 		},
 		onFinish: async (result) => {
+			if (
+				displayedQuestion &&
+				shouldClearKnowledgeClarificationAnswerDraft({
+					currentQuestion: displayedQuestion.question,
+					currentStepIndex: displayedQuestion.stepIndex,
+					result,
+				})
+			) {
+				clearLocalStorageDraftValue(
+					buildKnowledgeClarificationAnswerDraftPersistenceId({
+						websiteSlug,
+						requestId: displayedQuestion.requestId,
+						stepIndex: displayedQuestion.stepIndex,
+					})
+				);
+			}
+
 			setLocalStep(stepFromKnowledgeClarificationRequest(result.request));
 			await invalidateClarificationQueries({
 				request: result.request,
@@ -485,12 +505,6 @@ export function useClarificationComposerFlow({
 		[localStep, requestStep, shouldPreferRequestState, streamPreviewStep]
 	);
 
-	const answerDraft = useKnowledgeClarificationAnswerDraft(
-		step?.kind === "question" ? step.question : (summary?.question ?? null),
-		step?.kind === "question"
-			? step.inputMode
-			: (summary?.currentQuestionInputMode ?? "suggested_answers")
-	);
 	const approveMutation = useMutation(
 		trpc.knowledgeClarification.approveDraft.mutationOptions({
 			retry: false,
@@ -524,6 +538,7 @@ export function useClarificationComposerFlow({
 					question: summary.question,
 					questionScope: summary.currentQuestionScope,
 					requestId: summary.requestId,
+					stepIndex: summary.stepIndex,
 					suggestedAnswers: summary.currentSuggestedAnswers,
 				}
 			: null;
@@ -534,9 +549,24 @@ export function useClarificationComposerFlow({
 					question: step.question,
 					questionScope: step.questionScope,
 					requestId: step.request.id,
+					stepIndex: step.request.stepIndex,
 					suggestedAnswers: step.suggestedAnswers,
 				}
 			: summaryQuestionState;
+	const displayedQuestionDraftPersistenceId = displayedQuestion
+		? buildKnowledgeClarificationAnswerDraftPersistenceId({
+				websiteSlug,
+				requestId: displayedQuestion.requestId,
+				stepIndex: displayedQuestion.stepIndex,
+			})
+		: null;
+	const answerDraft = useKnowledgeClarificationAnswerDraft(
+		step?.kind === "question" ? step.question : (summary?.question ?? null),
+		step?.kind === "question"
+			? step.inputMode
+			: (summary?.currentQuestionInputMode ?? "suggested_answers"),
+		displayedQuestionDraftPersistenceId
+	);
 	const isSubmitting = clarificationStream.isPendingAction("answer");
 	const isSkipping = clarificationStream.isPendingAction("skip");
 	const isRetrying = clarificationStream.isPendingAction("retry");
@@ -578,6 +608,24 @@ export function useClarificationComposerFlow({
 	useEffect(() => {
 		setOptimisticProgressStartedAt(null);
 	}, [summary?.requestId]);
+
+	const previousQuestionDraftPersistenceIdRef = useRef<string | null>(
+		displayedQuestionDraftPersistenceId
+	);
+
+	useEffect(() => {
+		const previousQuestionDraftPersistenceId =
+			previousQuestionDraftPersistenceIdRef.current;
+		if (
+			previousQuestionDraftPersistenceId &&
+			previousQuestionDraftPersistenceId !== displayedQuestionDraftPersistenceId
+		) {
+			clearLocalStorageDraftValue(previousQuestionDraftPersistenceId);
+		}
+
+		previousQuestionDraftPersistenceIdRef.current =
+			displayedQuestionDraftPersistenceId;
+	}, [displayedQuestionDraftPersistenceId]);
 
 	if (!summary) {
 		return null;
@@ -676,6 +724,7 @@ export function useClarificationComposerFlow({
 			action: "answer",
 			websiteSlug,
 			requestId: displayedQuestion.requestId,
+			expectedStepIndex: displayedQuestion.stepIndex,
 			...answerDraft.submitPayload,
 		});
 	};
@@ -691,6 +740,7 @@ export function useClarificationComposerFlow({
 			action: "skip",
 			websiteSlug,
 			requestId: displayedQuestion.requestId,
+			expectedStepIndex: displayedQuestion.stepIndex,
 		});
 	};
 

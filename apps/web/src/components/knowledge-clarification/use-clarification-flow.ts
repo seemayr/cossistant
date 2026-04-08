@@ -1,5 +1,6 @@
 "use client";
 
+import { clearLocalStorageDraftValue } from "@cossistant/react";
 import type {
 	ApproveKnowledgeClarificationDraftResponse,
 	KnowledgeClarificationDraftFaq,
@@ -15,6 +16,10 @@ import {
 	stepFromKnowledgeClarificationRequest,
 	stepFromKnowledgeClarificationStreamResponse,
 } from "./helpers";
+import {
+	buildKnowledgeClarificationAnswerDraftPersistenceId,
+	shouldClearKnowledgeClarificationAnswerDraft,
+} from "./question-flow";
 import { useKnowledgeClarificationStreamAction } from "./use-clarification-stream";
 import { useKnowledgeClarificationQueryInvalidation } from "./use-query-invalidation";
 
@@ -69,6 +74,27 @@ export function useKnowledgeClarificationFlow({
 			);
 		},
 		onFinish: async (result) => {
+			const currentQuestion = step?.kind === "question" ? step.question : null;
+			const currentStepIndex =
+				requestFallback?.stepIndex ?? initialRequest?.stepIndex ?? 0;
+
+			if (
+				requestFallback?.id &&
+				shouldClearKnowledgeClarificationAnswerDraft({
+					currentQuestion,
+					currentStepIndex,
+					result,
+				})
+			) {
+				clearLocalStorageDraftValue(
+					buildKnowledgeClarificationAnswerDraftPersistenceId({
+						websiteSlug,
+						requestId: requestFallback.id,
+						stepIndex: currentStepIndex,
+					})
+				);
+			}
+
 			setStep(stepFromKnowledgeClarificationRequest(result.request));
 			setRequestFallback(result.request);
 			await invalidateQueries({
@@ -89,6 +115,13 @@ export function useKnowledgeClarificationFlow({
 		trpc.knowledgeClarification.defer.mutationOptions({
 			retry: false,
 			onSuccess: async (request) => {
+				clearLocalStorageDraftValue(
+					buildKnowledgeClarificationAnswerDraftPersistenceId({
+						websiteSlug,
+						requestId: request.id,
+						stepIndex: request.stepIndex,
+					})
+				);
 				await invalidateQueries({ request });
 				await onDeferred?.(request);
 			},
@@ -102,6 +135,13 @@ export function useKnowledgeClarificationFlow({
 		trpc.knowledgeClarification.dismiss.mutationOptions({
 			retry: false,
 			onSuccess: async (request) => {
+				clearLocalStorageDraftValue(
+					buildKnowledgeClarificationAnswerDraftPersistenceId({
+						websiteSlug,
+						requestId: request.id,
+						stepIndex: request.stepIndex,
+					})
+				);
 				await invalidateQueries({ request });
 				await onDismissed?.(request);
 			},
@@ -167,6 +207,7 @@ export function useKnowledgeClarificationFlow({
 		approveMutation,
 		submitAnswer: async (
 			requestId: string,
+			expectedStepIndex: number,
 			payload: {
 				selectedAnswer?: string;
 				freeAnswer?: string;
@@ -177,6 +218,7 @@ export function useKnowledgeClarificationFlow({
 					action: "answer",
 					websiteSlug,
 					requestId,
+					expectedStepIndex,
 					...payload,
 				});
 			})(),

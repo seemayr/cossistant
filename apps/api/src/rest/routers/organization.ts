@@ -84,7 +84,8 @@ app.openapi(
 					name: privateContext.organization.name,
 				},
 				organizationResponseSchema
-			)
+			),
+			200
 		);
 	}
 );

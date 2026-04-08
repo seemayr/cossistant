@@ -4,13 +4,13 @@ import {
 	getSESConfigurationSetName,
 	getSESCredentials,
 } from "../../core/config";
+import { assertPreparedMailSupportedByProvider } from "../../core/provider-capabilities";
 import type {
 	MailProviderSendOptions,
 	MailProviderSendResult,
 	MailTransport,
 	PreparedMail,
 } from "../../core/types";
-import { assertSupportedBySESTransport } from "./assert-supported";
 import { buildRawMimeEmail } from "./build-raw-mime-email";
 import { getSESClient, getSESNotConfiguredResult } from "./client";
 
@@ -20,7 +20,7 @@ async function sendViaSES(
 	mail: PreparedMail,
 	_options?: MailProviderSendOptions
 ): Promise<MailProviderSendResult> {
-	assertSupportedBySESTransport(mail);
+	assertPreparedMailSupportedByProvider("ses", mail);
 
 	if (!getSESCredentials()) {
 		return getSESNotConfiguredResult();

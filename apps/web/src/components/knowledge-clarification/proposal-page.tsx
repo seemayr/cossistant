@@ -210,6 +210,7 @@ export function KnowledgeClarificationProposalPage({
 				pageDraftReviewState={draftReviewPayload ? draftReviewState : null}
 				showPageApprovalPendingState={isApprovalPendingUi}
 				variant="page"
+				websiteSlug={website.slug}
 			/>
 		</TrainingEntryDetailLayout>
 	);

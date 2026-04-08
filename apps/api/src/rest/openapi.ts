@@ -11,7 +11,19 @@ type OpenAPIParameter = {
 	in: "header" | "path" | "query";
 	description: string;
 	required: boolean;
-	schema: Record<string, unknown>;
+	schema: {
+		type:
+			| "array"
+			| "boolean"
+			| "integer"
+			| "null"
+			| "number"
+			| "object"
+			| "string";
+		example?: unknown;
+		format?: string;
+		pattern?: string;
+	};
 };
 
 type OpenAPIAuthOptions = {
@@ -144,9 +156,9 @@ export function runtimeDualAuth(options: OpenAPIAuthOptions = {}) {
 	};
 }
 
-export function restError(
+export function restError<TStatus extends 400 | 401 | 403 | 404 | 500>(
 	c: Context<RestContext>,
-	status: 400 | 401 | 403 | 404 | 500,
+	status: TStatus,
 	error: string,
 	message?: string
 ) {

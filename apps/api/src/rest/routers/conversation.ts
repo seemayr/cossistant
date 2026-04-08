@@ -533,7 +533,10 @@ conversationRouter.openapi(
 			}),
 		};
 
-		return c.json(validateResponse(response, createConversationResponseSchema));
+		return c.json(
+			validateResponse(response, createConversationResponseSchema),
+			200
+		);
 	}
 );
 
@@ -598,7 +601,10 @@ conversationRouter.openapi(
 			pagination: result.pagination,
 		};
 
-		return c.json(validateResponse(response, listConversationsResponseSchema));
+		return c.json(
+			validateResponse(response, listConversationsResponseSchema),
+			200
+		);
 	}
 );
 
@@ -756,7 +762,10 @@ conversationRouter.openapi(
 				conversation: serializeConversationForResponse(conversationRecord),
 			};
 
-			return c.json(validateResponse(response, getConversationResponseSchema));
+			return c.json(
+				validateResponse(response, getConversationResponseSchema),
+				200
+			);
 		} catch (error) {
 			console.error(
 				"[GET_CONVERSATION] Failed to serialize conversation response",
