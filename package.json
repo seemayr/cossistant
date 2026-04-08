@@ -29,6 +29,7 @@
     "@types/react-dom": "^19.2.3",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.7",
+    "postal-mime": "^2.4.4",
     "prettier": "^3.8.1",
     "tsdown": "^0.16.8",
     "tsx": "4.20.5",
@@ -47,6 +48,7 @@
     "tinybird"
   ],
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.975.0",
     "@polar-sh/better-auth": "^1.8.1",
     "@polar-sh/hono": "^0.5.3",
     "@polar-sh/nextjs": "^0.9.3",

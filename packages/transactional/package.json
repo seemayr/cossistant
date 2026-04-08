@@ -8,11 +8,14 @@
   "exports": {
     ".": "./index.ts",
     "./emails": "./emails/index.ts",
-    "./send": "./send-via-resend.ts"
+    "./send": "./send.ts",
+    "./send-via-resend": "./send-via-resend.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-sesv2": "^3.975.0",
     "@cossistant/tiny-markdown": "workspace:*",
     "@react-email/components": "^1.0.1",
+    "@react-email/render": "^2.0.4",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "resend": "^6.4.2"
@@ -23,6 +26,7 @@
     "check-types": "tsc --noEmit --project tsconfig.json"
   },
   "devDependencies": {
+    "@types/bun": "^1.3.6",
     "@cossistant/typescript-config": "workspace:*",
     "@react-email/preview-server": "^5.0.3",
     "@types/react": "^19.2.4",

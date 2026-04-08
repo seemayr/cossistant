@@ -1,12 +1,14 @@
 import { env } from "@api/env";
+import {
+	getActiveInboundEmailDomain,
+	getInboundEmailDomain,
+} from "@api/mail/config";
 
 /**
  * Email threading utilities for maintaining conversation continuity
  * Generates proper Message-ID, In-Reply-To, and References headers
  * and helpers for inbound reply-to addresses.
  */
-
-const INBOUND_EMAIL_DOMAIN = "inbound.cossistant.com";
 
 /**
  * Generate a unique Message-ID for an email
@@ -27,26 +29,27 @@ export function generateConversationThreadId(conversationId: string): string {
 /**
  * Generate the inbound reply-to email address for a conversation.
  *
- * Our inbound domain is <anything>@inbound.cossistant.com.
+ * Our inbound domain is <anything>@{provider inbound domain}.
  * We encode:
  * - environment: in dev/test we prefix "test-", in prod we add nothing
  * - the conversation id: conv-{conversationId}
  *
  * Final format:
- *   - production: conv-{conversationId}@inbound.cossistant.com
- *   - non-production: test-conv-{conversationId}@inbound.cossistant.com
+ *   - production: conv-{conversationId}@<active inbound domain>
+ *   - non-production: test-conv-{conversationId}@<active inbound domain>
  */
 export function generateInboundReplyAddress(params: {
 	conversationId: string;
 }): string {
 	const envPrefix = env.NODE_ENV === "production" ? "" : "test-";
 	const localPart = `${envPrefix}conv-${params.conversationId}`;
-	return `${localPart}@${INBOUND_EMAIL_DOMAIN}`;
+	return `${localPart}@${getActiveInboundEmailDomain()}`;
 }
 
 export type ParsedInboundReplyAddress = {
 	conversationId: string;
 	environment: "production" | "test";
+	provider: "resend" | "ses";
 };
 
 /**
@@ -64,7 +67,15 @@ export function parseInboundReplyAddress(
 		return null;
 	}
 
-	if (domainPart.toLowerCase() !== INBOUND_EMAIL_DOMAIN) {
+	const normalizedDomain = domainPart.toLowerCase();
+	const provider =
+		normalizedDomain === getInboundEmailDomain("ses").toLowerCase()
+			? "ses"
+			: normalizedDomain === getInboundEmailDomain("resend").toLowerCase()
+				? "resend"
+				: null;
+
+	if (!provider) {
 		return null;
 	}
 
@@ -87,6 +98,7 @@ export function parseInboundReplyAddress(
 		// Make sure ULID are uppercase, resend can send them lowercase
 		conversationId: conversationId.toUpperCase(),
 		environment: hasTestPrefix ? "test" : "production",
+		provider,
 	};
 }
 
