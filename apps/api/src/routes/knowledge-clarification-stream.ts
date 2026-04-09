@@ -11,6 +11,10 @@ import { getWebsiteBySlugWithAccess } from "@api/db/queries/website";
 import type { KnowledgeClarificationRequestSelect } from "@api/db/schema/knowledge-clarification";
 import type { auth } from "@api/lib/auth";
 import {
+	applyApiBrowserCorsResponseHeaders,
+	createApiBrowserPreflightResponse,
+} from "@api/lib/browser-cors";
+import {
 	createKnowledgeClarificationAuditEntry,
 	emitConversationClarificationUpdate,
 	loadKnowledgeClarificationRuntime,
@@ -26,6 +30,7 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { HTTPException } from "hono/http-exception";
 
 const textEncoder = new TextEncoder();
+const STREAM_STEP_ALLOW_METHODS = ["POST", "OPTIONS"] as const;
 
 type StreamRouterContext = {
 	Variables: {
@@ -164,6 +169,18 @@ function createStreamEnvelopeResponse(params: {
 			},
 		}
 	);
+}
+
+function applyStreamStepCorsHeaders(
+	response: Response,
+	requestOrigin?: string | null
+) {
+	applyApiBrowserCorsResponseHeaders({
+		headers: response.headers,
+		requestOrigin,
+	});
+
+	return response;
 }
 
 async function loadWebsite(
@@ -506,6 +523,38 @@ export function createKnowledgeClarificationStreamRouter(
 		...depsInput,
 	};
 	const router = new OpenAPIHono<StreamRouterContext>();
+
+	router.use("/stream-step", async (c, next) => {
+		const requestOrigin = c.req.header("origin");
+
+		if (c.req.method === "OPTIONS") {
+			return createApiBrowserPreflightResponse({
+				requestOrigin,
+				requestHeaders: c.req.header("Access-Control-Request-Headers"),
+				allowMethods: STREAM_STEP_ALLOW_METHODS,
+			});
+		}
+
+		await next();
+		applyApiBrowserCorsResponseHeaders({
+			headers: c.res.headers,
+			requestOrigin,
+		});
+	});
+
+	router.onError((error, c) => {
+		const response =
+			error instanceof HTTPException
+				? error.getResponse()
+				: createJsonResponse(
+						{
+							error: "Failed to continue clarification flow",
+						},
+						500
+					);
+
+		return applyStreamStepCorsHeaders(response, c.req.header("origin"));
+	});
 
 	router.post("/stream-step", async (c) => {
 		const user = c.get("user");

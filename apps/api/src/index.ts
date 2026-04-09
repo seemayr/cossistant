@@ -1,5 +1,6 @@
 import { env } from "@api/env";
 import { auth } from "@api/lib/auth";
+import { createApiBrowserCorsMiddleware } from "@api/lib/browser-cors";
 import {
 	authRateLimiter,
 	defaultRateLimiter,
@@ -43,15 +44,7 @@ const stripSetCookie: MiddlewareHandler = async (c, next) => {
 	c.res.headers.delete("Set-Cookie");
 };
 
-const acceptedOrigins = [
-	"http://localhost:3000",
-	"https://cossistant.com",
-	"https://www.cossistant.com",
-	"https://cossistant.com",
-	"https://www.cossistant.com",
-	"http://localhost:8081",
-	"https://qstash.upstash.io",
-];
+const apiBrowserCors = createApiBrowserCorsMiddleware();
 
 // Logger middleware
 app.use(logger());
@@ -88,32 +81,11 @@ app.get("/health", async (c) => {
 app.get("/robots.txt", (c) => c.text("User-agent: *\nDisallow: /\n"));
 
 // CORS middleware for auth and TRPC endpoints (trusted domains only)
-app.use(
-	"/api/auth/*",
-	cors({
-		origin: acceptedOrigins,
-		maxAge: 86_400,
-		credentials: true,
-	})
-);
+app.use("/api/auth/*", apiBrowserCors);
 
-app.use(
-	"/trpc/*",
-	cors({
-		origin: acceptedOrigins,
-		maxAge: 86_400,
-		credentials: true,
-	})
-);
+app.use("/trpc/*", apiBrowserCors);
 
-app.use(
-	"/api/knowledge-clarification/*",
-	cors({
-		origin: acceptedOrigins,
-		maxAge: 86_400,
-		credentials: true,
-	})
-);
+app.use("/api/knowledge-clarification/*", apiBrowserCors);
 
 // CORS middleware for V1 API (public access)
 app.use(
@@ -224,6 +196,8 @@ app.get(
 		url: "/openapi",
 	})
 );
+
+export { app };
 
 export default {
 	port: env.PORT,

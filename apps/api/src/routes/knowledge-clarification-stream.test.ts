@@ -141,12 +141,42 @@ function createAuthenticatedApp(router: any) {
 }
 
 function buildWebsiteRequest(body: Record<string, unknown>): Request {
-	return new Request("http://localhost/stream-step", {
+	return buildRouteRequest({
+		body,
 		method: "POST",
+	});
+}
+
+function buildRouteRequest(params: {
+	method: string;
+	body?: Record<string, unknown>;
+	headers?: Record<string, string>;
+}): Request {
+	return new Request("http://localhost/stream-step", {
+		method: params.method,
 		headers: {
-			"Content-Type": "application/json",
+			...(params.body
+				? {
+						"Content-Type": "application/json",
+					}
+				: {}),
+			...params.headers,
 		},
-		body: JSON.stringify(body),
+		body: params.body ? JSON.stringify(params.body) : undefined,
+	});
+}
+
+function buildPreflightRequest(
+	origin: string,
+	requestHeaders = "content-type"
+) {
+	return buildRouteRequest({
+		method: "OPTIONS",
+		headers: {
+			Origin: origin,
+			"Access-Control-Request-Method": "POST",
+			"Access-Control-Request-Headers": requestHeaders,
+		},
 	});
 }
 
@@ -308,11 +338,115 @@ function createDeps() {
 	};
 }
 
+async function createTestApp(deps: ReturnType<typeof createDeps>) {
+	const { createKnowledgeClarificationStreamRouter } = await routeModulePromise;
+	const router = createKnowledgeClarificationStreamRouter({
+		db: deps.db,
+		createKnowledgeClarificationTurn:
+			deps.createKnowledgeClarificationTurnMock as never,
+		getKnowledgeClarificationRequestById:
+			deps.getKnowledgeClarificationRequestByIdMock as never,
+		listKnowledgeClarificationTurns:
+			deps.listKnowledgeClarificationTurnsMock as never,
+		updateKnowledgeClarificationRequest:
+			deps.updateKnowledgeClarificationRequestMock as never,
+		getAiAgentForWebsite: deps.getAiAgentForWebsiteMock as never,
+		getKnowledgeById: deps.getKnowledgeByIdMock as never,
+		getWebsiteBySlugWithAccess: deps.getWebsiteBySlugWithAccessMock as never,
+		createKnowledgeClarificationAuditEntry:
+			deps.createKnowledgeClarificationAuditEntryMock as never,
+		emitConversationClarificationUpdate:
+			deps.emitConversationClarificationUpdateMock as never,
+		loadKnowledgeClarificationRuntime:
+			deps.loadKnowledgeClarificationRuntimeMock as never,
+		prepareConversationKnowledgeClarificationStart:
+			deps.prepareConversationKnowledgeClarificationStartMock as never,
+		prepareFaqKnowledgeClarificationStart:
+			deps.prepareFaqKnowledgeClarificationStartMock as never,
+		startKnowledgeClarificationStepStream:
+			deps.startKnowledgeClarificationStepStreamMock as never,
+		loadConversationContext: deps.loadConversationContextMock as never,
+		toKnowledgeClarificationStreamStepResponse:
+			deps.toKnowledgeClarificationStreamStepResponseMock as never,
+	});
+
+	return createAuthenticatedApp(router);
+}
+
 describe("knowledgeClarificationStreamRouter", () => {
 	let deps: ReturnType<typeof createDeps>;
 
 	beforeEach(() => {
 		deps = createDeps();
+	});
+
+	it("returns explicit preflight CORS headers for allowed origins", async () => {
+		const app = await createTestApp(deps);
+
+		const response = await app.request(
+			buildPreflightRequest("https://cossistant.com")
+		);
+
+		expect(response.status).toBe(204);
+		expect(response.headers.get("Access-Control-Allow-Origin")).toBe(
+			"https://cossistant.com"
+		);
+		expect(response.headers.get("Access-Control-Allow-Credentials")).toBe(
+			"true"
+		);
+		expect(response.headers.get("Access-Control-Allow-Methods")).toContain(
+			"POST"
+		);
+		expect(response.headers.get("Access-Control-Allow-Headers")).toBe(
+			"content-type"
+		);
+		expect(response.headers.get("Vary")).toContain("Origin");
+	});
+
+	it("adds CORS headers to streamed POST responses for allowed origins", async () => {
+		const app = await createTestApp(deps);
+
+		const response = await app.request(
+			buildRouteRequest({
+				method: "POST",
+				headers: {
+					Origin: "https://cossistant.com",
+				},
+				body: {
+					action: "start_conversation",
+					websiteSlug: "acme",
+					conversationId: "conv-1",
+					topicSummary: "Billing clarification",
+				},
+			})
+		);
+
+		expect(response.status).toBe(200);
+		expect(response.headers.get("Access-Control-Allow-Origin")).toBe(
+			"https://cossistant.com"
+		);
+		expect(response.headers.get("Access-Control-Allow-Credentials")).toBe(
+			"true"
+		);
+		expect(response.headers.get("Vary")).toContain("Origin");
+
+		const payload = await response.json();
+		expect(payload).toMatchObject({
+			requestId: REQUEST_ID,
+			status: "awaiting_answer",
+		});
+	});
+
+	it("does not echo allow-origin for disallowed origins", async () => {
+		const app = await createTestApp(deps);
+
+		const response = await app.request(
+			buildPreflightRequest("https://evil.example")
+		);
+
+		expect(response.status).toBe(204);
+		expect(response.headers.get("Access-Control-Allow-Origin")).toBeNull();
+		expect(response.headers.get("Vary")).toContain("Origin");
 	});
 
 	it("streams a partial decision before appending the final request", async () => {
