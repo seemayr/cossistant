@@ -11,6 +11,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useTRPC } from "@/lib/trpc/client";
+import { useKnowledgeClarificationDraftReviewState } from "./draft-review";
 import {
 	shouldPreferKnowledgeClarificationRequestState,
 	stepFromKnowledgeClarificationRequest,
@@ -60,7 +61,7 @@ export function useKnowledgeClarificationFlow({
 		setRequestFallback(initialRequest ?? initialStep?.request ?? null);
 	}, [initialRequest, initialStep]);
 	const clarificationStream = useKnowledgeClarificationStreamAction<
-		"answer" | "retry"
+		"answer" | "skip" | "retry"
 	>({
 		onError: async (error) => {
 			await invalidateQueries({
@@ -191,13 +192,34 @@ export function useKnowledgeClarificationFlow({
 	const fallbackStep = currentRequest
 		? stepFromKnowledgeClarificationRequest(currentRequest)
 		: null;
+	const activeReviewStep = useMemo(() => {
+		if (currentStep?.kind === "draft_ready") {
+			return currentStep;
+		}
+
+		if (fallbackStep?.kind === "draft_ready") {
+			return fallbackStep;
+		}
+
+		return null;
+	}, [currentStep, fallbackStep]);
+	const reviewDraftPayload = activeReviewStep?.draftFaqPayload ?? null;
+	const reviewDraftState =
+		useKnowledgeClarificationDraftReviewState(reviewDraftPayload);
 
 	return {
 		currentRequest,
 		currentStep,
 		fallbackStep,
+		activeReviewStep,
+		reviewDraftPayload,
+		reviewDraftState,
+		isStreamLoading: clarificationStream.isLoading,
 		answerMutation: {
 			isPending: clarificationStream.isPendingAction("answer"),
+		},
+		skipMutation: {
+			isPending: clarificationStream.isPendingAction("skip"),
 		},
 		deferMutation,
 		dismissMutation,
@@ -220,6 +242,15 @@ export function useKnowledgeClarificationFlow({
 					requestId,
 					expectedStepIndex,
 					...payload,
+				});
+			})(),
+		skipQuestion: (requestId: string, expectedStepIndex: number) =>
+			(() => {
+				clarificationStream.submitAction("skip", {
+					action: "skip",
+					websiteSlug,
+					requestId,
+					expectedStepIndex,
 				});
 			})(),
 		deferRequest: (requestId: string) =>
@@ -246,6 +277,17 @@ export function useKnowledgeClarificationFlow({
 				requestId,
 				draft,
 			}),
+		approveActiveDraft: () => {
+			if (!activeReviewStep) {
+				return;
+			}
+
+			approveMutation.mutate({
+				websiteSlug,
+				requestId: activeReviewStep.request.id,
+				draft: reviewDraftState.parsedDraft,
+			});
+		},
 	};
 }
 

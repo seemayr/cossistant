@@ -93,25 +93,15 @@ export function KnowledgeClarificationProposalPage({
 		setIsApprovalRedirecting(false);
 	}, [flow.approveMutation.isError]);
 
-	const activeDraftStep = useMemo(() => {
-		if (flow.currentStep?.kind === "draft_ready") {
-			return flow.currentStep;
-		}
-
-		if (flow.fallbackStep?.kind === "draft_ready") {
-			return flow.fallbackStep;
-		}
-
-		return null;
-	}, [flow.currentStep, flow.fallbackStep]);
-
 	const draftReviewPayload = useMemo(
-		() => pendingApprovalDraft ?? activeDraftStep?.draftFaqPayload ?? null,
-		[activeDraftStep?.draftFaqPayload, pendingApprovalDraft]
+		() => pendingApprovalDraft ?? flow.reviewDraftPayload,
+		[flow.reviewDraftPayload, pendingApprovalDraft]
 	);
-
-	const draftReviewState =
-		useKnowledgeClarificationDraftReviewState(draftReviewPayload);
+	const pendingDraftReviewState =
+		useKnowledgeClarificationDraftReviewState(pendingApprovalDraft);
+	const draftReviewState = pendingApprovalDraft
+		? pendingDraftReviewState
+		: flow.reviewDraftState;
 	const isApprovalPendingUi =
 		flow.approveMutation.isPending || isApprovalRedirecting;
 

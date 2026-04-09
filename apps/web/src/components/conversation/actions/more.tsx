@@ -1,4 +1,5 @@
 import { ConversationStatus } from "@cossistant/types";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ import {
 	CONVERSATION_DEVELOPER_MODE_SHORTCUT_CHIPS,
 	useConversationDeveloperMode,
 } from "@/hooks/use-conversation-developer-mode";
+import { useTRPC } from "@/lib/trpc/client";
 import { cn } from "@/lib/utils";
 import {
 	type RunConversationActionOptions,
@@ -26,6 +28,7 @@ import {
 export function MoreConversationActions({
 	className,
 	conversationId,
+	websiteSlug,
 	visitorId,
 	status,
 	visitorIsBlocked,
@@ -33,13 +36,17 @@ export function MoreConversationActions({
 }: {
 	className?: string;
 	conversationId: string;
+	websiteSlug: string;
 	visitorId?: string | null;
 	status?: ConversationStatus;
 	visitorIsBlocked?: boolean | null;
 	deletedAt?: string | null;
 }) {
+	const trpc = useTRPC();
+	const queryClient = useQueryClient();
 	const triggerRef = useRef<HTMLButtonElement | null>(null);
 	const [open, setOpen] = useState(false);
+	const [isExportPending, setIsExportPending] = useState(false);
 	const [tooltipSuppressed, setTooltipSuppressed] = useState(false);
 	const tooltipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const isDeveloperModeEnabled = useConversationDeveloperMode(
@@ -106,6 +113,10 @@ export function MoreConversationActions({
 	const copyIdErrorMessage = "Unable to copy conversation ID";
 	const copyUrlSuccessMessage = "Conversation link copied";
 	const copyUrlErrorMessage = "Unable to copy conversation link";
+	const copyExportSuccessMessage = "Full conversation copied";
+	const copyExportErrorMessage = "Unable to copy full conversation";
+	const downloadExportSuccessMessage = "Conversation downloaded";
+	const downloadExportErrorMessage = "Unable to download conversation";
 	const developerModeLabel = isDeveloperModeEnabled
 		? "Disable developer mode"
 		: "Enable developer mode";
@@ -329,6 +340,75 @@ export function MoreConversationActions({
 		}
 	}, []);
 
+	const fetchConversationExport = useCallback(
+		async () =>
+			queryClient.fetchQuery(
+				trpc.conversation.getConversationExport.queryOptions({
+					websiteSlug,
+					conversationId,
+				})
+			),
+		[conversationId, queryClient, trpc, websiteSlug]
+	);
+
+	const handleCopyConversationExport = useCallback(async () => {
+		if (isExportPending) {
+			return false;
+		}
+
+		try {
+			if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+				return false;
+			}
+
+			setIsExportPending(true);
+			const exportResult = await fetchConversationExport();
+			await navigator.clipboard.writeText(exportResult.content);
+			return true;
+		} catch (error) {
+			console.error("Failed to copy conversation export", error);
+			return false;
+		} finally {
+			setIsExportPending(false);
+		}
+	}, [fetchConversationExport, isExportPending]);
+
+	const handleDownloadConversationExport = useCallback(async () => {
+		if (isExportPending) {
+			return false;
+		}
+
+		try {
+			if (
+				typeof window === "undefined" ||
+				typeof document === "undefined" ||
+				typeof URL === "undefined"
+			) {
+				return false;
+			}
+
+			setIsExportPending(true);
+			const exportResult = await fetchConversationExport();
+			const blob = new Blob([exportResult.content], {
+				type: exportResult.mimeType,
+			});
+			const objectUrl = URL.createObjectURL(blob);
+			const anchor = document.createElement("a");
+			anchor.href = objectUrl;
+			anchor.download = exportResult.filename;
+			document.body.append(anchor);
+			anchor.click();
+			anchor.remove();
+			URL.revokeObjectURL(objectUrl);
+			return true;
+		} catch (error) {
+			console.error("Failed to download conversation export", error);
+			return false;
+		} finally {
+			setIsExportPending(false);
+		}
+	}, [fetchConversationExport, isExportPending]);
+
 	return (
 		<div className={cn("flex items-center gap-2 pr-1", className)}>
 			<DropdownMenu onOpenChange={handleOpenChange} open={open}>
@@ -444,6 +524,34 @@ export function MoreConversationActions({
 							{blockLabel}
 						</DropdownMenuItem>
 					</DropdownMenuGroup>
+					<DropdownMenuSeparator />
+					<DropdownMenuItem
+						disabled={isExportPending}
+						onSelect={(event) => {
+							event.preventDefault();
+							void runMenuAction(async () => handleCopyConversationExport(), {
+								successMessage: copyExportSuccessMessage,
+								errorMessage: copyExportErrorMessage,
+							});
+						}}
+					>
+						Copy full conversation
+					</DropdownMenuItem>
+					<DropdownMenuItem
+						disabled={isExportPending}
+						onSelect={(event) => {
+							event.preventDefault();
+							void runMenuAction(
+								async () => handleDownloadConversationExport(),
+								{
+									successMessage: downloadExportSuccessMessage,
+									errorMessage: downloadExportErrorMessage,
+								}
+							);
+						}}
+					>
+						Download conversation (.txt)
+					</DropdownMenuItem>
 					<DropdownMenuSeparator />
 					<DropdownMenuItem
 						onSelect={(event) => {

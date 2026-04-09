@@ -20,6 +20,7 @@ import {
 } from "@api/lib/hard-limits/dashboard";
 import { getPlanForWebsite } from "@api/lib/plans/access";
 import { markVisitorPresence } from "@api/services/presence";
+import { buildConversationExport } from "@api/utils/conversation-export";
 import {
 	emitConversationCreatedEvent,
 	emitConversationSeenEvent,
@@ -204,6 +205,8 @@ const conversationIdPathParameter = {
 		type: "string",
 	},
 } as const;
+
+const emptyQuerySchema = z.object({});
 
 function getConversationPathParams(c: {
 	req: { param(name: string): string | undefined };
@@ -1183,6 +1186,87 @@ conversationRouter.openapi(
 			validateResponse({ seenData }, getConversationSeenDataResponseSchema),
 			200
 		);
+	}
+);
+
+conversationRouter.openapi(
+	{
+		method: "get",
+		path: "/{conversationId}/export",
+		summary: "Download a full conversation export",
+		description:
+			"Returns the full internal conversation transcript as plain text. This control-plane endpoint requires a private API key.",
+		tags: ["Conversations"],
+		request: {
+			query: emptyQuerySchema,
+			params: getConversationRequestSchema,
+		},
+		responses: {
+			200: {
+				description: "Conversation export generated successfully",
+				content: {
+					"text/plain": {
+						schema: z.string(),
+					},
+				},
+			},
+			401: errorJsonResponse(
+				"Unauthorized - Invalid or missing private API key"
+			),
+			403: errorJsonResponse("Forbidden - Private API key required"),
+			404: errorJsonResponse("Conversation not found"),
+		},
+		...privateControlAuth({
+			parameters: [conversationIdPathParameter],
+		}),
+	},
+	async (c) => {
+		const extracted = await safelyExtractRequestQuery(c, emptyQuerySchema);
+		const privateContext = requirePrivateControlContext(c, extracted);
+
+		if (privateContext instanceof Response) {
+			return privateContext;
+		}
+
+		const params = getConversationPathParams(c);
+		const conversationRecord = await getConversationByIdWithLastMessage(
+			extracted.db,
+			{
+				organizationId: privateContext.organization.id,
+				websiteId: privateContext.website.id,
+				conversationId: params.conversationId,
+			}
+		);
+
+		if (!conversationRecord) {
+			return c.json(
+				{
+					error: "Conversation not found",
+				},
+				404
+			);
+		}
+
+		const exportResult = await buildConversationExport({
+			db: extracted.db,
+			website: {
+				id: privateContext.website.id,
+				slug: privateContext.website.slug,
+				organizationId: privateContext.website.organizationId,
+				teamId: privateContext.website.teamId,
+			},
+			conversation: {
+				id: conversationRecord.id,
+				title: conversationRecord.title,
+				createdAt: conversationRecord.createdAt,
+				visitorId: conversationRecord.visitorId,
+			},
+		});
+
+		return c.text(exportResult.content, 200, {
+			"Content-Disposition": `attachment; filename="${exportResult.filename}"`,
+			"Content-Type": exportResult.mimeType,
+		});
 	}
 );
 

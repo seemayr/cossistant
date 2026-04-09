@@ -202,22 +202,22 @@ describe("PrecisionFlowSection", () => {
 		expect(html).toContain("Next");
 	});
 
-	it("renders the real draft-ready composer banner once the flow completes", () => {
+	it("renders the real draft review inside the composer once the flow completes", () => {
 		const html = renderToStaticMarkup(
 			<React.StrictMode>
 				<PrecisionFlowSection autoplay={false} initialPhase="draft_ready" />
 			</React.StrictMode>
 		);
 
-		expect(html).toContain('data-clarification-slot="draft-ready-banner"');
-		expect(html).toContain("FAQ draft ready");
-		expect(html).toContain("View");
+		expect(html).toContain('data-clarification-slot="review"');
+		expect(html).toContain('data-clarification-slot="review-actions"');
+		expect(html).toContain("Review FAQ draft");
+		expect(html).toContain("Skip");
 		expect(html).toContain("Approve");
 		expect(html).toContain('data-composer-layout-mode="inline"');
 		expect(html).not.toContain(
 			'data-knowledge-clarification-draft-preview="true"'
 		);
-		expect(html).not.toContain("How do I delete my account?");
 	});
 
 	it("returns to a composer-only view after the transition completes", () => {
@@ -263,7 +263,7 @@ describe("PrecisionFlowSection", () => {
 		expect(html).toContain("w-[86%]");
 		expect(html).toContain("self-center");
 		expect(html).not.toContain('data-precision-opening-radial="true"');
-		expect(html).not.toContain('data-clarification-slot="draft-ready-banner"');
+		expect(html).not.toContain('data-clarification-slot="review"');
 		expect(html).not.toContain("Knowledge base updated");
 	});
 

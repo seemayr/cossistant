@@ -20,6 +20,11 @@ const getConversationTimelineItemsMock = mock((async () => ({
 	nextCursor: null,
 	hasNextPage: false,
 })) as (...args: unknown[]) => Promise<unknown>);
+const buildConversationExportMock = mock((async () => ({
+	filename: "conversation-conv-1.txt",
+	content: "Conversation Export\nConversation ID: conv-1",
+	mimeType: "text/plain; charset=utf-8",
+})) as (...args: unknown[]) => Promise<unknown>);
 const getConversationSeenDataMock = mock((async () => []) as (
 	...args: unknown[]
 ) => Promise<unknown>);
@@ -113,6 +118,10 @@ mock.module("@api/utils/conversation-realtime", () => ({
 	emitConversationCreatedEvent: mock(async () => {}),
 	emitConversationSeenEvent: mock(async () => {}),
 	emitConversationTypingEvent: mock(async () => {}),
+}));
+
+mock.module("@api/utils/conversation-export", () => ({
+	buildConversationExport: buildConversationExportMock,
 }));
 
 mock.module("@api/lib/plans/access", () => ({
@@ -227,6 +236,7 @@ describe("conversation auth and inbox routes", () => {
 		getVisitorMock.mockReset();
 		getConversationByIdWithLastMessageMock.mockReset();
 		getConversationTimelineItemsMock.mockReset();
+		buildConversationExportMock.mockReset();
 		getConversationSeenDataMock.mockReset();
 		listConversationsHeadersMock.mockReset();
 
@@ -242,6 +252,11 @@ describe("conversation auth and inbox routes", () => {
 			items: [],
 			nextCursor: null,
 			hasNextPage: false,
+		});
+		buildConversationExportMock.mockResolvedValue({
+			filename: "conversation-conv-1.txt",
+			content: "Conversation Export\nConversation ID: conv-1",
+			mimeType: "text/plain; charset=utf-8",
 		});
 		getConversationSeenDataMock.mockResolvedValue([]);
 		listConversationsHeadersMock.mockResolvedValue({
@@ -355,5 +370,63 @@ describe("conversation auth and inbox routes", () => {
 
 		expect(response.status).toBe(404);
 		expect(getConversationTimelineItemsMock).toHaveBeenCalledTimes(0);
+	});
+
+	it("returns a plain-text attachment for private export requests", async () => {
+		safelyExtractRequestQueryMock.mockResolvedValue({
+			db: {},
+			apiKey: { keyType: APIKeyType.PRIVATE },
+			organization: { id: "org-1" },
+			website: {
+				id: "site-1",
+				organizationId: "org-1",
+				slug: "acme",
+				teamId: "team-1",
+			},
+			query: {},
+		});
+
+		const { conversationRouter } = await conversationRouterModulePromise;
+		const response = await conversationRouter.request(
+			new Request("http://localhost/conv-1/export", {
+				method: "GET",
+			})
+		);
+
+		expect(response.status).toBe(200);
+		expect(response.headers.get("Content-Type")).toBe(
+			"text/plain; charset=utf-8"
+		);
+		expect(response.headers.get("Content-Disposition")).toBe(
+			'attachment; filename="conversation-conv-1.txt"'
+		);
+		expect(await response.text()).toContain("Conversation Export");
+		expect(buildConversationExportMock).toHaveBeenCalledTimes(1);
+	});
+
+	it("rejects public API keys for full export requests", async () => {
+		safelyExtractRequestQueryMock.mockResolvedValue({
+			db: {},
+			apiKey: { keyType: APIKeyType.PUBLIC },
+			organization: { id: "org-1" },
+			website: {
+				id: "site-1",
+				organizationId: "org-1",
+				slug: "acme",
+				teamId: "team-1",
+			},
+			visitorIdHeader: visitorId,
+			query: {},
+		});
+
+		const { conversationRouter } = await conversationRouterModulePromise;
+		const response = await conversationRouter.request(
+			new Request("http://localhost/conv-1/export", {
+				method: "GET",
+			})
+		);
+
+		expect(response.status).toBe(403);
+		expect(buildConversationExportMock).toHaveBeenCalledTimes(0);
 	});
 });

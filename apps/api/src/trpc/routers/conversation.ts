@@ -35,6 +35,7 @@ import { realtime } from "@api/realtime/emitter";
 import { getRedis } from "@api/redis";
 import { createConversationEvent } from "@api/utils/conversation-event";
 import { createParticipantJoinedEvent } from "@api/utils/conversation-events";
+import { buildConversationExport } from "@api/utils/conversation-export";
 import {
 	emitConversationSeenEvent,
 	emitConversationTypingEvent,
@@ -48,6 +49,7 @@ import { createMessageTimelineItem } from "@api/utils/timeline-item";
 import {
 	type ContactMetadata,
 	ConversationEventType,
+	conversationExportSchema,
 	conversationMutationResponseSchema,
 	listConversationHeadersResponseSchema,
 	TimelineItemVisibility,
@@ -270,6 +272,38 @@ export const conversationRouter = createTRPCRouter({
 				nextCursor: result.nextCursor ?? null,
 				hasNextPage: result.hasNextPage,
 			};
+		}),
+
+	getConversationExport: protectedProcedure
+		.input(
+			z.object({
+				conversationId: z.string(),
+				websiteSlug: z.string(),
+			})
+		)
+		.output(conversationExportSchema)
+		.query(async ({ ctx: { db, user }, input }) => {
+			const { website, conversation } = await loadConversationContext(
+				db,
+				user.id,
+				input
+			);
+
+			return buildConversationExport({
+				db,
+				website: {
+					id: website.id,
+					slug: website.slug,
+					organizationId: website.organizationId,
+					teamId: website.teamId,
+				},
+				conversation: {
+					id: conversation.id,
+					title: conversation.title,
+					createdAt: conversation.createdAt,
+					visitorId: conversation.visitorId,
+				},
+			});
 		}),
 
 	sendMessage: protectedProcedure

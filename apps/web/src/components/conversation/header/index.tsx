@@ -3,7 +3,7 @@
 import type { ConversationStatus } from "@cossistant/types";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Icon } from "@/components/ui/icons";
+import Icon from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { TooltipOnHover } from "@/components/ui/tooltip";
 import { PageHeader } from "../../ui/layout";
@@ -160,6 +160,7 @@ export type ConversationHeaderProps = {
 	onToggleRightSidebar: () => void;
 	navigation: ConversationHeaderNavigationProps;
 	conversationId: string;
+	websiteSlug: string;
 	visitorId?: string | null;
 	status?: ConversationStatus;
 	deletedAt?: string | null;
@@ -176,6 +177,7 @@ export function ConversationHeader({
 	onToggleRightSidebar,
 	navigation,
 	conversationId,
+	websiteSlug,
 	visitorId,
 	status,
 	deletedAt,
@@ -224,6 +226,7 @@ export function ConversationHeader({
 					status={status}
 					visitorId={visitorId}
 					visitorIsBlocked={visitorIsBlocked ?? null}
+					websiteSlug={websiteSlug}
 				/>
 				{!isRightSidebarOpen && (
 					<TooltipOnHover

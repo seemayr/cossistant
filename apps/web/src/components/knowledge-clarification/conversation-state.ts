@@ -8,8 +8,8 @@ export type ConversationClarificationDisplayState = {
 	showPrompt: boolean;
 	showAction: boolean;
 	actionRequest: KnowledgeClarificationRequest | null;
-	showDraftBanner: boolean;
-	bannerRequest: KnowledgeClarificationRequest | null;
+	showReview: boolean;
+	reviewRequest: KnowledgeClarificationRequest | null;
 };
 
 export function resolveEngagedConversationClarificationRequestId(params: {
@@ -47,6 +47,10 @@ export function shouldShowConversationClarificationPrompt(params: {
 	}
 
 	if (!params.summary) {
+		return false;
+	}
+
+	if (params.summary.status === "draft_ready") {
 		return false;
 	}
 
@@ -99,12 +103,8 @@ export function resolveConversationClarificationDisplayState(params: {
 			summary: params.summary,
 			engagedRequestId,
 		});
-	const showDraftBanner = Boolean(
-		!(
-			params.hasLimitAction ||
-			params.summary?.status !== "draft_ready" ||
-			params.summary?.engagementMode === "linked"
-		)
+	const showReview = Boolean(
+		!(params.hasLimitAction || params.summary?.status !== "draft_ready")
 	);
 	const showPrompt = shouldShowConversationClarificationPrompt({
 		summary: params.summary,
@@ -117,7 +117,7 @@ export function resolveConversationClarificationDisplayState(params: {
 		showPrompt,
 		showAction,
 		actionRequest: showAction ? (params.request ?? null) : null,
-		showDraftBanner,
-		bannerRequest: showDraftBanner ? (params.request ?? null) : null,
+		showReview,
+		reviewRequest: showReview ? (params.request ?? null) : null,
 	};
 }

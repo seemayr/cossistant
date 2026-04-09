@@ -33,6 +33,7 @@ async function renderHeader(title: string | null): Promise<string> {
 			onToggleRightSidebar: () => {},
 			navigation: baseNavigation,
 			conversationId: "conv-1",
+			websiteSlug: "acme",
 			visitorId: "visitor-1",
 			title,
 			titleSource: null,

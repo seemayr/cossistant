@@ -123,6 +123,12 @@ export const listConversationHeadersResponseSchema = z.object({
 	nextCursor: z.string().nullable(),
 });
 
+export const conversationExportSchema = z.object({
+	filename: z.string(),
+	content: z.string(),
+	mimeType: z.literal("text/plain; charset=utf-8"),
+});
+
 export const inboxAnalyticsRangeSchema = z.union([
 	z.literal(7),
 	z.literal(14),
@@ -164,3 +170,4 @@ export type InboxAnalyticsRequest = z.infer<typeof inboxAnalyticsRequestSchema>;
 export type InboxAnalyticsResponse = z.infer<
 	typeof inboxAnalyticsResponseSchema
 >;
+export type ConversationExport = z.infer<typeof conversationExportSchema>;

@@ -17,12 +17,16 @@ import {
 } from "@/components/conversation/composer";
 import {
 	ClarificationActionsBlock,
-	ClarificationDraftReadyBanner,
 	ClarificationQuestionBlock,
+	ClarificationReviewActionsBlock,
+	ClarificationReviewBlock,
 	ClarificationTopicBlock,
 } from "@/components/conversation/composer/clarification-composer-flow";
 import { ClarificationPromptCard } from "@/components/conversation/composer/clarification-teaser";
-import { KnowledgeClarificationDraftPreviewCard } from "@/components/knowledge-clarification/draft-review";
+import {
+	KnowledgeClarificationDraftPreviewCard,
+	useKnowledgeClarificationDraftReviewState,
+} from "@/components/knowledge-clarification/draft-review";
 import { marcVisitor } from "@/components/landing/fake-dashboard/data";
 import { FakeComposerTextareaDisplay } from "@/components/landing/fake-dashboard/fake-composer-textarea-display";
 import { FakeConversationTimelineList } from "@/components/landing/fake-dashboard/fake-conversation/fake-conversation-timeline-list";
@@ -100,6 +104,7 @@ function PrecisionFlowComposer({
 	composerState,
 	composerValue,
 	topicSummary,
+	faqDraft,
 	clarifyButtonRef,
 	nextButtonRef,
 	approveButtonRef,
@@ -110,6 +115,7 @@ function PrecisionFlowComposer({
 	composerState: PrecisionFlowComposerState;
 	composerValue: string;
 	topicSummary: string;
+	faqDraft: ReturnType<typeof buildPrecisionFlowScene>["faqDraft"];
 	clarifyButtonRef: React.RefObject<HTMLButtonElement | null>;
 	nextButtonRef: React.RefObject<HTMLButtonElement | null>;
 	approveButtonRef: React.RefObject<HTMLButtonElement | null>;
@@ -117,6 +123,7 @@ function PrecisionFlowComposer({
 	visibility: MessageVisibility;
 	onVisibilityChange: (visibility: MessageVisibility) => void;
 }) {
+	const draftReviewState = useKnowledgeClarificationDraftReviewState(faqDraft);
 	let aboveBlock: React.ReactNode = null;
 	let centralBlock: React.ReactNode = null;
 	let bottomBlock: React.ReactNode = null;
@@ -220,17 +227,19 @@ function PrecisionFlowComposer({
 			/>
 		);
 	} else if (composerState.kind === "draft_ready") {
-		aboveBlock = (
-			<ClarificationDraftReadyBanner
+		centralBlock = (
+			<ClarificationReviewBlock
+				isSubmittingApproval={false}
+				state={draftReviewState}
+			/>
+		);
+		bottomBlock = (
+			<ClarificationReviewActionsBlock
 				approveButtonRef={approveButtonRef}
 				canApprove={true}
-				canView={true}
 				isApproving={false}
 				onApprove={() => {}}
-				onClose={() => {}}
-				onView={() => {}}
-				request={null}
-				topicSummary={topicSummary}
+				onSkip={() => {}}
 			/>
 		);
 	}
@@ -356,6 +365,7 @@ function PrecisionFlowTimeline({
 function PrecisionFlowConversationStage({
 	composerState,
 	composerValue,
+	faqDraft,
 	timelineItems,
 	topicSummary,
 	visibility,
@@ -374,6 +384,7 @@ function PrecisionFlowConversationStage({
 }: {
 	composerState: PrecisionFlowComposerState;
 	composerValue: string;
+	faqDraft: ReturnType<typeof buildPrecisionFlowScene>["faqDraft"];
 	timelineItems: ReturnType<typeof buildPrecisionFlowScene>["timelineItems"];
 	topicSummary: string;
 	visibility: MessageVisibility;
@@ -430,6 +441,7 @@ function PrecisionFlowConversationStage({
 							clarifyButtonRef={clarifyButtonRef}
 							composerState={composerState}
 							composerValue={composerValue}
+							faqDraft={faqDraft}
 							nextButtonRef={nextButtonRef}
 							onVisibilityChange={onVisibilityChange}
 							suggestedAnswerButtonRef={suggestedAnswerButtonRef}
@@ -449,6 +461,7 @@ function PrecisionFlowConversationStage({
 							clarifyButtonRef={clarifyButtonRef}
 							composerState={composerState}
 							composerValue={composerValue}
+							faqDraft={faqDraft}
 							nextButtonRef={nextButtonRef}
 							onVisibilityChange={onVisibilityChange}
 							suggestedAnswerButtonRef={suggestedAnswerButtonRef}
@@ -969,6 +982,7 @@ export function PrecisionFlowPlaybackStage() {
 				<PrecisionFlowConversationStage
 					composerState={scene.composerState}
 					composerValue={scene.composerValue}
+					faqDraft={scene.faqDraft}
 					isClarifyTransition={isClarifyTransition}
 					onAnswerSelectCursorClick={handleAnswerSelectCursorClick}
 					onApproveCursorClick={handleApproveCursorClick}

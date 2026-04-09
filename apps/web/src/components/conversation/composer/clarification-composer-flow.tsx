@@ -5,27 +5,21 @@ import type {
 	ConversationClarificationSummary,
 	KnowledgeClarificationRequest,
 } from "@cossistant/types";
-import { useMutation } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
-	formatClarificationQuestionLabel,
-	shouldPreferKnowledgeClarificationRequestState,
-	stepFromKnowledgeClarificationRequest,
-	stepFromKnowledgeClarificationStreamResponse,
-} from "@/components/knowledge-clarification/helpers";
+	KnowledgeClarificationDraftReviewBody,
+	type KnowledgeClarificationDraftReviewState,
+} from "@/components/knowledge-clarification/draft-review";
+import { formatClarificationQuestionLabel } from "@/components/knowledge-clarification/helpers";
 import {
 	buildKnowledgeClarificationAnswerDraftPersistenceId,
 	KnowledgeClarificationQuestionContent,
-	shouldClearKnowledgeClarificationAnswerDraft,
 	useKnowledgeClarificationAnswerDraft,
 } from "@/components/knowledge-clarification/question-flow";
-import { useKnowledgeClarificationStreamAction } from "@/components/knowledge-clarification/use-clarification-stream";
-import { useKnowledgeClarificationQueryInvalidation } from "@/components/knowledge-clarification/use-query-invalidation";
+import { useKnowledgeClarificationFlow } from "@/components/knowledge-clarification/use-clarification-flow";
 import { Button } from "@/components/ui/button";
-import { useTRPC } from "@/lib/trpc/client";
 import { cn } from "@/lib/utils";
 import { Spinner } from "../../../../../../packages/react/src/support/components/spinner";
 import Icon from "../../ui/icons";
@@ -77,6 +71,11 @@ export type ClarificationRetryBlockProps = {
 	onRetry: () => void;
 };
 
+type HiddenReviewState = {
+	requestId: string;
+	reason: "approved" | "skipped";
+};
+
 export type ClarificationQuestionBlockProps = {
 	question: string;
 	suggestedAnswers: [string, string, string] | string[];
@@ -98,6 +97,11 @@ export type ClarificationQuestionBlockProps = {
 	>[0]["getSuggestedAnswerButtonRef"];
 	onSelectAnswer: (answer: string) => void;
 	onFreeAnswerChange: (value: string) => void;
+};
+
+export type ClarificationReviewBlockProps = {
+	state: KnowledgeClarificationDraftReviewState;
+	isSubmittingApproval: boolean;
 };
 
 function useClarificationProgressClock(enabled: boolean) {
@@ -226,31 +230,17 @@ export function ClarificationRetryBlock({
 	);
 }
 
-export function ClarificationDraftReadyBanner({
-	request,
+export function ClarificationReviewTeaser({
 	topicSummary,
-	isApproving,
-	onApprove,
-	onClose,
-	onView,
-	canApprove,
-	canView,
-	approveButtonRef,
+	onReview,
 }: {
-	request: KnowledgeClarificationRequest | null;
 	topicSummary: string;
-	isApproving: boolean;
-	onApprove: () => void;
-	onClose: () => void;
-	onView: () => void;
-	canApprove?: boolean;
-	canView?: boolean;
-	approveButtonRef?: React.RefObject<HTMLButtonElement | null>;
+	onReview: () => void;
 }) {
 	return (
 		<div
 			className="mb-4 flex items-start justify-between gap-3 px-2 py-2"
-			data-clarification-slot="draft-ready-banner"
+			data-clarification-slot="review-teaser"
 		>
 			<div className="flex min-w-0 flex-col gap-1">
 				<div className="font-medium text-sm">FAQ draft ready</div>
@@ -258,17 +248,62 @@ export function ClarificationDraftReadyBanner({
 			</div>
 
 			<div className="flex shrink-0 items-center gap-2">
+				<Button onClick={onReview} size="xs" type="button">
+					Review FAQ
+				</Button>
+			</div>
+		</div>
+	);
+}
+
+export function ClarificationReviewBlock({
+	state,
+	isSubmittingApproval,
+}: ClarificationReviewBlockProps) {
+	return (
+		<ComposerCentralBlock>
+			<div className="p-4" data-clarification-slot="review">
+				<KnowledgeClarificationDraftReviewBody
+					description="Review and edit this FAQ draft without leaving the conversation."
+					disabled={isSubmittingApproval}
+					state={state}
+					title="Review FAQ draft"
+				/>
+			</div>
+		</ComposerCentralBlock>
+	);
+}
+
+export function ClarificationReviewActionsBlock({
+	canApprove,
+	isApproving,
+	onApprove,
+	onSkip,
+	approveButtonRef,
+}: {
+	canApprove: boolean;
+	isApproving: boolean;
+	onApprove: () => void;
+	onSkip: () => void;
+	approveButtonRef?: React.RefObject<HTMLButtonElement | null>;
+}) {
+	return (
+		<ComposerBottomBlock className="pl-0">
+			<div
+				className="flex w-full items-center justify-between gap-3 p-2"
+				data-clarification-slot="review-actions"
+			>
 				<Button
-					disabled={canView ?? !request}
-					onClick={onView}
+					disabled={isApproving}
+					onClick={onSkip}
 					size="xs"
 					type="button"
 					variant="ghost"
 				>
-					View
+					Skip
 				</Button>
 				<Button
-					disabled={isApproving || !(canApprove ?? !!request?.draftFaqPayload)}
+					disabled={isApproving || !canApprove}
 					onClick={onApprove}
 					ref={approveButtonRef}
 					size="xs"
@@ -283,16 +318,8 @@ export function ClarificationDraftReadyBanner({
 						"Approve"
 					)}
 				</Button>
-				<Button
-					onClick={onClose}
-					size="icon-small"
-					type="button"
-					variant="ghost"
-				>
-					<Icon className="size-3.5" name="x" variant="filled" />
-				</Button>
 			</div>
-		</div>
+		</ComposerBottomBlock>
 	);
 }
 
@@ -404,130 +431,31 @@ export function ClarificationActionsBlock({
 
 export function useClarificationComposerFlow({
 	websiteSlug,
-	conversationId,
+	conversationId: _conversationId,
 	summary,
 	request,
 	onCancel,
 }: ClarificationComposerFlowProps): ClarificationComposerBlocks | null {
-	const router = useRouter();
-	const trpc = useTRPC();
-	const invalidateClarificationQueries =
-		useKnowledgeClarificationQueryInvalidation(websiteSlug);
-	const [localStep, setLocalStep] = useState(
-		stepFromKnowledgeClarificationRequest(request)
-	);
-	const [closedDraftRequestId, setClosedDraftRequestId] = useState<
-		string | null
-	>(null);
-
-	useEffect(() => {
-		setLocalStep(stepFromKnowledgeClarificationRequest(request));
-	}, [request]);
-
-	useEffect(() => {
-		if (!(request && request.status === "draft_ready")) {
-			setClosedDraftRequestId(null);
-			return;
-		}
-
-		setClosedDraftRequestId((current) =>
-			current === request.id ? current : null
-		);
-	}, [request]);
-
-	const requestStep = useMemo(
-		() => stepFromKnowledgeClarificationRequest(request),
-		[request]
-	);
+	const [hiddenReviewState, setHiddenReviewState] =
+		useState<HiddenReviewState | null>(null);
+	const flow = useKnowledgeClarificationFlow({
+		initialRequest: request,
+		onApproved: async (result) => {
+			setHiddenReviewState({
+				requestId: result.request.id,
+				reason: "approved",
+			});
+			toast.success("FAQ draft approved");
+		},
+		websiteSlug,
+	});
 	const [optimisticProgressStartedAt, setOptimisticProgressStartedAt] =
 		useState<string | null>(null);
 	const [lastSubmittedAnswer, setLastSubmittedAnswer] = useState<string | null>(
 		null
 	);
-	const clarificationStream = useKnowledgeClarificationStreamAction<
-		"answer" | "skip" | "retry"
-	>({
-		onError: async (error) => {
-			await invalidateClarificationQueries({
-				requestId: request?.id ?? summary?.requestId ?? null,
-				conversationId: request?.conversationId ?? conversationId,
-			});
-			toast.error(
-				error.message ||
-					"The AI hit a temporary issue. You can retry from here."
-			);
-		},
-		onFinish: async (result) => {
-			if (
-				displayedQuestion &&
-				shouldClearKnowledgeClarificationAnswerDraft({
-					currentQuestion: displayedQuestion.question,
-					currentStepIndex: displayedQuestion.stepIndex,
-					result,
-				})
-			) {
-				clearLocalStorageDraftValue(
-					buildKnowledgeClarificationAnswerDraftPersistenceId({
-						websiteSlug,
-						requestId: displayedQuestion.requestId,
-						stepIndex: displayedQuestion.stepIndex,
-					})
-				);
-			}
-
-			setLocalStep(stepFromKnowledgeClarificationRequest(result.request));
-			await invalidateClarificationQueries({
-				request: result.request,
-			});
-		},
-	});
-	const streamPreviewStep = useMemo(
-		() =>
-			stepFromKnowledgeClarificationStreamResponse({
-				request: localStep?.request ?? request,
-				response: clarificationStream.object,
-			}),
-		[clarificationStream.object, localStep, request]
-	);
-	const shouldPreferRequestState = useMemo(
-		() =>
-			!streamPreviewStep &&
-			shouldPreferKnowledgeClarificationRequestState({
-				request,
-				step: localStep,
-			}),
-		[localStep, request, streamPreviewStep]
-	);
-	const step = useMemo(
-		() =>
-			streamPreviewStep ??
-			(shouldPreferRequestState ? requestStep : (localStep ?? requestStep)),
-		[localStep, requestStep, shouldPreferRequestState, streamPreviewStep]
-	);
-
-	const approveMutation = useMutation(
-		trpc.knowledgeClarification.approveDraft.mutationOptions({
-			retry: false,
-			onSuccess: async (result) => {
-				await invalidateClarificationQueries({
-					request: result.request,
-					includeKnowledgeQueries: true,
-				});
-				toast.success("FAQ draft approved");
-			},
-			onError: async (_error, variables) => {
-				await invalidateClarificationQueries({
-					requestId: variables.requestId,
-					conversationId: request?.conversationId ?? null,
-				});
-				toast.error("Failed to approve draft");
-			},
-		})
-	);
-
-	const currentRequest = shouldPreferRequestState
-		? request
-		: (step?.request ?? request);
+	const currentRequest = flow.currentRequest;
+	const step = flow.currentStep;
 	const summaryQuestionState =
 		summary?.question &&
 		summary.currentSuggestedAnswers &&
@@ -567,12 +495,23 @@ export function useClarificationComposerFlow({
 			: (summary?.currentQuestionInputMode ?? "suggested_answers"),
 		displayedQuestionDraftPersistenceId
 	);
-	const isSubmitting = clarificationStream.isPendingAction("answer");
-	const isSkipping = clarificationStream.isPendingAction("skip");
-	const isRetrying = clarificationStream.isPendingAction("retry");
+	const activeReviewRequestId =
+		currentRequest?.status === "draft_ready"
+			? currentRequest.id
+			: summary?.status === "draft_ready"
+				? summary.requestId
+				: null;
+	const hiddenActiveReview =
+		activeReviewRequestId &&
+		hiddenReviewState?.requestId === activeReviewRequestId
+			? hiddenReviewState
+			: null;
+	const isSubmitting = flow.answerMutation.isPending;
+	const isSkipping = flow.skipMutation.isPending;
+	const isRetrying = flow.retryMutation.isPending;
 	const isAnalyzing = Boolean(
 		summary &&
-			(clarificationStream.isLoading ||
+			(flow.isStreamLoading ||
 				currentRequest?.status === "analyzing" ||
 				summary.status === "analyzing")
 	);
@@ -609,6 +548,17 @@ export function useClarificationComposerFlow({
 		setOptimisticProgressStartedAt(null);
 	}, [summary?.requestId]);
 
+	useEffect(() => {
+		if (!activeReviewRequestId) {
+			setHiddenReviewState(null);
+			return;
+		}
+
+		setHiddenReviewState((current) =>
+			current?.requestId === activeReviewRequestId ? current : null
+		);
+	}, [activeReviewRequestId]);
+
 	const previousQuestionDraftPersistenceIdRef = useRef<string | null>(
 		displayedQuestionDraftPersistenceId
 	);
@@ -631,68 +581,59 @@ export function useClarificationComposerFlow({
 		return null;
 	}
 
-	const isDraftReady =
-		currentRequest?.status === "draft_ready" &&
-		Boolean(currentRequest.draftFaqPayload);
+	if (summary.status === "draft_ready") {
+		if (hiddenActiveReview?.reason === "approved") {
+			return null;
+		}
 
-	if (summary.status === "draft_ready" && !currentRequest) {
+		if (hiddenActiveReview?.reason === "skipped") {
+			return {
+				aboveBlock: (
+					<ClarificationReviewTeaser
+						onReview={() => {
+							setHiddenReviewState(null);
+						}}
+						topicSummary={currentRequest?.topicSummary ?? summary.topicSummary}
+					/>
+				),
+				centralBlock: null,
+				bottomBlock: null,
+			};
+		}
+
 		return {
-			aboveBlock: (
-				<ClarificationDraftReadyBanner
-					isApproving={false}
-					onApprove={() => {}}
-					onClose={() => {
-						setClosedDraftRequestId(summary.requestId);
-					}}
-					onView={() => {}}
-					request={null}
-					topicSummary={summary.topicSummary}
+			aboveBlock: null,
+			centralBlock: flow.activeReviewStep ? (
+				<ClarificationReviewBlock
+					isSubmittingApproval={flow.approveMutation.isPending}
+					state={flow.reviewDraftState}
+				/>
+			) : (
+				<ClarificationLoadingBlock
+					key="review-loading"
+					label="Preparing FAQ draft..."
 				/>
 			),
-			centralBlock: null,
-			bottomBlock: null,
-		};
-	}
-
-	if (
-		isDraftReady &&
-		currentRequest &&
-		closedDraftRequestId !== currentRequest.id
-	) {
-		return {
-			aboveBlock: (
-				<ClarificationDraftReadyBanner
-					isApproving={approveMutation.isPending}
+			bottomBlock: flow.activeReviewStep ? (
+				<ClarificationReviewActionsBlock
+					canApprove={flow.reviewDraftState.canApprove}
+					isApproving={flow.approveMutation.isPending}
 					onApprove={() => {
-						if (!currentRequest.draftFaqPayload) {
+						flow.approveActiveDraft();
+					}}
+					onSkip={() => {
+						if (!activeReviewRequestId) {
 							return;
 						}
 
-						approveMutation.mutate({
-							websiteSlug,
-							requestId: currentRequest.id,
-							draft: currentRequest.draftFaqPayload,
+						setHiddenReviewState({
+							requestId: activeReviewRequestId,
+							reason: "skipped",
 						});
 					}}
-					onClose={() => {
-						setClosedDraftRequestId(currentRequest.id);
-					}}
-					onView={() => {
-						router.push(
-							`/${websiteSlug}/agent/training/faq/proposals/${currentRequest.id}`
-						);
-					}}
-					request={currentRequest}
-					topicSummary={currentRequest.topicSummary ?? summary.topicSummary}
 				/>
-			),
-			centralBlock: null,
-			bottomBlock: null,
+			) : null,
 		};
-	}
-
-	if (isDraftReady) {
-		return null;
 	}
 
 	const topicSummary = currentRequest?.topicSummary ?? summary.topicSummary;
@@ -720,13 +661,11 @@ export function useClarificationComposerFlow({
 				answerDraft.submitPayload.selectedAnswer ??
 				null
 		);
-		clarificationStream.submitAction("answer", {
-			action: "answer",
-			websiteSlug,
-			requestId: displayedQuestion.requestId,
-			expectedStepIndex: displayedQuestion.stepIndex,
-			...answerDraft.submitPayload,
-		});
+		flow.submitAnswer(
+			displayedQuestion.requestId,
+			displayedQuestion.stepIndex,
+			answerDraft.submitPayload
+		);
 	};
 
 	const handleSkip = () => {
@@ -736,12 +675,7 @@ export function useClarificationComposerFlow({
 
 		setOptimisticProgressStartedAt(new Date().toISOString());
 		setLastSubmittedAnswer("Skipped this question");
-		clarificationStream.submitAction("skip", {
-			action: "skip",
-			websiteSlug,
-			requestId: displayedQuestion.requestId,
-			expectedStepIndex: displayedQuestion.stepIndex,
-		});
+		flow.skipQuestion(displayedQuestion.requestId, displayedQuestion.stepIndex);
 	};
 
 	const handleRetry = () => {
@@ -752,11 +686,7 @@ export function useClarificationComposerFlow({
 
 		setOptimisticProgressStartedAt(new Date().toISOString());
 		setLastSubmittedAnswer(null);
-		clarificationStream.submitAction("retry", {
-			action: "retry",
-			websiteSlug,
-			requestId,
-		});
+		flow.retryRequest(requestId);
 	};
 
 	return {

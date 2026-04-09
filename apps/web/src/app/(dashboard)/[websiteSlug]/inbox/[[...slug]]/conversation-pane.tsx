@@ -505,9 +505,8 @@ export function ConversationPane({
 	const showClarificationAction = clarificationDisplayState.showAction;
 	const showClarificationPrompt = clarificationDisplayState.showPrompt;
 	const engagedClarificationRequest = clarificationDisplayState.actionRequest;
-	const showClarificationDraftBanner =
-		clarificationDisplayState.showDraftBanner;
-	const clarificationBannerRequest = clarificationDisplayState.bannerRequest;
+	const showClarificationReview = clarificationDisplayState.showReview;
+	const clarificationReviewRequest = clarificationDisplayState.reviewRequest;
 
 	const handleStartClarification = useCallback(() => {
 		if (!activeClarificationSummary) {
@@ -547,13 +546,13 @@ export function ConversationPane({
 	const clarificationComposerBlocks = useClarificationComposerFlow({
 		conversationId,
 		onCancel: handleCancelClarification,
-		request: showClarificationDraftBanner
-			? clarificationBannerRequest
+		request: showClarificationReview
+			? clarificationReviewRequest
 			: showClarificationAction
 				? engagedClarificationRequest
 				: null,
 		summary:
-			showClarificationDraftBanner || showClarificationAction
+			showClarificationReview || showClarificationAction
 				? activeClarificationSummary
 				: null,
 		websiteSlug,
@@ -599,6 +598,7 @@ export function ConversationPane({
 			onToggleRightSidebar: toggleRightSidebar,
 			navigation: navigationProps,
 			conversationId,
+			websiteSlug,
 			visitorId,
 			status: selectedConversation?.status,
 			deletedAt: selectedConversation?.deletedAt ?? null,

@@ -6,13 +6,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 const answerMutationOptionsMock = mock((options: unknown) => options);
 const skipMutationOptionsMock = mock((options: unknown) => options);
 const retryMutationOptionsMock = mock((options: unknown) => options);
+const deferMutationOptionsMock = mock((options: unknown) => options);
+const dismissMutationOptionsMock = mock((options: unknown) => options);
 const approveDraftMutationOptionsMock = mock((options: unknown) => options);
-
-mock.module("next/navigation", () => ({
-	useRouter: () => ({
-		push: () => {},
-	}),
-}));
 
 mock.module("@tanstack/react-query", () => ({
 	useMutation: () => ({
@@ -41,6 +37,12 @@ mock.module("@/lib/trpc/client", () => ({
 			},
 			retry: {
 				mutationOptions: retryMutationOptionsMock,
+			},
+			defer: {
+				mutationOptions: deferMutationOptionsMock,
+			},
+			dismiss: {
+				mutationOptions: dismissMutationOptionsMock,
 			},
 			approveDraft: {
 				mutationOptions: approveDraftMutationOptionsMock,
@@ -166,6 +168,8 @@ describe("useClarificationComposerFlow", () => {
 		answerMutationOptionsMock.mockClear();
 		skipMutationOptionsMock.mockClear();
 		retryMutationOptionsMock.mockClear();
+		deferMutationOptionsMock.mockClear();
+		dismissMutationOptionsMock.mockClear();
 		approveDraftMutationOptionsMock.mockClear();
 
 		const { useClarificationComposerFlow } = await modulePromise;
@@ -411,7 +415,7 @@ describe("useClarificationComposerFlow", () => {
 		expect(html).not.toContain('data-clarification-slot="actions"');
 	});
 
-	it("renders a draft-ready banner above the composer once the faq draft exists", async () => {
+	it("renders the FAQ review directly inside the composer once the draft exists", async () => {
 		const { useClarificationComposerFlow } = await modulePromise;
 
 		function FlowHarness() {
@@ -450,32 +454,27 @@ describe("useClarificationComposerFlow", () => {
 
 		const html = renderToStaticMarkup(<FlowHarness />);
 
-		expect(html).toContain('data-clarification-slot="draft-ready-banner"');
-		expect(html).toContain("FAQ draft ready");
-		expect(html).toContain(">View<");
+		expect(html).toContain('data-clarification-slot="review"');
+		expect(html).toContain("Review FAQ draft");
+		expect(html).toContain("When does billing change take effect?");
+		expect(html).toContain('data-clarification-slot="review-actions"');
+		expect(html).toContain(">Skip<");
 		expect(html).toContain(">Approve<");
+		expect(html).not.toContain(">View<");
 	});
 
-	it("accepts an approve button ref on the shared draft-ready banner", async () => {
-		const { ClarificationDraftReadyBanner } = await modulePromise;
-		const approveButtonRef = React.createRef<HTMLButtonElement>();
+	it("renders the shared review teaser with a reopen action", async () => {
+		const { ClarificationReviewTeaser } = await modulePromise;
 
 		const html = renderToStaticMarkup(
-			<ClarificationDraftReadyBanner
-				approveButtonRef={approveButtonRef}
-				canApprove={true}
-				canView={true}
-				isApproving={false}
-				onApprove={() => {}}
-				onClose={() => {}}
-				onView={() => {}}
-				request={null}
+			<ClarificationReviewTeaser
+				onReview={() => {}}
 				topicSummary="Clarify billing timing"
 			/>
 		);
 
-		expect(html).toContain('data-clarification-slot="draft-ready-banner"');
-		expect(html).toContain(">Approve<");
+		expect(html).toContain('data-clarification-slot="review-teaser"');
+		expect(html).toContain(">Review FAQ<");
 	});
 
 	it("marks the shared next button as a cursor target when a submit ref is provided", async () => {

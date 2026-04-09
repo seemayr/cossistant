@@ -93,7 +93,7 @@ describe("resolveEngagedConversationClarificationRequestId", () => {
 		).toBe("req_1");
 	});
 
-	it("clears the engaged request once the clarification becomes a draft banner", () => {
+	it("clears the engaged request once the clarification becomes a review step", () => {
 		expect(
 			resolveEngagedConversationClarificationRequestId({
 				summary: createSummary({
@@ -143,7 +143,7 @@ describe("resolveConversationClarificationDisplayState", () => {
 			engagedRequestId: null,
 			showPrompt: true,
 			showAction: false,
-			showDraftBanner: false,
+			showReview: false,
 		});
 	});
 
@@ -301,7 +301,7 @@ describe("resolveConversationClarificationDisplayState", () => {
 		});
 	});
 
-	it("switches draft-ready clarifications into the composer banner state", () => {
+	it("switches draft-ready clarifications into the composer review state", () => {
 		const request = createRequest({
 			status: "draft_ready",
 			currentQuestion: null,
@@ -332,12 +332,12 @@ describe("resolveConversationClarificationDisplayState", () => {
 			engagedRequestId: null,
 			showPrompt: false,
 			showAction: false,
-			showDraftBanner: true,
-			bannerRequest: request,
+			showReview: true,
+			reviewRequest: request,
 		});
 	});
 
-	it("keeps draft-ready clarifications in the composer banner state during escalation", () => {
+	it("keeps draft-ready clarifications in the composer review state during escalation", () => {
 		const request = createRequest({
 			status: "draft_ready",
 			currentQuestion: null,
@@ -368,8 +368,48 @@ describe("resolveConversationClarificationDisplayState", () => {
 			engagedRequestId: null,
 			showPrompt: false,
 			showAction: false,
-			showDraftBanner: true,
-			bannerRequest: request,
+			showReview: true,
+			reviewRequest: request,
+		});
+	});
+
+	it("opens linked draft-ready clarifications directly into the shared review state", () => {
+		const request = createRequest({
+			status: "draft_ready",
+			engagementMode: "linked",
+			linkedConversationCount: 3,
+			currentQuestion: null,
+			currentSuggestedAnswers: null,
+			currentQuestionInputMode: null,
+			currentQuestionScope: null,
+			draftFaqPayload: {
+				title: "Billing timing",
+				question: "When does billing change take effect?",
+				answer: "It applies at the next billing cycle.",
+				categories: ["Billing"],
+				relatedQuestions: [],
+			},
+		});
+
+		expect(
+			resolveConversationClarificationDisplayState({
+				summary: createSummary({
+					status: "draft_ready",
+					engagementMode: "linked",
+					linkedConversationCount: 3,
+					question: null,
+				}),
+				request,
+				engagedRequestId: null,
+				hasEscalation: false,
+				hasLimitAction: false,
+			})
+		).toMatchObject({
+			engagedRequestId: null,
+			showPrompt: false,
+			showAction: false,
+			showReview: true,
+			reviewRequest: request,
 		});
 	});
 });
