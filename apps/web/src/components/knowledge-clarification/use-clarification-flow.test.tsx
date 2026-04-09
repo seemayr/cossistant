@@ -68,6 +68,9 @@ mock.module("./use-clarification-stream", () => ({
 }));
 
 const modulePromise = import("./use-clarification-flow");
+type UseKnowledgeClarificationFlowReturn = ReturnType<
+	typeof import("./use-clarification-flow")["useKnowledgeClarificationFlow"]
+>;
 
 function createRequest(
 	overrides: Partial<KnowledgeClarificationRequest> = {}
@@ -106,9 +109,9 @@ function createRequest(
 
 async function renderHook(
 	initialRequest: KnowledgeClarificationRequest | null
-) {
+): Promise<UseKnowledgeClarificationFlowReturn> {
 	const { useKnowledgeClarificationFlow } = await modulePromise;
-	let hookValue: ReturnType<typeof useKnowledgeClarificationFlow> | null = null;
+	let hookValue: UseKnowledgeClarificationFlowReturn | null = null;
 
 	function Harness() {
 		hookValue = useKnowledgeClarificationFlow({
@@ -120,11 +123,13 @@ async function renderHook(
 
 	renderToStaticMarkup(<Harness />);
 
-	if (!hookValue) {
+	const resolvedHookValue = hookValue;
+
+	if (!resolvedHookValue) {
 		throw new Error("Hook did not render");
 	}
 
-	return hookValue;
+	return resolvedHookValue;
 }
 
 describe("useKnowledgeClarificationFlow", () => {

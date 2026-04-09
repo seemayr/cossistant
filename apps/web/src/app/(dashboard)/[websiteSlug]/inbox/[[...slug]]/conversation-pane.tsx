@@ -27,6 +27,7 @@ import type {
 } from "@/components/conversation/composer";
 import { useClarificationComposerFlow } from "@/components/conversation/composer/clarification-composer-flow";
 import { ClarificationPrompt } from "@/components/conversation/composer/clarification-teaser";
+import { buildConversationComposerViewModel } from "@/components/conversation/composer/composer-view-model";
 import type { ConversationHeaderNavigationProps } from "@/components/conversation/header/navigation";
 import { resolveConversationClarificationDisplayState } from "@/components/knowledge-clarification/conversation-state";
 import { ButtonWithPaywall } from "@/components/plan/button-with-paywall";
@@ -589,6 +590,81 @@ export function ConversationPane({
 		selectedConversationIndex,
 		totalOpenConversations: conversations.length,
 	};
+	const composerViewModel = buildConversationComposerViewModel({
+		input: {
+			allowedFileTypes: FILE_INPUT_ACCEPT,
+			error,
+			files,
+			isSubmitting,
+			isUploading,
+			uploadProgress,
+			maxFileSize: 10 * 1024 * 1024,
+			maxFiles: 2,
+			onChange: handleMessageChange,
+			onMarkdownChange: handleMarkdownChange,
+			onFileSelect: addFiles,
+			onRemoveFile: removeFile,
+			onSubmit: submit,
+			placeholder: "Type your message...",
+			value: message,
+			visibility: messageVisibility,
+			onVisibilityChange: setMessageVisibility,
+			aiPausedUntil: selectedConversation.aiPausedUntil,
+			onAiPauseAction: handleAiPauseAction,
+			isAiPauseActionPending: pendingAction.pauseAi || pendingAction.resumeAi,
+			renderAttachButton: ({ triggerFileInput, disabled }) => (
+				<TooltipOnHover content="Attach files">
+					<ButtonWithPaywall
+						className={cn(files.length >= 2 && "opacity-50")}
+						disabled={disabled}
+						featureKey="dashboard-file-sharing"
+						onClick={triggerFileInput}
+						size="icon"
+						type="button"
+						variant="ghost"
+						websiteSlug={websiteSlug}
+					>
+						<Icon className="h-4 w-4" name="attachment" />
+					</ButtonWithPaywall>
+				</TooltipOnHover>
+			),
+			mentionConfig: {
+				aiAgent: aiAgent
+					? {
+							id: aiAgent.id,
+							name: aiAgent.name,
+							isActive: aiAgent.isActive,
+							image: aiAgent.image ?? null,
+						}
+					: null,
+				teamMembers: members.map((member) => ({
+					...member,
+					name: resolveDashboardHumanAgentDisplay(member).displayName,
+				})),
+				visitor,
+			},
+		},
+		clarificationPrompt: clarificationPromptContent,
+		clarificationFlow: clarificationComposerBlocks,
+		escalationAction: hasEscalationAction
+			? {
+					reason:
+						selectedConversation.escalationReason ??
+						"Human assistance requested",
+					onJoin: joinEscalation,
+					isJoining: pendingAction.joinEscalation,
+				}
+			: null,
+		limitAction:
+			!hasEscalationAction && isMessageLimitReached
+				? {
+						limit: messageLimitStatus?.limit ?? null,
+						onUpgradeClick: () => setIsUpgradeModalOpen(true),
+						used: messageLimitStatus?.used ?? 0,
+						windowDays: hardLimitStatus?.rollingWindowDays ?? 30,
+					}
+				: null,
+	});
 
 	const conversationProps: ConversationProps = {
 		header: {
@@ -617,88 +693,14 @@ export function ConversationPane({
 			teamMembers: members,
 			visitor,
 		},
-		input: {
-			allowedFileTypes: FILE_INPUT_ACCEPT,
-			aboveBlock:
-				clarificationComposerBlocks?.aboveBlock ?? clarificationPromptContent,
-			error,
-			escalationAction: hasEscalationAction
-				? {
-						reason:
-							selectedConversation.escalationReason ??
-							"Human assistance requested",
-						onJoin: joinEscalation,
-						isJoining: pendingAction.joinEscalation,
-					}
-				: null,
-			files,
-			isSubmitting,
-			isUploading,
-			uploadProgress,
-			maxFileSize: 10 * 1024 * 1024,
-			maxFiles: 2,
-			onChange: handleMessageChange,
-			onMarkdownChange: handleMarkdownChange,
-			onFileSelect: addFiles,
-			onRemoveFile: removeFile,
-			onSubmit: submit,
-			placeholder: "Type your message...",
-			value: message,
-			centralBlock: clarificationComposerBlocks?.centralBlock,
-			bottomBlock: clarificationComposerBlocks?.bottomBlock,
-			visibility: messageVisibility,
-			onVisibilityChange: setMessageVisibility,
-			aiPausedUntil: selectedConversation.aiPausedUntil,
-			onAiPauseAction: handleAiPauseAction,
-			isAiPauseActionPending: pendingAction.pauseAi || pendingAction.resumeAi,
-			renderAttachButton: ({ triggerFileInput, disabled }) => (
-				<TooltipOnHover content="Attach files">
-					<ButtonWithPaywall
-						className={cn(files.length >= 2 && "opacity-50")}
-						disabled={disabled}
-						featureKey="dashboard-file-sharing"
-						onClick={triggerFileInput}
-						size="icon"
-						type="button"
-						variant="ghost"
-						websiteSlug={websiteSlug}
-					>
-						<Icon className="h-4 w-4" name="attachment" />
-					</ButtonWithPaywall>
-				</TooltipOnHover>
-			),
-			// Enable mentions for AI agent, team members, and visitor
-			mentionConfig: {
-				aiAgent: aiAgent
-					? {
-							id: aiAgent.id,
-							name: aiAgent.name,
-							isActive: aiAgent.isActive,
-							image: aiAgent.image ?? null,
-						}
-					: null,
-				teamMembers: members.map((member) => ({
-					...member,
-					name: resolveDashboardHumanAgentDisplay(member).displayName,
-				})),
-				visitor,
-			},
-		},
+		input: composerViewModel.input,
 		visitorSidebar: {
 			conversationId,
 			visitorId,
 			isLoading: isVisitorLoading,
 			visitor,
 		},
-		limitAction:
-			!hasEscalationAction && isMessageLimitReached
-				? {
-						limit: messageLimitStatus?.limit ?? null,
-						onUpgradeClick: () => setIsUpgradeModalOpen(true),
-						used: messageLimitStatus?.used ?? 0,
-						windowDays: hardLimitStatus?.rollingWindowDays ?? 30,
-					}
-				: null,
+		limitAction: composerViewModel.limitAction,
 	};
 
 	return (
