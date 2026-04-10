@@ -141,8 +141,9 @@ export const identifyContactRequestSchema = z.object({
 			"Optional contact ID to update when linking the visitor to an existing contact.",
 		example: "01JG000000000000000000000",
 	}),
-	visitorId: z.ulid().openapi({
-		description: "The visitor ID to link to the contact.",
+	visitorId: z.ulid().optional().openapi({
+		description:
+			"The visitor ID to link to the contact. Optional when passed via the X-Visitor-Id header. If both are provided, the body value wins.",
 		example: "01JG000000000000000000000",
 	}),
 	externalId: z

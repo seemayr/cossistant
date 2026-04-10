@@ -122,7 +122,7 @@ contactRuntimeRouter.openapi(
 		path: "/identify",
 		summary: "Identify a visitor",
 		description:
-			"Creates or updates a contact for a visitor. If a contact with the same externalId or email exists, it will be updated. The visitor will be linked to the contact.",
+			"Creates or updates a contact for a visitor. If a contact with the same externalId or email exists, it will be updated. The visitor will be linked to the contact. Public callers may pass the visitor ID in the request body or via X-Visitor-Id, and the body value takes precedence when both are provided.",
 		request: {
 			body: {
 				content: {
@@ -150,15 +150,25 @@ contactRuntimeRouter.openapi(
 	},
 	async (c) => {
 		try {
-			const { db, website, body } = await safelyExtractRequestData(
-				c,
-				identifyContactRequestSchema
-			);
+			const { db, website, body, visitorIdHeader } =
+				await safelyExtractRequestData(c, identifyContactRequestSchema);
 
 			if (!(website?.id && website.organizationId)) {
 				return c.json(
 					{ error: "UNAUTHORIZED", message: "Invalid API key" },
 					401
+				);
+			}
+
+			const resolvedVisitorId = body.visitorId ?? visitorIdHeader;
+
+			if (!resolvedVisitorId) {
+				return c.json(
+					{
+						error: "BAD_REQUEST",
+						message: "Visitor not found, please pass a valid visitorId",
+					},
+					400
 				);
 			}
 
@@ -178,7 +188,7 @@ contactRuntimeRouter.openapi(
 			}
 
 			const visitor = await findVisitorForWebsite(db, {
-				visitorId: body.visitorId,
+				visitorId: resolvedVisitorId,
 				websiteId: website.id,
 			});
 
@@ -201,13 +211,13 @@ contactRuntimeRouter.openapi(
 			});
 
 			await linkVisitorToContact(db, {
-				visitorId: body.visitorId,
+				visitorId: resolvedVisitorId,
 				contactId: contact.id,
 				websiteId: website.id,
 			});
 
 			const visitorRecord = await getCompleteVisitorWithContact(db, {
-				visitorId: body.visitorId,
+				visitorId: resolvedVisitorId,
 			});
 
 			if (visitorRecord) {
@@ -228,7 +238,7 @@ contactRuntimeRouter.openapi(
 
 			const response: IdentifyContactResponse = {
 				contact: formatContactResponse(contact),
-				visitorId: body.visitorId,
+				visitorId: resolvedVisitorId,
 			};
 
 			return c.json(
@@ -1054,6 +1064,8 @@ contactControlRouter.openapi(
 	}
 );
 
+// Mount shared runtime routes before private control routes so public requests
+// like POST /contacts/identify are not intercepted by private-only middleware.
 export const contactRouter = new OpenAPIHono<RestContext>()
-	.route("/", contactControlRouter)
-	.route("/", contactRuntimeRouter);
+	.route("/", contactRuntimeRouter)
+	.route("/", contactControlRouter);

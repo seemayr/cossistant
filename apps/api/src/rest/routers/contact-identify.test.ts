@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { APIKeyType } from "@cossistant/types";
 
 const safelyExtractRequestDataMock = mock((async () => ({})) as (
 	...args: unknown[]
@@ -101,6 +102,7 @@ mock.module("@api/realtime/emitter", () => ({
 
 mock.module("../middleware", () => ({
 	protectedPublicApiKeyMiddleware: [],
+	protectedPrivateApiKeyMiddleware: [],
 }));
 
 const contactRouterModulePromise = import("./contact");
@@ -226,9 +228,135 @@ describe("contact identify route", () => {
 		expect(identifyArg.email).toBeUndefined();
 	});
 
+	it("returns 200 when visitorId is provided via X-Visitor-Id header", async () => {
+		const db = {};
+		safelyExtractRequestDataMock.mockResolvedValue({
+			db,
+			website: {
+				id: "site-1",
+				organizationId: "org-1",
+			},
+			visitorIdHeader: "visitor-header-1",
+			body: {
+				externalId: "user-123",
+				email: undefined,
+				name: "User",
+				image: undefined,
+				metadata: undefined,
+				contactOrganizationId: undefined,
+			},
+		});
+
+		const { contactRouter } = await contactRouterModulePromise;
+		const response = await contactRouter.request(
+			new Request("http://localhost/identify", {
+				method: "POST",
+			})
+		);
+		const payload = (await response.json()) as {
+			visitorId: string;
+		};
+
+		expect(response.status).toBe(200);
+		expect(findVisitorForWebsiteMock).toHaveBeenCalledWith(db, {
+			visitorId: "visitor-header-1",
+			websiteId: "site-1",
+		});
+		expect(linkVisitorToContactMock).toHaveBeenCalledWith(db, {
+			visitorId: "visitor-header-1",
+			contactId: "contact-1",
+			websiteId: "site-1",
+		});
+		expect(payload.visitorId).toBe("visitor-header-1");
+	});
+
+	it("prefers body visitorId over X-Visitor-Id header when both are provided", async () => {
+		const db = {};
+		safelyExtractRequestDataMock.mockResolvedValue({
+			db,
+			website: {
+				id: "site-1",
+				organizationId: "org-1",
+			},
+			visitorIdHeader: "visitor-header-1",
+			body: {
+				visitorId: "visitor-body-1",
+				externalId: "user-123",
+				email: undefined,
+				name: "User",
+				image: undefined,
+				metadata: undefined,
+				contactOrganizationId: undefined,
+			},
+		});
+
+		const { contactRouter } = await contactRouterModulePromise;
+		const response = await contactRouter.request(
+			new Request("http://localhost/identify", {
+				method: "POST",
+			})
+		);
+		const payload = (await response.json()) as {
+			visitorId: string;
+		};
+
+		expect(response.status).toBe(200);
+		expect(findVisitorForWebsiteMock).toHaveBeenCalledWith(db, {
+			visitorId: "visitor-body-1",
+			websiteId: "site-1",
+		});
+		expect(linkVisitorToContactMock).toHaveBeenCalledWith(db, {
+			visitorId: "visitor-body-1",
+			contactId: "contact-1",
+			websiteId: "site-1",
+		});
+		expect(payload.visitorId).toBe("visitor-body-1");
+	});
+
+	it("returns 400 when neither body nor header provides a visitorId", async () => {
+		safelyExtractRequestDataMock.mockResolvedValue({
+			db: {},
+			website: {
+				id: "site-1",
+				organizationId: "org-1",
+			},
+			visitorIdHeader: null,
+			body: {
+				externalId: "user-123",
+				email: undefined,
+				name: "User",
+				image: undefined,
+				metadata: undefined,
+				contactOrganizationId: undefined,
+			},
+		});
+
+		const { contactRouter } = await contactRouterModulePromise;
+		const response = await contactRouter.request(
+			new Request("http://localhost/identify", {
+				method: "POST",
+			})
+		);
+
+		const payload = (await response.json()) as {
+			error: string;
+			message: string;
+		};
+
+		expect(response.status).toBe(400);
+		expect(payload).toEqual({
+			error: "BAD_REQUEST",
+			message: "Visitor not found, please pass a valid visitorId",
+		});
+		expect(findVisitorForWebsiteMock).toHaveBeenCalledTimes(0);
+		expect(identifyContactMock).toHaveBeenCalledTimes(0);
+	});
+
 	it("POST /contacts returns 201 when externalId upsert creates a new contact", async () => {
 		safelyExtractRequestDataMock.mockResolvedValue({
 			db: {},
+			apiKey: { keyType: APIKeyType.PRIVATE },
+			organization: { id: "org-1" },
 			website: {
 				id: "site-1",
 				organizationId: "org-1",
@@ -272,6 +400,8 @@ describe("contact identify route", () => {
 	it("POST /contacts returns 200 when externalId upsert updates an existing contact", async () => {
 		safelyExtractRequestDataMock.mockResolvedValue({
 			db: {},
+			apiKey: { keyType: APIKeyType.PRIVATE },
+			organization: { id: "org-1" },
 			website: {
 				id: "site-1",
 				organizationId: "org-1",
@@ -307,6 +437,8 @@ describe("contact identify route", () => {
 	it("POST /contacts keeps create-only behavior when externalId is not provided", async () => {
 		safelyExtractRequestDataMock.mockResolvedValue({
 			db: {},
+			apiKey: { keyType: APIKeyType.PRIVATE },
+			organization: { id: "org-1" },
 			website: {
 				id: "site-1",
 				organizationId: "org-1",

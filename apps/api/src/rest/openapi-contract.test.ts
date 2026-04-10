@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { identifyContactRequestSchema } from "@cossistant/types/api/contact";
 import {
 	createConversationRequestSchema,
 	getConversationResponseSchema,
@@ -34,6 +35,7 @@ type OpenAPISchemaWithProperties = {
 		string,
 		OpenAPIMetadataSchema | OpenAPISchemaWithProperties
 	>;
+	required?: string[];
 };
 
 type OpenAPIJsonContent = {
@@ -185,5 +187,53 @@ describe("REST OpenAPI contract guards", () => {
 
 		expect(requestValueTypes).toEqual(["boolean", "null", "number", "string"]);
 		expect(responseValueTypes).toEqual(["boolean", "null", "number", "string"]);
+	});
+
+	it("documents contact identify visitorId precedence between body and X-Visitor-Id", () => {
+		const app = new OpenAPIHono();
+
+		app.openapi(
+			{
+				method: "post",
+				path: "/contacts/identify",
+				request: {
+					body: {
+						required: true,
+						content: {
+							"application/json": {
+								schema: identifyContactRequestSchema,
+							},
+						},
+					},
+				},
+				responses: {
+					200: {
+						description: "Contact identified",
+					},
+				},
+			},
+			(() => new Response(null)) as never
+		);
+
+		const doc = app.getOpenAPI31Document({
+			openapi: "3.1.0",
+			info: {
+				title: "OpenAPI metadata contract test",
+				version: "1.0.0",
+			},
+		});
+
+		const postPath = doc.paths?.["/contacts/identify"]?.post;
+		const requestBody = postPath?.requestBody as OpenAPIJsonContent | undefined;
+		const requestSchema = requestBody?.content?.["application/json"]?.schema as
+			| OpenAPISchemaWithProperties
+			| undefined;
+		const visitorIdSchema = requestSchema?.properties?.visitorId as
+			| OpenAPIMetadataSchema
+			| undefined;
+
+		expect(requestSchema?.required ?? []).not.toContain("visitorId");
+		expect(visitorIdSchema?.description).toContain("X-Visitor-Id");
+		expect(visitorIdSchema?.description).toContain("body value wins");
 	});
 });
