@@ -26,6 +26,10 @@ describe("tinybird jwt generation", () => {
 		}));
 		mock.module("@api/lib/tinybird-local-cli", () => ({
 			createTinybirdLocalJwt: createTinybirdLocalJwtMock,
+			readTinybirdLocalStatus: async () => ({
+				host: "http://localhost:7181",
+				workspace: "workspace-local",
+			}),
 		}));
 		mock.module("jsonwebtoken", () => ({
 			default: {
@@ -58,6 +62,10 @@ describe("tinybird jwt generation", () => {
 		}));
 		mock.module("@api/lib/tinybird-local-cli", () => ({
 			createTinybirdLocalJwt: createTinybirdLocalJwtMock,
+			readTinybirdLocalStatus: async () => ({
+				host: "http://localhost:7181",
+				workspace: "workspace-local",
+			}),
 		}));
 		mock.module("jsonwebtoken", () => ({
 			default: {
@@ -71,5 +79,36 @@ describe("tinybird jwt generation", () => {
 		expect(token).toBe("cloud-jwt");
 		expect(jsonwebtokenSignMock).toHaveBeenCalledTimes(1);
 		expect(createTinybirdLocalJwtMock).not.toHaveBeenCalled();
+	});
+
+	it("returns null when Tinybird is disabled", async () => {
+		mock.module("@api/env", () => ({
+			env: {
+				TINYBIRD_ENABLED: false,
+				TINYBIRD_HOST: "https://api.us-east.aws.tinybird.co",
+				TINYBIRD_SIGNING_KEY: "cloud-signing-key",
+				TINYBIRD_TOKEN: "cloud-token",
+				TINYBIRD_WORKSPACE: "workspace-cloud",
+			},
+		}));
+		mock.module("@api/lib/tinybird-local-cli", () => ({
+			createTinybirdLocalJwt: createTinybirdLocalJwtMock,
+			readTinybirdLocalStatus: async () => ({
+				host: "http://localhost:7181",
+				workspace: "workspace-local",
+			}),
+		}));
+		mock.module("jsonwebtoken", () => ({
+			default: {
+				sign: jsonwebtokenSignMock,
+			},
+		}));
+
+		const module = await import(`./tinybird-jwt.ts?disabled=${Math.random()}`);
+		const token = await module.generateTinybirdJWT("site-1");
+
+		expect(token).toBeNull();
+		expect(createTinybirdLocalJwtMock).not.toHaveBeenCalled();
+		expect(jsonwebtokenSignMock).not.toHaveBeenCalled();
 	});
 });

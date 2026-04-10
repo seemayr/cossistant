@@ -19,9 +19,11 @@ const useTinybirdTokenMock = mock(((
 	options?: unknown
 ) => {
 	data: {
-		token: string;
-		host: string;
-		maxRetentionDays: number;
+		enabled?: boolean;
+		token: string | null;
+		host: string | null;
+		expiresAt?: number | null;
+		maxRetentionDays: number | null;
 	} | null;
 });
 
@@ -127,6 +129,35 @@ describe("useInboxAnalytics", () => {
 			refetchInterval: 300_000,
 		});
 		expect(options.queryKey).toEqual(["inbox-analytics", "acme", 7, undefined]);
+	});
+
+	it("stays inert when Tinybird is disabled by the server token response", async () => {
+		const { useInboxAnalytics } = await modulePromise;
+
+		useTinybirdTokenMock.mockReturnValue({
+			data: {
+				enabled: false,
+				token: null,
+				host: null,
+				expiresAt: null,
+				maxRetentionDays: null,
+			},
+		});
+
+		await renderHook(() =>
+			useInboxAnalytics({
+				websiteSlug: "acme",
+				rangeDays: 7,
+			})
+		);
+
+		const options = useQueryMock.mock.calls[0]?.[0] as {
+			enabled: boolean;
+			queryKey: unknown[];
+		};
+
+		expect(options.enabled).toBe(false);
+		expect(options.queryKey).toEqual(["inbox-analytics", "acme", 7, null]);
 	});
 
 	it("uses range-specific query keys for historical analytics", async () => {

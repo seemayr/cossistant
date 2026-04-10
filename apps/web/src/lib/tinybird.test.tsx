@@ -48,6 +48,7 @@ describe("tinybird web helpers", () => {
 	beforeEach(() => {
 		useQueryMock.mockClear();
 		getTinybirdTokenQueryOptionsMock.mockClear();
+		process.env.NEXT_PUBLIC_TINYBIRD_ENABLED = undefined;
 	});
 
 	afterEach(() => {
@@ -104,5 +105,42 @@ describe("tinybird web helpers", () => {
 		).rejects.toThrow(
 			"Tinybird query failed for pipe \"unique_visitors\" on http://localhost:7181 (404 Not Found): The pipe 'unique_visitors' does not exist | docs: https://docs.tinybird.co/example Local Tinybird hint: run scripts/tinybird-local-env.sh"
 		);
+	});
+
+	it("returns a disabled token state when Tinybird is disabled", async () => {
+		process.env.NEXT_PUBLIC_TINYBIRD_ENABLED = "false";
+		const { useTinybirdToken } = await modulePromise;
+
+		await renderHook(() =>
+			useTinybirdToken("acme", {
+				staleTimeMs: 120_000,
+			})
+		);
+
+		const options = useQueryMock.mock.calls[0]?.[0] as {
+			enabled: boolean;
+			initialData: {
+				enabled: boolean;
+				token: null;
+				host: null;
+				expiresAt: null;
+				maxRetentionDays: null;
+			};
+			queryKey: unknown[];
+		};
+
+		expect(getTinybirdTokenQueryOptionsMock).toHaveBeenCalledTimes(1);
+		expect(options.enabled).toBe(false);
+		expect(options.initialData).toEqual({
+			enabled: false,
+			token: null,
+			host: null,
+			expiresAt: null,
+			maxRetentionDays: null,
+		});
+		expect(options.queryKey).toEqual([
+			"website.getTinybirdToken",
+			{ websiteSlug: "acme" },
+		]);
 	});
 });

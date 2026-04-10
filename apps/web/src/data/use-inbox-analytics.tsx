@@ -156,11 +156,23 @@ export function useInboxAnalytics({
 	const { data: tokenData } = useTinybirdToken(websiteSlug, {
 		staleTimeMs: STALE_TIME,
 	});
+	const tinybirdQueryEnabled =
+		enabled &&
+		tokenData?.enabled !== false &&
+		!!tokenData?.token &&
+		!!tokenData?.host;
 
 	return useQuery<InboxAnalyticsResponse>({
 		queryKey: ["inbox-analytics", websiteSlug, rangeDays, tokenData?.token],
 		queryFn: async () => {
-			if (!tokenData) {
+			if (
+				!(
+					tokenData &&
+					tokenData.enabled !== false &&
+					tokenData.token &&
+					tokenData.host
+				)
+			) {
 				throw new Error("Tinybird token not available");
 			}
 			const { token, host, maxRetentionDays } = tokenData;
@@ -247,7 +259,7 @@ export function useInboxAnalytics({
 				previous,
 			};
 		},
-		enabled: enabled && !!tokenData,
+		enabled: tinybirdQueryEnabled,
 		staleTime: STALE_TIME,
 		refetchInterval: STALE_TIME,
 	});

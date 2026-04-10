@@ -49,6 +49,7 @@ const installedGlobalKeys = [
 	"EventTarget",
 	"FocusEvent",
 	"HTMLElement",
+	"HTMLButtonElement",
 	"HTMLInputElement",
 	"HTMLSelectElement",
 	"MouseEvent",
@@ -81,6 +82,7 @@ function installDomGlobals(window: Window) {
 	setGlobalValue("EventTarget", window.EventTarget);
 	setGlobalValue("FocusEvent", window.FocusEvent);
 	setGlobalValue("HTMLElement", window.HTMLElement);
+	setGlobalValue("HTMLButtonElement", window.HTMLButtonElement);
 	setGlobalValue("HTMLInputElement", window.HTMLInputElement);
 	setGlobalValue("HTMLSelectElement", window.HTMLSelectElement);
 	setGlobalValue("MouseEvent", window.MouseEvent);
@@ -110,30 +112,29 @@ function clickButtonByPreset(preset: string) {
 
 function toggleCheckbox(label: string, checked: boolean) {
 	const input = document.querySelector(
-		`input[aria-label="${label}"]`
-	) as HTMLInputElement | null;
+		`button[aria-label="${label}"]`
+	) as HTMLButtonElement | null;
 
 	if (!input) {
-		throw new Error(`Missing checkbox input: ${label}`);
+		throw new Error(`Missing switch button: ${label}`);
 	}
 
 	input.click();
-	if (checked !== input.checked) {
+	if ((input.getAttribute("aria-checked") === "true") !== checked) {
 		input.click();
 	}
 }
 
-function changeSelectValue(label: string, value: string) {
-	const select = document.querySelector(
-		`select[aria-label="${label}"]`
-	) as HTMLSelectElement | null;
+function clickVisibilityButton(value: "public" | "private") {
+	const button = document.querySelector(
+		`button[data-composer-ui-visibility="${value}"]`
+	) as HTMLButtonElement | null;
 
-	if (!select) {
-		throw new Error(`Missing select input: ${label}`);
+	if (!button) {
+		throw new Error(`Missing visibility button: ${value}`);
 	}
 
-	select.value = value;
-	select.dispatchEvent(new window.Event("change", { bubbles: true }));
+	button.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
 }
 
 describe("ComposerUiTestPage", () => {
@@ -170,11 +171,17 @@ describe("ComposerUiTestPage", () => {
 		const html = renderToStaticMarkup(React.createElement(routeModule.default));
 
 		expect(html).toContain("Composer UI Test");
-		expect(html).toContain("Focused inbox shell for composer iteration");
-		expect(html).toContain("default");
+		expect(html).toContain('data-composer-ui-controls="true"');
+		expect(html).toContain('data-composer-ui-advanced="true"');
+		expect(html).toContain('data-composer-ui-preview="true"');
+		expect(html).toContain('data-composer-ui-center-scroll="true"');
+		expect(html).not.toContain("Focused inbox shell for composer iteration");
+		expect(html).not.toContain("Olivia Parker");
+		expect(html).not.toContain("Live preview");
+		expect(html).not.toContain(">Attach<");
 	});
 
-	it("switches between prompt, question, review, and retry presets", async () => {
+	it("switches between prompt, question, streaming, review, and retry presets", async () => {
 		const { act } = await import("react");
 		const { createRoot } = await import("react-dom/client");
 		const { ComposerUiTestPage } = await import("./composer-ui-test-page");
@@ -204,6 +211,15 @@ describe("ComposerUiTestPage", () => {
 		);
 
 		await act(async () => {
+			clickButtonByPreset("streaming");
+		});
+		expect(document.body.innerHTML).toContain(
+			'data-clarification-slot="loading"'
+		);
+		expect(document.body.innerHTML).toContain("Last answer");
+		expect(document.body.innerHTML).toContain("At the next billing cycle");
+
+		await act(async () => {
 			clickButtonByPreset("review");
 		});
 		expect(document.body.innerHTML).toContain("Review FAQ draft");
@@ -219,7 +235,7 @@ describe("ComposerUiTestPage", () => {
 		expect(document.body.innerHTML).toContain("Retry AI");
 	});
 
-	it("lets advanced controls drive visibility, attachments, uploading, escalation, and AI pause", async () => {
+	it("lets advanced controls drive visibility, attachments, escalation, and AI pause", async () => {
 		const { act } = await import("react");
 		const { createRoot } = await import("react-dom/client");
 		const { ComposerUiTestPage } = await import("./composer-ui-test-page");
@@ -233,7 +249,7 @@ describe("ComposerUiTestPage", () => {
 		});
 
 		await act(async () => {
-			changeSelectValue("Composer visibility", "private");
+			clickVisibilityButton("private");
 		});
 		expect(document.body.innerHTML).toContain("Write a private note...");
 
@@ -242,11 +258,6 @@ describe("ComposerUiTestPage", () => {
 		});
 		expect(document.body.innerHTML).toContain("faq-notes.pdf");
 		expect(document.body.innerHTML).toContain("pricing-changelog.png");
-
-		await act(async () => {
-			toggleCheckbox("Uploading", true);
-		});
-		expect(document.body.innerHTML).toContain("Uploading 40%");
 
 		await act(async () => {
 			toggleCheckbox("Escalation", true);

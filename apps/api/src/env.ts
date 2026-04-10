@@ -29,6 +29,7 @@ const defaultTracePayloadMode =
 
 export const env = {
 	NODE_ENV: getEnvVariable("NODE_ENV"),
+	TINYBIRD_ENABLED: getEnvVariable("TINYBIRD_ENABLED", "true") === "true",
 	TINYBIRD_HOST: getEnvVariable("TINYBIRD_HOST", "http://localhost:7181"),
 	TINYBIRD_TOKEN: getEnvVariable("TINYBIRD_TOKEN", "admin"),
 	TINYBIRD_SIGNING_KEY: getEnvVariable("TINYBIRD_SIGNING_KEY", ""),

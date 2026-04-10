@@ -25,6 +25,7 @@ import { isVisitorOnlineEntity } from "@/data/use-online-now";
 import { usePrefetchContactVisitorDetail } from "@/data/use-prefetch-contact-visitor-detail";
 import { useContactVisitorDetailState } from "@/hooks/use-contact-visitor-detail-state";
 import { useLiveVisitorsOverlayState } from "@/hooks/use-live-visitors-overlay-state";
+import { isTinybirdEnabled } from "@/lib/analytics-flags";
 import { getVisitorNameWithFallback } from "@/lib/visitors";
 import {
 	DashboardOverlayCenteredState,
@@ -347,12 +348,13 @@ export function LiveVisitorsOverlayView({
 export function LiveVisitorsOverlay() {
 	const website = useWebsite();
 	const { closeLiveVisitorsOverlay, isOpen } = useLiveVisitorsOverlayState();
+	const tinybirdEnabled = isTinybirdEnabled();
 	const analytics = useInboxAnalyticsController({
-		enabled: isOpen,
+		enabled: isOpen && tinybirdEnabled,
 		websiteSlug: website.slug,
 	});
 	const liveVisitorsQuery = useLiveVisitorsData({
-		enabled: isOpen,
+		enabled: isOpen && tinybirdEnabled,
 		websiteSlug: website.slug,
 	});
 	const { prefetchDetail } = usePrefetchContactVisitorDetail({
@@ -385,7 +387,7 @@ export function LiveVisitorsOverlay() {
 		]
 	);
 
-	if (!isOpen) {
+	if (!(isOpen && tinybirdEnabled)) {
 		return null;
 	}
 

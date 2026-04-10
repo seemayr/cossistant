@@ -15,7 +15,7 @@ export async function markVisitorPresence(params: {
 	};
 }): Promise<void> {
 	try {
-		// Keep API signature stable while presence source-of-truth is Tinybird.
+		// Keep API signature stable while live presence backends remain optional.
 		void params.lastSeenAt;
 		void params.sessionId;
 
@@ -53,7 +53,7 @@ export async function markUserPresence(params: {
 	};
 }): Promise<void> {
 	try {
-		// Keep API signature stable while presence source-of-truth is Tinybird.
+		// Keep API signature stable while live presence backends remain optional.
 		void params.lastSeenAt;
 
 		trackPresence({

@@ -85,6 +85,7 @@ type TinybirdEvent =
 
 const TINYBIRD_HOST = env.TINYBIRD_HOST;
 const TINYBIRD_TOKEN = env.TINYBIRD_TOKEN;
+const TINYBIRD_ENABLED = env.TINYBIRD_ENABLED !== false;
 
 // Event batching configuration
 const BATCH_SIZE = 100;
@@ -98,10 +99,12 @@ const RETRY_BASE_DELAY_MS = 1000;
 // Official SDK Client
 // ============================================================================
 
-const tinybirdClient = createTinybirdApi({
-	baseUrl: TINYBIRD_HOST,
-	token: TINYBIRD_TOKEN,
-});
+const tinybirdClient = TINYBIRD_ENABLED
+	? createTinybirdApi({
+			baseUrl: TINYBIRD_HOST,
+			token: TINYBIRD_TOKEN,
+		})
+	: null;
 
 // ============================================================================
 // Retry Logic with Exponential Backoff
@@ -218,7 +221,7 @@ async function ingestBatch<T extends TinybirdEvent>(
 	datasource: string,
 	events: T[]
 ): Promise<void> {
-	if (events.length === 0) {
+	if (!TINYBIRD_ENABLED || events.length === 0) {
 		return;
 	}
 
@@ -256,6 +259,10 @@ export async function ingestEvent<T extends TinybirdEvent>(
 	datasource: string,
 	event: T
 ): Promise<void> {
+	if (!TINYBIRD_ENABLED || tinybirdClient === null) {
+		return;
+	}
+
 	await withRetry(async () => {
 		await tinybirdClient.ingest(datasource, event);
 	});
@@ -265,14 +272,18 @@ export async function ingestEvent<T extends TinybirdEvent>(
 // Event Buffers (Singleton Instances)
 // ============================================================================
 
-const presenceEventBuffer = new EventBuffer<PresenceEvent>("presence_events");
-const visitorActivityBuffer = new EventBuffer<VisitorActivityEvent>(
-	"visitor_activity_events"
-);
-const visitorEventBuffer = new EventBuffer<VisitorEvent>("visitor_events");
-const conversationMetricBuffer = new EventBuffer<ConversationMetricEvent>(
-	"conversation_metrics"
-);
+const presenceEventBuffer = TINYBIRD_ENABLED
+	? new EventBuffer<PresenceEvent>("presence_events")
+	: null;
+const visitorActivityBuffer = TINYBIRD_ENABLED
+	? new EventBuffer<VisitorActivityEvent>("visitor_activity_events")
+	: null;
+const visitorEventBuffer = TINYBIRD_ENABLED
+	? new EventBuffer<VisitorEvent>("visitor_events")
+	: null;
+const conversationMetricBuffer = TINYBIRD_ENABLED
+	? new EventBuffer<ConversationMetricEvent>("conversation_metrics")
+	: null;
 const EMPTY_TRACKING_CONTEXT = flattenVisitorTrackingContext({});
 
 /**
@@ -298,6 +309,10 @@ export function trackPresence(
 		longitude?: number;
 	}
 ): void {
+	if (presenceEventBuffer === null) {
+		return;
+	}
+
 	presenceEventBuffer.add({
 		...event,
 		timestamp: new Date(),
@@ -313,6 +328,10 @@ export function trackPresence(
 export function trackVisitorEvent(
 	event: Omit<VisitorEvent, "timestamp">
 ): void {
+	if (visitorEventBuffer === null) {
+		return;
+	}
+
 	visitorEventBuffer.add({
 		...EMPTY_TRACKING_CONTEXT,
 		...event,
@@ -339,6 +358,10 @@ export function trackVisitorActivity(
 			longitude?: number;
 		}
 ): void {
+	if (visitorActivityBuffer === null) {
+		return;
+	}
+
 	visitorActivityBuffer.add({
 		...EMPTY_TRACKING_CONTEXT,
 		...event,
@@ -360,6 +383,10 @@ export function trackConversationMetric(
 		duration_seconds?: number;
 	}
 ): void {
+	if (conversationMetricBuffer === null) {
+		return;
+	}
+
 	conversationMetricBuffer.add({
 		...EMPTY_TRACKING_CONTEXT,
 		...event,
@@ -377,6 +404,10 @@ export async function trackConversationMetricForVisitor(
 		duration_seconds?: number;
 	}
 ): Promise<void> {
+	if (!TINYBIRD_ENABLED) {
+		return;
+	}
+
 	try {
 		const visitor = await findVisitorForWebsite(db, {
 			visitorId: event.visitor_id,
@@ -427,6 +458,10 @@ type InboxAnalyticsResponse = {
 export async function queryInboxAnalytics(
 	params: InboxAnalyticsParams
 ): Promise<InboxAnalyticsResponse> {
+	if (!TINYBIRD_ENABLED || tinybirdClient === null) {
+		return { data: [] };
+	}
+
 	return withRetry(async () => {
 		const result = await tinybirdClient.query<InboxAnalyticsRow>(
 			"inbox_analytics",
@@ -452,14 +487,19 @@ export async function queryInboxAnalytics(
  * Call this in your process exit handler.
  */
 export async function flushAllEvents(): Promise<void> {
+	if (!TINYBIRD_ENABLED) {
+		return;
+	}
+
 	await Promise.all([
-		presenceEventBuffer.destroy(),
-		visitorActivityBuffer.destroy(),
-		visitorEventBuffer.destroy(),
-		conversationMetricBuffer.destroy(),
+		presenceEventBuffer?.destroy(),
+		visitorActivityBuffer?.destroy(),
+		visitorEventBuffer?.destroy(),
+		conversationMetricBuffer?.destroy(),
 	]);
 }
 
-// Register shutdown handlers
-process.on("SIGTERM", () => void flushAllEvents());
-process.on("SIGINT", () => void flushAllEvents());
+if (TINYBIRD_ENABLED) {
+	process.on("SIGTERM", () => void flushAllEvents());
+	process.on("SIGINT", () => void flushAllEvents());
+}

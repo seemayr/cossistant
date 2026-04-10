@@ -47,6 +47,11 @@ const partitionWebsiteSubscriptionsForDeletionMock = mock((() => ({
 	subscriptionsToKeep: [],
 	subscriptionsToRevoke: [],
 })) as (...args: unknown[]) => unknown);
+const generateTinybirdJWTMock = mock(
+	(async () => "tinybird-token") as (
+		...args: unknown[]
+	) => Promise<string | null>
+);
 
 class WebsiteSlugConflictError extends Error {
 	constructor() {
@@ -95,10 +100,17 @@ mock.module("@api/lib/polar", () => ({
 	default: {},
 }));
 
+const mockEnv = {
+	TINYBIRD_ENABLED: true,
+	TINYBIRD_HOST: "http://localhost:7181",
+};
+
 mock.module("@api/env", () => ({
-	env: {
-		TINYBIRD_HOST: "http://localhost:7181",
-	},
+	env: mockEnv,
+}));
+
+mock.module("@api/lib/tinybird-jwt", () => ({
+	generateTinybirdJWT: generateTinybirdJWTMock,
 }));
 
 const modulePromise = Promise.all([import("../init"), import("./website")]);
@@ -190,6 +202,7 @@ describe("website router create", () => {
 		getCustomerByOrganizationIdMock.mockReset();
 		getCustomerStateMock.mockReset();
 		partitionWebsiteSubscriptionsForDeletionMock.mockReset();
+		generateTinybirdJWTMock.mockReset();
 
 		createDefaultWebsiteKeysMock.mockResolvedValue([createApiKeyRecord()]);
 		createDefaultWebsiteViewsMock.mockResolvedValue([]);
@@ -205,6 +218,8 @@ describe("website router create", () => {
 			subscriptionsToKeep: [],
 			subscriptionsToRevoke: [],
 		});
+		generateTinybirdJWTMock.mockResolvedValue("tinybird-token");
+		mockEnv.TINYBIRD_ENABLED = true;
 	});
 
 	afterAll(() => {
@@ -293,5 +308,55 @@ describe("website router create", () => {
 			expect((error as Error).message).not.toContain('insert into "website"');
 			expect((error as Error).message).not.toContain("organization_id");
 		}
+	});
+});
+
+describe("website router getTinybirdToken", () => {
+	beforeEach(() => {
+		getWebsiteBySlugWithAccessMock.mockReset();
+		generateTinybirdJWTMock.mockReset();
+		mockEnv.TINYBIRD_ENABLED = true;
+
+		getWebsiteBySlugWithAccessMock.mockResolvedValue({
+			id: WEBSITE_ID,
+			slug: "better-i18n",
+			name: "Better-i18n",
+			domain: "better-i18n.com",
+			organizationId: ORGANIZATION_ID,
+		});
+		generateTinybirdJWTMock.mockResolvedValue("tinybird-token");
+	});
+
+	it("returns an enabled Tinybird token payload when Tinybird is enabled", async () => {
+		const caller = await createCaller({} as Database);
+		const response = await caller.getTinybirdToken({
+			websiteSlug: "better-i18n",
+		});
+
+		expect(response).toMatchObject({
+			enabled: true,
+			token: "tinybird-token",
+			host: "http://localhost:7181",
+			maxRetentionDays: 90,
+		});
+		expect(typeof response.expiresAt).toBe("number");
+		expect(generateTinybirdJWTMock).toHaveBeenCalledWith(WEBSITE_ID);
+	});
+
+	it("returns the disabled payload without minting a JWT when Tinybird is off", async () => {
+		mockEnv.TINYBIRD_ENABLED = false;
+		const caller = await createCaller({} as Database);
+		const response = await caller.getTinybirdToken({
+			websiteSlug: "better-i18n",
+		});
+
+		expect(response).toEqual({
+			enabled: false,
+			token: null,
+			host: null,
+			expiresAt: null,
+			maxRetentionDays: null,
+		});
+		expect(generateTinybirdJWTMock).not.toHaveBeenCalled();
 	});
 });

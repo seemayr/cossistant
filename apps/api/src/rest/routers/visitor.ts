@@ -513,10 +513,19 @@ visitorRouter.openapi(
 			}
 
 			const acceptedAt = new Date().toISOString();
+			const updatedVisitor = await updateVisitorForWebsite(db, {
+				visitorId,
+				websiteId: website.id,
+				data: {
+					lastSeenAt: acceptedAt,
+					updatedAt: acceptedAt,
+				},
+			});
 			const trackingContext = flattenVisitorTrackingContext({
 				attribution: body.attribution,
 				currentPage: body.currentPage,
 			});
+			void updatedVisitor;
 
 			trackVisitorActivity({
 				website_id: website.id,

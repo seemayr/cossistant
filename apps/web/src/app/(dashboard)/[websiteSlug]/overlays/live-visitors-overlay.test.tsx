@@ -277,6 +277,7 @@ function resetState() {
 	rowButtonClickHandlers.length = 0;
 	rowButtonFocusHandlers.length = 0;
 	rowButtonMouseEnterHandlers.length = 0;
+	process.env.NEXT_PUBLIC_TINYBIRD_ENABLED = "true";
 }
 
 async function renderView(
@@ -516,5 +517,32 @@ describe("LiveVisitorsOverlay", () => {
 		rowButtonClickHandlers[0]?.();
 
 		expect(openVisitorDetailCalls).toEqual(["visitor-identified"]);
+	});
+
+	it("returns nothing when Tinybird is disabled", async () => {
+		resetState();
+		process.env.NEXT_PUBLIC_TINYBIRD_ENABLED = "false";
+		liveVisitorsOverlayState.isOpen = true;
+		liveVisitorsQueryState.data = [
+			{
+				attribution_channel: "referral",
+				city: "Bangkok",
+				contactId: "contact-9",
+				country_code: "TH",
+				email: "identified@example.com",
+				entity_id: "visitor-identified",
+				entity_type: "visitor",
+				image: "https://example.com/identified.png",
+				last_seen: "2026-03-31T08:30:00.000Z",
+				latitude: 13.7563,
+				longitude: 100.5018,
+				name: "Identified Contact",
+				page_path: "/pricing",
+			},
+		];
+
+		const html = await renderOverlay();
+
+		expect(html).toBe("");
 	});
 });

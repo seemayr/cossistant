@@ -10,7 +10,20 @@ mock.module("@api/db/queries/visitor", () => ({
 	updateVisitorForWebsite: async () => null,
 }));
 
-const modulePromise = import("./tinybird-sdk");
+const mockEnv = {
+	TINYBIRD_ENABLED: true,
+	TINYBIRD_HOST: "https://tinybird.example",
+	TINYBIRD_TOKEN: "tb-token",
+};
+
+mock.module("@api/env", () => ({
+	env: mockEnv,
+}));
+
+async function importTinybirdSdk(querySuffix: string) {
+	return import(`./tinybird-sdk.ts?${querySuffix}`);
+}
+
 const originalFetch = globalThis.fetch;
 
 function createTrackingContext() {
@@ -64,9 +77,12 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-	const { flushAllEvents } = await modulePromise;
+	const { flushAllEvents } = await importTinybirdSdk(
+		`cleanup=${Math.random()}`
+	);
 	await flushAllEvents();
 	globalThis.fetch = originalFetch;
+	mockEnv.TINYBIRD_ENABLED = true;
 });
 
 describe("tinybird visitor tracking", () => {
@@ -80,7 +96,9 @@ describe("tinybird visitor tracking", () => {
 		);
 		globalThis.fetch = fetchMock as unknown as typeof fetch;
 		const { attribution, currentPage } = createTrackingContext();
-		const { trackVisitorEvent, flushAllEvents } = await modulePromise;
+		const { trackVisitorEvent, flushAllEvents } = await importTinybirdSdk(
+			`page-view=${Math.random()}`
+		);
 
 		trackVisitorEvent({
 			website_id: "site-1",
@@ -122,7 +140,9 @@ describe("tinybird visitor tracking", () => {
 		);
 		globalThis.fetch = fetchMock as unknown as typeof fetch;
 		const { attribution, currentPage } = createTrackingContext();
-		const { flushAllEvents, trackVisitorActivity } = await modulePromise;
+		const { flushAllEvents, trackVisitorActivity } = await importTinybirdSdk(
+			`activity=${Math.random()}`
+		);
 
 		trackVisitorActivity({
 			website_id: "site-1",
@@ -167,7 +187,7 @@ describe("tinybird visitor tracking", () => {
 			currentPage,
 		});
 		const { flushAllEvents, trackConversationMetricForVisitor } =
-			await modulePromise;
+			await importTinybirdSdk(`conversation=${Math.random()}`);
 
 		await trackConversationMetricForVisitor({} as never, {
 			website_id: "site-1",
@@ -197,5 +217,29 @@ describe("tinybird visitor tracking", () => {
 		expect(payload.page_path).toBe("/pricing");
 		expect(payload.attribution_channel).toBe("paid");
 		expect(payload.attribution_referrer_domain).toBe("google.com");
+	});
+
+	it("skips event ingestion entirely when Tinybird is disabled", async () => {
+		mockEnv.TINYBIRD_ENABLED = false;
+		const fetchMock = mock(async () => {
+			throw new Error("fetch should not be called when Tinybird is disabled");
+		});
+		globalThis.fetch = fetchMock as unknown as typeof fetch;
+		const { flushAllEvents, trackPresence, trackVisitorActivity } =
+			await importTinybirdSdk(`disabled=${Math.random()}`);
+
+		trackPresence({
+			website_id: "site-1",
+			entity_id: "visitor-1",
+			entity_type: "visitor",
+		});
+		trackVisitorActivity({
+			website_id: "site-1",
+			visitor_id: "visitor-1",
+			event_type: "heartbeat",
+		});
+		await flushAllEvents();
+
+		expect(fetchMock).not.toHaveBeenCalled();
 	});
 });

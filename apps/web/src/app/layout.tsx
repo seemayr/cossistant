@@ -5,6 +5,7 @@ import Script from "next/script";
 import "./globals.css";
 
 import { Toaster } from "@/components/ui/sonner";
+import { isDatafastEnabled } from "@/lib/analytics-flags";
 import { createRootMetadata } from "@/lib/metadata";
 import { Providers } from "./providers";
 
@@ -50,18 +51,22 @@ export default function RootLayout({
 }: Readonly<{
 	children: React.ReactNode;
 }>) {
+	const datafastEnabled = isDatafastEnabled();
+
 	return (
 		<html lang="en" suppressHydrationWarning>
 			<body
 				className={`${geistSans.variable} ${geistMono.variable} ${F37Stout.variable} group/body antialiased`}
 			>
 				<div className="isolate" id="radix-portal-root" />
-				<Script
-					data-domain="cossistant.com"
-					data-website-id="68dfcb6e6f762f4ecaf58bb4"
-					src="https://datafa.st/js/script.js"
-					strategy="afterInteractive"
-				/>
+				{datafastEnabled ? (
+					<Script
+						data-domain="cossistant.com"
+						data-website-id="68dfcb6e6f762f4ecaf58bb4"
+						src="https://datafa.st/js/script.js"
+						strategy="afterInteractive"
+					/>
+				) : null}
 				<Providers>{children}</Providers>
 				<Toaster />
 			</body>

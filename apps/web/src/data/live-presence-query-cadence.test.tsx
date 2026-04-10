@@ -27,14 +27,29 @@ const queryTinybirdPipeMock = mock((async (pipe: string) => {
 
 	return [];
 }) as (...args: unknown[]) => Promise<unknown>);
-const useTinybirdTokenMock = mock(
-	(_websiteSlug: string, _options?: unknown) => ({
-		data: {
-			token: "tb-token",
-			host: "https://api.tinybird.test",
-		},
-	})
-);
+const useTinybirdTokenMock = mock(((
+	_websiteSlug: string,
+	_options?: unknown
+) => ({
+	data: {
+		enabled: true,
+		token: "tb-token",
+		host: "https://api.tinybird.test",
+		expiresAt: Date.now() + 600_000,
+		maxRetentionDays: 90,
+	},
+})) as (
+	websiteSlug: string,
+	options?: unknown
+) => {
+	data: {
+		enabled: boolean;
+		token: string | null;
+		host: string | null;
+		expiresAt: number | null;
+		maxRetentionDays: number | null;
+	} | null;
+});
 const listPresenceProfilesQueryOptionsMock = mock((input: unknown) => ({
 	queryKey: ["visitor.listPresenceProfiles", input],
 }));
@@ -221,5 +236,38 @@ describe("live presence query cadence", () => {
 		]);
 		expect(listPresenceProfilesQueryOptionsMock).toHaveBeenCalledTimes(1);
 		expect(fetchQueryMock).toHaveBeenCalledTimes(1);
+	});
+
+	it("keeps live presence hooks inert when Tinybird is disabled", async () => {
+		useTinybirdTokenMock.mockReturnValue({
+			data: {
+				enabled: false,
+				token: null,
+				host: null,
+				expiresAt: null,
+				maxRetentionDays: null,
+			},
+		});
+		const { useOnlineNow } = await useOnlineNowModulePromise;
+
+		await renderHook(() =>
+			useOnlineNow({
+				websiteSlug: "acme",
+			})
+		);
+		const options = useQueryMock.mock.calls[0]?.[0] as {
+			enabled: boolean;
+			queryKey: unknown[];
+		};
+
+		expect(options.enabled).toBe(false);
+		expect(options.queryKey).toEqual([
+			"tinybird",
+			"online-now",
+			"acme",
+			5,
+			null,
+		]);
+		expect(queryTinybirdPipeMock).not.toHaveBeenCalled();
 	});
 });

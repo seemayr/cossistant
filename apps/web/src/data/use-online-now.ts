@@ -41,6 +41,11 @@ export function useOnlineNow({
 	const { data: tokenData } = useTinybirdToken(websiteSlug, {
 		staleTimeMs: ONLINE_NOW_REFRESH_INTERVAL_MS,
 	});
+	const tinybirdQueryEnabled =
+		enabled &&
+		tokenData?.enabled !== false &&
+		!!tokenData?.token &&
+		!!tokenData?.host;
 
 	return useQuery({
 		queryKey: [
@@ -61,7 +66,7 @@ export function useOnlineNow({
 				host
 			);
 		},
-		enabled: enabled && !!tokenData,
+		enabled: tinybirdQueryEnabled,
 		staleTime: ONLINE_NOW_REFRESH_INTERVAL_MS,
 		refetchInterval: ONLINE_NOW_REFRESH_INTERVAL_MS,
 	});

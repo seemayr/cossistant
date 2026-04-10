@@ -13,6 +13,7 @@ import {
 import { UpgradeModal } from "@/components/plan/upgrade-modal";
 import { type ConversationHeader, useInboxes } from "@/contexts/inboxes";
 import { useLiveVisitorsOverlayState } from "@/hooks/use-live-visitors-overlay-state";
+import { isTinybirdEnabled } from "@/lib/analytics-flags";
 import { useTRPC } from "@/lib/trpc/client";
 import { Button } from "../ui/button";
 import Icon from "../ui/icons";
@@ -72,9 +73,10 @@ export function ConversationsList({
 		statusCounts.spam +
 		statusCounts.archived;
 	const isOnboarding = totalConversations === 0;
+	const tinybirdEnabled = isTinybirdEnabled();
 
 	const showWaitingForReplyPill = selectedConversationStatus === null;
-	const showAnalytics = selectedConversationStatus === null;
+	const showAnalytics = selectedConversationStatus === null && tinybirdEnabled;
 	const analytics = useInboxAnalyticsController({
 		websiteSlug,
 		enabled: showAnalytics,

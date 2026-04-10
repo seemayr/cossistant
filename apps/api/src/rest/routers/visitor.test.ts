@@ -760,6 +760,15 @@ describe("visitor route PATCH /:id countryCode handling", () => {
 		expect(response.status).toBe(200);
 		expect(payload.ok).toBe(true);
 		expect(typeof payload.acceptedAt).toBe("string");
+		expect(updateVisitorForWebsiteMock).toHaveBeenCalledTimes(1);
+		expect(updateVisitorForWebsiteMock.mock.calls[0]?.[1]).toMatchObject({
+			visitorId: "visitor-1",
+			websiteId: "site-1",
+			data: {
+				lastSeenAt: payload.acceptedAt,
+				updatedAt: payload.acceptedAt,
+			},
+		});
 		expect(trackVisitorActivityMock).toHaveBeenCalledTimes(1);
 		expect(trackVisitorActivityMock.mock.calls[0]?.[0]).toMatchObject({
 			website_id: "site-1",

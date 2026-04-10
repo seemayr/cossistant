@@ -3,6 +3,7 @@ import { createTinybirdLocalJwt } from "@api/lib/tinybird-local-cli";
 import { isLocalTinybirdHost } from "@api/lib/tinybird-local-diagnostics";
 import jwt from "jsonwebtoken";
 
+const TINYBIRD_ENABLED = env.TINYBIRD_ENABLED !== false;
 const TINYBIRD_SIGNING_KEY = env.TINYBIRD_SIGNING_KEY || env.TINYBIRD_TOKEN;
 
 const PIPES = [
@@ -15,7 +16,13 @@ const PIPES = [
 
 const JWT_EXPIRY_SECONDS = 600; // 10 minutes
 
-export async function generateTinybirdJWT(websiteId: string): Promise<string> {
+export async function generateTinybirdJWT(
+	websiteId: string
+): Promise<string | null> {
+	if (!TINYBIRD_ENABLED) {
+		return null;
+	}
+
 	if (isLocalTinybirdHost(env.TINYBIRD_HOST)) {
 		return createTinybirdLocalJwt(websiteId, PIPES);
 	}

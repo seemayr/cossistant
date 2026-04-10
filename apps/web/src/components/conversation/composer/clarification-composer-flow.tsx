@@ -161,12 +161,12 @@ export function ClarificationLoadingBlock({
 		<ComposerCentralBlock>
 			<div className="space-y-3 p-4" data-clarification-slot="loading">
 				<div className="flex items-center gap-2 text-muted-foreground text-sm">
-					<Spinner size={16} />
+					<Spinner size={14} />
 					<span>{label}</span>
 				</div>
 				{submittedAnswer ? (
-					<div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2">
-						<div className="font-medium text-[11px] text-muted-foreground uppercase tracking-[0.08em]">
+					<div className="py-2">
+						<div className="font-medium text-[11px] text-muted-foreground">
 							Last answer
 						</div>
 						<p className="mt-1 text-sm">{submittedAnswer}</p>

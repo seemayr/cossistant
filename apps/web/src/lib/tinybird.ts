@@ -1,11 +1,36 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { isTinybirdEnabled } from "@/lib/analytics-flags";
 import { useTRPC } from "@/lib/trpc/client";
 
 const DEFAULT_TOKEN_STALE_TIME_MS = 300_000;
 const LOCAL_TINYBIRD_RECOVERY_HINT =
 	"Local Tinybird hint: run scripts/tinybird-local-env.sh, copy TINYBIRD_TOKEN/TINYBIRD_SIGNING_KEY/TINYBIRD_WORKSPACE into apps/api/.env and apps/workers/.env, restart API/workers, then hard refresh the dashboard.";
+
+export type TinybirdTokenQueryData =
+	| {
+			enabled: true;
+			token: string;
+			host: string;
+			expiresAt: number;
+			maxRetentionDays: number;
+	  }
+	| {
+			enabled: false;
+			token: null;
+			host: null;
+			expiresAt: null;
+			maxRetentionDays: null;
+	  };
+
+const DISABLED_TINYBIRD_TOKEN_DATA: TinybirdTokenQueryData = {
+	enabled: false,
+	token: null,
+	host: null,
+	expiresAt: null,
+	maxRetentionDays: null,
+};
 
 function isLocalTinybirdHost(host: string): boolean {
 	try {
@@ -21,8 +46,20 @@ export function useTinybirdToken(
 	{ staleTimeMs = DEFAULT_TOKEN_STALE_TIME_MS }: { staleTimeMs?: number } = {}
 ) {
 	const trpc = useTRPC();
+	const tinybirdEnabled = isTinybirdEnabled();
+	const queryOptions = trpc.website.getTinybirdToken.queryOptions({
+		websiteSlug,
+	});
+
 	return useQuery({
-		...trpc.website.getTinybirdToken.queryOptions({ websiteSlug }),
+		...queryOptions,
+		...(tinybirdEnabled
+			? {}
+			: {
+					queryFn: async () => DISABLED_TINYBIRD_TOKEN_DATA,
+					initialData: DISABLED_TINYBIRD_TOKEN_DATA,
+				}),
+		enabled: tinybirdEnabled,
 		staleTime: staleTimeMs,
 		refetchInterval: staleTimeMs,
 	});

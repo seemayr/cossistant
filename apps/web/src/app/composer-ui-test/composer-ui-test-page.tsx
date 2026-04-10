@@ -2,13 +2,14 @@
 
 import { FILE_INPUT_ACCEPT } from "@cossistant/core";
 import type { KnowledgeClarificationRequest } from "@cossistant/types";
-import { type ReactNode, useState } from "react";
+import { useState } from "react";
 import {
 	Composer,
 	type MessageVisibility,
 } from "@/components/conversation/composer";
 import {
 	ClarificationActionsBlock,
+	ClarificationLoadingBlock,
 	ClarificationQuestionBlock,
 	ClarificationRetryBlock,
 	ClarificationReviewActionsBlock,
@@ -22,8 +23,16 @@ import {
 } from "@/components/conversation/composer/composer-view-model";
 import { useKnowledgeClarificationDraftReviewState } from "@/components/knowledge-clarification/draft-review";
 import { Button } from "@/components/ui/button";
-import Icon from "@/components/ui/icons";
+import {
+	Card,
+	CardContent,
+	CardDescription,
+	CardHeader,
+	CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
@@ -31,22 +40,17 @@ export type ComposerUiPreset =
 	| "default"
 	| "prompt"
 	| "question"
+	| "streaming"
 	| "review"
 	| "retry"
 	| "escalation"
-	| "disabled"
-	| "uploading";
-
-export type ComposerShellMode = "fake-inbox";
+	| "disabled";
 
 export type ComposerUiDebugState = {
 	preset: ComposerUiPreset;
-	shellMode: ComposerShellMode;
 	visibility: MessageVisibility;
 	value: string;
 	showAttachments: boolean;
-	isUploading: boolean;
-	uploadProgress: number;
 	showCustomAboveBlock: boolean;
 	showCustomCentralBlock: boolean;
 	showCustomBottomBlock: boolean;
@@ -63,11 +67,11 @@ const PRESET_ORDER: ComposerUiPreset[] = [
 	"default",
 	"prompt",
 	"question",
+	"streaming",
 	"review",
 	"retry",
 	"escalation",
 	"disabled",
-	"uploading",
 ];
 
 const DEBUG_FILES = [
@@ -128,12 +132,9 @@ function createComposerUiDebugState(
 		case "prompt":
 			return {
 				preset,
-				shellMode: "fake-inbox",
 				visibility: "public",
 				value: "",
 				showAttachments: false,
-				isUploading: false,
-				uploadProgress: 40,
 				showCustomAboveBlock: false,
 				showCustomCentralBlock: false,
 				showCustomBottomBlock: false,
@@ -148,12 +149,9 @@ function createComposerUiDebugState(
 		case "question":
 			return {
 				preset,
-				shellMode: "fake-inbox",
 				visibility: "public",
 				value: "",
 				showAttachments: false,
-				isUploading: false,
-				uploadProgress: 40,
 				showCustomAboveBlock: false,
 				showCustomCentralBlock: false,
 				showCustomBottomBlock: false,
@@ -168,12 +166,26 @@ function createComposerUiDebugState(
 		case "review":
 			return {
 				preset,
-				shellMode: "fake-inbox",
 				visibility: "public",
 				value: "",
 				showAttachments: false,
-				isUploading: false,
-				uploadProgress: 40,
+				showCustomAboveBlock: false,
+				showCustomCentralBlock: false,
+				showCustomBottomBlock: false,
+				showEscalationAction: false,
+				isAiPaused: false,
+				mentionConfigEnabled: false,
+				autoFocus: false,
+				disabled: false,
+				selectedSuggestedAnswer: null,
+				freeAnswer: "",
+			};
+		case "streaming":
+			return {
+				preset,
+				visibility: "public",
+				value: "",
+				showAttachments: false,
 				showCustomAboveBlock: false,
 				showCustomCentralBlock: false,
 				showCustomBottomBlock: false,
@@ -188,12 +200,9 @@ function createComposerUiDebugState(
 		case "retry":
 			return {
 				preset,
-				shellMode: "fake-inbox",
 				visibility: "public",
 				value: "",
 				showAttachments: false,
-				isUploading: false,
-				uploadProgress: 40,
 				showCustomAboveBlock: false,
 				showCustomCentralBlock: false,
 				showCustomBottomBlock: false,
@@ -208,12 +217,9 @@ function createComposerUiDebugState(
 		case "escalation":
 			return {
 				preset,
-				shellMode: "fake-inbox",
 				visibility: "public",
 				value: "",
 				showAttachments: false,
-				isUploading: false,
-				uploadProgress: 40,
 				showCustomAboveBlock: false,
 				showCustomCentralBlock: false,
 				showCustomBottomBlock: false,
@@ -228,12 +234,9 @@ function createComposerUiDebugState(
 		case "disabled":
 			return {
 				preset,
-				shellMode: "fake-inbox",
 				visibility: "private",
 				value: "Waiting on a teammate before I send this note.",
 				showAttachments: false,
-				isUploading: false,
-				uploadProgress: 40,
 				showCustomAboveBlock: false,
 				showCustomCentralBlock: false,
 				showCustomBottomBlock: false,
@@ -245,35 +248,12 @@ function createComposerUiDebugState(
 				selectedSuggestedAnswer: null,
 				freeAnswer: "",
 			};
-		case "uploading":
-			return {
-				preset,
-				shellMode: "fake-inbox",
-				visibility: "public",
-				value: "Sharing the updated screenshots now.",
-				showAttachments: true,
-				isUploading: true,
-				uploadProgress: 62,
-				showCustomAboveBlock: false,
-				showCustomCentralBlock: false,
-				showCustomBottomBlock: false,
-				showEscalationAction: false,
-				isAiPaused: false,
-				mentionConfigEnabled: false,
-				autoFocus: false,
-				disabled: false,
-				selectedSuggestedAnswer: null,
-				freeAnswer: "",
-			};
 		default:
 			return {
 				preset: "default",
-				shellMode: "fake-inbox",
 				visibility: "public",
 				value: "I checked your workspace and I can help with that.",
 				showAttachments: false,
-				isUploading: false,
-				uploadProgress: 40,
 				showCustomAboveBlock: false,
 				showCustomCentralBlock: false,
 				showCustomBottomBlock: false,
@@ -288,138 +268,47 @@ function createComposerUiDebugState(
 	}
 }
 
-type ControlSectionProps = {
-	title: string;
-	description: string;
-	children: ReactNode;
-};
-
-function ControlSection({ title, description, children }: ControlSectionProps) {
-	return (
-		<section className="rounded-2xl border border-black/10 bg-white/80 p-4 shadow-sm backdrop-blur">
-			<div className="mb-3 space-y-1">
-				<h2 className="font-medium text-sm uppercase tracking-[0.08em]">
-					{title}
-				</h2>
-				<p className="text-muted-foreground text-sm">{description}</p>
-			</div>
-			<div className="space-y-3">{children}</div>
-		</section>
-	);
-}
-
 function ToggleRow({
+	id,
 	label,
 	description,
 	checked,
 	onChange,
 }: {
+	id: string;
 	label: string;
 	description: string;
 	checked: boolean;
 	onChange: (checked: boolean) => void;
 }) {
 	return (
-		<label className="flex items-start gap-3 rounded-xl border border-black/8 bg-background/80 px-3 py-3 text-sm">
-			<input
+		<div className="flex items-start justify-between gap-4">
+			<div className="space-y-1">
+				<Label htmlFor={id}>{label}</Label>
+				<p className="text-muted-foreground text-sm">{description}</p>
+			</div>
+			<Switch
 				aria-label={label}
 				checked={checked}
-				className="mt-1 h-4 w-4 accent-primary"
-				onChange={(event) => onChange(event.target.checked)}
-				type="checkbox"
+				id={id}
+				onCheckedChange={onChange}
 			/>
-			<span className="space-y-0.5">
-				<span className="block font-medium text-foreground">{label}</span>
-				<span className="block text-muted-foreground">{description}</span>
-			</span>
-		</label>
-	);
-}
-
-function ComposerPresetButton({
-	isActive,
-	label,
-	onClick,
-}: {
-	isActive: boolean;
-	label: ComposerUiPreset;
-	onClick: () => void;
-}) {
-	return (
-		<Button
-			className={cn(
-				"justify-start rounded-xl border border-black/10 bg-white/80 text-left text-xs uppercase tracking-[0.08em] hover:bg-white",
-				isActive && "border-primary/40 bg-primary/10 text-primary"
-			)}
-			data-composer-ui-preset={label}
-			onClick={onClick}
-			size="xs"
-			type="button"
-			variant={isActive ? "secondary" : "ghost"}
-		>
-			{label}
-		</Button>
-	);
-}
-
-function FakeTimelineBubble({
-	align = "left",
-	eyebrow,
-	text,
-}: {
-	align?: "left" | "right";
-	eyebrow: string;
-	text: string;
-}) {
-	return (
-		<div
-			className={cn(
-				"flex",
-				align === "right" ? "justify-end" : "justify-start"
-			)}
-		>
-			<div
-				className={cn(
-					"max-w-[78%] rounded-2xl border px-4 py-3 shadow-sm",
-					align === "right"
-						? "border-primary/10 bg-primary text-primary-foreground"
-						: "border-black/10 bg-white/95"
-				)}
-			>
-				<div
-					className={cn(
-						"mb-1 font-medium text-[11px] uppercase tracking-[0.12em]",
-						align === "right"
-							? "text-primary-foreground/70"
-							: "text-muted-foreground"
-					)}
-				>
-					{eyebrow}
-				</div>
-				<p className="text-sm leading-6">{text}</p>
-			</div>
 		</div>
 	);
 }
 
 function createCustomSlots(
-	state: ComposerUiDebugState,
-	lastAction: string | null
+	state: ComposerUiDebugState
 ): ComposerSlotBlocks | null {
 	const slots: ComposerSlotBlocks = {};
 
 	if (state.showCustomAboveBlock) {
 		slots.aboveBlock = (
 			<div
-				className="mb-3 rounded-2xl border border-sky-500/40 border-dashed bg-sky-500/8 px-4 py-3 text-sm"
+				className="mb-3 rounded border border-dashed bg-muted/30 px-4 py-3 text-sm"
 				data-composer-ui-custom-slot="above"
 			>
-				<div className="font-medium text-sky-900 dark:text-sky-100">
-					Custom above block
-				</div>
-				<p className="mt-1 text-sky-900/70 dark:text-sky-100/80">
-					Use this to inspect banners, notices, or ephemeral workflow hints.
-				</p>
+				Custom above block
 			</div>
 		);
 	}
@@ -427,22 +316,10 @@ function createCustomSlots(
 	if (state.showCustomCentralBlock) {
 		slots.centralBlock = (
 			<div
-				className="rounded-3xl border border-emerald-500/30 bg-emerald-500/8 p-5"
+				className="rounded border border-dashed bg-muted/30 p-4 text-sm"
 				data-composer-ui-custom-slot="central"
 			>
-				<div className="flex items-center gap-2 font-medium text-emerald-900 text-sm dark:text-emerald-100">
-					<Icon className="size-4" name="star" />
-					Custom central block
-				</div>
-				<p className="mt-2 text-emerald-900/70 text-sm leading-6 dark:text-emerald-100/80">
-					This is helpful when you want to isolate a bespoke state without the
-					default editor chrome underneath it.
-				</p>
-				{lastAction ? (
-					<div className="mt-3 rounded-xl border border-emerald-500/20 bg-white/70 px-3 py-2 text-emerald-900 text-xs dark:bg-black/10 dark:text-emerald-50">
-						Last action: {lastAction}
-					</div>
-				) : null}
+				Custom central block
 			</div>
 		);
 	}
@@ -450,15 +327,10 @@ function createCustomSlots(
 	if (state.showCustomBottomBlock) {
 		slots.bottomBlock = (
 			<div
-				className="flex items-center justify-between rounded-2xl border border-amber-500/30 bg-amber-500/8 px-3 py-2"
+				className="rounded border border-dashed bg-muted/30 px-3 py-2 text-sm"
 				data-composer-ui-custom-slot="bottom"
 			>
-				<span className="font-medium text-amber-900 text-xs uppercase tracking-[0.08em] dark:text-amber-100">
-					Custom footer
-				</span>
-				<Button size="xs" type="button" variant="ghost">
-					Debug action
-				</Button>
+				Custom bottom block
 			</div>
 		);
 	}
@@ -468,9 +340,8 @@ function createCustomSlots(
 		: null;
 }
 
-function ComposerPreviewSurface({
+function ComposerPreview({
 	debugState,
-	lastAction,
 	onAction,
 	onFreeAnswerChange,
 	onPresetChange,
@@ -479,7 +350,6 @@ function ComposerPreviewSurface({
 	onVisibilityChange,
 }: {
 	debugState: ComposerUiDebugState;
-	lastAction: string | null;
 	onAction: (label: string) => void;
 	onFreeAnswerChange: (value: string) => void;
 	onPresetChange: (preset: ComposerUiPreset) => void;
@@ -544,6 +414,22 @@ function ComposerPreviewSurface({
 				/>
 			),
 		};
+	} else if (debugState.preset === "streaming") {
+		clarificationFlow = {
+			aboveBlock: (
+				<ClarificationTopicBlock
+					stepIndex={2}
+					topicSummary="Clarify how billing changes take effect so the FAQ answer is consistent."
+				/>
+			),
+			centralBlock: (
+				<ClarificationLoadingBlock
+					label="Reviewing what we already know..."
+					submittedAnswer="At the next billing cycle"
+				/>
+			),
+			bottomBlock: null,
+		};
 	} else if (debugState.preset === "review") {
 		clarificationFlow = {
 			aboveBlock: (
@@ -600,7 +486,7 @@ function ComposerPreviewSurface({
 			files: debugState.showAttachments ? DEBUG_FILES : [],
 			isAiPauseActionPending: false,
 			isSubmitting: false,
-			isUploading: debugState.isUploading,
+			isUploading: false,
 			layoutMode: "inline",
 			maxFileSize: 10 * 1024 * 1024,
 			maxFiles: 2,
@@ -652,24 +538,12 @@ function ComposerPreviewSurface({
 				onAction(`Visibility switched to ${visibility}`);
 			},
 			placeholder: "Type your message...",
-			renderAttachButton: ({ disabled, triggerFileInput }) => (
-				<Button
-					className="h-8 w-8 rounded-full"
-					disabled={disabled}
-					onClick={triggerFileInput}
-					size="icon"
-					type="button"
-					variant="ghost"
-				>
-					<Icon className="h-4 w-4" name="attachment" />
-				</Button>
-			),
-			uploadProgress: debugState.uploadProgress,
+			uploadProgress: 0,
 			value: debugState.value,
 			visibility: debugState.visibility,
 			aiPausedUntil: debugState.isAiPaused ? "2120-01-01T00:00:00.000Z" : null,
 		},
-		slots: createCustomSlots(debugState, lastAction),
+		slots: createCustomSlots(debugState),
 		clarification: {
 			promptBlock: clarificationPrompt,
 			flowBlocks: clarificationFlow,
@@ -685,90 +559,15 @@ function ComposerPreviewSurface({
 
 	return (
 		<div
-			className="rounded-[28px] border border-black/10 bg-white/80 p-4 shadow-2xl shadow-black/8 backdrop-blur"
-			data-composer-ui-shell="true"
+			className="flex min-h-[400px] w-full items-start justify-center"
+			data-composer-ui-preview="true"
 		>
-			<div className="flex flex-wrap items-center justify-between gap-3 border-black/8 border-b pb-4">
-				<div>
-					<div className="font-medium text-[11px] text-muted-foreground uppercase tracking-[0.16em]">
-						Composer UI Test
-					</div>
-					<h1 className="mt-1 font-medium text-xl">
-						Focused inbox shell for composer iteration
-					</h1>
-				</div>
-				<div className="rounded-full border border-black/10 bg-background/80 px-3 py-1 font-medium text-xs uppercase tracking-[0.1em]">
-					{debugState.preset}
-				</div>
-			</div>
-
-			<div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
-				<div className="min-w-0">
-					<div
-						className="mt-4 rounded-[24px] border border-black/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(246,248,245,0.92))] p-4"
-						data-composer-ui-timeline="true"
-					>
-						<div className="mb-4 flex items-center justify-between gap-3">
-							<div>
-								<div className="font-medium text-sm">Olivia Parker</div>
-								<p className="text-muted-foreground text-sm">
-									Acme billing workflow conversation
-								</p>
-							</div>
-							<div className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 font-medium text-emerald-900 text-xs dark:text-emerald-100">
-								Live preview
-							</div>
-						</div>
-
-						<div className="space-y-3 pb-6">
-							<FakeTimelineBubble
-								eyebrow="Visitor"
-								text="If I change plans today, when should the billing update actually take effect?"
-							/>
-							<FakeTimelineBubble
-								align="right"
-								eyebrow="AI assistant"
-								text="I can answer that, but I want to confirm the exact billing policy before I update the FAQ."
-							/>
-							<FakeTimelineBubble
-								eyebrow="Internal note"
-								text="This shell is fake on purpose so the composer can be tested in isolation."
-							/>
-						</div>
-					</div>
-
-					<div className="mt-4 rounded-[28px] border border-black/8 bg-background/90 px-4 py-4">
-						<div className="mx-auto w-full max-w-2xl">
-							<Composer {...composerViewModel.input} />
-						</div>
-					</div>
-				</div>
-
-				<div className="mt-4 space-y-3 rounded-[24px] border border-black/8 bg-background/80 p-4">
-					<div className="font-medium text-[11px] text-muted-foreground uppercase tracking-[0.16em]">
-						Preview notes
-					</div>
-					<div className="space-y-2 text-sm leading-6">
-						<p>
-							The shell stays fake and local. Only the composer and its slot
-							states are real.
-						</p>
-						<p>
-							Clarification presets override custom slots in the same way the
-							live inbox does.
-						</p>
-					</div>
-					<div
-						className="rounded-2xl border border-black/10 border-dashed bg-muted/40 px-3 py-3 text-sm"
-						data-composer-ui-last-action={lastAction ?? "none"}
-					>
-						<div className="font-medium text-xs uppercase tracking-[0.08em]">
-							Last action
-						</div>
-						<p className="mt-1 text-muted-foreground">
-							{lastAction ?? "No interaction yet."}
-						</p>
-					</div>
+			<div
+				className="flex max-h-[calc(100vh-3rem)] min-h-[400px] w-full items-center justify-center overflow-y-auto px-4 py-10"
+				data-composer-ui-center-scroll="true"
+			>
+				<div className="w-full max-w-2xl">
+					<Composer {...composerViewModel.input} />
 				</div>
 			</div>
 		</div>
@@ -792,173 +591,106 @@ export function ComposerUiTestPage() {
 
 	return (
 		<div
-			className="min-h-screen bg-[linear-gradient(180deg,#f5f2ea_0%,#eef2eb_52%,#e8ece7_100%)] px-4 py-6 text-foreground lg:px-6"
+			className="min-h-screen bg-background p-6 dark:bg-background-100"
 			data-composer-ui-test="true"
 		>
-			<div className="mx-auto grid max-w-[1480px] gap-6 xl:grid-cols-[340px_minmax(0,1fr)]">
-				<div className="space-y-4">
-					<ControlSection
-						description="Jump between the main states without loading the real inbox."
-						title="Presets"
-					>
-						<div className="grid grid-cols-2 gap-2">
+			<div className="mx-auto grid max-w-[1600px] gap-6 lg:grid-cols-[320px_minmax(0,1fr)_320px]">
+				<div className="space-y-4" data-composer-ui-controls="true">
+					<Card>
+						<CardHeader>
+							<CardTitle>Composer UI Test</CardTitle>
+							<CardDescription>
+								Switch local states and inspect the real composer.
+							</CardDescription>
+						</CardHeader>
+						<CardContent className="grid grid-cols-2 gap-2">
 							{PRESET_ORDER.map((preset) => (
-								<ComposerPresetButton
-									isActive={debugState.preset === preset}
+								<Button
+									className={cn(
+										"justify-start",
+										debugState.preset === preset && "pointer-events-none"
+									)}
+									data-composer-ui-preset={preset}
 									key={preset}
-									label={preset}
 									onClick={() => handlePresetChange(preset)}
-								/>
-							))}
-						</div>
-					</ControlSection>
-
-					<ControlSection
-						description="Adjust the generic props the composer receives."
-						title="Controls"
-					>
-						<div className="space-y-2">
-							<label className="space-y-2 text-sm">
-								<span className="block font-medium">Visibility</span>
-								<select
-									aria-label="Composer visibility"
-									className="flex h-10 w-full rounded-xl border border-black/10 bg-background px-3 text-sm"
-									onChange={(event) =>
-										updateState({
-											visibility: event.target.value as MessageVisibility,
-										})
+									size="xs"
+									type="button"
+									variant={
+										debugState.preset === preset ? "secondary" : "outline"
 									}
-									value={debugState.visibility}
 								>
-									<option value="public">Public reply</option>
-									<option value="private">Private note</option>
-								</select>
-							</label>
-						</div>
+									{preset}
+								</Button>
+							))}
+						</CardContent>
+					</Card>
 
-						<label
-							className="space-y-2 text-sm"
-							htmlFor="composer-textarea-value"
-						>
-							<span className="block font-medium">Textarea value</span>
-							<Textarea
-								id="composer-textarea-value"
-								onChange={(event) => updateState({ value: event.target.value })}
-								rows={5}
-								value={debugState.value}
-							/>
-						</label>
+					<Card>
+						<CardHeader>
+							<CardTitle>Controls</CardTitle>
+							<CardDescription>
+								Edit core composer props without leaving the page.
+							</CardDescription>
+						</CardHeader>
+						<CardContent className="space-y-4">
+							<div className="space-y-2">
+								<Label>Visibility</Label>
+								<div className="flex gap-2">
+									<Button
+										aria-pressed={debugState.visibility === "public"}
+										data-composer-ui-visibility="public"
+										onClick={() => updateState({ visibility: "public" })}
+										size="xs"
+										type="button"
+										variant={
+											debugState.visibility === "public"
+												? "secondary"
+												: "outline"
+										}
+									>
+										Public
+									</Button>
+									<Button
+										aria-pressed={debugState.visibility === "private"}
+										data-composer-ui-visibility="private"
+										onClick={() => updateState({ visibility: "private" })}
+										size="xs"
+										type="button"
+										variant={
+											debugState.visibility === "private"
+												? "secondary"
+												: "outline"
+										}
+									>
+										Private
+									</Button>
+								</div>
+							</div>
 
-						<label className="space-y-2 text-sm">
-							<span className="block font-medium">Upload progress</span>
-							<div className="flex items-center gap-3">
-								<input
-									aria-label="Upload progress"
-									className="w-full accent-primary"
-									max={100}
-									min={0}
+							<div className="space-y-2">
+								<Label htmlFor="composer-ui-text-value">Textarea value</Label>
+								<Textarea
+									id="composer-ui-text-value"
 									onChange={(event) =>
-										updateState({
-											uploadProgress: Number(event.target.value),
-										})
+										updateState({ value: event.target.value })
 									}
-									type="range"
-									value={debugState.uploadProgress}
-								/>
-								<Input
-									className="w-20"
-									inputMode="numeric"
-									onChange={(event) =>
-										updateState({
-											uploadProgress: Number(event.target.value) || 0,
-										})
-									}
-									value={String(debugState.uploadProgress)}
+									rows={5}
+									value={debugState.value}
 								/>
 							</div>
-						</label>
-					</ControlSection>
+						</CardContent>
+					</Card>
 
-					<ControlSection
-						description="Flip high-value layout and chrome options on top of the preset."
-						title="Advanced"
+					<p
+						className="px-1 text-muted-foreground text-xs"
+						data-composer-ui-last-action={lastAction ?? "none"}
 					>
-						<ToggleRow
-							checked={debugState.showAttachments}
-							description="Show fake attachments in the default editor surface."
-							label="Attachments"
-							onChange={(checked) => updateState({ showAttachments: checked })}
-						/>
-						<ToggleRow
-							checked={debugState.isUploading}
-							description="Display the upload progress meter above attachment chips."
-							label="Uploading"
-							onChange={(checked) => updateState({ isUploading: checked })}
-						/>
-						<ToggleRow
-							checked={debugState.showCustomAboveBlock}
-							description="Inject a custom above block when clarification UI is inactive."
-							label="Custom above block"
-							onChange={(checked) =>
-								updateState({ showCustomAboveBlock: checked })
-							}
-						/>
-						<ToggleRow
-							checked={debugState.showCustomCentralBlock}
-							description="Replace the editor with a custom central block."
-							label="Custom central block"
-							onChange={(checked) =>
-								updateState({ showCustomCentralBlock: checked })
-							}
-						/>
-						<ToggleRow
-							checked={debugState.showCustomBottomBlock}
-							description="Swap the footer for a custom bottom block."
-							label="Custom bottom block"
-							onChange={(checked) =>
-								updateState({ showCustomBottomBlock: checked })
-							}
-						/>
-						<ToggleRow
-							checked={debugState.showEscalationAction}
-							description="Show the escalation join state in the composer."
-							label="Escalation"
-							onChange={(checked) =>
-								updateState({ showEscalationAction: checked })
-							}
-						/>
-						<ToggleRow
-							checked={debugState.isAiPaused}
-							description="Enable the AI pause footer state."
-							label="AI paused"
-							onChange={(checked) => updateState({ isAiPaused: checked })}
-						/>
-						<ToggleRow
-							checked={debugState.mentionConfigEnabled}
-							description="Add fake AI, teammate, visitor, and tool mentions."
-							label="Mentions"
-							onChange={(checked) =>
-								updateState({ mentionConfigEnabled: checked })
-							}
-						/>
-						<ToggleRow
-							checked={debugState.autoFocus}
-							description="Allow the real textarea to grab focus on mount."
-							label="Autofocus"
-							onChange={(checked) => updateState({ autoFocus: checked })}
-						/>
-						<ToggleRow
-							checked={debugState.disabled}
-							description="Disable the editor and built-in actions."
-							label="Disabled"
-							onChange={(checked) => updateState({ disabled: checked })}
-						/>
-					</ControlSection>
+						Last action: {lastAction ?? "none"}
+					</p>
 				</div>
 
-				<ComposerPreviewSurface
+				<ComposerPreview
 					debugState={debugState}
-					lastAction={lastAction}
 					onAction={setLastAction}
 					onFreeAnswerChange={(value) => updateState({ freeAnswer: value })}
 					onPresetChange={handlePresetChange}
@@ -971,6 +703,94 @@ export function ComposerUiTestPage() {
 					onValueChange={(value) => updateState({ value })}
 					onVisibilityChange={(visibility) => updateState({ visibility })}
 				/>
+
+				<div className="space-y-4" data-composer-ui-advanced="true">
+					<Card>
+						<CardHeader>
+							<CardTitle>Advanced</CardTitle>
+							<CardDescription>
+								Toggle optional blocks and secondary states.
+							</CardDescription>
+						</CardHeader>
+						<CardContent className="space-y-4">
+							<ToggleRow
+								checked={debugState.showAttachments}
+								description="Show fake attachment chips."
+								id="composer-ui-attachments"
+								label="Attachments"
+								onChange={(checked) =>
+									updateState({ showAttachments: checked })
+								}
+							/>
+							<ToggleRow
+								checked={debugState.showCustomAboveBlock}
+								description="Inject a custom above slot."
+								id="composer-ui-custom-above"
+								label="Custom above block"
+								onChange={(checked) =>
+									updateState({ showCustomAboveBlock: checked })
+								}
+							/>
+							<ToggleRow
+								checked={debugState.showCustomCentralBlock}
+								description="Replace the default center area."
+								id="composer-ui-custom-central"
+								label="Custom central block"
+								onChange={(checked) =>
+									updateState({ showCustomCentralBlock: checked })
+								}
+							/>
+							<ToggleRow
+								checked={debugState.showCustomBottomBlock}
+								description="Swap the footer area."
+								id="composer-ui-custom-bottom"
+								label="Custom bottom block"
+								onChange={(checked) =>
+									updateState({ showCustomBottomBlock: checked })
+								}
+							/>
+							<ToggleRow
+								checked={debugState.showEscalationAction}
+								description="Show the escalation join state."
+								id="composer-ui-escalation"
+								label="Escalation"
+								onChange={(checked) =>
+									updateState({ showEscalationAction: checked })
+								}
+							/>
+							<ToggleRow
+								checked={debugState.isAiPaused}
+								description="Enable the AI pause footer state."
+								id="composer-ui-ai-paused"
+								label="AI paused"
+								onChange={(checked) => updateState({ isAiPaused: checked })}
+							/>
+							<ToggleRow
+								checked={debugState.mentionConfigEnabled}
+								description="Enable fake mentions."
+								id="composer-ui-mentions"
+								label="Mentions"
+								onChange={(checked) =>
+									updateState({ mentionConfigEnabled: checked })
+								}
+							/>
+							<ToggleRow
+								checked={debugState.autoFocus}
+								description="Allow autofocus in the textarea."
+								id="composer-ui-autofocus"
+								label="Autofocus"
+								onChange={(checked) => updateState({ autoFocus: checked })}
+							/>
+							<ToggleRow
+								checked={debugState.disabled}
+								description="Disable the composer."
+								id="composer-ui-disabled"
+								label="Disabled"
+								onChange={(checked) => updateState({ disabled: checked })}
+							/>
+						</CardContent>
+					</Card>
+				</div>
 			</div>
 		</div>
 	);

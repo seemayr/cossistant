@@ -183,6 +183,11 @@ export function useVisitorPresenceData({
 	const { data: tokenData } = useTinybirdToken(websiteSlug, {
 		staleTimeMs: REFRESH_INTERVAL_MS,
 	});
+	const tinybirdQueryEnabled =
+		enabled &&
+		tokenData?.enabled !== false &&
+		!!tokenData?.token &&
+		!!tokenData?.host;
 
 	return useQuery<VisitorPresenceQueryData>({
 		queryKey: [
@@ -194,7 +199,14 @@ export function useVisitorPresenceData({
 			tokenData?.token,
 		],
 		queryFn: async () => {
-			if (!tokenData) {
+			if (
+				!(
+					tokenData &&
+					tokenData.enabled !== false &&
+					tokenData.token &&
+					tokenData.host
+				)
+			) {
 				throw new Error("Tinybird token not available");
 			}
 
@@ -236,7 +248,7 @@ export function useVisitorPresenceData({
 
 			return mergeVisitorPresenceRows({ rows, profilesByVisitorId });
 		},
-		enabled: enabled && !!tokenData,
+		enabled: tinybirdQueryEnabled,
 		staleTime: REFRESH_INTERVAL_MS,
 		refetchInterval: REFRESH_INTERVAL_MS,
 		refetchOnReconnect: true,

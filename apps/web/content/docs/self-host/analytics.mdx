@@ -1,0 +1,102 @@
+---
+title: Analytics
+description: Decide how self-hosted Cossistant should handle Tinybird-backed analytics and the optional DataFast script.
+---
+
+Start with the [Self-Host overview](/docs/self-host) if you want the broader architecture first. This page focuses on the analytics-specific decisions you need to make for a self-hosted deployment.
+
+## What Cossistant uses analytics for
+
+Today, Cossistant uses Tinybird for:
+
+- inbox analytics
+- live visitor presence
+- live "last seen in app" enrichment in Tinybird-backed dashboard surfaces
+
+Separately, the docs and marketing site include a DataFast script for hosted web analytics.
+
+These are independent concerns:
+
+- Tinybird powers product analytics and live presence features inside the app
+- DataFast is a third-party site analytics script that can be disabled separately
+
+## Runtime switches
+
+For self-hosting, all analytics-related toggles default to `true`:
+
+```bash title=".env"
+TINYBIRD_ENABLED=true
+NEXT_PUBLIC_TINYBIRD_ENABLED=true
+NEXT_PUBLIC_DATAFAST_ENABLED=true
+```
+
+The parsing is strict:
+
+- `"true"` enables the feature
+- any other value disables it
+
+## Tinybird enabled path
+
+If you want inbox analytics and live visitor dashboards, keep Tinybird enabled and point the app at your Tinybird instance:
+
+```bash title=".env"
+TINYBIRD_ENABLED=true
+NEXT_PUBLIC_TINYBIRD_ENABLED=true
+TINYBIRD_HOST=https://your-tinybird.example.com
+TINYBIRD_TOKEN=...
+TINYBIRD_SIGNING_KEY=...
+TINYBIRD_WORKSPACE=...
+```
+
+If you want to self-host or self-manage Tinybird itself, start with Tinybird's own guides:
+
+- [Tinybird infrastructure / self-host overview](https://www.tinybird.co/blog/tb-infra)
+- [Tinybird self-managed installation guide](https://www.tinybird.co/docs/forward/install-tinybird/self-managed)
+
+## Tinybird disabled path
+
+If Tinybird is hard to support in your environment, you can disable it cleanly:
+
+```bash title=".env"
+TINYBIRD_ENABLED=false
+NEXT_PUBLIC_TINYBIRD_ENABLED=false
+```
+
+When Tinybird is disabled:
+
+- Tinybird ingestion stops on the API side
+- Tinybird JWT/token generation stops
+- inbox analytics UI is hidden
+- live visitors overlay, live presence counts, and Tinybird-backed live maps are hidden
+
+What still works:
+
+- Postgres-backed visitor and user `lastSeenAt` timestamps continue updating
+- places in the app that already fall back to database `lastSeenAt` continue to show those timestamps
+- the rest of the product continues working without Tinybird
+
+What this does **not** do:
+
+- it does not recreate Tinybird analytics on Postgres
+- it does not keep the Tinybird-only dashboards visible with replacement data
+
+## DataFast
+
+DataFast is treated as an optional third-party analytics dependency for our hosted web analytics script.
+
+To disable it for self-hosting:
+
+```bash title=".env"
+NEXT_PUBLIC_DATAFAST_ENABLED=false
+```
+
+When disabled, the root web layout simply omits the `datafa.st` script.
+
+## Recommended self-host defaults
+
+If you want the simplest self-host path first:
+
+1. Decide whether you truly need the Tinybird-backed analytics UI on day one.
+2. If not, set `TINYBIRD_ENABLED=false` and `NEXT_PUBLIC_TINYBIRD_ENABLED=false`.
+3. Disable `NEXT_PUBLIC_DATAFAST_ENABLED` unless you explicitly want that third-party script.
+4. Bring Tinybird back later only if you want the inbox analytics and live visitor dashboards.

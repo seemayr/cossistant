@@ -163,18 +163,49 @@ mock.module("../ui/tooltip", () => ({
 	),
 }));
 
+mock.module("../ui/sheet", () => ({
+	Sheet: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+	SheetContent: ({ children }: { children: React.ReactNode }) => (
+		<div data-slot="mock-sheet-content">{children}</div>
+	),
+	SheetDescription: ({ children }: { children: React.ReactNode }) => (
+		<div>{children}</div>
+	),
+	SheetHeader: ({ children }: { children: React.ReactNode }) => (
+		<div>{children}</div>
+	),
+	SheetTitle: ({ children }: { children: React.ReactNode }) => (
+		<div>{children}</div>
+	),
+	SheetTrigger: ({ children }: { children: React.ReactNode }) => (
+		<>{children}</>
+	),
+}));
+
 mock.module("./ai-agent-onboarding", () => ({
 	AIAgentOnboarding: () => null,
 }));
 
-const modulePromise = import("./index");
+mock.module("./virtualized-conversations", () => ({
+	VirtualizedConversations: ({
+		analyticsSlot,
+	}: {
+		analyticsSlot?: React.ReactNode;
+	}) => <div data-slot="mock-virtualized-conversations">{analyticsSlot}</div>,
+}));
 
 async function renderList(
-	selectedConversationStatus: "archived" | "resolved" | null
+	selectedConversationStatus: "archived" | "resolved" | null,
+	{
+		tinybirdEnabled = true,
+	}: {
+		tinybirdEnabled?: boolean;
+	} = {}
 ) {
 	renderedButtonHandlers.length = 0;
 	openLiveVisitorsOverlayCalls.length = 0;
-	const { ConversationsList } = await modulePromise;
+	process.env.NEXT_PUBLIC_TINYBIRD_ENABLED = tinybirdEnabled ? "true" : "false";
+	const { ConversationsList } = await import(`./index?${Math.random()}`);
 
 	return renderToStaticMarkup(
 		<ConversationsList
@@ -218,5 +249,17 @@ describe("ConversationsList analytics controls", () => {
 
 		expect(html).not.toContain(">Analytics<");
 		expect(html).not.toContain('data-slot="mock-inbox-analytics"');
+	});
+
+	it("hides analytics controls entirely when Tinybird is disabled", async () => {
+		isAnalyticsSheetOpen = false;
+		const html = await renderList(null, {
+			tinybirdEnabled: false,
+		});
+
+		expect(html).not.toContain(">Analytics<");
+		expect(html).not.toContain('data-slot="mock-inbox-analytics"');
+		expect(html).not.toContain('data-slot="inbox-desktop-analytics-slot"');
+		expect(html).not.toContain("Open live visitors overlay");
 	});
 });

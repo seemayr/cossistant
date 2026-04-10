@@ -5,6 +5,7 @@ import { NavigationTopbar } from "@/components/ui/layout/navigation-topbar";
 import { InboxesProvider } from "@/contexts/inboxes";
 import { VisitorPresenceProvider } from "@/contexts/visitor-presence";
 import { WebsiteProvider } from "@/contexts/website";
+import { isTinybirdEnabled } from "@/lib/analytics-flags";
 import { getLatestRelease, getLatestReleaseBody } from "@/lib/latest-release";
 import {
 	getQueryClient,
@@ -13,6 +14,7 @@ import {
 	trpc,
 } from "@/lib/trpc/server";
 import { isValidWebsiteSlug } from "@/lib/url";
+import { getDashboardPrefetchTasks } from "./layout-prefetch";
 import { ContactVisitorDetailOverlay } from "./overlays/detail-page-overlay";
 import { LiveVisitorsOverlay } from "./overlays/live-visitors-overlay";
 import { ModalsAndSheets } from "./overlays/modals-and-sheets";
@@ -28,6 +30,7 @@ type LayoutProps = {
 
 export default async function Layout({ children, params }: LayoutProps) {
 	const { websiteSlug } = await params;
+	const tinybirdEnabled = isTinybirdEnabled();
 
 	// Reject invalid slugs (e.g., __webpack_hmr, _next paths)
 	if (!isValidWebsiteSlug(websiteSlug)) {
@@ -60,46 +63,16 @@ export default async function Layout({ children, params }: LayoutProps) {
 		handleAuthRedirect
 	);
 
-	await Promise.all([
-		prefetch(
-			trpc.view.list.queryOptions({ slug: websiteSlug }),
-			handleAuthRedirect
-		),
-		prefetch(
-			trpc.user.getWebsiteMembers.queryOptions({ websiteSlug }),
-			handleAuthRedirect
-		),
-		prefetch(
-			trpc.aiAgent.get.queryOptions({ websiteSlug }),
-			handleAuthRedirect
-		),
-		// Prefetch the conversation headers as an infinite query
-		queryClient.prefetchInfiniteQuery({
-			queryKey: [
-				...trpc.conversation.listConversationsHeaders.queryOptions({
-					websiteSlug,
-				}).queryKey,
-				{ type: "infinite" },
-			],
-			queryFn: async ({ pageParam }) => {
-				const response = await queryClient.fetchQuery(
-					trpc.conversation.listConversationsHeaders.queryOptions({
-						websiteSlug,
-						limit: 500,
-						cursor: pageParam ?? null,
-					})
-				);
-				return response;
-			},
-			initialPageParam: null as string | null,
-			getNextPageParam: (lastPage) => lastPage.nextCursor,
-			pages: 1, // Prefetch the first page
-		}),
-		prefetch(
-			trpc.website.getTinybirdToken.queryOptions({ websiteSlug }),
-			handleAuthRedirect
-		),
-	]);
+	await Promise.all(
+		getDashboardPrefetchTasks({
+			handleAuthRedirect,
+			prefetch,
+			queryClient,
+			tinybirdEnabled,
+			trpc,
+			websiteSlug,
+		})
+	);
 
 	return (
 		<HydrateClient>

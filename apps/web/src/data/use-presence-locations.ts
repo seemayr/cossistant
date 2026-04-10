@@ -34,6 +34,11 @@ export function usePresenceLocations({
 	const { data: tokenData } = useTinybirdToken(websiteSlug, {
 		staleTimeMs: PRESENCE_LOCATIONS_REFRESH_INTERVAL_MS,
 	});
+	const tinybirdQueryEnabled =
+		enabled &&
+		tokenData?.enabled !== false &&
+		!!tokenData?.token &&
+		!!tokenData?.host;
 
 	return useQuery({
 		queryKey: [
@@ -54,7 +59,7 @@ export function usePresenceLocations({
 				host
 			);
 		},
-		enabled: enabled && !!tokenData,
+		enabled: tinybirdQueryEnabled,
 		staleTime: PRESENCE_LOCATIONS_REFRESH_INTERVAL_MS,
 		refetchInterval: PRESENCE_LOCATIONS_REFRESH_INTERVAL_MS,
 	});

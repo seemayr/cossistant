@@ -50,7 +50,6 @@ function EscalationActionCard({
 
 			<div className="flex items-center justify-end">
 				<Button
-					className="bg-cossistant-orange text-white hover:bg-cossistant-orange/90"
 					disabled={isJoining}
 					onClick={onJoin}
 					ref={joinButtonRef}

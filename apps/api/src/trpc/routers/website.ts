@@ -100,6 +100,27 @@ const toWebsiteApiKey = (
 
 const WEBSITE_CREATE_ERROR_MESSAGE = "Failed to create website";
 
+const tinybirdEnabledResponseSchema = z.object({
+	enabled: z.literal(true),
+	token: z.string(),
+	host: z.string(),
+	expiresAt: z.number(),
+	maxRetentionDays: z.number(),
+});
+
+const tinybirdDisabledResponseSchema = z.object({
+	enabled: z.literal(false),
+	token: z.null(),
+	host: z.null(),
+	expiresAt: z.null(),
+	maxRetentionDays: z.null(),
+});
+
+const getTinybirdTokenResponseSchema = z.union([
+	tinybirdEnabledResponseSchema,
+	tinybirdDisabledResponseSchema,
+]);
+
 function logWebsiteCreateError(params: {
 	error: unknown;
 	organizationId: string;
@@ -524,6 +545,7 @@ export const websiteRouter = createTRPCRouter({
 		}),
 	getTinybirdToken: protectedProcedure
 		.input(z.object({ websiteSlug: z.string() }))
+		.output(getTinybirdTokenResponseSchema)
 		.query(async ({ ctx: { db, user }, input }) => {
 			const websiteData = await getWebsiteBySlugWithAccess(db, {
 				userId: user.id,
@@ -537,9 +559,30 @@ export const websiteRouter = createTRPCRouter({
 				});
 			}
 
+			if (env.TINYBIRD_ENABLED === false) {
+				return {
+					enabled: false as const,
+					token: null,
+					host: null,
+					expiresAt: null,
+					maxRetentionDays: null,
+				};
+			}
+
 			const token = await generateTinybirdJWT(websiteData.id);
 
+			if (!token) {
+				return {
+					enabled: false as const,
+					token: null,
+					host: null,
+					expiresAt: null,
+					maxRetentionDays: null,
+				};
+			}
+
 			return {
+				enabled: true as const,
 				token,
 				host: env.TINYBIRD_HOST,
 				expiresAt: Date.now() + 600_000,

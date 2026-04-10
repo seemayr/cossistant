@@ -1,19 +1,21 @@
 ---
 title: Overview
-description: Understand the storage and email responsibilities a self-hosted Cossistant deployment needs, and choose the setup path that fits your stack.
+description: Understand the storage, email, and analytics responsibilities a self-hosted Cossistant deployment needs, and choose the setup path that fits your stack.
 ---
 
-If you are self-hosting Cossistant, there are two infrastructure responsibilities you want to settle early: storage and email.
+If you are self-hosting Cossistant, there are three infrastructure responsibilities you want to settle early: storage, email, and analytics.
 
 Cossistant expects:
 
 - object storage for uploads and public file reads
 - transactional email infrastructure that can send mail, receive replies, and report lifecycle events
+- analytics infrastructure for inbox metrics and live presence, or an explicit decision to disable those managed analytics features
 
 We recommend an AWS-first path for the official self-host setup because the repo already ships Terraform modules for it, but the docs in this section are organized around roles rather than vendors:
 
 - [Storage](/docs/self-host/storage) covers uploads, public file reads, and the AWS S3 setup path
 - [Email Setup](/docs/self-host/email-setup) covers transactional email, inbound replies, and how to choose between Resend and SES
+- [Analytics](/docs/self-host/analytics) covers Tinybird-backed analytics, the Tinybird/DataFast toggle env vars, and what happens when analytics are disabled
 
 ## Why the AWS-first path is recommended
 
@@ -63,6 +65,22 @@ The good news is that you can choose your transport:
 
 Use the [Email Setup guide](/docs/self-host/email-setup) to choose a provider and configure the full inbound and outbound path.
 
+## Analytics responsibility
+
+Cossistant uses analytics infrastructure for two product areas:
+
+- inbox analytics
+- live visitor presence and "last seen in app" enrichment
+
+For self-hosting, you have two valid paths:
+
+- keep Tinybird enabled and point the app at your Tinybird setup
+- disable Tinybird entirely and run without the Tinybird-backed analytics UI
+
+The app also includes a separate DataFast script for our hosted web analytics. Self-hosters can disable that independently.
+
+Use the [Analytics guide](/docs/self-host/analytics) to choose how you want to handle both Tinybird and DataFast in your deployment.
+
 ## How the pieces fit together
 
 At a high level, a self-hosted deployment looks like this:
@@ -74,6 +92,7 @@ At a high level, a self-hosted deployment looks like this:
 5. New reply-to addresses point to the inbound domain for the active email provider.
 6. Resend or SES delivers inbound replies and lifecycle events back into the API using the provider-specific bridge path configured in the app.
 7. The API turns those events into timeline messages, notification triggers, and bounce or complaint records.
+8. Tinybird-backed inbox analytics and live presence are either enabled through your analytics setup or explicitly disabled through env flags.
 
 ## Recommended setup order
 
@@ -82,7 +101,8 @@ For a clean first deployment:
 1. Set up [Storage](/docs/self-host/storage) first and verify uploads.
 2. Read [Email Setup](/docs/self-host/email-setup) and decide whether you want Resend or SES for transactional mail.
 3. Configure the chosen provider and verify outbound email plus inbound reply handling.
-4. If you are rolling out SES gradually, keep the default `EMAIL_TRANSPORT_PROVIDER=resend` until the SES path is healthy, then flip to `ses`.
+4. Read [Analytics](/docs/self-host/analytics) and decide whether you will keep Tinybird enabled or disable Tinybird/DataFast for your deployment.
+5. If you are rolling out SES gradually, keep the default `EMAIL_TRANSPORT_PROVIDER=resend` until the SES path is healthy, then flip to `ses`.
 
 If you are doing a greenfield self-host deployment and do not plan to use Resend at all, you can move directly to SES once DNS, identities, and webhooks are confirmed working in your environment.
 
@@ -90,3 +110,4 @@ If you are doing a greenfield self-host deployment and do not plan to use Resend
 
 - [Storage](/docs/self-host/storage)
 - [Email Setup](/docs/self-host/email-setup)
+- [Analytics](/docs/self-host/analytics)
