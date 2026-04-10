@@ -126,6 +126,7 @@ export async function emitConversationCreatedEvent({
 			updatedAt: conversation.updatedAt,
 			visitorId: conversation.visitorId,
 			websiteId: conversation.websiteId,
+			channel: conversation.channel,
 			status: conversation.status,
 			deletedAt: conversation.deletedAt ?? null,
 			lastTimelineItem: header.lastTimelineItem ?? undefined,

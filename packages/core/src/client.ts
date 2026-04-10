@@ -86,6 +86,7 @@ type InitiateConversationParams = {
 	conversationId?: string;
 	visitorId?: string | null;
 	websiteId?: string | null;
+	channel?: Conversation["channel"];
 	title?: string;
 	status?: Conversation["status"];
 	defaultTimelineItems?: Array<DefaultMessage | TimelineItem>;
@@ -257,6 +258,7 @@ export class CossistantClient {
 					updatedAt: now,
 					visitorId: baseVisitorId,
 					websiteId: baseWebsiteId,
+					channel: params.channel ?? "widget",
 					status: params.status ?? ConversationStatus.OPEN,
 					deletedAt: null,
 					lastTimelineItem: timelineItems.at(-1),
@@ -420,6 +422,7 @@ export class CossistantClient {
 				const response = await this.restClient.createConversation({
 					conversationId: rest.conversationId,
 					visitorId: pending.conversation.visitorId || undefined,
+					channel: pending.conversation.channel,
 					defaultTimelineItems: [
 						...pending.initialTimelineItems,
 						optimisticTimelineItem,

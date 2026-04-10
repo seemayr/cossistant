@@ -483,6 +483,7 @@ describe("conversationCreated handler", () => {
 					updatedAt: new Date().toISOString(),
 					visitorId: "visitor-created",
 					websiteId: "site-created",
+					channel: "widget",
 					status: "open",
 					deletedAt: null,
 					lastTimelineItem: undefined,
