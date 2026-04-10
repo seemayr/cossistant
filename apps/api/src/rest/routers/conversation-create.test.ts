@@ -73,6 +73,7 @@ mock.module("@api/db/queries", () => ({
 
 mock.module("@api/db/queries/conversation", () => ({
 	upsertConversation: upsertConversationMock,
+	getConversationById: mock(async () => null),
 	getConversationHeader: getConversationHeaderMock,
 	getConversationByIdWithLastMessage: mock(async () => null),
 	getConversationSeenData: mock(async () => []),
@@ -91,6 +92,10 @@ mock.module("@api/db/queries/conversation", () => ({
 			hasMore: false,
 		},
 	})),
+	listConversationsHeaders: mock(async () => ({
+		items: [],
+		nextCursor: null,
+	})),
 }));
 
 mock.module("@api/db/queries/feedback", () => ({
@@ -98,8 +103,10 @@ mock.module("@api/db/queries/feedback", () => ({
 }));
 
 mock.module("@api/utils/participant-helpers", () => ({
+	addConversationParticipant: mock(async () => null),
 	getDefaultParticipants: getDefaultParticipantsMock,
 	addConversationParticipants: addConversationParticipantsMock,
+	isUserParticipant: mock(() => false),
 }));
 
 mock.module("@api/utils/timeline-item", () => ({
@@ -116,6 +123,17 @@ mock.module("@api/utils/conversation-realtime", () => ({
 	emitConversationCreatedEvent: emitConversationCreatedEventMock,
 	emitConversationSeenEvent: mock(async () => {}),
 	emitConversationTypingEvent: mock(async () => {}),
+}));
+
+mock.module("@api/ai-pipeline/shared/safety/kill-switch", () => ({
+	pauseAiForConversation: mock(async () => null),
+	resumeAiForConversation: mock(async () => null),
+}));
+
+mock.module("@api/realtime/emitter", () => ({
+	realtime: {
+		emit: mock(async () => {}),
+	},
 }));
 
 mock.module("@api/lib/plans/access", () => ({
@@ -135,10 +153,24 @@ mock.module("@api/services/presence", () => ({
 }));
 
 mock.module("@api/db/mutations/conversation", () => ({
+	archiveConversation: mock(async () => null),
+	joinEscalation: mock(async () => null),
+	markConversationAsNotSpam: mock(async () => null),
+	markConversationAsRead: mock(async () => ({
+		conversation: null,
+		lastSeenAt: null,
+	})),
 	markConversationAsSeenByVisitor: mock(async () => ({
 		conversationId: "conv-1",
 		lastSeenAt: "2026-02-26T00:00:00.000Z",
 	})),
+	markConversationAsSpam: mock(async () => null),
+	markConversationAsUnread: mock(async () => null),
+	mergeConversationMetadata: mock(async () => null),
+	reopenConversation: mock(async () => null),
+	resolveConversation: mock(async () => null),
+	unarchiveConversation: mock(async () => null),
+	updateConversationTitle: mock(async () => null),
 }));
 
 mock.module("@api/utils/geo-helpers", () => ({
@@ -147,6 +179,7 @@ mock.module("@api/utils/geo-helpers", () => ({
 
 mock.module("@api/lib/tinybird-sdk", () => ({
 	trackConversationMetric: mock(() => {}),
+	trackConversationMetricForVisitor: mock(() => {}),
 }));
 
 mock.module("../middleware", () => ({
@@ -198,6 +231,8 @@ const baseConversation = {
 	organizationId: "org-1",
 	websiteId: "site-1",
 	visitorId: "visitor-1",
+	channel: "widget",
+	metadata: null,
 	status: "open",
 	createdAt: "2026-02-26T00:00:00.000Z",
 	updatedAt: "2026-02-26T00:00:00.000Z",
@@ -320,6 +355,109 @@ describe("POST /v1/conversations", () => {
 		expect(response.status).toBe(200);
 		expect(payload.conversation.id).toBe("conv-1");
 		expect(payload.initialTimelineItems).toEqual([]);
+	});
+
+	it("defaults response channel to widget when the conversation record is missing it", async () => {
+		const dbHarness = createDbHarness({});
+		const { channel: _channel, ...conversationWithoutChannel } =
+			baseConversation;
+		safelyExtractRequestDataMock.mockResolvedValue({
+			db: dbHarness.db,
+			website: baseWebsite,
+			organization: baseOrganization,
+			visitorIdHeader: "visitor-1",
+			body: {
+				conversationId: "conv-1",
+				visitorId: "visitor-1",
+				defaultTimelineItems: [],
+			},
+		});
+		upsertConversationMock.mockResolvedValue({
+			status: "created",
+			conversation: conversationWithoutChannel,
+		});
+
+		const { conversationRouter } = await conversationRouterModulePromise;
+		const response = await conversationRouter.request(
+			createValidConversationPostRequest()
+		);
+		const payload = (await response.json()) as {
+			conversation: { channel: string };
+		};
+
+		expect(response.status).toBe(200);
+		expect(payload.conversation.channel).toBe("widget");
+	});
+
+	it("passes public metadata on create and returns it in the conversation payload", async () => {
+		const dbHarness = createDbHarness({});
+		safelyExtractRequestDataMock.mockResolvedValue({
+			db: dbHarness.db,
+			website: baseWebsite,
+			organization: baseOrganization,
+			visitorIdHeader: "visitor-1",
+			body: {
+				conversationId: "conv-1",
+				visitorId: "visitor-1",
+				defaultTimelineItems: [],
+				channel: "widget",
+				metadata: {
+					orderId: "ord_123",
+					priority: "vip",
+					mrr: 299,
+					flagged: true,
+					lastRefundAt: null,
+				},
+			},
+		});
+		upsertConversationMock.mockResolvedValue({
+			status: "created",
+			conversation: {
+				...baseConversation,
+				metadata: {
+					orderId: "ord_123",
+					priority: "vip",
+					mrr: 299,
+					flagged: true,
+					lastRefundAt: null,
+				},
+			},
+		});
+
+		const { conversationRouter } = await conversationRouterModulePromise;
+		const response = await conversationRouter.request(
+			createValidConversationPostRequest()
+		);
+		const payload = (await response.json()) as {
+			conversation: {
+				channel: string;
+				metadata: Record<string, unknown> | null;
+			};
+			initialTimelineItems: unknown[];
+		};
+
+		expect(response.status).toBe(200);
+		expect(upsertConversationMock).toHaveBeenCalledWith(
+			dbHarness.db,
+			expect.objectContaining({
+				channel: "widget",
+				metadata: {
+					orderId: "ord_123",
+					priority: "vip",
+					mrr: 299,
+					flagged: true,
+					lastRefundAt: null,
+				},
+			})
+		);
+		expect(payload.conversation.metadata).toEqual({
+			orderId: "ord_123",
+			priority: "vip",
+			mrr: 299,
+			flagged: true,
+			lastRefundAt: null,
+		});
+		expect(payload.conversation.channel).toBe("widget");
 	});
 
 	it("returns 409 when conversationId belongs to another owner tuple", async () => {

@@ -311,6 +311,15 @@ export const listKnowledgeRequestSchema = z
 				"Filter by AI agent ID; null for shared entries; omit for all",
 			example: "01JG000000000000000000002",
 		}),
+		isIncluded: z.boolean().optional().openapi({
+			description:
+				"Filter by whether the entry is currently included in training",
+			example: true,
+		}),
+		linkSourceId: z.ulid().optional().openapi({
+			description: "Filter by the link source that created this entry",
+			example: "01JG000000000000000000003",
+		}),
 		page: z.coerce.number().int().positive().default(1).openapi({
 			description: "Page number (1-indexed)",
 			example: 1,
@@ -344,6 +353,15 @@ export const listKnowledgeRestRequestSchema = z
 					'Filter by AI agent ID. Pass a valid ULID to filter by agent, pass "null" or empty string to filter for shared/website-scoped entries only, or omit entirely to return all entries.',
 				example: "01JG000000000000000000002",
 			}),
+		isIncluded: z.enum(["true", "false"]).optional().openapi({
+			description:
+				'Filter by training inclusion. Pass "true" for included entries or "false" for excluded entries.',
+			example: "true",
+		}),
+		linkSourceId: z.ulid().optional().openapi({
+			description: "Filter by the link source that created this entry.",
+			example: "01JG000000000000000000003",
+		}),
 		page: z.coerce.number().int().positive().default(1).openapi({
 			description: "Page number (1-indexed)",
 			example: 1,

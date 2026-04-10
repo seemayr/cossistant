@@ -1,4 +1,5 @@
 import type { Database } from "@api/db";
+import { SECURITY_CACHE_CONFIG } from "@api/db/cache/config";
 import type { UserSelect } from "@api/db/schema";
 import { session, user } from "@api/db/schema";
 import { auth } from "@api/lib/auth";
@@ -66,7 +67,9 @@ export async function resolveSession(
 			)
 			.innerJoin(user, eq(session.userId, user.id))
 			.limit(1)
-			.$withCache();
+			.$withCache({
+				config: SECURITY_CACHE_CONFIG,
+			});
 
 		if (res) {
 			foundSession = {
@@ -103,7 +106,9 @@ export async function resolveSession(
 			.where(and(eq(session.token, token), gt(session.expiresAt, now)))
 			.innerJoin(user, eq(session.userId, user.id))
 			.limit(1)
-			.$withCache();
+			.$withCache({
+				config: SECURITY_CACHE_CONFIG,
+			});
 
 		if (res) {
 			foundSession = {

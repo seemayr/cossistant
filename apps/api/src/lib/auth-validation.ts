@@ -41,8 +41,9 @@ async function getApiKeyFromRedis(
 	key: string,
 	db: Database
 ): Promise<ApiKeyWithWebsiteAndOrganization | null> {
-	// Direct call to DB query which has Redis caching built-in via .$withCache({ tag: "api-key" })
-	// This is shared across all API instances and provides sub-ms responses
+	// Direct call to the DB query which has Redis caching built-in with a
+	// per-key tag. This is shared across API instances and allows eager
+	// invalidation when website-level key settings change.
 	return await getApiKeyByKey(db, { key });
 }
 

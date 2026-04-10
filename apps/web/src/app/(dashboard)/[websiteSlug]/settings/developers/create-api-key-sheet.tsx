@@ -27,6 +27,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
+import {
 	Sheet,
 	SheetContent,
 	SheetDescription,
@@ -36,7 +43,7 @@ import {
 } from "@/components/ui/sheet";
 import { Step, Steps } from "@/components/ui/steps";
 import { Switch } from "@/components/ui/switch";
-import { useWebsite } from "@/contexts/website";
+import { useWebsite, useWebsiteMembers } from "@/contexts/website";
 import { useTRPC } from "@/lib/trpc/client";
 import { cn } from "@/lib/utils";
 
@@ -56,6 +63,7 @@ type CreateApiKeyFormValues = {
 	name: string;
 	keyType: (typeof KEY_TYPE_VALUES)[number];
 	environment: EnvironmentValue;
+	linkedUserId: string;
 };
 
 const createApiKeyFormSchema = z.object({
@@ -65,6 +73,7 @@ const createApiKeyFormSchema = z.object({
 		.max(80, { message: "Names must be fewer than 80 characters." }),
 	keyType: z.enum(KEY_TYPE_VALUES),
 	environment: z.enum(ENVIRONMENT_VALUES),
+	linkedUserId: z.string(),
 });
 
 const KEY_TYPE_OPTIONS: Array<{
@@ -105,6 +114,7 @@ const ENVIRONMENT_OPTIONS: Array<{
 
 export function CreateApiKeySheet({ organizationId }: CreateApiKeySheetProps) {
 	const website = useWebsite();
+	const members = useWebsiteMembers();
 	const trpc = useTRPC();
 	const queryClient = useQueryClient();
 	const [isOpen, setIsOpen] = useState(false);
@@ -118,6 +128,7 @@ export function CreateApiKeySheet({ organizationId }: CreateApiKeySheetProps) {
 			name: "",
 			keyType: APIKeyType.PUBLIC,
 			environment: "production",
+			linkedUserId: "none",
 		},
 	});
 
@@ -145,6 +156,10 @@ export function CreateApiKeySheet({ organizationId }: CreateApiKeySheetProps) {
 			websiteId: website.id,
 			name: values.name.trim(),
 			keyType: values.keyType,
+			linkedUserId:
+				values.keyType === APIKeyType.PRIVATE && values.linkedUserId !== "none"
+					? values.linkedUserId
+					: undefined,
 			isTest: values.environment === "test",
 		});
 
@@ -152,6 +167,8 @@ export function CreateApiKeySheet({ organizationId }: CreateApiKeySheetProps) {
 			name: "",
 			keyType: values.keyType,
 			environment: values.environment,
+			linkedUserId:
+				values.keyType === APIKeyType.PRIVATE ? values.linkedUserId : "none",
 		});
 	};
 
@@ -176,6 +193,8 @@ export function CreateApiKeySheet({ organizationId }: CreateApiKeySheetProps) {
 	};
 
 	const keyCreated = Boolean(lastCreatedKey?.key);
+	const selectedKeyType = form.watch("keyType");
+	const showLinkedUserField = selectedKeyType === APIKeyType.PRIVATE;
 
 	return (
 		<Sheet onOpenChange={handleOpenChange} open={isOpen}>
@@ -268,6 +287,47 @@ export function CreateApiKeySheet({ organizationId }: CreateApiKeySheetProps) {
 												</FormItem>
 											)}
 										/>
+
+										{showLinkedUserField ? (
+											<FormField
+												control={form.control}
+												name="linkedUserId"
+												render={({ field }) => (
+													<FormItem>
+														<FormLabel>Linked teammate</FormLabel>
+														<FormControl>
+															<Select
+																onValueChange={field.onChange}
+																value={field.value}
+															>
+																<SelectTrigger>
+																	<SelectValue placeholder="Choose who this key should act as" />
+																</SelectTrigger>
+																<SelectContent>
+																	<SelectItem value="none">
+																		Not linked
+																	</SelectItem>
+																	{members.map((member) => (
+																		<SelectItem
+																			key={member.id}
+																			value={member.id}
+																		>
+																			{member.name || member.email}
+																		</SelectItem>
+																	))}
+																</SelectContent>
+															</Select>
+														</FormControl>
+														<FormDescription>
+															Linked private keys automatically act as the
+															selected teammate on actor-aware API routes and
+															realtime connections.
+														</FormDescription>
+														<FormMessage />
+													</FormItem>
+												)}
+											/>
+										) : null}
 
 										<FormField
 											control={form.control}

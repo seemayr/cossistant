@@ -1,6 +1,25 @@
-import { markConversationAsSeenByVisitor } from "@api/db/mutations/conversation";
+import {
+	pauseAiForConversation,
+	resumeAiForConversation,
+} from "@api/ai-pipeline/shared/safety/kill-switch";
+import {
+	archiveConversation,
+	type ConversationRecord,
+	joinEscalation,
+	markConversationAsNotSpam,
+	markConversationAsRead,
+	markConversationAsSeenByVisitor,
+	markConversationAsSpam,
+	markConversationAsUnread,
+	mergeConversationMetadata,
+	reopenConversation,
+	resolveConversation,
+	unarchiveConversation,
+	updateConversationTitle,
+} from "@api/db/mutations/conversation";
 import { getVisitor } from "@api/db/queries";
 import {
+	getConversationById,
 	getConversationByIdWithLastMessage,
 	getConversationHeader,
 	getConversationSeenData,
@@ -13,13 +32,23 @@ import {
 	type conversation,
 	conversationTimelineItem,
 } from "@api/db/schema/conversation";
+import { env } from "@api/env";
+import { AuthValidationError } from "@api/lib/auth-validation";
 import {
 	applyDashboardConversationHardLimit,
 	getDashboardConversationLockCutoff,
 	resolveDashboardHardLimitPolicy,
 } from "@api/lib/hard-limits/dashboard";
 import { getPlanForWebsite } from "@api/lib/plans/access";
+import {
+	type ResolvedPrivateApiKeyActor,
+	resolvePrivateApiKeyActorUser,
+} from "@api/lib/private-api-key-actor";
+import { realtime } from "@api/realtime/emitter";
+import { getRedis } from "@api/redis";
 import { markVisitorPresence } from "@api/services/presence";
+import { createConversationEvent } from "@api/utils/conversation-event";
+import { createParticipantJoinedEvent } from "@api/utils/conversation-events";
 import { buildConversationExport } from "@api/utils/conversation-export";
 import {
 	emitConversationCreatedEvent,
@@ -29,8 +58,10 @@ import {
 import { generateIdempotentULID } from "@api/utils/db/ids";
 import { extractGeoFromVisitor } from "@api/utils/geo-helpers";
 import {
+	addConversationParticipant,
 	addConversationParticipants,
 	getDefaultParticipants,
+	isUserParticipant,
 } from "@api/utils/participant-helpers";
 import { triggerMessageNotificationWorkflow } from "@api/utils/send-message-with-notification";
 import {
@@ -44,7 +75,11 @@ import {
 	safelyExtractRequestQuery,
 	validateResponse,
 } from "@api/utils/validate";
-import { APIKeyType, TimelineItemVisibility } from "@cossistant/types";
+import {
+	APIKeyType,
+	ConversationEventType,
+	TimelineItemVisibility,
+} from "@cossistant/types";
 import {
 	type CreateConversationConflictCode,
 	conversationInboxItemSchema,
@@ -60,10 +95,14 @@ import {
 	listInboxConversationsResponseSchema,
 	markConversationSeenRequestSchema,
 	markConversationSeenResponseSchema,
+	pauseConversationAiRestRequestSchema,
+	privateConversationMutationResponseSchema,
 	setConversationTypingRequestSchema,
 	setConversationTypingResponseSchema,
 	submitConversationRatingRequestSchema,
 	submitConversationRatingResponseSchema,
+	updateConversationMetadataRequestSchema,
+	updateConversationTitleRestRequestSchema,
 } from "@cossistant/types/api/conversation";
 import {
 	getConversationTimelineItemsRequestSchema,
@@ -74,6 +113,7 @@ import {
 import { conversationSchema } from "@cossistant/types/schemas";
 import { OpenAPIHono, z } from "@hono/zod-openapi";
 import { and, eq } from "drizzle-orm";
+import { HTTPException } from "hono/http-exception";
 import { protectedPublicApiKeyMiddleware } from "../middleware";
 import {
 	errorJsonResponse,
@@ -88,6 +128,8 @@ import { persistFeedbackSubmission } from "./feedback-shared";
 
 type ConversationRow = typeof conversation.$inferSelect;
 type ConversationTimelineItemRow = typeof conversationTimelineItem.$inferSelect;
+const AI_PAUSE_DURATION_MAX_MINUTES = 60 * 24 * 365 * 100;
+const AI_PAUSE_FURTHER_NOTICE_MINUTES = 60 * 24 * 365 * 99;
 
 const serializeTimelineItemForResponse = (
 	item: (ConversationTimelineItemRow & { parts: unknown }) | TimelineItem
@@ -119,10 +161,15 @@ const serializeConversationForResponse = (
 	const serializedConversation = conversationSchema.parse({
 		id: record.id,
 		title: record.title ?? undefined,
+		metadata:
+			typeof record.metadata === "object" && record.metadata !== null
+				? (record.metadata as Record<string, string | number | boolean | null>)
+				: null,
 		createdAt: record.createdAt,
 		updatedAt: record.updatedAt,
 		visitorId: record.visitorId,
 		websiteId: record.websiteId,
+		channel: record.channel ?? "widget",
 		status: record.status,
 		visitorRating: record.visitorRating ?? null,
 		visitorRatingAt: record.visitorRatingAt ?? null,
@@ -216,6 +263,191 @@ function getConversationPathParams(c: {
 	});
 }
 
+async function safelyExtractOptionalRequestData<T>(
+	c: Parameters<typeof safelyExtractRequestData>[0],
+	schema: z.ZodType<T>
+) {
+	const extracted = await safelyExtractRequestData(c);
+	const rawBody = await c.req.text();
+	let parsedBody: unknown;
+
+	try {
+		parsedBody = rawBody.trim().length === 0 ? {} : JSON.parse(rawBody);
+	} catch (error) {
+		throw new HTTPException(400, {
+			message: "Invalid JSON in request body",
+			cause: error,
+		});
+	}
+
+	const result = schema.safeParse(parsedBody);
+
+	if (!result.success) {
+		throw new HTTPException(400, {
+			message: "Request validation failed",
+			cause: result.error.flatten(),
+		});
+	}
+
+	return {
+		...extracted,
+		body: result.data,
+	};
+}
+
+function getActorUserIdHeader(c: {
+	req: { header(name: string): string | undefined };
+}) {
+	const actorUserId = c.req.header("X-Actor-User-Id")?.trim();
+	return actorUserId && actorUserId.length > 0 ? actorUserId : null;
+}
+
+function assertPrivateConversationControlContext(
+	context: Pick<
+		Awaited<ReturnType<typeof safelyExtractRequestData>>,
+		"apiKey" | "website" | "organization"
+	>
+) {
+	if (context.apiKey?.keyType !== APIKeyType.PRIVATE) {
+		throw new HTTPException(403, {
+			message: "Private API key required",
+		});
+	}
+
+	if (!(context.website?.id && context.organization?.id)) {
+		throw new HTTPException(401, {
+			message: "Invalid API key",
+		});
+	}
+
+	return {
+		apiKey: context.apiKey,
+		website: context.website,
+		organization: context.organization,
+	};
+}
+
+function createPrivateConversationMutationResponse(
+	conversationRecord: ConversationRecord
+) {
+	return validateResponse(
+		{ conversation: conversationRecord },
+		privateConversationMutationResponseSchema
+	);
+}
+
+function buildAiPauseEventMessage(durationMinutes: number): string {
+	if (durationMinutes >= AI_PAUSE_FURTHER_NOTICE_MINUTES) {
+		return "paused AI answers until further notice";
+	}
+
+	if (durationMinutes === 10) {
+		return "paused AI answers for 10-min";
+	}
+
+	if (durationMinutes === 60) {
+		return "paused AI answers for 1-hour";
+	}
+
+	return `paused AI answers for ${durationMinutes}-min`;
+}
+
+async function emitPrivateConversationUpdate(
+	conversationRecord: ConversationRecord,
+	updates: {
+		status?: ConversationRecord["status"];
+		deletedAt?: string | null;
+		aiPausedUntil?: string | null;
+		title?: string | null;
+	}
+) {
+	await realtime.emit("conversationUpdated", {
+		websiteId: conversationRecord.websiteId,
+		organizationId: conversationRecord.organizationId,
+		visitorId: conversationRecord.visitorId ?? null,
+		userId: null,
+		conversationId: conversationRecord.id,
+		updates,
+		aiAgentId: null,
+	});
+}
+
+async function loadPrivateConversationRecord(params: {
+	db: RestContext["Variables"]["db"];
+	organizationId: string;
+	websiteId: string;
+	conversationId: string;
+}) {
+	const conversationRecord = await getConversationById(params.db, {
+		conversationId: params.conversationId,
+	});
+
+	if (!conversationRecord) {
+		return null;
+	}
+
+	if (
+		conversationRecord.organizationId !== params.organizationId ||
+		conversationRecord.websiteId !== params.websiteId
+	) {
+		return null;
+	}
+
+	return conversationRecord;
+}
+
+async function requirePrivateConversationActor(params: {
+	c: Parameters<typeof restError>[0];
+	db: RestContext["Variables"]["db"];
+	apiKey: NonNullable<RestContext["Variables"]["apiKey"]>;
+	organizationId: string;
+	websiteTeamId: string | null | undefined;
+	required: true;
+	missingActorMessage?: string;
+	invalidActorMessage?: string;
+}): Promise<ResolvedPrivateApiKeyActor>;
+async function requirePrivateConversationActor(params: {
+	c: Parameters<typeof restError>[0];
+	db: RestContext["Variables"]["db"];
+	apiKey: NonNullable<RestContext["Variables"]["apiKey"]>;
+	organizationId: string;
+	websiteTeamId: string | null | undefined;
+	required: false;
+	missingActorMessage?: string;
+	invalidActorMessage?: string;
+}): Promise<ResolvedPrivateApiKeyActor | null>;
+async function requirePrivateConversationActor(params: {
+	c: Parameters<typeof restError>[0];
+	db: RestContext["Variables"]["db"];
+	apiKey: NonNullable<RestContext["Variables"]["apiKey"]>;
+	organizationId: string;
+	websiteTeamId: string | null | undefined;
+	required: boolean;
+	missingActorMessage?: string;
+	invalidActorMessage?: string;
+}): Promise<ResolvedPrivateApiKeyActor | null> {
+	try {
+		return await resolvePrivateApiKeyActorUser({
+			db: params.db,
+			apiKey: params.apiKey,
+			organizationId: params.organizationId,
+			websiteTeamId: params.websiteTeamId,
+			explicitActorUserId: getActorUserIdHeader(params.c),
+			required: params.required,
+			missingActorMessage: params.missingActorMessage,
+			invalidActorMessage: params.invalidActorMessage,
+		});
+	} catch (error) {
+		if (error instanceof AuthValidationError) {
+			throw new HTTPException(error.statusCode === 400 ? 400 : 403, {
+				message: error.message,
+			});
+		}
+
+		throw error;
+	}
+}
+
 async function resolvePublicConversationVisitor(params: {
 	c: Parameters<typeof restError>[0];
 	db: RestContext["Variables"]["db"];
@@ -284,7 +516,7 @@ conversationRouter.openapi(
 		path: "/",
 		summary: "Create a conversation (optionally with initial timeline items)",
 		description:
-			"Create a conversation; optionally pass a conversationId and a set of default timeline items.",
+			"Create a conversation; optionally pass a conversationId, public metadata, and a set of default timeline items.",
 		tags: ["Conversations"],
 		request: {
 			body: {
@@ -342,6 +574,8 @@ conversationRouter.openapi(
 			websiteId: website.id,
 			visitorId: visitor.id,
 			conversationId: body.conversationId,
+			channel: body.channel,
+			metadata: body.metadata,
 		});
 		if (upsertResult.status === "conflict") {
 			return c.json(
@@ -549,7 +783,7 @@ conversationRouter.openapi(
 		path: "/",
 		summary: "List conversations for a visitor",
 		description:
-			"Fetch paginated list of conversations for a specific visitor with optional filters.",
+			"Fetch paginated list of conversations for a specific visitor with optional filters. Public conversation metadata is included when present.",
 		tags: ["Conversations"],
 		request: {
 			query: listConversationsRequestSchema,
@@ -606,6 +840,1165 @@ conversationRouter.openapi(
 
 		return c.json(
 			validateResponse(response, listConversationsResponseSchema),
+			200
+		);
+	}
+);
+
+conversationRouter.openapi(
+	{
+		method: "post",
+		path: "/{conversationId}/resolve",
+		summary: "Resolve a conversation",
+		description:
+			"Marks a conversation as resolved. Requires a private API key. When using an unlinked private key, send `X-Actor-User-Id` with a valid website teammate ID.",
+		operationId: "resolveConversation",
+		tags: ["Conversations"],
+		responses: {
+			200: {
+				description: "Conversation resolved successfully",
+				content: {
+					"application/json": {
+						schema: privateConversationMutationResponseSchema,
+					},
+				},
+			},
+			400: errorJsonResponse(
+				"Bad request - Missing actor for an unlinked private API key"
+			),
+			401: errorJsonResponse(
+				"Unauthorized - Invalid or missing private API key"
+			),
+			403: errorJsonResponse(
+				"Forbidden - Private API key required or actor user not allowed for this website"
+			),
+			404: errorJsonResponse("Conversation not found"),
+			500: errorJsonResponse("Internal server error"),
+		},
+		...privateControlAuth({
+			parameters: [conversationIdPathParameter],
+			includeActorUserIdHeader: true,
+		}),
+	},
+	async (c) => {
+		const extracted = await safelyExtractRequestData(c);
+		const privateContext = assertPrivateConversationControlContext(extracted);
+
+		const { conversationId } = getConversationPathParams(c);
+		const conversationRecord = await loadPrivateConversationRecord({
+			db: extracted.db,
+			organizationId: privateContext.organization.id,
+			websiteId: privateContext.website.id,
+			conversationId,
+		});
+
+		if (!conversationRecord) {
+			return restError(c, 404, "NOT_FOUND", "Conversation not found");
+		}
+
+		const actor = await requirePrivateConversationActor({
+			c,
+			db: extracted.db,
+			apiKey: privateContext.apiKey,
+			organizationId: privateContext.organization.id,
+			websiteTeamId: privateContext.website.teamId,
+			required: true,
+		});
+
+		const updatedConversation = await resolveConversation(extracted.db, {
+			conversation: conversationRecord,
+			actorUserId: actor.userId,
+		});
+
+		if (!updatedConversation) {
+			return restError(
+				c,
+				500,
+				"INTERNAL_SERVER_ERROR",
+				"Unable to resolve conversation"
+			);
+		}
+
+		await emitPrivateConversationUpdate(updatedConversation, {
+			status: updatedConversation.status,
+		});
+
+		return c.json(
+			createPrivateConversationMutationResponse(updatedConversation),
+			200
+		);
+	}
+);
+
+conversationRouter.openapi(
+	{
+		method: "post",
+		path: "/{conversationId}/reopen",
+		summary: "Reopen a conversation",
+		description:
+			"Reopens a previously resolved or spam conversation. Requires a private API key and an acting teammate.",
+		operationId: "reopenConversation",
+		tags: ["Conversations"],
+		responses: {
+			200: {
+				description: "Conversation reopened successfully",
+				content: {
+					"application/json": {
+						schema: privateConversationMutationResponseSchema,
+					},
+				},
+			},
+			400: errorJsonResponse(
+				"Bad request - Missing actor for an unlinked private API key"
+			),
+			401: errorJsonResponse(
+				"Unauthorized - Invalid or missing private API key"
+			),
+			403: errorJsonResponse(
+				"Forbidden - Private API key required or actor user not allowed for this website"
+			),
+			404: errorJsonResponse("Conversation not found"),
+			500: errorJsonResponse("Internal server error"),
+		},
+		...privateControlAuth({
+			parameters: [conversationIdPathParameter],
+			includeActorUserIdHeader: true,
+		}),
+	},
+	async (c) => {
+		const extracted = await safelyExtractRequestData(c);
+		const privateContext = assertPrivateConversationControlContext(extracted);
+
+		const { conversationId } = getConversationPathParams(c);
+		const conversationRecord = await loadPrivateConversationRecord({
+			db: extracted.db,
+			organizationId: privateContext.organization.id,
+			websiteId: privateContext.website.id,
+			conversationId,
+		});
+
+		if (!conversationRecord) {
+			return restError(c, 404, "NOT_FOUND", "Conversation not found");
+		}
+
+		const actor = await requirePrivateConversationActor({
+			c,
+			db: extracted.db,
+			apiKey: privateContext.apiKey,
+			organizationId: privateContext.organization.id,
+			websiteTeamId: privateContext.website.teamId,
+			required: true,
+		});
+
+		const updatedConversation = await reopenConversation(extracted.db, {
+			conversation: conversationRecord,
+			actorUserId: actor.userId,
+		});
+
+		if (!updatedConversation) {
+			return restError(
+				c,
+				500,
+				"INTERNAL_SERVER_ERROR",
+				"Unable to reopen conversation"
+			);
+		}
+
+		await emitPrivateConversationUpdate(updatedConversation, {
+			status: updatedConversation.status,
+		});
+
+		return c.json(
+			createPrivateConversationMutationResponse(updatedConversation),
+			200
+		);
+	}
+);
+
+conversationRouter.openapi(
+	{
+		method: "post",
+		path: "/{conversationId}/spam",
+		summary: "Mark a conversation as spam",
+		description:
+			"Marks a conversation as spam. Requires a private API key and an acting teammate.",
+		operationId: "markConversationAsSpam",
+		tags: ["Conversations"],
+		responses: {
+			200: {
+				description: "Conversation marked as spam successfully",
+				content: {
+					"application/json": {
+						schema: privateConversationMutationResponseSchema,
+					},
+				},
+			},
+			400: errorJsonResponse(
+				"Bad request - Missing actor for an unlinked private API key"
+			),
+			401: errorJsonResponse(
+				"Unauthorized - Invalid or missing private API key"
+			),
+			403: errorJsonResponse(
+				"Forbidden - Private API key required or actor user not allowed for this website"
+			),
+			404: errorJsonResponse("Conversation not found"),
+			500: errorJsonResponse("Internal server error"),
+		},
+		...privateControlAuth({
+			parameters: [conversationIdPathParameter],
+			includeActorUserIdHeader: true,
+		}),
+	},
+	async (c) => {
+		const extracted = await safelyExtractRequestData(c);
+		const privateContext = assertPrivateConversationControlContext(extracted);
+
+		const { conversationId } = getConversationPathParams(c);
+		const conversationRecord = await loadPrivateConversationRecord({
+			db: extracted.db,
+			organizationId: privateContext.organization.id,
+			websiteId: privateContext.website.id,
+			conversationId,
+		});
+
+		if (!conversationRecord) {
+			return restError(c, 404, "NOT_FOUND", "Conversation not found");
+		}
+
+		const actor = await requirePrivateConversationActor({
+			c,
+			db: extracted.db,
+			apiKey: privateContext.apiKey,
+			organizationId: privateContext.organization.id,
+			websiteTeamId: privateContext.website.teamId,
+			required: true,
+		});
+
+		const updatedConversation = await markConversationAsSpam(extracted.db, {
+			conversation: conversationRecord,
+			actorUserId: actor.userId,
+		});
+
+		if (!updatedConversation) {
+			return restError(
+				c,
+				500,
+				"INTERNAL_SERVER_ERROR",
+				"Unable to mark conversation as spam"
+			);
+		}
+
+		await emitPrivateConversationUpdate(updatedConversation, {
+			status: updatedConversation.status,
+		});
+
+		return c.json(
+			createPrivateConversationMutationResponse(updatedConversation),
+			200
+		);
+	}
+);
+
+conversationRouter.openapi(
+	{
+		method: "post",
+		path: "/{conversationId}/not-spam",
+		summary: "Mark a conversation as not spam",
+		description:
+			"Restores a spam conversation back to the open state. Requires a private API key and an acting teammate.",
+		operationId: "markConversationAsNotSpam",
+		tags: ["Conversations"],
+		responses: {
+			200: {
+				description: "Conversation marked as not spam successfully",
+				content: {
+					"application/json": {
+						schema: privateConversationMutationResponseSchema,
+					},
+				},
+			},
+			400: errorJsonResponse(
+				"Bad request - Missing actor for an unlinked private API key"
+			),
+			401: errorJsonResponse(
+				"Unauthorized - Invalid or missing private API key"
+			),
+			403: errorJsonResponse(
+				"Forbidden - Private API key required or actor user not allowed for this website"
+			),
+			404: errorJsonResponse("Conversation not found"),
+			500: errorJsonResponse("Internal server error"),
+		},
+		...privateControlAuth({
+			parameters: [conversationIdPathParameter],
+			includeActorUserIdHeader: true,
+		}),
+	},
+	async (c) => {
+		const extracted = await safelyExtractRequestData(c);
+		const privateContext = assertPrivateConversationControlContext(extracted);
+
+		const { conversationId } = getConversationPathParams(c);
+		const conversationRecord = await loadPrivateConversationRecord({
+			db: extracted.db,
+			organizationId: privateContext.organization.id,
+			websiteId: privateContext.website.id,
+			conversationId,
+		});
+
+		if (!conversationRecord) {
+			return restError(c, 404, "NOT_FOUND", "Conversation not found");
+		}
+
+		const actor = await requirePrivateConversationActor({
+			c,
+			db: extracted.db,
+			apiKey: privateContext.apiKey,
+			organizationId: privateContext.organization.id,
+			websiteTeamId: privateContext.website.teamId,
+			required: true,
+		});
+
+		const updatedConversation = await markConversationAsNotSpam(extracted.db, {
+			conversation: conversationRecord,
+			actorUserId: actor.userId,
+		});
+
+		if (!updatedConversation) {
+			return restError(
+				c,
+				500,
+				"INTERNAL_SERVER_ERROR",
+				"Unable to mark conversation as not spam"
+			);
+		}
+
+		await emitPrivateConversationUpdate(updatedConversation, {
+			status: updatedConversation.status,
+		});
+
+		return c.json(
+			createPrivateConversationMutationResponse(updatedConversation),
+			200
+		);
+	}
+);
+
+conversationRouter.openapi(
+	{
+		method: "post",
+		path: "/{conversationId}/archive",
+		summary: "Archive a conversation",
+		description:
+			"Archives a conversation from the inbox. This matches the dashboard delete behavior and requires a private API key plus an acting teammate.",
+		operationId: "archiveConversation",
+		tags: ["Conversations"],
+		responses: {
+			200: {
+				description: "Conversation archived successfully",
+				content: {
+					"application/json": {
+						schema: privateConversationMutationResponseSchema,
+					},
+				},
+			},
+			400: errorJsonResponse(
+				"Bad request - Missing actor for an unlinked private API key"
+			),
+			401: errorJsonResponse(
+				"Unauthorized - Invalid or missing private API key"
+			),
+			403: errorJsonResponse(
+				"Forbidden - Private API key required or actor user not allowed for this website"
+			),
+			404: errorJsonResponse("Conversation not found"),
+			500: errorJsonResponse("Internal server error"),
+		},
+		...privateControlAuth({
+			parameters: [conversationIdPathParameter],
+			includeActorUserIdHeader: true,
+		}),
+	},
+	async (c) => {
+		const extracted = await safelyExtractRequestData(c);
+		const privateContext = assertPrivateConversationControlContext(extracted);
+
+		const { conversationId } = getConversationPathParams(c);
+		const conversationRecord = await loadPrivateConversationRecord({
+			db: extracted.db,
+			organizationId: privateContext.organization.id,
+			websiteId: privateContext.website.id,
+			conversationId,
+		});
+
+		if (!conversationRecord) {
+			return restError(c, 404, "NOT_FOUND", "Conversation not found");
+		}
+
+		const actor = await requirePrivateConversationActor({
+			c,
+			db: extracted.db,
+			apiKey: privateContext.apiKey,
+			organizationId: privateContext.organization.id,
+			websiteTeamId: privateContext.website.teamId,
+			required: true,
+		});
+
+		const updatedConversation = await archiveConversation(extracted.db, {
+			conversation: conversationRecord,
+			actorUserId: actor.userId,
+		});
+
+		if (!updatedConversation) {
+			return restError(
+				c,
+				500,
+				"INTERNAL_SERVER_ERROR",
+				"Unable to archive conversation"
+			);
+		}
+
+		await emitPrivateConversationUpdate(updatedConversation, {
+			deletedAt: updatedConversation.deletedAt,
+		});
+
+		return c.json(
+			createPrivateConversationMutationResponse(updatedConversation),
+			200
+		);
+	}
+);
+
+conversationRouter.openapi(
+	{
+		method: "post",
+		path: "/{conversationId}/unarchive",
+		summary: "Unarchive a conversation",
+		description:
+			"Restores an archived conversation. Requires a private API key and an acting teammate.",
+		operationId: "unarchiveConversation",
+		tags: ["Conversations"],
+		responses: {
+			200: {
+				description: "Conversation unarchived successfully",
+				content: {
+					"application/json": {
+						schema: privateConversationMutationResponseSchema,
+					},
+				},
+			},
+			400: errorJsonResponse(
+				"Bad request - Missing actor for an unlinked private API key"
+			),
+			401: errorJsonResponse(
+				"Unauthorized - Invalid or missing private API key"
+			),
+			403: errorJsonResponse(
+				"Forbidden - Private API key required or actor user not allowed for this website"
+			),
+			404: errorJsonResponse("Conversation not found"),
+			500: errorJsonResponse("Internal server error"),
+		},
+		...privateControlAuth({
+			parameters: [conversationIdPathParameter],
+			includeActorUserIdHeader: true,
+		}),
+	},
+	async (c) => {
+		const extracted = await safelyExtractRequestData(c);
+		const privateContext = assertPrivateConversationControlContext(extracted);
+
+		const { conversationId } = getConversationPathParams(c);
+		const conversationRecord = await loadPrivateConversationRecord({
+			db: extracted.db,
+			organizationId: privateContext.organization.id,
+			websiteId: privateContext.website.id,
+			conversationId,
+		});
+
+		if (!conversationRecord) {
+			return restError(c, 404, "NOT_FOUND", "Conversation not found");
+		}
+
+		const actor = await requirePrivateConversationActor({
+			c,
+			db: extracted.db,
+			apiKey: privateContext.apiKey,
+			organizationId: privateContext.organization.id,
+			websiteTeamId: privateContext.website.teamId,
+			required: true,
+		});
+
+		const updatedConversation = await unarchiveConversation(extracted.db, {
+			conversation: conversationRecord,
+			actorUserId: actor.userId,
+		});
+
+		if (!updatedConversation) {
+			return restError(
+				c,
+				500,
+				"INTERNAL_SERVER_ERROR",
+				"Unable to unarchive conversation"
+			);
+		}
+
+		await emitPrivateConversationUpdate(updatedConversation, {
+			deletedAt: updatedConversation.deletedAt,
+		});
+
+		return c.json(
+			createPrivateConversationMutationResponse(updatedConversation),
+			200
+		);
+	}
+);
+
+conversationRouter.openapi(
+	{
+		method: "post",
+		path: "/{conversationId}/read",
+		summary: "Mark a conversation as read",
+		description:
+			"Marks a conversation as read for the acting teammate. Requires a private API key and an acting teammate.",
+		operationId: "markConversationAsRead",
+		tags: ["Conversations"],
+		responses: {
+			200: {
+				description: "Conversation marked as read successfully",
+				content: {
+					"application/json": {
+						schema: privateConversationMutationResponseSchema,
+					},
+				},
+			},
+			400: errorJsonResponse(
+				"Bad request - Missing actor for an unlinked private API key"
+			),
+			401: errorJsonResponse(
+				"Unauthorized - Invalid or missing private API key"
+			),
+			403: errorJsonResponse(
+				"Forbidden - Private API key required or actor user not allowed for this website"
+			),
+			404: errorJsonResponse("Conversation not found"),
+		},
+		...privateControlAuth({
+			parameters: [conversationIdPathParameter],
+			includeActorUserIdHeader: true,
+		}),
+	},
+	async (c) => {
+		const extracted = await safelyExtractRequestData(c);
+		const privateContext = assertPrivateConversationControlContext(extracted);
+
+		const { conversationId } = getConversationPathParams(c);
+		const conversationRecord = await loadPrivateConversationRecord({
+			db: extracted.db,
+			organizationId: privateContext.organization.id,
+			websiteId: privateContext.website.id,
+			conversationId,
+		});
+
+		if (!conversationRecord) {
+			return restError(c, 404, "NOT_FOUND", "Conversation not found");
+		}
+
+		const actor = await requirePrivateConversationActor({
+			c,
+			db: extracted.db,
+			apiKey: privateContext.apiKey,
+			organizationId: privateContext.organization.id,
+			websiteTeamId: privateContext.website.teamId,
+			required: true,
+		});
+
+		const { conversation: updatedConversation, lastSeenAt } =
+			await markConversationAsRead(extracted.db, {
+				conversation: conversationRecord,
+				actorUserId: actor.userId,
+			});
+
+		await emitConversationSeenEvent({
+			conversation: updatedConversation,
+			actor: { type: "user", userId: actor.userId },
+			lastSeenAt,
+		});
+
+		return c.json(
+			createPrivateConversationMutationResponse(updatedConversation),
+			200
+		);
+	}
+);
+
+conversationRouter.openapi(
+	{
+		method: "post",
+		path: "/{conversationId}/unread",
+		summary: "Mark a conversation as unread",
+		description:
+			"Clears the acting teammate's read marker for a conversation. Requires a private API key and an acting teammate.",
+		operationId: "markConversationAsUnread",
+		tags: ["Conversations"],
+		responses: {
+			200: {
+				description: "Conversation marked as unread successfully",
+				content: {
+					"application/json": {
+						schema: privateConversationMutationResponseSchema,
+					},
+				},
+			},
+			400: errorJsonResponse(
+				"Bad request - Missing actor for an unlinked private API key"
+			),
+			401: errorJsonResponse(
+				"Unauthorized - Invalid or missing private API key"
+			),
+			403: errorJsonResponse(
+				"Forbidden - Private API key required or actor user not allowed for this website"
+			),
+			404: errorJsonResponse("Conversation not found"),
+		},
+		...privateControlAuth({
+			parameters: [conversationIdPathParameter],
+			includeActorUserIdHeader: true,
+		}),
+	},
+	async (c) => {
+		const extracted = await safelyExtractRequestData(c);
+		const privateContext = assertPrivateConversationControlContext(extracted);
+
+		const { conversationId } = getConversationPathParams(c);
+		const conversationRecord = await loadPrivateConversationRecord({
+			db: extracted.db,
+			organizationId: privateContext.organization.id,
+			websiteId: privateContext.website.id,
+			conversationId,
+		});
+
+		if (!conversationRecord) {
+			return restError(c, 404, "NOT_FOUND", "Conversation not found");
+		}
+
+		const actor = await requirePrivateConversationActor({
+			c,
+			db: extracted.db,
+			apiKey: privateContext.apiKey,
+			organizationId: privateContext.organization.id,
+			websiteTeamId: privateContext.website.teamId,
+			required: true,
+		});
+
+		const updatedConversation = await markConversationAsUnread(extracted.db, {
+			conversation: conversationRecord,
+			actorUserId: actor.userId,
+		});
+
+		return c.json(
+			createPrivateConversationMutationResponse(updatedConversation),
+			200
+		);
+	}
+);
+
+conversationRouter.openapi(
+	{
+		method: "patch",
+		path: "/{conversationId}/metadata",
+		summary: "Update conversation metadata",
+		description:
+			"Merges metadata into a conversation. Conversation metadata are public and retrievable on public conversation endpoints, but this post-creation update route requires a private API key.",
+		operationId: "updateConversationMetadata",
+		tags: ["Conversations"],
+		request: {
+			body: {
+				required: true,
+				content: {
+					"application/json": {
+						schema: updateConversationMetadataRequestSchema,
+					},
+				},
+			},
+		},
+		responses: {
+			200: {
+				description: "Conversation metadata updated successfully",
+				content: {
+					"application/json": {
+						schema: privateConversationMutationResponseSchema,
+					},
+				},
+			},
+			400: errorJsonResponse("Bad request - Invalid request payload"),
+			401: errorJsonResponse(
+				"Unauthorized - Invalid or missing private API key"
+			),
+			403: errorJsonResponse("Forbidden - Private API key required"),
+			404: errorJsonResponse("Conversation not found"),
+			500: errorJsonResponse("Internal server error"),
+		},
+		...privateControlAuth({
+			parameters: [conversationIdPathParameter],
+		}),
+	},
+	async (c) => {
+		const extracted = await safelyExtractRequestData(
+			c,
+			updateConversationMetadataRequestSchema
+		);
+		const privateContext = assertPrivateConversationControlContext(extracted);
+
+		const { conversationId } = getConversationPathParams(c);
+		const conversationRecord = await loadPrivateConversationRecord({
+			db: extracted.db,
+			organizationId: privateContext.organization.id,
+			websiteId: privateContext.website.id,
+			conversationId,
+		});
+
+		if (!conversationRecord) {
+			return restError(c, 404, "NOT_FOUND", "Conversation not found");
+		}
+
+		const updatedConversation = await mergeConversationMetadata(extracted.db, {
+			conversation: conversationRecord,
+			metadata: extracted.body.metadata,
+		});
+
+		if (!updatedConversation) {
+			return restError(
+				c,
+				500,
+				"INTERNAL_SERVER_ERROR",
+				"Unable to update conversation metadata"
+			);
+		}
+
+		return c.json(
+			createPrivateConversationMutationResponse(updatedConversation),
+			200
+		);
+	}
+);
+
+conversationRouter.openapi(
+	{
+		method: "patch",
+		path: "/{conversationId}",
+		summary: "Update a conversation title",
+		description:
+			"Updates the conversation title. This private control route does not require an acting teammate in v1.",
+		operationId: "updateConversationTitle",
+		tags: ["Conversations"],
+		request: {
+			body: {
+				required: true,
+				content: {
+					"application/json": {
+						schema: updateConversationTitleRestRequestSchema,
+					},
+				},
+			},
+		},
+		responses: {
+			200: {
+				description: "Conversation title updated successfully",
+				content: {
+					"application/json": {
+						schema: privateConversationMutationResponseSchema,
+					},
+				},
+			},
+			400: errorJsonResponse("Bad request - Invalid request payload"),
+			401: errorJsonResponse(
+				"Unauthorized - Invalid or missing private API key"
+			),
+			403: errorJsonResponse("Forbidden - Private API key required"),
+			404: errorJsonResponse("Conversation not found"),
+			500: errorJsonResponse("Internal server error"),
+		},
+		...privateControlAuth({
+			parameters: [conversationIdPathParameter],
+		}),
+	},
+	async (c) => {
+		const extracted = await safelyExtractRequestData(
+			c,
+			updateConversationTitleRestRequestSchema
+		);
+		const privateContext = assertPrivateConversationControlContext(extracted);
+
+		const { conversationId } = getConversationPathParams(c);
+		const conversationRecord = await loadPrivateConversationRecord({
+			db: extracted.db,
+			organizationId: privateContext.organization.id,
+			websiteId: privateContext.website.id,
+			conversationId,
+		});
+
+		if (!conversationRecord) {
+			return restError(c, 404, "NOT_FOUND", "Conversation not found");
+		}
+
+		const normalizedTitle = extracted.body.title?.trim() || null;
+		const updatedConversation = await updateConversationTitle(extracted.db, {
+			conversation: conversationRecord,
+			title: normalizedTitle,
+			titleSource: "user",
+		});
+
+		if (!updatedConversation) {
+			return restError(
+				c,
+				500,
+				"INTERNAL_SERVER_ERROR",
+				"Unable to update conversation title"
+			);
+		}
+
+		await emitPrivateConversationUpdate(updatedConversation, {
+			title: updatedConversation.title,
+		});
+
+		return c.json(
+			createPrivateConversationMutationResponse(updatedConversation),
+			200
+		);
+	}
+);
+
+conversationRouter.openapi(
+	{
+		method: "post",
+		path: "/{conversationId}/ai/pause",
+		summary: "Pause AI replies for a conversation",
+		description:
+			"Pauses AI replies for a conversation for the provided duration. Requires a private API key and an acting teammate.",
+		operationId: "pauseConversationAi",
+		tags: ["Conversations"],
+		request: {
+			body: {
+				required: false,
+				content: {
+					"application/json": {
+						schema: pauseConversationAiRestRequestSchema,
+					},
+				},
+			},
+		},
+		responses: {
+			200: {
+				description: "Conversation AI paused successfully",
+				content: {
+					"application/json": {
+						schema: privateConversationMutationResponseSchema,
+					},
+				},
+			},
+			400: errorJsonResponse(
+				"Bad request - Invalid request payload or missing actor for an unlinked private API key"
+			),
+			401: errorJsonResponse(
+				"Unauthorized - Invalid or missing private API key"
+			),
+			403: errorJsonResponse(
+				"Forbidden - Private API key required or actor user not allowed for this website"
+			),
+			404: errorJsonResponse("Conversation not found"),
+			500: errorJsonResponse("Internal server error"),
+		},
+		...privateControlAuth({
+			parameters: [conversationIdPathParameter],
+			includeActorUserIdHeader: true,
+		}),
+	},
+	async (c) => {
+		const extracted = await safelyExtractOptionalRequestData(
+			c,
+			pauseConversationAiRestRequestSchema
+		);
+		const privateContext = assertPrivateConversationControlContext(extracted);
+
+		const { conversationId } = getConversationPathParams(c);
+		const conversationRecord = await loadPrivateConversationRecord({
+			db: extracted.db,
+			organizationId: privateContext.organization.id,
+			websiteId: privateContext.website.id,
+			conversationId,
+		});
+
+		if (!conversationRecord) {
+			return restError(c, 404, "NOT_FOUND", "Conversation not found");
+		}
+
+		const actor = await requirePrivateConversationActor({
+			c,
+			db: extracted.db,
+			apiKey: privateContext.apiKey,
+			organizationId: privateContext.organization.id,
+			websiteTeamId: privateContext.website.teamId,
+			required: true,
+		});
+
+		const durationMinutes =
+			extracted.body.durationMinutes ?? env.AI_AGENT_ROGUE_PAUSE_MINUTES;
+
+		if (durationMinutes > AI_PAUSE_DURATION_MAX_MINUTES) {
+			return restError(
+				c,
+				400,
+				"BAD_REQUEST",
+				"durationMinutes exceeds the supported maximum"
+			);
+		}
+
+		const updatedConversation = await pauseAiForConversation({
+			db: extracted.db,
+			redis: getRedis(),
+			conversationId: conversationRecord.id,
+			organizationId: conversationRecord.organizationId,
+			durationMinutes,
+			reason: `manual:${actor.userId}`,
+			mode: "replace",
+		});
+
+		if (!updatedConversation) {
+			return restError(
+				c,
+				500,
+				"INTERNAL_SERVER_ERROR",
+				"Unable to pause AI for conversation"
+			);
+		}
+
+		await Promise.all([
+			emitPrivateConversationUpdate(updatedConversation, {
+				aiPausedUntil: updatedConversation.aiPausedUntil,
+			}),
+			createConversationEvent({
+				db: extracted.db,
+				context: {
+					conversationId: updatedConversation.id,
+					organizationId: updatedConversation.organizationId,
+					websiteId: updatedConversation.websiteId,
+					visitorId: updatedConversation.visitorId,
+				},
+				event: {
+					type: ConversationEventType.AI_PAUSED,
+					actorUserId: actor.userId,
+					message: buildAiPauseEventMessage(durationMinutes),
+					visibility: TimelineItemVisibility.PRIVATE,
+				},
+			}),
+		]);
+
+		return c.json(
+			createPrivateConversationMutationResponse(updatedConversation),
+			200
+		);
+	}
+);
+
+conversationRouter.openapi(
+	{
+		method: "post",
+		path: "/{conversationId}/ai/resume",
+		summary: "Resume AI replies for a conversation",
+		description:
+			"Resumes AI replies for a conversation. Requires a private API key and an acting teammate.",
+		operationId: "resumeConversationAi",
+		tags: ["Conversations"],
+		responses: {
+			200: {
+				description: "Conversation AI resumed successfully",
+				content: {
+					"application/json": {
+						schema: privateConversationMutationResponseSchema,
+					},
+				},
+			},
+			400: errorJsonResponse(
+				"Bad request - Missing actor for an unlinked private API key"
+			),
+			401: errorJsonResponse(
+				"Unauthorized - Invalid or missing private API key"
+			),
+			403: errorJsonResponse(
+				"Forbidden - Private API key required or actor user not allowed for this website"
+			),
+			404: errorJsonResponse("Conversation not found"),
+			500: errorJsonResponse("Internal server error"),
+		},
+		...privateControlAuth({
+			parameters: [conversationIdPathParameter],
+			includeActorUserIdHeader: true,
+		}),
+	},
+	async (c) => {
+		const extracted = await safelyExtractRequestData(c);
+		const privateContext = assertPrivateConversationControlContext(extracted);
+
+		const { conversationId } = getConversationPathParams(c);
+		const conversationRecord = await loadPrivateConversationRecord({
+			db: extracted.db,
+			organizationId: privateContext.organization.id,
+			websiteId: privateContext.website.id,
+			conversationId,
+		});
+
+		if (!conversationRecord) {
+			return restError(c, 404, "NOT_FOUND", "Conversation not found");
+		}
+
+		const actor = await requirePrivateConversationActor({
+			c,
+			db: extracted.db,
+			apiKey: privateContext.apiKey,
+			organizationId: privateContext.organization.id,
+			websiteTeamId: privateContext.website.teamId,
+			required: true,
+		});
+
+		const updatedConversation = await resumeAiForConversation({
+			db: extracted.db,
+			redis: getRedis(),
+			conversationId: conversationRecord.id,
+			organizationId: conversationRecord.organizationId,
+		});
+
+		if (!updatedConversation) {
+			return restError(
+				c,
+				500,
+				"INTERNAL_SERVER_ERROR",
+				"Unable to resume AI for conversation"
+			);
+		}
+
+		await Promise.all([
+			emitPrivateConversationUpdate(updatedConversation, {
+				aiPausedUntil: null,
+			}),
+			createConversationEvent({
+				db: extracted.db,
+				context: {
+					conversationId: updatedConversation.id,
+					organizationId: updatedConversation.organizationId,
+					websiteId: updatedConversation.websiteId,
+					visitorId: updatedConversation.visitorId,
+				},
+				event: {
+					type: ConversationEventType.AI_RESUMED,
+					actorUserId: actor.userId,
+					message: "resumed AI answers",
+					visibility: TimelineItemVisibility.PRIVATE,
+				},
+			}),
+		]);
+
+		return c.json(
+			createPrivateConversationMutationResponse(updatedConversation),
+			200
+		);
+	}
+);
+
+conversationRouter.openapi(
+	{
+		method: "post",
+		path: "/{conversationId}/join-escalation",
+		summary: "Join an escalated conversation",
+		description:
+			"Marks an escalation as handled and adds the acting teammate as a participant if needed. Requires a private API key and an acting teammate.",
+		operationId: "joinConversationEscalation",
+		tags: ["Conversations"],
+		responses: {
+			200: {
+				description: "Escalation joined successfully",
+				content: {
+					"application/json": {
+						schema: privateConversationMutationResponseSchema,
+					},
+				},
+			},
+			400: errorJsonResponse(
+				"Bad request - Missing actor for an unlinked private API key"
+			),
+			401: errorJsonResponse(
+				"Unauthorized - Invalid or missing private API key"
+			),
+			403: errorJsonResponse(
+				"Forbidden - Private API key required or actor user not allowed for this website"
+			),
+			404: errorJsonResponse("Conversation not found"),
+			500: errorJsonResponse("Internal server error"),
+		},
+		...privateControlAuth({
+			parameters: [conversationIdPathParameter],
+			includeActorUserIdHeader: true,
+		}),
+	},
+	async (c) => {
+		const extracted = await safelyExtractRequestData(c);
+		const privateContext = assertPrivateConversationControlContext(extracted);
+
+		const { conversationId } = getConversationPathParams(c);
+		const conversationRecord = await loadPrivateConversationRecord({
+			db: extracted.db,
+			organizationId: privateContext.organization.id,
+			websiteId: privateContext.website.id,
+			conversationId,
+		});
+
+		if (!conversationRecord) {
+			return restError(c, 404, "NOT_FOUND", "Conversation not found");
+		}
+
+		const actor = await requirePrivateConversationActor({
+			c,
+			db: extracted.db,
+			apiKey: privateContext.apiKey,
+			organizationId: privateContext.organization.id,
+			websiteTeamId: privateContext.website.teamId,
+			required: true,
+		});
+
+		const isParticipant = await isUserParticipant(extracted.db, {
+			conversationId,
+			userId: actor.userId,
+		});
+
+		if (!isParticipant) {
+			await addConversationParticipant(extracted.db, {
+				conversationId,
+				userId: actor.userId,
+				organizationId: privateContext.organization.id,
+				requestedByUserId: actor.userId,
+				reason: "Joined escalation",
+			});
+		}
+
+		await createParticipantJoinedEvent(extracted.db, {
+			conversationId,
+			organizationId: privateContext.organization.id,
+			websiteId: privateContext.website.id,
+			visitorId: conversationRecord.visitorId,
+			targetUserId: actor.userId,
+			actorUserId: actor.userId,
+			isAutoAdded: false,
+			customMessage: "joined to help",
+		});
+
+		const updatedConversation = await joinEscalation(extracted.db, {
+			conversation: conversationRecord,
+			actorUserId: actor.userId,
+		});
+
+		return c.json(
+			createPrivateConversationMutationResponse(updatedConversation),
 			200
 		);
 	}
@@ -693,7 +2086,8 @@ conversationRouter.openapi(
 		method: "get",
 		path: "/{conversationId}",
 		summary: "Get a single conversation by ID",
-		description: "Fetch a specific conversation by its ID.",
+		description:
+			"Fetch a specific conversation by its ID, including any public conversation metadata.",
 		tags: ["Conversations"],
 		request: {
 			params: getConversationRequestSchema,

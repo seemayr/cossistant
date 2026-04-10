@@ -1,5 +1,6 @@
 import { DEFAULT_PAGE_LIMIT } from "@api/constants";
 import type { Database } from "@api/db";
+import { SECURITY_CACHE_CONFIG } from "@api/db/cache/config";
 import type {
 	ApiKeySelect,
 	OrganizationSelect,
@@ -8,10 +9,7 @@ import type {
 import { apiKey, organization, website } from "@api/db/schema";
 import { env } from "@api/env";
 import { generateApiKey, hashApiKey } from "@api/utils/api-keys";
-import {
-	API_KEY_CACHE_TAG,
-	getApiKeyCacheTagForKey,
-} from "@api/utils/cache/api-key-cache";
+import { getApiKeyCacheTagForKey } from "@api/utils/cache/api-key-cache";
 import { generateULID } from "@api/utils/db/ids";
 import { APIKeyType } from "@cossistant/types";
 import { and, desc, eq } from "drizzle-orm";
@@ -36,7 +34,10 @@ export async function getApiKeyByKey(
 		.innerJoin(organization, eq(apiKey.organizationId, organization.id))
 		.innerJoin(website, eq(apiKey.websiteId, website.id))
 		.limit(1)
-		.$withCache();
+		.$withCache({
+			tag: getApiKeyCacheTagForKey(params.key),
+			config: SECURITY_CACHE_CONFIG,
+		});
 
 	if (res?.website && res.organization && res.api_key) {
 		return {
@@ -194,6 +195,7 @@ export async function createApiKey(
 		websiteId: string;
 		keyType: APIKeyType;
 		createdBy: string;
+		linkedUserId?: string | null;
 		isTest: boolean;
 	}
 ): Promise<CreateApiKeyResult> {
@@ -222,6 +224,7 @@ export async function createApiKey(
 			organizationId: data.organizationId,
 			keyType: data.keyType,
 			createdBy: data.createdBy,
+			linkedUserId: data.linkedUserId ?? null,
 			websiteId: data.websiteId,
 			isActive: true,
 			isTest: data.isTest,

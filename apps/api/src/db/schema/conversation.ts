@@ -165,6 +165,10 @@ export const conversation = pgTable(
 		sentimentConfidence: real("sentiment_confidence"),
 		channel: text("channel").notNull().default("widget"),
 		title: text("title"),
+		metadata: jsonb("metadata").$type<Record<
+			string,
+			string | number | boolean | null
+		> | null>(),
 		titleSource: conversationTitleSourceEnum("title_source"),
 		resolutionTime: integer("resolution_time"), // in seconds
 		visitorRating: integer("visitor_rating"), // 1-5 scale

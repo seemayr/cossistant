@@ -6,6 +6,11 @@ import {
 	getApiKeysByOrganization,
 	revokeApiKey,
 } from "@api/db/queries/api-keys";
+import {
+	getWebsiteMemberById,
+	getWebsiteMembers,
+	type WebsiteMember,
+} from "@api/db/queries/member";
 import { createDefaultWebsiteViews } from "@api/db/queries/view";
 import {
 	createWebsite,
@@ -78,7 +83,10 @@ const toNumberOrNull = (value: unknown): number | null => {
 
 const toWebsiteApiKey = (
 	key: ApiKeyLike,
-	options?: { includeRawKey?: boolean }
+	options?: {
+		includeRawKey?: boolean;
+		linkedUser?: WebsiteMember | null;
+	}
 ) => ({
 	id: key.id,
 	name:
@@ -96,7 +104,15 @@ const toWebsiteApiKey = (
 	createdAt: key.createdAt,
 	lastUsedAt: key.lastUsedAt ?? null,
 	revokedAt: key.revokedAt ?? null,
+	linkedUserId: key.linkedUserId ?? null,
+	linkedUser: options?.linkedUser ?? null,
 });
+
+function buildWebsiteMemberMap(members: WebsiteMember[]) {
+	return new Map(
+		members.map((websiteMember) => [websiteMember.id, websiteMember])
+	);
+}
 
 const WEBSITE_CREATE_ERROR_MESSAGE = "Failed to create website";
 
@@ -223,6 +239,7 @@ export const websiteRouter = createTRPCRouter({
 					contactEmail: true,
 					logoUrl: true,
 					organizationId: true,
+					teamId: true,
 					whitelistedDomains: true,
 					defaultParticipantIds: true,
 				},
@@ -252,6 +269,14 @@ export const websiteRouter = createTRPCRouter({
 				orgId: site.organizationId,
 				websiteId: site.id,
 			});
+			const members =
+				site.teamId === null
+					? []
+					: await getWebsiteMembers(ctx.db, {
+							organizationId: site.organizationId,
+							websiteTeamId: site.teamId,
+						});
+			const memberMap = buildWebsiteMemberMap(members);
 
 			return {
 				website: {
@@ -267,7 +292,12 @@ export const websiteRouter = createTRPCRouter({
 				},
 				apiKeys: apiKeys
 					.filter((key) => key.isActive)
-					.map((key) => toWebsiteApiKey(key)),
+					.map((key) =>
+						toWebsiteApiKey(key, {
+							linkedUser:
+								(key.linkedUserId && memberMap.get(key.linkedUserId)) || null,
+						})
+					),
 			};
 		}),
 	create: protectedProcedure
@@ -423,7 +453,7 @@ export const websiteRouter = createTRPCRouter({
 					eq(website.organizationId, input.organizationId),
 					isNull(website.deletedAt)
 				),
-				columns: { id: true, organizationId: true },
+				columns: { id: true, organizationId: true, teamId: true },
 			});
 
 			if (!site) {
@@ -446,6 +476,40 @@ export const websiteRouter = createTRPCRouter({
 				});
 			}
 
+			let linkedUser: WebsiteMember | null = null;
+			let linkedUserId: string | null = null;
+
+			if (input.linkedUserId) {
+				if (input.keyType !== APIKeyType.PRIVATE) {
+					throw new TRPCError({
+						code: "BAD_REQUEST",
+						message: "Only private API keys can be linked to a team member.",
+					});
+				}
+
+				if (!site.teamId) {
+					throw new TRPCError({
+						code: "BAD_REQUEST",
+						message: "This website does not have a team to link API keys to.",
+					});
+				}
+
+				linkedUser = await getWebsiteMemberById(ctx.db, {
+					organizationId: input.organizationId,
+					websiteTeamId: site.teamId,
+					userId: input.linkedUserId,
+				});
+
+				if (!linkedUser) {
+					throw new TRPCError({
+						code: "NOT_FOUND",
+						message: "Linked team member not found for this website.",
+					});
+				}
+
+				linkedUserId = linkedUser.id;
+			}
+
 			const createdKey = await createApiKey(ctx.db, {
 				id: generateULID(),
 				name: input.name,
@@ -453,10 +517,14 @@ export const websiteRouter = createTRPCRouter({
 				websiteId: input.websiteId,
 				keyType: input.keyType,
 				createdBy: ctx.user.id,
+				linkedUserId,
 				isTest: input.isTest,
 			});
 
-			return toWebsiteApiKey(createdKey, { includeRawKey: true });
+			return toWebsiteApiKey(createdKey, {
+				includeRawKey: true,
+				linkedUser,
+			});
 		}),
 	revokeApiKey: protectedProcedure
 		.input(revokeWebsiteApiKeyRequestSchema)
@@ -468,7 +536,7 @@ export const websiteRouter = createTRPCRouter({
 					eq(website.organizationId, input.organizationId),
 					isNull(website.deletedAt)
 				),
-				columns: { id: true, organizationId: true },
+				columns: { id: true, organizationId: true, teamId: true },
 			});
 
 			if (!site) {
@@ -516,7 +584,16 @@ export const websiteRouter = createTRPCRouter({
 				});
 			}
 
-			return toWebsiteApiKey(revoked);
+			const linkedUser =
+				revoked.linkedUserId && site.teamId
+					? await getWebsiteMemberById(ctx.db, {
+							organizationId: input.organizationId,
+							websiteTeamId: site.teamId,
+							userId: revoked.linkedUserId,
+						})
+					: null;
+
+			return toWebsiteApiKey(revoked, { linkedUser });
 		}),
 	checkDomain: protectedProcedure
 		.input(checkWebsiteDomainRequestSchema)

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { APIKeyType } from "@cossistant/types";
 
 const safelyExtractRequestDataMock = mock((async () => ({})) as (
 	...args: unknown[]
@@ -236,6 +237,47 @@ describe("website route GET /", () => {
 				name: "Support AI",
 				image: "https://cdn.example.com/ai-agent.png",
 			},
+		]);
+	});
+
+	it("lists website team members for private API keys", async () => {
+		const { db, website } = createWebsiteContext();
+		listWebsiteAccessUsersMock.mockResolvedValue([
+			createWebsiteAccessUser({
+				userId: "user-1",
+				name: "Alice",
+				email: "alice@example.com",
+				lastSeenAt: new Date("2026-03-03T04:05:06.000Z"),
+			}),
+		]);
+		safelyExtractRequestDataMock.mockResolvedValue({
+			db,
+			website,
+			organization: { id: "org-1" },
+			apiKey: { keyType: APIKeyType.PRIVATE },
+		});
+
+		const { websiteRouter } = await websiteRouterModulePromise;
+		const response = await websiteRouter.request(
+			new Request("http://localhost/team-members", {
+				method: "GET",
+			})
+		);
+		const payload = (await response.json()) as {
+			members: Array<{
+				id: string;
+				name: string | null;
+				email: string;
+			}>;
+		};
+
+		expect(response.status).toBe(200);
+		expect(payload.members).toEqual([
+			expect.objectContaining({
+				id: "user-1",
+				name: "Alice",
+				email: "alice@example.com",
+			}),
 		]);
 	});
 });

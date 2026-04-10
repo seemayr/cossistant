@@ -37,7 +37,7 @@
     "@types/node": "^24.10.9",
     "@upstash/workflow": "^0.2.23",
     "ai": "^6.0.154",
-    "drizzle-orm": "^0.44.7",
+    "drizzle-orm": "^0.45.2",
     "email-reply-parser": "^2.3.5",
     "hono": "^4.11.5",
     "hono-rate-limiter": "^0.4.2",
@@ -63,7 +63,7 @@
     "@types/react": "^19.2.9",
     "@types/web-push": "^3.6.4",
     "concurrently": "^9.2.1",
-    "drizzle-kit": "^0.31.8",
+    "drizzle-kit": "^0.31.10",
     "react-email": "4.2.11"
   },
   "scripts": {

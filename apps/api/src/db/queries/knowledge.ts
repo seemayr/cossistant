@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { Database } from "@api/db";
+import { KNOWLEDGE_READ_CACHE_CONFIG } from "@api/db/cache/config";
 import {
 	type KnowledgeInsert,
 	type KnowledgeSelect,
@@ -37,7 +38,10 @@ export async function getKnowledgeById(
 				isNull(knowledge.deletedAt)
 			)
 		)
-		.limit(1);
+		.limit(1)
+		.$withCache({
+			config: KNOWLEDGE_READ_CACHE_CONFIG,
+		});
 
 	return entry ?? null;
 }
@@ -85,6 +89,8 @@ export async function listKnowledge(
 		websiteId: string;
 		type?: KnowledgeType;
 		aiAgentId?: string | null;
+		isIncluded?: boolean;
+		linkSourceId?: string;
 		page?: number;
 		limit?: number;
 	}
@@ -122,11 +128,22 @@ export async function listKnowledge(
 		}
 	}
 
+	if (params.isIncluded !== undefined) {
+		whereConditions.push(eq(knowledge.isIncluded, params.isIncluded));
+	}
+
+	if (params.linkSourceId) {
+		whereConditions.push(eq(knowledge.linkSourceId, params.linkSourceId));
+	}
+
 	// Get total count
 	const [countResult] = await db
 		.select({ total: count() })
 		.from(knowledge)
-		.where(and(...whereConditions));
+		.where(and(...whereConditions))
+		.$withCache({
+			config: KNOWLEDGE_READ_CACHE_CONFIG,
+		});
 
 	const total = Number(countResult?.total ?? 0);
 
@@ -137,7 +154,10 @@ export async function listKnowledge(
 		.where(and(...whereConditions))
 		.orderBy(knowledge.createdAt)
 		.limit(limit)
-		.offset(offset);
+		.offset(offset)
+		.$withCache({
+			config: KNOWLEDGE_READ_CACHE_CONFIG,
+		});
 
 	return {
 		items,

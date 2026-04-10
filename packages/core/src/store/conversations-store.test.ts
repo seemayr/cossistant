@@ -18,6 +18,7 @@ function createMockConversation(
 		updatedAt: "2024-01-01T00:00:00.000Z",
 		visitorId: "visitor-1",
 		websiteId: "site-1",
+		channel: "widget",
 		status: "open",
 		deletedAt: null,
 		lastTimelineItem: undefined,

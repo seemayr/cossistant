@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { conversationMetadataSchema } from "../api/conversation-metadata";
 import { conversationClarificationSummarySchema } from "../api/knowledge-clarification";
 import { timelineItemSchema } from "../api/timeline-item";
 import { visitorProfileSchema } from "../api/visitor";
@@ -35,6 +36,7 @@ export const conversationRecordSchema = z.object({
 	organizationId: z.string(),
 	visitorId: z.string(),
 	websiteId: z.string(),
+	metadata: conversationMetadataSchema.nullable().optional(),
 	status: conversationStatusSchema,
 	priority: conversationPrioritySchema,
 	sentiment: conversationSentimentSchema,
@@ -81,6 +83,7 @@ export const conversationHeaderSchema = z.object({
 	visitorId: z.string(),
 	visitor: visitorProfileSchema,
 	websiteId: z.string(),
+	metadata: conversationMetadataSchema.nullable().optional(),
 	channel: z.string(),
 	title: z.string().nullable(),
 	titleSource: z.enum(["ai", "user"]).nullable(),

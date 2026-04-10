@@ -29,6 +29,7 @@ type OpenAPIParameter = {
 type OpenAPIAuthOptions = {
 	parameters?: OpenAPIParameter[];
 	includeVisitorIdHeader?: boolean;
+	includeActorUserIdHeader?: boolean;
 };
 
 type RestAuthContext = {
@@ -110,6 +111,19 @@ export const visitorIdHeader = {
 	},
 } satisfies OpenAPIParameter;
 
+export const actorUserIdHeader = {
+	name: "X-Actor-User-Id",
+	in: "header",
+	description:
+		"Acting teammate identifier for unlinked private API keys. Required on actor-aware private routes when the private key is not linked to a team member. Ignored when the private key is linked.",
+	required: false,
+	schema: {
+		type: "string",
+		pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+		example: "01JG000000000000000000000",
+	},
+} satisfies OpenAPIParameter;
+
 export function errorJsonResponse(description: string) {
 	return {
 		description,
@@ -128,6 +142,7 @@ export function privateControlAuth(options: OpenAPIAuthOptions = {}) {
 	const parameters = [
 		...(options.parameters ?? []),
 		privateApiKeyAuthorizationHeader,
+		...(options.includeActorUserIdHeader ? [actorUserIdHeader] : []),
 		...(options.includeVisitorIdHeader ? [visitorIdHeader] : []),
 	];
 
@@ -147,6 +162,7 @@ export function runtimeDualAuth(options: OpenAPIAuthOptions = {}) {
 		privateApiKeyAuthorizationHeader,
 		publicApiKeyHeader,
 		publicApiKeyOriginHeader,
+		...(options.includeActorUserIdHeader ? [actorUserIdHeader] : []),
 		...(options.includeVisitorIdHeader ? [visitorIdHeader] : []),
 	];
 

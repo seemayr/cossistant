@@ -66,15 +66,28 @@ export type SessionAuthConfig = {
 	userId?: string | null;
 };
 
-export type RealtimeAuthConfig = VisitorAuthConfig | SessionAuthConfig;
+export type PrivateKeyAuthConfig = {
+	kind: "privateKey";
+	privateKey: string | null;
+	actorUserId?: string | null;
+	websiteId?: string | null;
+	userId?: string | null;
+};
+
+export type RealtimeAuthConfig =
+	| VisitorAuthConfig
+	| SessionAuthConfig
+	| PrivateKeyAuthConfig;
 
 type ResolvedAuthConfig = {
-	type: "visitor" | "session";
+	type: "visitor" | "session" | "privateKey";
 	visitorId: string | null;
 	websiteId: string | null;
 	userId: string | null;
 	sessionToken: string | null;
 	publicKey: string | null;
+	privateKey: string | null;
+	actorUserId: string | null;
 };
 
 export type RealtimeConnectionStatus =
@@ -295,6 +308,27 @@ function normalizeAuth(
 			userId: null,
 			sessionToken: null,
 			publicKey: resolvePublicKeyOrNull(auth.publicKey ?? null),
+			privateKey: null,
+			actorUserId: null,
+		} satisfies ResolvedAuthConfig;
+	}
+
+	if (auth.kind === "privateKey") {
+		const privateKey = auth.privateKey?.trim() || null;
+
+		if (!privateKey) {
+			return null;
+		}
+
+		return {
+			type: "privateKey",
+			visitorId: null,
+			websiteId: auth.websiteId?.trim() || null,
+			userId: auth.userId?.trim() || auth.actorUserId?.trim() || null,
+			sessionToken: null,
+			publicKey: null,
+			privateKey,
+			actorUserId: auth.actorUserId?.trim() || null,
 		} satisfies ResolvedAuthConfig;
 	}
 
@@ -311,6 +345,8 @@ function normalizeAuth(
 		userId: auth.userId?.trim() || null,
 		sessionToken,
 		publicKey: null,
+		privateKey: null,
+		actorUserId: null,
 	} satisfies ResolvedAuthConfig;
 }
 
@@ -330,6 +366,11 @@ function buildSocketUrl(
 			const publicKey = auth.publicKey;
 			if (publicKey) {
 				url.searchParams.set("publicKey", publicKey);
+			}
+		} else if (auth.type === "privateKey") {
+			url.searchParams.set("token", auth.privateKey ?? "");
+			if (auth.actorUserId) {
+				url.searchParams.set("actorUserId", auth.actorUserId);
 			}
 		} else {
 			url.searchParams.set("sessionToken", auth.sessionToken ?? "");
@@ -360,7 +401,9 @@ function authChanged(
 		a.websiteId !== b.websiteId ||
 		a.userId !== b.userId ||
 		a.sessionToken !== b.sessionToken ||
-		a.publicKey !== b.publicKey
+		a.publicKey !== b.publicKey ||
+		a.privateKey !== b.privateKey ||
+		a.actorUserId !== b.actorUserId
 	);
 }
 

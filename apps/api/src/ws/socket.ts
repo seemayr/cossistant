@@ -9,6 +9,7 @@ import {
 	type AuthValidationOptions,
 	performAuthentication,
 } from "@api/lib/auth-validation";
+import { resolvePrivateApiKeyActorUser } from "@api/lib/private-api-key-actor";
 import { markUserPresence, markVisitorPresence } from "@api/services/presence";
 import {
 	createConnectionEvent,
@@ -22,6 +23,7 @@ import {
 	type WSContext,
 } from "@api/utils/websocket-connection";
 import { updateLastSeenTimestamps } from "@api/utils/websocket-updates";
+import { APIKeyType } from "@cossistant/types";
 import {
 	type AnyRealtimeEvent,
 	isValidEventType,
@@ -682,12 +684,14 @@ function extractAuthCredentials(c: Context): {
 	publicKey: string | undefined;
 	actualOrigin: string | undefined;
 	visitorId: string | undefined;
+	actorUserId: string | undefined;
 } {
 	// Try headers first (for non-browser clients)
 	const authHeader = c.req.header("Authorization");
 	let privateKey = authHeader?.split(" ")[1];
 	let publicKey = c.req.header("X-Public-Key");
 	let visitorId = c.req.header("X-Visitor-Id");
+	let actorUserId = c.req.header("X-Actor-User-Id");
 
 	// Fallback to URL parameters (for browser WebSocket clients)
 	// This is necessary because browsers can't set custom headers on WebSocket connections
@@ -699,6 +703,9 @@ function extractAuthCredentials(c: Context): {
 	}
 	if (!visitorId) {
 		visitorId = c.req.query("visitorId");
+	}
+	if (!actorUserId) {
+		actorUserId = c.req.query("actorUserId");
 	}
 
 	// Extract origin from WebSocket-specific headers
@@ -729,10 +736,11 @@ function extractAuthCredentials(c: Context): {
 			referer,
 			actualOrigin,
 			visitorId: visitorId ? `${visitorId.substring(0, 8)}...` : null,
+			actorUserId: actorUserId ? `${actorUserId.substring(0, 8)}...` : null,
 		});
 	}
 
-	return { privateKey, publicKey, actualOrigin, visitorId };
+	return { privateKey, publicKey, actualOrigin, visitorId, actorUserId };
 }
 
 function extractSessionToken(c: Context): string | undefined {
@@ -992,7 +1000,7 @@ async function authenticateWebSocketConnection(
 ): Promise<WebSocketAuthSuccess | null> {
 	try {
 		// Extract credentials
-		const { privateKey, publicKey, actualOrigin, visitorId } =
+		const { privateKey, publicKey, actualOrigin, visitorId, actorUserId } =
 			extractAuthCredentials(c);
 		const websiteIdParam = c.req.query("websiteId")?.trim() || undefined;
 		const sessionToken = extractSessionToken(c);
@@ -1026,6 +1034,22 @@ async function authenticateWebSocketConnection(
 		if (result) {
 			result.visitorId = visitorId;
 			await applyWebsiteOverride(result, websiteIdParam);
+
+			const apiKey = result.apiKey;
+
+			if (apiKey && apiKey.keyType === APIKeyType.PRIVATE) {
+				const actor = await resolvePrivateApiKeyActorUser({
+					db,
+					apiKey,
+					organizationId: apiKey.organization.id,
+					websiteTeamId: apiKey.website?.teamId,
+					explicitActorUserId: actorUserId,
+					required: true,
+				});
+
+				result.userId = actor?.userId;
+			}
+
 			logAuthSuccess(result);
 		}
 
@@ -1148,7 +1172,12 @@ export const upgradedWebsocket = upgradeWebSocket(async (c) => {
 					message: authError.message,
 					code: authError.statusCode,
 				});
-				ws.close(authError.statusCode === 403 ? 1008 : 1011, authError.message);
+				ws.close(
+					authError.statusCode >= 400 && authError.statusCode < 500
+						? 1008
+						: 1011,
+					authError.message
+				);
 				return;
 			}
 

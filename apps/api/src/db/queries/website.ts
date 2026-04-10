@@ -1,15 +1,13 @@
 import { DEFAULT_PAGE_LIMIT } from "@api/constants";
 import type { Database } from "@api/db";
+import { SECURITY_CACHE_CONFIG } from "@api/db/cache/config";
 import type { WebsiteInsert } from "@api/db/schema";
-import {
-	member,
-	organization,
-	team,
-	teamMember,
-	website,
-} from "@api/db/schema";
+import { organization, team, website } from "@api/db/schema";
 import { auth } from "@api/lib/auth";
-import { hasAnyRole } from "@cossistant/core";
+import {
+	isOrganizationAdminOrOwner,
+	isTeamMember,
+} from "@api/utils/access-control";
 import type { WebsiteStatus } from "@cossistant/types/enums";
 
 import { and, desc, eq, inArray, isNull, or } from "drizzle-orm";
@@ -276,51 +274,21 @@ export async function checkUserWebsiteAccess(
 		websiteSlug: string;
 	}
 ) {
-	// First, get the website by slug
-	const [site] = await db
-		.select()
-		.from(website)
-		.where(and(eq(website.slug, params.websiteSlug), isNull(website.deletedAt)))
-		.limit(1);
+	const site = await getActiveWebsiteBySlug(db, {
+		websiteSlug: params.websiteSlug,
+	});
 
 	if (!site) {
 		return { hasAccess: false, website: null };
 	}
 
-	// Check if user is an owner or admin of the organization
-	const [orgMembership] = await db
-		.select({
-			role: member.role,
-		})
-		.from(member)
-		.where(
-			and(
-				eq(member.userId, params.userId),
-				eq(member.organizationId, site.organizationId)
-			)
-		)
-		.limit(1);
+	const hasAccess = await userHasWebsiteAccess(db, {
+		userId: params.userId,
+		site,
+	});
 
-	if (hasAnyRole(orgMembership?.role ?? null, ["owner", "admin"])) {
+	if (hasAccess) {
 		return { hasAccess: true, website: site };
-	}
-
-	// Check if user is a member of the team associated with this website
-	if (site.teamId) {
-		const [teamMembership] = await db
-			.select()
-			.from(teamMember)
-			.where(
-				and(
-					eq(teamMember.userId, params.userId),
-					eq(teamMember.teamId, site.teamId)
-				)
-			)
-			.limit(1);
-
-		if (teamMembership) {
-			return { hasAccess: true, website: site };
-		}
 	}
 
 	return { hasAccess: false, website: site };
@@ -361,53 +329,88 @@ export async function getWebsiteByIdWithAccess(
 		websiteId: string;
 	}
 ) {
-	// First, get the website by ID
-	const [site] = await db
-		.select()
-		.from(website)
-		.where(and(eq(website.id, params.websiteId), isNull(website.deletedAt)))
-		.limit(1);
+	const site = await getActiveWebsiteById(db, {
+		websiteId: params.websiteId,
+	});
 
 	if (!site) {
 		return null;
 	}
 
-	// Check if user is an owner or admin of the organization
-	const [orgMembership] = await db
-		.select({
-			role: member.role,
+	if (
+		await userHasWebsiteAccess(db, {
+			userId: params.userId,
+			site,
 		})
-		.from(member)
-		.where(
-			and(
-				eq(member.userId, params.userId),
-				eq(member.organizationId, site.organizationId)
-			)
-		)
-		.limit(1);
-
-	if (hasAnyRole(orgMembership?.role ?? null, ["owner", "admin"])) {
+	) {
 		return site;
 	}
 
-	// Check if user is a member of the team associated with this website
-	if (site.teamId) {
-		const [teamMembership] = await db
-			.select()
-			.from(teamMember)
-			.where(
-				and(
-					eq(teamMember.userId, params.userId),
-					eq(teamMember.teamId, site.teamId)
-				)
-			)
-			.limit(1);
+	return null;
+}
 
-		if (teamMembership) {
-			return site;
-		}
+async function getActiveWebsiteBySlug(
+	db: Database,
+	params: {
+		websiteSlug: string;
+	}
+) {
+	const [site] = await db
+		.select()
+		.from(website)
+		.where(and(eq(website.slug, params.websiteSlug), isNull(website.deletedAt)))
+		.limit(1)
+		.$withCache({
+			config: SECURITY_CACHE_CONFIG,
+		});
+
+	return site ?? null;
+}
+
+async function getActiveWebsiteById(
+	db: Database,
+	params: {
+		websiteId: string;
+	}
+) {
+	const [site] = await db
+		.select()
+		.from(website)
+		.where(and(eq(website.id, params.websiteId), isNull(website.deletedAt)))
+		.limit(1)
+		.$withCache({
+			config: SECURITY_CACHE_CONFIG,
+		});
+
+	return site ?? null;
+}
+
+async function userHasWebsiteAccess(
+	db: Database,
+	params: {
+		userId: string;
+		site: Awaited<ReturnType<typeof getActiveWebsiteById>>;
+	}
+) {
+	if (!params.site) {
+		return false;
 	}
 
-	// User doesn't have access
-	return null;
+	if (
+		await isOrganizationAdminOrOwner(db, {
+			userId: params.userId,
+			organizationId: params.site.organizationId,
+		})
+	) {
+		return true;
+	}
+
+	if (!params.site.teamId) {
+		return false;
+	}
+
+	return await isTeamMember(db, {
+		userId: params.userId,
+		teamId: params.site.teamId,
+	});
 }

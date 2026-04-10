@@ -1,6 +1,7 @@
 import { z } from "@hono/zod-openapi";
 import { APIKeyType, WebsiteInstallationTarget, WebsiteStatus } from "../enums";
 import { apiTimestampSchema, nullableApiTimestampSchema } from "./common";
+import { userResponseSchema } from "./user";
 import { publicVisitorResponseSchema } from "./visitor";
 
 /**
@@ -84,6 +85,15 @@ export const websiteApiKeySchema = z
 			description:
 				"Timestamp indicating when the API key was revoked, if applicable.",
 			example: null,
+		}),
+		linkedUserId: z.ulid().nullable().openapi({
+			description:
+				"Optional teammate linked to this private key. Linked private keys act as that teammate on actor-required API routes.",
+			example: "01JG000000000000000000001",
+		}),
+		linkedUser: userResponseSchema.nullable().openapi({
+			description:
+				"Website-access teammate linked to this private key, if one is configured.",
 		}),
 	})
 	.openapi({
@@ -173,6 +183,11 @@ export const createWebsiteApiKeyRequestSchema = z
 			description: "The type of API key to generate.",
 			example: APIKeyType.PRIVATE,
 		}),
+		linkedUserId: z.ulid().nullable().optional().openapi({
+			description:
+				"Optional website teammate to link to this private key. Only supported for private keys and create-only in v1.",
+			example: "01JG000000000000000000001",
+		}),
 		isTest: z.boolean().openapi({
 			description: "Whether to generate a test key scoped to localhost.",
 			example: false,
@@ -184,6 +199,21 @@ export const createWebsiteApiKeyRequestSchema = z
 
 export type CreateWebsiteApiKeyRequest = z.infer<
 	typeof createWebsiteApiKeyRequestSchema
+>;
+
+export const websiteTeamMembersResponseSchema = z
+	.object({
+		members: z.array(userResponseSchema).openapi({
+			description:
+				"Website teammates that can be linked to private API keys or used as actor IDs.",
+		}),
+	})
+	.openapi({
+		description: "List of website-access team members.",
+	});
+
+export type WebsiteTeamMembersResponse = z.infer<
+	typeof websiteTeamMembersResponseSchema
 >;
 
 export const revokeWebsiteApiKeyRequestSchema = z

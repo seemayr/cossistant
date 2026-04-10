@@ -3,6 +3,78 @@ import { describe, expect, it } from "bun:test";
 const knowledgeQueriesModulePromise = import("./knowledge");
 
 describe("knowledge queries", () => {
+	it("getKnowledgeById uses Drizzle cache for private read paths", async () => {
+		let withCacheCalls = 0;
+
+		const { getKnowledgeById } = await knowledgeQueriesModulePromise;
+		const result = await getKnowledgeById(
+			{
+				select: () => ({
+					from: () => ({
+						where: () => ({
+							limit: () => ({
+								$withCache: async () => {
+									withCacheCalls += 1;
+									return [{ id: "knowledge-1" }];
+								},
+							}),
+						}),
+					}),
+				}),
+			} as never,
+			{
+				id: "knowledge-1",
+				websiteId: "site-1",
+			}
+		);
+
+		expect(result).toMatchObject({ id: "knowledge-1" });
+		expect(withCacheCalls).toBe(1);
+	});
+
+	it("listKnowledge caches both the count and page queries", async () => {
+		let withCacheCalls = 0;
+
+		const { listKnowledge } = await knowledgeQueriesModulePromise;
+		const result = await listKnowledge(
+			{
+				select: () => ({
+					from: () => ({
+						where: () => ({
+							$withCache: async () => {
+								withCacheCalls += 1;
+								return [{ total: 2 }];
+							},
+							orderBy: () => ({
+								limit: () => ({
+									offset: () => ({
+										$withCache: async () => {
+											withCacheCalls += 1;
+											return [{ id: "knowledge-1" }, { id: "knowledge-2" }];
+										},
+									}),
+								}),
+							}),
+						}),
+					}),
+				}),
+			} as never,
+			{
+				organizationId: "org-1",
+				websiteId: "site-1",
+				page: 1,
+				limit: 20,
+			}
+		);
+
+		expect(withCacheCalls).toBe(2);
+		expect(result.pagination.total).toBe(2);
+		expect(result.items).toMatchObject([
+			{ id: "knowledge-1" },
+			{ id: "knowledge-2" },
+		]);
+	});
+
 	it("deleteKnowledge permanently deletes a matching row", async () => {
 		let deleteCalls = 0;
 		let whereCalls = 0;

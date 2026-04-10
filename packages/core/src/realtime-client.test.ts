@@ -97,6 +97,14 @@ const VISITOR_AUTH: RealtimeAuthConfig = {
 	publicKey: "pk_test",
 };
 
+const PRIVATE_KEY_AUTH: RealtimeAuthConfig = {
+	kind: "privateKey",
+	privateKey: "sk_test_123",
+	actorUserId: "user_123",
+	websiteId: "ws_456",
+	userId: "user_123",
+};
+
 function lastSocket(): MockWebSocketInstance {
 	const socket = mockSockets[mockSockets.length - 1];
 	if (!socket) {
@@ -189,6 +197,19 @@ describe("RealtimeClient", () => {
 			const url = new URL(lastSocket().url);
 			expect(url.searchParams.get("sessionToken")).toBe("tok_abc");
 			expect(url.searchParams.get("websiteId")).toBe("ws_456");
+
+			client.destroy();
+		});
+
+		test("connects with private key auth and builds correct URL", () => {
+			const client = new RealtimeClient();
+			client.connect(PRIVATE_KEY_AUTH);
+
+			expect(mockSockets).toHaveLength(1);
+			const url = new URL(lastSocket().url);
+			expect(url.searchParams.get("token")).toBe("sk_test_123");
+			expect(url.searchParams.get("actorUserId")).toBe("user_123");
+			expect(url.searchParams.get("sessionToken")).toBeNull();
 
 			client.destroy();
 		});

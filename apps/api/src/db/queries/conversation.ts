@@ -128,22 +128,31 @@ export async function upsertConversation(
 		websiteId: string;
 		visitorId: string;
 		conversationId?: string;
+		channel?: string;
+		metadata?: Record<string, string | number | boolean | null>;
 	}
 ): Promise<UpsertConversationResult> {
 	const newConversationId = params.conversationId ?? generateShortPrimaryId();
 	const now = new Date().toISOString();
+	const insertValues: typeof conversation.$inferInsert = {
+		id: newConversationId,
+		organizationId: params.organizationId,
+		websiteId: params.websiteId,
+		visitorId: params.visitorId,
+		status: ConversationStatus.OPEN,
+		createdAt: now,
+	};
+
+	if (params.metadata !== undefined) {
+		insertValues.metadata = params.metadata;
+	}
+
+	insertValues.channel = params.channel ?? "widget";
 
 	// Upsert conversation
 	const [insertedConversation] = await db
 		.insert(conversation)
-		.values({
-			id: newConversationId,
-			organizationId: params.organizationId,
-			websiteId: params.websiteId,
-			visitorId: params.visitorId,
-			status: ConversationStatus.OPEN,
-			createdAt: now,
-		})
+		.values(insertValues)
 		.onConflictDoNothing({
 			target: conversation.id,
 		})

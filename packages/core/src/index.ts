@@ -61,6 +61,7 @@ export {
 } from "./privacy-filter";
 // Realtime client
 export {
+	type PrivateKeyAuthConfig,
 	type RealtimeAuthConfig,
 	RealtimeClient,
 	type RealtimeClientOptions,

@@ -57,6 +57,13 @@ function extractAuthIdentity(auth: RealtimeAuthConfig | null) {
 			userId: null,
 		};
 	}
+	if (auth.kind === "privateKey") {
+		return {
+			visitorId: null,
+			websiteId: auth.websiteId ?? null,
+			userId: auth.userId ?? auth.actorUserId ?? null,
+		};
+	}
 	return {
 		visitorId: null,
 		websiteId: auth.websiteId ?? null,

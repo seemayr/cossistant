@@ -41,6 +41,12 @@ export const apiKey = pgTable(
 		createdBy: ulidReference("created_by").references(() => user.id, {
 			onDelete: "cascade",
 		}),
+		linkedUserId: ulidNullableReference("linked_user_id").references(
+			() => user.id,
+			{
+				onDelete: "set null",
+			}
+		),
 		isActive: boolean("is_active")
 			.$defaultFn(() => true)
 			.notNull(),
@@ -67,6 +73,8 @@ export const apiKey = pgTable(
 		index("api_key_key_active_idx").on(table.key, table.isActive),
 		// Index for organization keys
 		index("api_key_org_idx").on(table.organizationId),
+		// Index for linked teammate lookups
+		index("api_key_linked_user_idx").on(table.linkedUserId),
 		// Index for active keys
 		index("api_key_active_idx").on(table.isActive),
 		// Index for test keys
@@ -92,6 +100,11 @@ export const apiKeyRelations = relations(apiKey, ({ one }) => ({
 	creator: one(user, {
 		fields: [apiKey.createdBy],
 		references: [user.id],
+	}),
+	linkedUser: one(user, {
+		fields: [apiKey.linkedUserId],
+		references: [user.id],
+		relationName: "ApiKeyLinkedUser",
 	}),
 	revoker: one(user, {
 		fields: [apiKey.revokedBy],

@@ -407,6 +407,20 @@
       "when": 1775529521784,
       "tag": "0057_funny_human_fly",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1775799613833,
+      "tag": "0058_dazzling_bedlam",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1775805384571,
+      "tag": "0059_slippery_the_renegades",
+      "breakpoints": true
     }
   ]
 }

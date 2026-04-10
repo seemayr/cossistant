@@ -3,9 +3,10 @@ import type { Database } from "@api/db";
 import {
 	isOrganizationAdminOrOwner,
 	isOrganizationOwner,
+	isTeamMember,
 } from "./access-control";
 
-function createDbMock(rows: Array<{ id: string }>): Database {
+function createDbMock(rows: Record<string, string>[]): Database {
 	return {
 		select: () => ({
 			from: () => ({
@@ -48,6 +49,17 @@ describe("access-control ownership checks", () => {
 		const hasAccess = await isOrganizationAdminOrOwner(db, {
 			userId: "user_1",
 			organizationId: "org_1",
+		});
+
+		expect(hasAccess).toBe(true);
+	});
+
+	it("returns true when a team membership exists", async () => {
+		const db = createDbMock([{ userId: "user_1" }]);
+
+		const hasAccess = await isTeamMember(db, {
+			userId: "user_1",
+			teamId: "team_1",
 		});
 
 		expect(hasAccess).toBe(true);

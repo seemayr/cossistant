@@ -5,6 +5,7 @@ export * from "./ai-agent-defaults";
 export * from "./common";
 export * from "./contact";
 export * from "./conversation";
+export * from "./conversation-metadata";
 export * from "./feedback";
 export * from "./knowledge";
 export * from "./knowledge-clarification";

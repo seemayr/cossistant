@@ -16,6 +16,13 @@ import { getRedis } from "../../redis";
 
 type RedisClient = Redis;
 
+const UNSUPPORTED_CACHE_CONFIG_KEYS = [
+	"px",
+	"exat",
+	"pxat",
+	"keepTtl",
+] as const;
+
 const getByTagScript = `
 local tagsMapKey = KEYS[1] -- tags map key
 local tag        = ARGV[1] -- tag
@@ -66,6 +73,36 @@ end
 
 type ExpireOptions = "NX" | "nx" | "XX" | "xx" | "GT" | "gt" | "LT" | "lt";
 
+function toRedisExpireMode(
+	value?: ExpireOptions
+): "NX" | "XX" | "GT" | "LT" | undefined {
+	if (!value) {
+		return;
+	}
+
+	return value.toUpperCase() as "NX" | "XX" | "GT" | "LT";
+}
+
+function assertSupportedCacheConfig(config?: CacheConfig): void {
+	if (!config) {
+		return;
+	}
+
+	const unsupportedKeys = UNSUPPORTED_CACHE_CONFIG_KEYS.filter(
+		(key) => config[key] !== undefined
+	);
+
+	if (unsupportedKeys.length === 0) {
+		return;
+	}
+
+	throw new Error(
+		`[BunRedisCache] Unsupported cache config option(s): ${unsupportedKeys.join(
+			", "
+		)}. Only "ex" and "hexOptions" are supported.`
+	);
+}
+
 export class BunRedisCache extends Cache {
 	static override readonly [entityKind]: string = "BunRedisCache";
 	/**
@@ -110,6 +147,7 @@ export class BunRedisCache extends Cache {
 		protected useGlobally?: boolean
 	) {
 		super();
+		assertSupportedCacheConfig(config);
 		this.internalConfig = this.toInternalConfig(config);
 		this.redis.on("error", (error) => {
 			console.error("[BunRedisCache] Redis client error", error);
@@ -129,14 +167,12 @@ export class BunRedisCache extends Cache {
 		seconds: number;
 		hexOptions?: ExpireOptions;
 	} {
-		return config
-			? {
-					seconds: config.ex!,
-					hexOptions: config.hexOptions,
-				}
-			: {
-					seconds: 1,
-				};
+		assertSupportedCacheConfig(config);
+
+		return {
+			seconds: typeof config?.ex === "number" ? config.ex : 1,
+			hexOptions: config?.hexOptions,
+		};
 	}
 
 	override async get(
@@ -175,9 +211,13 @@ export class BunRedisCache extends Cache {
 		isTag = false,
 		config?: CacheConfig
 	): Promise<void> {
+		assertSupportedCacheConfig(config);
+
 		const isAutoInvalidate = tables.length !== 0;
-		const ttlSeconds =
-			config && config.ex ? config.ex : this.internalConfig.seconds;
+		const ttlSeconds = config?.ex ?? this.internalConfig.seconds;
+		const expireMode = toRedisExpireMode(
+			config?.hexOptions ?? this.internalConfig.hexOptions
+		);
 		const serializedResponse = this.serialize(response);
 
 		if (!isAutoInvalidate) {
@@ -187,7 +227,7 @@ export class BunRedisCache extends Cache {
 					key,
 					BunRedisCache.nonAutoInvalidateTablePrefix
 				);
-				await this.redis.expire(BunRedisCache.tagsMapKey, ttlSeconds);
+				await this.expireKey(BunRedisCache.tagsMapKey, ttlSeconds, expireMode);
 			}
 
 			await this.redis.hset(
@@ -195,9 +235,10 @@ export class BunRedisCache extends Cache {
 				key,
 				serializedResponse
 			);
-			await this.redis.expire(
+			await this.expireKey(
 				BunRedisCache.nonAutoInvalidateTablePrefix,
-				ttlSeconds
+				ttlSeconds,
+				expireMode
 			);
 			return;
 		}
@@ -205,11 +246,11 @@ export class BunRedisCache extends Cache {
 		const compositeKey = this.getCompositeKey(tables);
 
 		await this.redis.hset(compositeKey, key, serializedResponse);
-		await this.redis.expire(compositeKey, ttlSeconds);
+		await this.expireKey(compositeKey, ttlSeconds, expireMode);
 
 		if (isTag) {
 			await this.redis.hset(BunRedisCache.tagsMapKey, key, compositeKey);
-			await this.redis.expire(BunRedisCache.tagsMapKey, ttlSeconds);
+			await this.expireKey(BunRedisCache.tagsMapKey, ttlSeconds, expireMode);
 		}
 
 		for (const table of tables) {
@@ -266,6 +307,25 @@ export class BunRedisCache extends Cache {
 		} catch (error) {
 			console.error("[BunRedisCache] Failed to parse cached value", error);
 			return;
+		}
+	}
+
+	private async expireKey(
+		key: string,
+		ttlSeconds: number,
+		expireMode?: "NX" | "XX" | "GT" | "LT"
+	) {
+		switch (expireMode) {
+			case "NX":
+				return await this.redis.expire(key, ttlSeconds, "NX");
+			case "XX":
+				return await this.redis.expire(key, ttlSeconds, "XX");
+			case "GT":
+				return await this.redis.expire(key, ttlSeconds, "GT");
+			case "LT":
+				return await this.redis.expire(key, ttlSeconds, "LT");
+			default:
+				return await this.redis.expire(key, ttlSeconds);
 		}
 	}
 

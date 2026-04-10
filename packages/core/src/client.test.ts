@@ -20,6 +20,7 @@ function createCreateConversationResponse(params: {
 			updatedAt: params.createdAt,
 			visitorId: params.visitorId,
 			websiteId: "site_123",
+			channel: "widget",
 			status: ConversationStatus.OPEN,
 			deletedAt: null,
 		},

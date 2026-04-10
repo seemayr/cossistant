@@ -26,6 +26,24 @@ function createWebsiteAccessUser(
 	};
 }
 
+function createMemberLookupDbMock(rows: Record<string, unknown>[]) {
+	return {
+		select: () => ({
+			from: () => ({
+				leftJoin: () => ({
+					leftJoin: () => ({
+						where: () => ({
+							limit: () => ({
+								$withCache: async () => rows,
+							}),
+						}),
+					}),
+				}),
+			}),
+		}),
+	};
+}
+
 describe("getWebsiteMembers", () => {
 	beforeEach(() => {
 		listWebsiteAccessUsersMock.mockReset();
@@ -81,5 +99,59 @@ describe("getWebsiteMembers", () => {
 				lastSeenAt: "2026-03-03T04:05:06.000Z",
 			},
 		]);
+	});
+});
+
+describe("getWebsiteMemberById", () => {
+	beforeEach(() => {
+		listWebsiteAccessUsersMock.mockReset();
+		listWebsiteAccessUsersMock.mockResolvedValue([]);
+	});
+
+	it("returns the requested website member when the user has access", async () => {
+		const db = createMemberLookupDbMock([
+			{
+				id: "user-2",
+				name: "Bob",
+				email: "bob@example.com",
+				image: null,
+				role: null,
+				createdAt: null,
+				updatedAt: new Date("2026-03-02T00:00:00.000Z"),
+				lastSeenAt: null,
+				teamMemberUserId: "user-2",
+			},
+		]);
+
+		const { getWebsiteMemberById } = await memberQueryModulePromise;
+		const member = await getWebsiteMemberById(db as never, {
+			organizationId: "org-1",
+			websiteTeamId: "team-1",
+			userId: "user-2",
+		});
+
+		expect(member).toEqual({
+			id: "user-2",
+			name: "Bob",
+			email: "bob@example.com",
+			image: null,
+			role: "member",
+			createdAt: "2026-03-02T00:00:00.000Z",
+			updatedAt: "2026-03-02T00:00:00.000Z",
+			lastSeenAt: null,
+		});
+	});
+
+	it("returns null when the user is not a website member", async () => {
+		const db = createMemberLookupDbMock([]);
+
+		const { getWebsiteMemberById } = await memberQueryModulePromise;
+		const member = await getWebsiteMemberById(db as never, {
+			organizationId: "org-1",
+			websiteTeamId: "team-1",
+			userId: "missing-user",
+		});
+
+		expect(member).toBeNull();
 	});
 });

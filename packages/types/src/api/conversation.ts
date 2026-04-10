@@ -5,7 +5,9 @@ import {
 	ConversationStatus,
 } from "../enums";
 import { conversationSchema, conversationSeenSchema } from "../schemas";
+import { conversationRecordSchema } from "../trpc/conversation";
 import { apiTimestampSchema, nullableApiTimestampSchema } from "./common";
+import { conversationMetadataSchema } from "./conversation-metadata";
 import { conversationClarificationSummarySchema } from "./knowledge-clarification";
 import { timelineItemSchema } from "./timeline-item";
 import { visitorProfileSchema } from "./visitor";
@@ -27,6 +29,11 @@ export const createConversationRequestSchema = z
 			description: "Which channel the conversation is from",
 			default: "widget",
 		}),
+		metadata: conversationMetadataSchema.optional().openapi({
+			description:
+				"Public conversation metadata stored as flat key-value pairs.",
+			example: { orderId: "ord_123", priority: "vip", mrr: 299 },
+		}),
 	})
 	.openapi({
 		description: "Body for creating a conversation.",
@@ -35,6 +42,8 @@ export const createConversationRequestSchema = z
 export type CreateConversationRequestBody = z.infer<
 	typeof createConversationRequestSchema
 >;
+
+export type { ConversationMetadata } from "./conversation-metadata";
 
 export const createConversationResponseSchema = z
 	.object({
@@ -187,6 +196,14 @@ export const conversationInboxItemSchema = z
 		websiteId: z.string().openapi({
 			description: "Website that owns the conversation.",
 		}),
+		metadata: conversationMetadataSchema
+			.nullable()
+			.optional()
+			.openapi({
+				description:
+					"Public conversation metadata stored as flat key-value pairs.",
+				example: { orderId: "ord_123", priority: "vip", mrr: 299 },
+			}),
 		channel: z.string().openapi({
 			description: "Channel where the conversation started.",
 			example: "widget",
@@ -341,6 +358,73 @@ export const getConversationResponseSchema = z
 
 export type GetConversationResponse = z.infer<
 	typeof getConversationResponseSchema
+>;
+
+export const privateConversationMutationResponseSchema = z
+	.object({
+		conversation: conversationRecordSchema,
+	})
+	.openapi({
+		description:
+			"Response containing the updated conversation after a private control action.",
+	});
+
+export type PrivateConversationMutationResponse = z.infer<
+	typeof privateConversationMutationResponseSchema
+>;
+
+export const updateConversationMetadataRequestSchema = z
+	.object({
+		metadata: conversationMetadataSchema.openapi({
+			description:
+				"Metadata payload to merge into the conversation. Conversation metadata are public and retrievable on public conversation endpoints.",
+			example: { orderId: "ord_123", priority: "vip", mrr: 299 },
+		}),
+	})
+	.openapi({
+		description: "Request payload for merging metadata into a conversation.",
+	});
+
+export type UpdateConversationMetadataRequest = z.infer<
+	typeof updateConversationMetadataRequestSchema
+>;
+
+export const updateConversationTitleRestRequestSchema = z
+	.object({
+		title: z.string().trim().max(255).nullable().openapi({
+			description:
+				"New conversation title. Pass null to clear the current title.",
+			example: "Billing issue from enterprise customer",
+		}),
+	})
+	.openapi({
+		description: "Request payload for changing a conversation title.",
+	});
+
+export type UpdateConversationTitleRestRequest = z.infer<
+	typeof updateConversationTitleRestRequestSchema
+>;
+
+export const pauseConversationAiRestRequestSchema = z
+	.object({
+		durationMinutes: z.coerce
+			.number()
+			.int()
+			.min(1)
+			.max(60 * 24 * 365 * 100)
+			.optional()
+			.openapi({
+				description:
+					"How long to pause AI replies for this conversation, in minutes.",
+				example: 60,
+			}),
+	})
+	.openapi({
+		description: "Request payload for pausing AI replies on a conversation.",
+	});
+
+export type PauseConversationAiRestRequest = z.infer<
+	typeof pauseConversationAiRestRequestSchema
 >;
 
 export const markConversationSeenRequestSchema = z

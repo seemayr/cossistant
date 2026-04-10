@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { apiTimestampSchema, nullableApiTimestampSchema } from "./api/common";
+import { conversationMetadataSchema } from "./api/conversation-metadata";
 import { timelineItemSchema } from "./api/timeline-item";
 import { ConversationEventType, ConversationStatus } from "./enums";
 
@@ -20,10 +21,12 @@ export type InboxView = z.infer<typeof viewSchema>;
 export const conversationSchema = z.object({
 	id: z.string(),
 	title: z.string().optional(),
+	metadata: conversationMetadataSchema.nullable().optional(),
 	createdAt: apiTimestampSchema,
 	updatedAt: apiTimestampSchema,
 	visitorId: z.string(),
 	websiteId: z.string(),
+	channel: z.string().default("widget"),
 	status: z
 		.enum([
 			ConversationStatus.OPEN,

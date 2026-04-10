@@ -1,5 +1,6 @@
 import type { Database } from "@api/db";
-import { member } from "@api/db/schema";
+import { SECURITY_CACHE_CONFIG } from "@api/db/cache/config";
+import { member, teamMember } from "@api/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
 
 const ORGANIZATION_ADMIN_ROLES = ["owner", "admin"] as const;
@@ -21,7 +22,9 @@ export async function isOrganizationAdminOrOwner(
 			)
 		)
 		.limit(1)
-		.$withCache();
+		.$withCache({
+			config: SECURITY_CACHE_CONFIG,
+		});
 
 	return Boolean(result);
 }
@@ -41,7 +44,30 @@ export async function isOrganizationOwner(
 			)
 		)
 		.limit(1)
-		.$withCache();
+		.$withCache({
+			config: SECURITY_CACHE_CONFIG,
+		});
+
+	return Boolean(result);
+}
+
+export async function isTeamMember(
+	db: Database,
+	params: { userId: string; teamId: string }
+): Promise<boolean> {
+	const [result] = await db
+		.select({ userId: teamMember.userId })
+		.from(teamMember)
+		.where(
+			and(
+				eq(teamMember.userId, params.userId),
+				eq(teamMember.teamId, params.teamId)
+			)
+		)
+		.limit(1)
+		.$withCache({
+			config: SECURITY_CACHE_CONFIG,
+		});
 
 	return Boolean(result);
 }

@@ -8,10 +8,12 @@ import {
 	ConversationStatus,
 	TimelineItemVisibility,
 } from "@cossistant/types";
-import type { InferSelectModel } from "drizzle-orm";
+import type { InferInsertModel, InferSelectModel } from "drizzle-orm";
 import { and, eq } from "drizzle-orm";
 
 export type ConversationRecord = InferSelectModel<typeof conversation>;
+type ConversationInsert = InferInsertModel<typeof conversation>;
+type ConversationMetadataMap = Record<string, string | number | boolean | null>;
 
 function computeResolutionTime(
 	conversationRecord: ConversationRecord,
@@ -208,6 +210,42 @@ export async function updateConversationTitle(
 		.set({
 			title: params.title,
 			titleSource: params.titleSource,
+			updatedAt,
+		})
+		.where(
+			and(
+				eq(conversation.id, params.conversation.id),
+				eq(conversation.organizationId, params.conversation.organizationId),
+				eq(conversation.websiteId, params.conversation.websiteId)
+			)
+		)
+		.returning();
+
+	return updated ?? null;
+}
+
+export async function mergeConversationMetadata(
+	db: Database,
+	params: {
+		conversation: ConversationRecord;
+		metadata: NonNullable<ConversationInsert["metadata"]>;
+	}
+) {
+	const existingMetadata =
+		typeof params.conversation.metadata === "object" &&
+		params.conversation.metadata !== null
+			? (params.conversation.metadata as ConversationMetadataMap)
+			: {};
+	const mergedMetadata: ConversationMetadataMap = {
+		...existingMetadata,
+		...(params.metadata as ConversationMetadataMap),
+	};
+	const updatedAt = new Date().toISOString();
+
+	const [updated] = await db
+		.update(conversation)
+		.set({
+			metadata: mergedMetadata,
 			updatedAt,
 		})
 		.where(

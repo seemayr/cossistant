@@ -49,6 +49,22 @@ function formatKeyPreview(keyValue: string | null) {
 	return `${keyValue.slice(0, 6)}…${keyValue.slice(-4)}`;
 }
 
+function formatLinkedUser(apiKey: WebsiteApiKey) {
+	if (apiKey.keyType !== APIKeyType.PRIVATE) {
+		return "—";
+	}
+
+	if (apiKey.linkedUser) {
+		return apiKey.linkedUser.name || apiKey.linkedUser.email;
+	}
+
+	if (apiKey.linkedUserId) {
+		return `Linked (${apiKey.linkedUserId})`;
+	}
+
+	return "Not linked";
+}
+
 export function ApiKeysTable({
 	apiKeys,
 	isLoading,
@@ -73,6 +89,7 @@ export function ApiKeysTable({
 					<TableRow>
 						<TableHead>Name</TableHead>
 						<TableHead>Type</TableHead>
+						<TableHead>Linked teammate</TableHead>
 						<TableHead>Key</TableHead>
 						<TableHead className="text-right">Actions</TableHead>
 					</TableRow>
@@ -80,7 +97,7 @@ export function ApiKeysTable({
 				<TableBody>
 					{LOADING_ROWS.map((row) => (
 						<TableRow key={row}>
-							<TableCell colSpan={4}>
+							<TableCell colSpan={5}>
 								<Skeleton className="h-9 w-full" />
 							</TableCell>
 						</TableRow>
@@ -104,6 +121,7 @@ export function ApiKeysTable({
 				<TableRow>
 					<TableHead>Name</TableHead>
 					<TableHead>Type</TableHead>
+					<TableHead>Linked teammate</TableHead>
 					<TableHead>Key</TableHead>
 					<TableHead className="text-right">Actions</TableHead>
 				</TableRow>
@@ -128,6 +146,16 @@ export function ApiKeysTable({
 									{formatEnvironment(apiKey.isTest)}{" "}
 									{formatType(apiKey.keyType)} Key
 								</Badge>
+							</TableCell>
+							<TableCell>
+								<div className="flex flex-col gap-1 text-sm">
+									<span>{formatLinkedUser(apiKey)}</span>
+									{apiKey.linkedUser ? (
+										<span className="text-muted-foreground text-xs">
+											{apiKey.linkedUser.email}
+										</span>
+									) : null}
+								</div>
 							</TableCell>
 							<TableCell>
 								<div className="flex items-center gap-2">

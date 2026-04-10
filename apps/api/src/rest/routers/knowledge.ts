@@ -8,6 +8,7 @@ import {
 import { syncLinkSourceStatsFromKnowledge } from "@api/db/queries/link-source";
 import {
 	safelyExtractRequestData,
+	safelyExtractRequestQuery,
 	validateResponse,
 } from "@api/utils/validate";
 import {
@@ -44,47 +45,14 @@ function normalizeAiAgentId(value: string | null | undefined): string | null {
 	return value;
 }
 
-const VALID_KNOWLEDGE_TYPES = ["url", "faq", "article"] as const;
-type KnowledgeType = (typeof VALID_KNOWLEDGE_TYPES)[number];
+function normalizeIsIncluded(
+	value: "true" | "false" | undefined
+): boolean | undefined {
+	if (value === undefined) {
+		return;
+	}
 
-/**
- * Validates and parses the 'type' query parameter.
- * Returns the type if valid, undefined if not provided, or an error message if invalid.
- */
-function parseKnowledgeType(
-	value: string | undefined
-): { value: KnowledgeType | undefined } | { error: string } {
-	if (value === undefined || value === "") {
-		return { value: undefined };
-	}
-	if (VALID_KNOWLEDGE_TYPES.includes(value as KnowledgeType)) {
-		return { value: value as KnowledgeType };
-	}
-	return {
-		error: `Invalid type '${value}'. Must be one of: ${VALID_KNOWLEDGE_TYPES.join(", ")}`,
-	};
-}
-
-/**
- * Parses a numeric query parameter with defaults and bounds.
- * Returns the default if the value is undefined, empty, NaN, or out of bounds.
- */
-function parsePositiveInt(
-	value: string | undefined,
-	defaultValue: number,
-	max?: number
-): number {
-	if (value === undefined || value === "") {
-		return defaultValue;
-	}
-	const parsed = Number.parseInt(value, 10);
-	if (Number.isNaN(parsed) || parsed <= 0) {
-		return defaultValue;
-	}
-	if (max !== undefined && parsed > max) {
-		return max;
-	}
-	return parsed;
+	return value === "true";
 }
 
 function formatKnowledgeResponse(entry: {
@@ -136,7 +104,8 @@ knowledgeRouter.openapi(
 		path: "/",
 		summary: "List knowledge entries",
 		description:
-			"Returns a paginated list of knowledge entries for the website. Supports filtering by type and AI agent ID.",
+			"Returns a paginated list of knowledge entries for the website. Supports filtering by type, AI agent, training inclusion, and link source.",
+		operationId: "listKnowledge",
 		request: {
 			query: listKnowledgeRestRequestSchema,
 		},
@@ -160,7 +129,10 @@ knowledgeRouter.openapi(
 	},
 	async (c) => {
 		try {
-			const { db, website } = await safelyExtractRequestData(c);
+			const { db, website, query } = await safelyExtractRequestQuery(
+				c,
+				listKnowledgeRestRequestSchema
+			);
 
 			if (!(website?.id && website.organizationId)) {
 				return c.json(
@@ -169,25 +141,18 @@ knowledgeRouter.openapi(
 				);
 			}
 
-			// Parse and validate query parameters
-			const query = c.req.query();
-
-			const typeResult = parseKnowledgeType(query.type);
-			if ("error" in typeResult) {
-				return c.json({ error: "BAD_REQUEST", message: typeResult.error }, 400);
-			}
-
 			const aiAgentId = normalizeAiAgentId(query.aiAgentId);
-			const page = parsePositiveInt(query.page, 1);
-			const limit = parsePositiveInt(query.limit, 20, 100);
+			const isIncluded = normalizeIsIncluded(query.isIncluded);
 
 			const result = await listKnowledge(db, {
 				organizationId: website.organizationId,
 				websiteId: website.id,
-				type: typeResult.value,
+				type: query.type,
 				aiAgentId,
-				page,
-				limit,
+				isIncluded,
+				linkSourceId: query.linkSourceId,
+				page: query.page,
+				limit: query.limit,
 			});
 
 			return c.json(
@@ -220,6 +185,7 @@ knowledgeRouter.openapi(
 		path: "/:id",
 		summary: "Get a knowledge entry",
 		description: "Retrieves a single knowledge entry by ID",
+		operationId: "getKnowledge",
 		responses: {
 			200: {
 				description: "Knowledge entry retrieved successfully",

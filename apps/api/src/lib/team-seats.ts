@@ -1,4 +1,5 @@
 import type { Database } from "@api/db";
+import { SECURITY_CACHE_CONFIG } from "@api/db/cache/config";
 import type { getWebsiteBySlugWithAccess } from "@api/db/queries/website";
 import { invitation, member, teamMember, user } from "@api/db/schema";
 import { getPlanForWebsite } from "@api/lib/plans/access";
@@ -126,13 +127,19 @@ export async function listWebsiteAccessUsers(
 			})
 			.from(member)
 			.innerJoin(user, eq(member.userId, user.id))
-			.where(eq(member.organizationId, params.organizationId)),
+			.where(eq(member.organizationId, params.organizationId))
+			.$withCache({
+				config: SECURITY_CACHE_CONFIG,
+			}),
 		db
 			.select({
 				userId: teamMember.userId,
 			})
 			.from(teamMember)
-			.where(eq(teamMember.teamId, params.teamId)),
+			.where(eq(teamMember.teamId, params.teamId))
+			.$withCache({
+				config: SECURITY_CACHE_CONFIG,
+			}),
 	]);
 
 	const teamUserIds = new Set(teamMemberships.map((item) => item.userId));

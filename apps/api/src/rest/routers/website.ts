@@ -1,5 +1,6 @@
 import { upsertVisitor } from "@api/db/queries";
 import { getContactForVisitor } from "@api/db/queries/contact";
+import { getWebsiteMembers as getWebsiteMembersForApi } from "@api/db/queries/member";
 import { aiAgent } from "@api/db/schema/ai-agent";
 import { visitor as visitorTable } from "@api/db/schema/website";
 import { listWebsiteAccessUsers } from "@api/lib/team-seats";
@@ -11,11 +12,19 @@ import {
 } from "@api/utils/validate";
 import { getMostRecentLastOnlineAt } from "@api/utils/website";
 import { normalizeHumanAgentName } from "@cossistant/core";
-import { publicWebsiteResponseSchema } from "@cossistant/types";
+import {
+	publicWebsiteResponseSchema,
+	websiteTeamMembersResponseSchema,
+} from "@cossistant/types";
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { and, eq, isNull } from "drizzle-orm";
 import { protectedPublicApiKeyMiddleware } from "../middleware";
-import { errorJsonResponse, runtimeDualAuth } from "../openapi";
+import {
+	errorJsonResponse,
+	privateControlAuth,
+	requirePrivateControlContext,
+	runtimeDualAuth,
+} from "../openapi";
 import type { RestContext } from "../types";
 
 export const websiteRouter = new OpenAPIHono<RestContext>();
@@ -141,5 +150,69 @@ websiteRouter.openapi(
 			),
 			200
 		);
+	}
+);
+
+websiteRouter.openapi(
+	{
+		method: "get",
+		path: "/team-members",
+		summary: "List website team members",
+		description:
+			"Returns the website-access teammates that can be linked to private API keys or used as actor IDs on actor-aware private API routes.",
+		operationId: "listWebsiteTeamMembers",
+		responses: {
+			200: {
+				description: "Website team members retrieved successfully",
+				content: {
+					"application/json": {
+						schema: websiteTeamMembersResponseSchema,
+					},
+				},
+			},
+			401: errorJsonResponse(
+				"Unauthorized - Invalid or missing private API key"
+			),
+			403: errorJsonResponse("Forbidden - Private API key required"),
+			500: errorJsonResponse("Internal server error"),
+		},
+		tags: ["Website"],
+		...privateControlAuth(),
+	},
+	async (c) => {
+		try {
+			const context = await safelyExtractRequestData(c);
+			const privateContext = requirePrivateControlContext(c, context);
+
+			if (privateContext instanceof Response) {
+				return privateContext;
+			}
+
+			const members = privateContext.website.teamId
+				? await getWebsiteMembersForApi(context.db, {
+						organizationId: privateContext.organization.id,
+						websiteTeamId: privateContext.website.teamId,
+					})
+				: [];
+
+			return c.json(
+				validateResponse(
+					{
+						members,
+					},
+					websiteTeamMembersResponseSchema
+				),
+				200
+			);
+		} catch (error) {
+			console.error("Error listing website team members:", error);
+			return c.json(
+				{
+					error: "INTERNAL_SERVER_ERROR",
+					message: "Failed to list website team members",
+				},
+				500
+			);
+		}
 	}
 );

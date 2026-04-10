@@ -44,10 +44,18 @@ describe("REST timestamp serialization", () => {
 		const parsed = conversationSchema.parse({
 			id: "conv_1",
 			title: "Support thread",
+			metadata: {
+				orderId: "ord_123",
+				priority: "vip",
+				mrr: 299,
+				flagged: true,
+				lastRefundAt: null,
+			},
 			createdAt: "2026-04-06T14:37:05.82+00:00",
 			updatedAt: "2026-04-06T14:37:02.996+00:00",
 			visitorId: "visitor_1",
 			websiteId: "site_1",
+			channel: "widget",
 			status: ConversationStatus.OPEN,
 			visitorRating: null,
 			visitorRatingAt: "2026-04-06T14:42:01.72+00:00",
@@ -72,12 +80,34 @@ describe("REST timestamp serialization", () => {
 
 		assert.equal(parsed.createdAt, "2026-04-06T14:37:05.820Z");
 		assert.equal(parsed.updatedAt, "2026-04-06T14:37:02.996Z");
+		assert.deepEqual(parsed.metadata, {
+			orderId: "ord_123",
+			priority: "vip",
+			mrr: 299,
+			flagged: true,
+			lastRefundAt: null,
+		});
+		assert.equal(parsed.channel, "widget");
 		assert.equal(parsed.visitorRatingAt, "2026-04-06T14:42:01.720Z");
 		assert.equal(parsed.visitorLastSeenAt, "2026-04-06T14:42:01.000Z");
 		assert.equal(
 			parsed.lastTimelineItem?.createdAt,
 			"2026-04-06T14:37:05.123Z"
 		);
+	});
+
+	it("defaults channel to widget when the public conversation payload omits it", () => {
+		const parsed = conversationSchema.parse({
+			id: "conv_2",
+			createdAt: "2026-04-06T14:37:05.820Z",
+			updatedAt: "2026-04-06T14:37:05.820Z",
+			visitorId: "visitor_2",
+			websiteId: "site_2",
+			status: ConversationStatus.OPEN,
+			deletedAt: null,
+		});
+
+		assert.equal(parsed.channel, "widget");
 	});
 
 	it("normalizes visitor and website response timestamps", () => {

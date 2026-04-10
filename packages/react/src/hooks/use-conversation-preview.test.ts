@@ -77,6 +77,7 @@ const baseConversation: Conversation = {
 	updatedAt: "2026-03-07T00:00:00.000Z",
 	visitorId: "visitor-1",
 	websiteId: "website-1",
+	channel: "widget",
 	status: ConversationStatus.OPEN,
 	deletedAt: null,
 	title: "Need help",
