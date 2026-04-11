@@ -8,6 +8,9 @@ const safelyExtractRequestQueryMock = mock((async () => ({})) as (
 	...args: unknown[]
 ) => Promise<unknown>);
 const validateResponseMock = mock(<T>(value: T) => value);
+const resolvePrivateApiKeyActorUserMock = mock(
+	(async () => null) as (...args: unknown[]) => Promise<unknown>
+);
 
 const getVisitorMock = mock(
 	(async () => null) as (...args: unknown[]) => Promise<unknown>
@@ -53,6 +56,10 @@ mock.module("@api/utils/validate", () => ({
 	safelyExtractRequestData: safelyExtractRequestDataMock,
 	safelyExtractRequestQuery: safelyExtractRequestQueryMock,
 	validateResponse: validateResponseMock,
+}));
+
+mock.module("@api/lib/private-api-key-actor", () => ({
+	resolvePrivateApiKeyActorUser: resolvePrivateApiKeyActorUserMock,
 }));
 
 mock.module("@api/db/queries", () => ({
@@ -317,15 +324,19 @@ describe("conversation auth and inbox routes", () => {
 			items: [createInboxItem()],
 			nextCursor: "cursor_2",
 		});
+		resolvePrivateApiKeyActorUserMock.mockResolvedValue(null);
 		mergeConversationMetadataMock.mockResolvedValue(createConversationRecord());
 	});
 
 	it("lists inbox conversations for private API keys", async () => {
+		resolvePrivateApiKeyActorUserMock.mockResolvedValue({
+			userId: "user-1",
+		});
 		safelyExtractRequestQueryMock.mockResolvedValue({
 			db: {},
 			apiKey: { keyType: APIKeyType.PRIVATE },
 			organization: { id: "org-1" },
-			website: { id: "site-1", organizationId: "org-1" },
+			website: { id: "site-1", organizationId: "org-1", teamId: "team-1" },
 			query: {
 				limit: 20,
 				cursor: null,
@@ -347,6 +358,39 @@ describe("conversation auth and inbox routes", () => {
 		expect(response.status).toBe(200);
 		expect(payload.nextCursor).toBe("cursor_2");
 		expect(payload.items[0]?.id).toBe(conversationId);
+		expect(listConversationsHeadersMock).toHaveBeenCalledWith(
+			{},
+			{
+				organizationId: "org-1",
+				websiteId: "site-1",
+				userId: "user-1",
+				limit: 20,
+				cursor: null,
+			}
+		);
+	});
+
+	it("keeps inbox lastSeenAt actorless when no teammate context is available", async () => {
+		resolvePrivateApiKeyActorUserMock.mockResolvedValue(null);
+		safelyExtractRequestQueryMock.mockResolvedValue({
+			db: {},
+			apiKey: { keyType: APIKeyType.PRIVATE },
+			organization: { id: "org-1" },
+			website: { id: "site-1", organizationId: "org-1", teamId: "team-1" },
+			query: {
+				limit: 20,
+				cursor: null,
+			},
+		});
+
+		const { conversationRouter } = await conversationRouterModulePromise;
+		const response = await conversationRouter.request(
+			new Request("http://localhost/inbox?limit=20", {
+				method: "GET",
+			})
+		);
+
+		expect(response.status).toBe(200);
 		expect(listConversationsHeadersMock).toHaveBeenCalledWith(
 			{},
 			{

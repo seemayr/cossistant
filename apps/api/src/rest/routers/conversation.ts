@@ -2043,12 +2043,21 @@ conversationRouter.openapi(
 			return privateContext;
 		}
 
+		const actor = await requirePrivateConversationActor({
+			c,
+			db: extracted.db,
+			apiKey: privateContext.apiKey,
+			organizationId: privateContext.organization.id,
+			websiteTeamId: privateContext.website.teamId,
+			required: false,
+		});
+
 		const [planInfo, result] = await Promise.all([
 			getPlanForWebsite(privateContext.website),
 			listConversationsHeaders(extracted.db, {
 				organizationId: privateContext.organization.id,
 				websiteId: privateContext.website.id,
-				userId: null,
+				userId: actor?.userId ?? null,
 				limit: extracted.query.limit,
 				cursor: extracted.query.cursor ?? null,
 			}),
