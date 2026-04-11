@@ -89,6 +89,11 @@ describe("dashboard hard-limit helpers", () => {
 				features: freePlan.features,
 				hardLimitsEnforced: false,
 				hardLimitsUnavailableReason: "billing_provider_unavailable",
+				billing: {
+					enabled: true,
+					provider: "polar",
+					canManageSubscription: true,
+				},
 			},
 			new Date("2026-02-18T00:00:00.000Z")
 		);

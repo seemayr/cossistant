@@ -3,6 +3,7 @@
 import type { RouterOutputs } from "@cossistant/api/types";
 import { useMemo, useState } from "react";
 import { Progress } from "@/components/ui/progress";
+import { canManageBilling } from "@/lib/plan-billing";
 import { cn } from "@/lib/utils";
 import { UpgradeModal } from "./upgrade-modal";
 
@@ -88,7 +89,7 @@ export function SidebarUpgradeButton({
 		return "messages" as const;
 	}, [hardLimitStatus.conversations.reached]);
 
-	if (plan.name !== "free") {
+	if (plan.name !== "free" || !canManageBilling(planInfo)) {
 		return null;
 	}
 

@@ -398,6 +398,106 @@ export const getAiAgentRequestSchema = z
 		description: "Request to get the AI agent for a website.",
 	});
 
+export const aiAgentRestPathParamsSchema = z
+	.object({
+		id: z.ulid().openapi({
+			description: "The AI agent's unique identifier.",
+			example: "01JG000000000000000000000",
+		}),
+	})
+	.openapi({
+		description: "Path parameters for AI agent REST routes.",
+	});
+
+export const aiAgentTrainingPublicStatusSchema = z
+	.enum(["out_of_date", "trained", "training_ongoing"])
+	.openapi({
+		description: "Public-facing knowledge base training status.",
+		example: "out_of_date",
+	});
+
+export const aiAgentTrainingInternalStatusSchema = z
+	.enum(["idle", "pending", "training", "completed", "failed"])
+	.openapi({
+		description: "Internal training state used by the training worker.",
+		example: "completed",
+	});
+
+export const aiAgentTrainingStatusResponseSchema = z
+	.object({
+		aiAgentId: z.ulid().openapi({
+			description: "The AI agent's unique identifier.",
+			example: "01JG000000000000000000000",
+		}),
+		status: aiAgentTrainingPublicStatusSchema,
+		internalStatus: aiAgentTrainingInternalStatusSchema,
+		progress: z.number().int().min(0).max(100).openapi({
+			description: "Training progress percentage.",
+			example: 100,
+		}),
+		updatedSourcesCount: z.number().int().nonnegative().openapi({
+			description:
+				"Number of included knowledge entries updated since the last successful training run.",
+			example: 3,
+		}),
+		canTrainAt: nullableApiTimestampSchema.openapi({
+			description:
+				"When the next training run is allowed under the current plan cooldown. Null means training may be started immediately.",
+			example: "2024-01-01T00:30:00.000Z",
+		}),
+		lastTrainedAt: nullableApiTimestampSchema.openapi({
+			description: "When the knowledge base was last trained successfully.",
+			example: "2024-01-01T00:00:00.000Z",
+		}),
+		trainingStartedAt: nullableApiTimestampSchema.openapi({
+			description: "When the current or last training run started.",
+			example: "2024-01-01T00:05:00.000Z",
+		}),
+		trainedItemsCount: z.number().int().nonnegative().nullable().openapi({
+			description:
+				"How many knowledge items were included in the last successful training run.",
+			example: 42,
+		}),
+		lastError: z.string().nullable().openapi({
+			description: "Last training error message, if any.",
+			example: "Embedding provider timeout",
+		}),
+	})
+	.openapi({
+		description:
+			"Current knowledge base training status for an AI agent, including both public and internal state.",
+	});
+
+export const aiAgentStartTrainingResponseSchema = z
+	.object({
+		aiAgentId: z.ulid().openapi({
+			description: "The AI agent's unique identifier.",
+			example: "01JG000000000000000000000",
+		}),
+		jobId: z.string().openapi({
+			description: "Queued training job identifier.",
+			example: "ai-training-01JG000000000000000000000",
+		}),
+		status: z.literal("training_ongoing").openapi({
+			description:
+				"Public-facing status immediately after a retraining job has been queued.",
+			example: "training_ongoing",
+		}),
+		internalStatus: z.enum(["pending", "training"]).openapi({
+			description:
+				"Initial internal worker status immediately after the job is queued.",
+			example: "pending",
+		}),
+		progress: z.number().int().min(0).max(100).openapi({
+			description: "Initial training progress percentage.",
+			example: 0,
+		}),
+	})
+	.openapi({
+		description:
+			"Response returned after a knowledge base retraining job has been queued.",
+	});
+
 /**
  * Generate Base Prompt request schema
  * Used to scrape a website and generate a tailored base prompt for the AI agent
@@ -795,6 +895,19 @@ export type ToggleAiAgentActiveRequest = z.infer<
 >;
 export type DeleteAiAgentRequest = z.infer<typeof deleteAiAgentRequestSchema>;
 export type GetAiAgentRequest = z.infer<typeof getAiAgentRequestSchema>;
+export type AiAgentRestPathParams = z.infer<typeof aiAgentRestPathParamsSchema>;
+export type AiAgentTrainingPublicStatus = z.infer<
+	typeof aiAgentTrainingPublicStatusSchema
+>;
+export type AiAgentTrainingInternalStatus = z.infer<
+	typeof aiAgentTrainingInternalStatusSchema
+>;
+export type AiAgentTrainingStatusResponse = z.infer<
+	typeof aiAgentTrainingStatusResponseSchema
+>;
+export type AiAgentStartTrainingResponse = z.infer<
+	typeof aiAgentStartTrainingResponseSchema
+>;
 export type GenerateBasePromptRequest = z.infer<
 	typeof generateBasePromptRequestSchema
 >;

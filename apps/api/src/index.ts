@@ -166,7 +166,9 @@ app.use("/v1/*", defaultRateLimiter);
 app.use("/v1/*", stripSetCookie);
 app.route("/v1", routers);
 
-app.route("/polar", polarRouters);
+if (env.POLAR_ENABLED !== false) {
+	app.route("/polar", polarRouters);
+}
 app.route("/resend", resendRouters);
 app.route("/ses", sesRouters);
 app.route("/workflow", workflowsRouters);

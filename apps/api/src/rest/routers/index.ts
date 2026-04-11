@@ -1,4 +1,5 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
+import { aiAgentRouter } from "./ai-agent";
 import { contactRouter } from "./contact";
 import { conversationRouter } from "./conversation";
 import { feedbackRouter } from "./feedback";
@@ -10,6 +11,7 @@ import { visitorRouter } from "./visitor";
 import { websiteRouter } from "./website";
 
 const routers = new OpenAPIHono()
+	.route("/ai-agents", aiAgentRouter)
 	.route("/organizations", organizationRouter)
 	.route("/websites", websiteRouter)
 	.route("/messages", messagesRouter)

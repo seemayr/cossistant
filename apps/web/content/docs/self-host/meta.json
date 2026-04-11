@@ -1,4 +1,4 @@
 {
   "title": "Self-Host",
-  "pages": ["index", "storage", "email-setup", "analytics"]
+  "pages": ["index", "billing", "storage", "email-setup", "analytics"]
 }

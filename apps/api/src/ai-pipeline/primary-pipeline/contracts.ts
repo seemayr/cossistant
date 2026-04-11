@@ -36,6 +36,7 @@ export type PrimaryPipelineResult = {
 			| "ingested"
 			| "failed"
 			| "skipped_backoff"
+			| "skipped_disabled"
 			| "skipped_zero"
 			| "skipped";
 	};

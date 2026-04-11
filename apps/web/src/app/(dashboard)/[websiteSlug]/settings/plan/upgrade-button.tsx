@@ -6,6 +6,7 @@ import { useState } from "react";
 import { UpgradeModal } from "@/components/plan/upgrade-modal";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { canManageBilling, isSelfHostedPlan } from "@/lib/plan-billing";
 import { cn } from "@/lib/utils";
 
 type PlanInfo = RouterOutputs["plan"]["getPlanInfo"];
@@ -67,20 +68,29 @@ function UsagePreviewRow({
 export function UpgradeButton({ planInfo, websiteSlug }: UpgradeButtonProps) {
 	const [isModalOpen, setIsModalOpen] = useState(false);
 	const { plan, hardLimitStatus } = planInfo;
+	const selfHostedPlan = isSelfHostedPlan(plan);
 
+	if (selfHostedPlan || !canManageBilling(planInfo)) {
+		return null;
+	}
+
+	const currentPlanName: PlanName =
+		plan.name === "free" || plan.name === "hobby" || plan.name === "pro"
+			? plan.name
+			: "pro";
 	const proPlan = PLAN_CONFIG.pro;
 	const nextPlanName: PlanName | null =
-		plan.name === "pro" || !proPlan ? null : "pro";
+		currentPlanName === "pro" || !proPlan ? null : "pro";
 
 	const buttonLabel = nextPlanName
 		? `Upgrade to ${PLAN_CONFIG[nextPlanName].displayName}`
 		: "Change plan";
 
-	const initialPlanName = nextPlanName ?? plan.name;
+	const initialPlanName = nextPlanName ?? currentPlanName;
 
 	return (
 		<>
-			{plan.name === "free" ? (
+			{currentPlanName === "free" ? (
 				<button
 					className="relative flex h-auto min-w-[260px] flex-col gap-3 overflow-hidden rounded-[2px] border border-cossistant-orange/60 border-dashed bg-cossistant-orange/[0.02] p-4 text-left hover:bg-cossistant-orange/5 dark:border-cossistant-orange/20"
 					onClick={() => setIsModalOpen(true)}

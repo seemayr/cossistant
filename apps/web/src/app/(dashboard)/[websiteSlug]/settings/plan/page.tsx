@@ -7,6 +7,7 @@ import {
 	SettingsRow,
 } from "@/components/ui/layout/settings-layout";
 import { ensureWebsiteAccess } from "@/lib/auth/website-access";
+import { canManageBilling, isSelfHostedPlan } from "@/lib/plan-billing";
 import { getPlanPricing } from "@/lib/plan-pricing";
 import { getQueryClient, prefetch, trpc } from "@/lib/trpc/server";
 import { getAiCreditUsageView } from "./ai-credit-usage";
@@ -72,27 +73,30 @@ async function PlanInfoContent({ websiteSlug }: { websiteSlug: string }) {
 
 	const { plan, usage, aiCredits } = planInfo;
 	const aiCreditUsage = getAiCreditUsageView(aiCredits);
+	const selfHostedPlan = isSelfHostedPlan(plan);
+	const canManageSubscription = canManageBilling(planInfo);
 	const pricing = getPlanPricing(plan.name);
 	const effectiveMonthlyPrice =
 		typeof plan.price === "number" ? plan.price : pricing.price;
 	const displayedPrice = pricing.hasPromo
 		? pricing.promoPrice
 		: effectiveMonthlyPrice;
-	const planPriceDescription =
-		typeof displayedPrice === "number"
+	const planPriceDescription = selfHostedPlan
+		? ""
+		: typeof displayedPrice === "number"
 			? pricing.hasPromo && typeof pricing.price === "number"
 				? ` ($${displayedPrice}/month, normally $${pricing.price})`
 				: ` ($${displayedPrice}/month)`
 			: "";
+	const planDescription = selfHostedPlan
+		? "This deployment is running in self-hosted mode with Polar disabled. Billing, credits, and plan limits are bypassed."
+		: `You are currently on the ${plan.displayName} plan${planPriceDescription}.`;
 
 	return (
 		<>
-			<SettingsRow
-				description={`You are currently on the ${plan.displayName} plan${planPriceDescription}.`}
-				title="Current Plan"
-			>
+			<SettingsRow description={planDescription} title="Current Plan">
 				<div className="flex flex-wrap items-center justify-between gap-4 p-2 pl-4">
-					{plan.name === "free" && (
+					{plan.name === "free" && canManageSubscription && (
 						<div className="flex gap-2 text-cossistant-orange">
 							<p className="py-2 text-sm">
 								Early bird launch pricing is live. Upgrade now to lock in
@@ -118,15 +122,19 @@ async function PlanInfoContent({ websiteSlug }: { websiteSlug: string }) {
 							<span className="text-primary/60 text-sm">
 								${displayedPrice}/month
 							</span>
+						) : selfHostedPlan ? (
+							<span className="text-primary/60 text-sm">Billing disabled</span>
 						) : (
 							<span className="text-primary/60 text-sm">Free</span>
 						)}
 					</div>
 					<div className="flex flex-wrap items-center gap-2">
 						<UpgradeButton planInfo={planInfo} websiteSlug={websiteSlug} />
-						<Button asChild variant="outline">
-							<Link href={`/${websiteSlug}/billing`}>View billing</Link>
-						</Button>
+						{canManageSubscription ? (
+							<Button asChild variant="outline">
+								<Link href={`/${websiteSlug}/billing`}>View billing</Link>
+							</Button>
+						) : null}
 					</div>
 				</div>
 			</SettingsRow>
@@ -140,7 +148,11 @@ async function PlanInfoContent({ websiteSlug }: { websiteSlug: string }) {
 						<UsageBar
 							current={aiCreditUsage.current}
 							formatValue={() => aiCreditUsage.usageLabel}
-							label="AI Credits (Current Billing Cycle)"
+							label={
+								aiCreditUsage.kind === "unlimited"
+									? "AI Usage"
+									: "AI Credits (Current Billing Cycle)"
+							}
 							limit={aiCreditUsage.limit}
 						/>
 					)}

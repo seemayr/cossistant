@@ -14,7 +14,7 @@ function createPlanInfo(overrides: Partial<PlanInfo> = {}): PlanInfo {
 		plan: {
 			name: "free",
 			displayName: "Free",
-			price: null,
+			price: undefined,
 			features: {
 				contacts: 100,
 				conversations: 500,
@@ -22,6 +22,11 @@ function createPlanInfo(overrides: Partial<PlanInfo> = {}): PlanInfo {
 				"team-members": 1,
 				"conversation-retention": 30,
 			},
+		},
+		billing: {
+			enabled: true,
+			provider: "polar",
+			canManageSubscription: true,
 		},
 		usage: {
 			contacts: 10,
@@ -99,5 +104,30 @@ describe("UpgradeButton", () => {
 		expect(html).toContain(">Change plan<");
 		expect(html).not.toContain("Rolling 30-day window");
 		expect(html).not.toContain(">Messages<");
+	});
+
+	it("hides upgrade controls for self-hosted deployments", () => {
+		const html = renderToStaticMarkup(
+			<UpgradeButton
+				planInfo={
+					createPlanInfo({
+						plan: {
+							...createPlanInfo().plan,
+							name: "self_hosted",
+							displayName: "Self-Hosted",
+							price: undefined,
+						},
+						billing: {
+							enabled: false,
+							provider: "disabled",
+							canManageSubscription: false,
+						},
+					}) as PlanInfo
+				}
+				websiteSlug="acme"
+			/>
+		);
+
+		expect(html).toBe("");
 	});
 });

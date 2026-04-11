@@ -36,6 +36,11 @@ const basePlanInfo: PlanInfo = {
 	},
 	hardLimitsEnforced: true,
 	hardLimitsUnavailableReason: null,
+	billing: {
+		enabled: true,
+		provider: "polar",
+		canManageSubscription: true,
+	},
 };
 
 describe("resolveAiCreditsView", () => {
@@ -81,5 +86,27 @@ describe("resolveAiCreditsView", () => {
 		expect(result.balance).toBe(50);
 		expect(result.creditedUnits).toBe(50);
 		expect(result.source).toBe("plan_fallback");
+	});
+
+	it("surfaces disabled billing as an unlimited self-hosted credit state", () => {
+		const result = resolveAiCreditsView({
+			planInfo: basePlanInfo,
+			meterState: {
+				organizationId: "org-1",
+				meterId: null,
+				balance: null,
+				consumedUnits: null,
+				creditedUnits: null,
+				meterBacked: false,
+				source: "disabled",
+				lastSyncedAt: "2026-02-18T12:00:00.000Z",
+				outage: false,
+			},
+		});
+
+		expect(result.meterBacked).toBe(false);
+		expect(result.balance).toBeNull();
+		expect(result.creditedUnits).toBeNull();
+		expect(result.source).toBe("disabled");
 	});
 });

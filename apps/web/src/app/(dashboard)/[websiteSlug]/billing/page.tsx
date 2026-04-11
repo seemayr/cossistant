@@ -1,7 +1,13 @@
-// checkout/route.ts
-
+import { isPolarEnabled } from "@api/lib/billing-mode";
 import polarClient from "@api/lib/polar";
+import Link from "next/link";
 import { redirect } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import {
+	SettingsHeader,
+	SettingsPage,
+	SettingsRow,
+} from "@/components/ui/layout/settings-layout";
 import { ensureWebsiteAccess } from "@/lib/auth/website-access";
 
 type BillingPageProps = {
@@ -10,25 +16,40 @@ type BillingPageProps = {
 	}>;
 };
 
-export default async function BillingRedirect({ params }: BillingPageProps) {
+export default async function BillingPage({ params }: BillingPageProps) {
 	const { websiteSlug } = await params;
-
 	const { website } = await ensureWebsiteAccess(websiteSlug);
 
-	// Should not happen, but just in case
 	if (!website) {
 		redirect("/select");
 	}
 
-	console.log("website", website);
+	if (!isPolarEnabled()) {
+		return (
+			<SettingsPage className="py-30">
+				<SettingsHeader>Billing</SettingsHeader>
+				<SettingsRow
+					description="This deployment is running in self-hosted mode with Polar disabled, so billing, credit tracking, and upgrade flows are bypassed."
+					title="Billing Disabled"
+				>
+					<div className="flex items-center justify-between gap-4 p-4">
+						<p className="max-w-xl text-primary/70 text-sm">
+							There is no customer portal for this deployment because
+							subscription management is turned off.
+						</p>
+						<Button asChild variant="outline">
+							<Link href={`/${websiteSlug}/settings/plan`}>Back to plan</Link>
+						</Button>
+					</div>
+				</SettingsRow>
+			</SettingsPage>
+		);
+	}
 
 	const customer = await polarClient.customers.getExternal({
 		externalId: website.organizationId,
 	});
 
-	console.log("customer", customer);
-
-	// Should not happen, but just in case
 	if (!customer) {
 		redirect("/select");
 	}
@@ -37,24 +58,5 @@ export default async function BillingRedirect({ params }: BillingPageProps) {
 		customerId: customer.id,
 	});
 
-	console.log("customerPortal", customerPortal);
-
 	redirect(customerPortal.customerPortalUrl);
 }
-
-// CustomerPortal({
-// 	accessToken: `${process.env.POLAR_ACCESS_TOKEN}`,
-// 	getCustomerId: async (
-// 		req: NextRequest,
-// 		{ params }: { params: { brandingId: string; agencyId: string } }
-// 	) => {
-// 		const websiteSlug =
-
-// 		const { user, website } = await ensureWebsiteAccess(websiteSlug);
-
-// 		const customer = await polarClient.customers.getExternal(website?.id);
-
-// 		return customer.id;
-// 	},
-// 	server: process.env.NODE_ENV === "production" ? "production" : "sandbox",
-// });

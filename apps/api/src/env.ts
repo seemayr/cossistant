@@ -1,3 +1,5 @@
+import { parseEnabledFlag } from "@api/lib/env-flags";
+
 const getEnvVariable = (name: string, defaultValue?: string): string => {
 	const value = process.env[name];
 
@@ -29,7 +31,8 @@ const defaultTracePayloadMode =
 
 export const env = {
 	NODE_ENV: getEnvVariable("NODE_ENV"),
-	TINYBIRD_ENABLED: getEnvVariable("TINYBIRD_ENABLED", "true") === "true",
+	POLAR_ENABLED: parseEnabledFlag(process.env.POLAR_ENABLED, true),
+	TINYBIRD_ENABLED: parseEnabledFlag(process.env.TINYBIRD_ENABLED, true),
 	TINYBIRD_HOST: getEnvVariable("TINYBIRD_HOST", "http://localhost:7181"),
 	TINYBIRD_TOKEN: getEnvVariable("TINYBIRD_TOKEN", "admin"),
 	TINYBIRD_SIGNING_KEY: getEnvVariable("TINYBIRD_SIGNING_KEY", ""),
@@ -124,8 +127,7 @@ export const env = {
 	S3_ACCESS_KEY_ID: getEnvVariable("S3_ACCESS_KEY_ID"),
 	S3_SECRET_ACCESS_KEY: getEnvVariable("S3_SECRET_ACCESS_KEY"),
 	S3_ENDPOINT: getEnvVariable("S3_ENDPOINT", ""),
-	S3_FORCE_PATH_STYLE:
-		getEnvVariable("S3_FORCE_PATH_STYLE", "false") === "true",
+	S3_FORCE_PATH_STYLE: parseEnabledFlag(process.env.S3_FORCE_PATH_STYLE, false),
 	S3_SIGNED_URL_EXPIRATION_SECONDS: +getEnvVariable(
 		"S3_SIGNED_URL_EXPIRATION_SECONDS",
 		"900"
@@ -150,8 +152,10 @@ export const env = {
 		"AI_AGENT_ROGUE_PAUSE_MINUTES",
 		"15"
 	),
-	AI_AGENT_DEEP_TRACE_ENABLED:
-		getEnvVariable("AI_AGENT_DEEP_TRACE_ENABLED", "false") === "true",
+	AI_AGENT_DEEP_TRACE_ENABLED: parseEnabledFlag(
+		process.env.AI_AGENT_DEEP_TRACE_ENABLED,
+		false
+	),
 	AI_AGENT_TRACE_HEARTBEAT_MS: +getEnvVariable(
 		"AI_AGENT_TRACE_HEARTBEAT_MS",
 		"2000"

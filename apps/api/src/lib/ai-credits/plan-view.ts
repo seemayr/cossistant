@@ -5,6 +5,17 @@ export function resolveAiCreditsView(params: {
 	planInfo: PlanInfo;
 	meterState: AiCreditMeterState;
 }) {
+	if (params.meterState.source === "disabled") {
+		return {
+			balance: null,
+			consumedUnits: null,
+			creditedUnits: null,
+			meterBacked: false,
+			source: "disabled" as const,
+			lastSyncedAt: params.meterState.lastSyncedAt,
+		};
+	}
+
 	const fallbackCredits =
 		typeof params.planInfo.features["ai-credit"] === "number"
 			? params.planInfo.features["ai-credit"]

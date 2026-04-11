@@ -43,6 +43,12 @@ const getCustomerByOrganizationIdMock = mock(
 const getCustomerStateMock = mock(
 	(async () => null) as (...args: unknown[]) => Promise<unknown>
 );
+const getPlanFromCustomerStateMock = mock(
+	(async () => null) as (...args: unknown[]) => Promise<unknown>
+);
+const getSubscriptionForWebsiteMock = mock(
+	(() => null) as (...args: unknown[]) => unknown
+);
 const partitionWebsiteSubscriptionsForDeletionMock = mock((() => ({
 	subscriptionsToKeep: [],
 	subscriptionsToRevoke: [],
@@ -91,6 +97,8 @@ mock.module("@api/lib/plans/polar", () => ({
 	ensureFreeSubscriptionForWebsite: ensureFreeSubscriptionForWebsiteMock,
 	getCustomerByOrganizationId: getCustomerByOrganizationIdMock,
 	getCustomerState: getCustomerStateMock,
+	getPlanFromCustomerState: getPlanFromCustomerStateMock,
+	getSubscriptionForWebsite: getSubscriptionForWebsiteMock,
 	partitionWebsiteSubscriptionsForDeletion:
 		partitionWebsiteSubscriptionsForDeletionMock,
 	PolarCustomerInvariantViolationError,
@@ -101,6 +109,7 @@ mock.module("@api/lib/polar", () => ({
 }));
 
 const mockEnv = {
+	POLAR_ENABLED: true,
 	TINYBIRD_ENABLED: true,
 	TINYBIRD_HOST: "http://localhost:7181",
 };
@@ -201,6 +210,8 @@ describe("website router create", () => {
 		ensureFreeSubscriptionForWebsiteMock.mockReset();
 		getCustomerByOrganizationIdMock.mockReset();
 		getCustomerStateMock.mockReset();
+		getPlanFromCustomerStateMock.mockReset();
+		getSubscriptionForWebsiteMock.mockReset();
 		partitionWebsiteSubscriptionsForDeletionMock.mockReset();
 		generateTinybirdJWTMock.mockReset();
 

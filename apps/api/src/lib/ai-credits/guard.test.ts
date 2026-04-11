@@ -147,4 +147,29 @@ describe("guardAiCreditRun", () => {
 		expect(result.mode).toBe("outage");
 		expect(result.blockedReason).toBe("outage_model_not_allowed");
 	});
+
+	it("allows runs without metering when billing is disabled", async () => {
+		getAiCreditMeterStateMock.mockResolvedValue({
+			organizationId: "org-1",
+			meterId: null,
+			balance: null,
+			consumedUnits: null,
+			creditedUnits: null,
+			meterBacked: false,
+			source: "disabled",
+			lastSyncedAt: new Date().toISOString(),
+			outage: false,
+		});
+
+		const { guardAiCreditRun } = await guardModulePromise;
+		const result = await guardAiCreditRun({
+			organizationId: "org-1",
+			modelId: "openai/gpt-5.2-chat",
+		});
+
+		expect(result.allowed).toBe(true);
+		expect(result.mode).toBe("normal");
+		expect(result.blockedReason).toBeNull();
+		expect(result.meterSource).toBe("disabled");
+	});
 });

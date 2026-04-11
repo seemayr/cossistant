@@ -3,11 +3,12 @@ import type { RouterOutputs } from "@cossistant/api/types";
 export type PlanAiCredits = RouterOutputs["plan"]["getPlanInfo"]["aiCredits"];
 
 export type AiCreditUsageView = {
+	kind: "metered" | "unlimited";
 	current: number;
-	limit: number;
-	remaining: number;
+	limit: number | null;
+	remaining: number | null;
 	usageLabel: string;
-	remainingLabel: string;
+	remainingLabel: string | null;
 };
 
 const aiCreditFormatter = new Intl.NumberFormat("en-US", {
@@ -25,6 +26,17 @@ export function formatAiCreditAmount(value: number): string {
 export function getAiCreditUsageView(
 	aiCredits: PlanAiCredits | null | undefined
 ): AiCreditUsageView | null {
+	if (aiCredits?.source === "disabled") {
+		return {
+			kind: "unlimited",
+			current: 0,
+			limit: null,
+			remaining: null,
+			usageLabel: "Unlimited in self-hosted mode",
+			remainingLabel: null,
+		};
+	}
+
 	if (!aiCredits?.meterBacked) {
 		return null;
 	}
@@ -43,6 +55,7 @@ export function getAiCreditUsageView(
 		: Math.max(aiCredits.creditedUnits - aiCredits.consumedUnits, 0);
 
 	return {
+		kind: "metered",
 		current: aiCredits.consumedUnits,
 		limit: aiCredits.creditedUnits,
 		remaining,

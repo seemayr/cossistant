@@ -1,4 +1,5 @@
 import { env } from "@api/env";
+import { isPolarEnabled } from "@api/lib/billing-mode";
 import polarClient from "@api/lib/polar";
 import { TRPCError } from "@trpc/server";
 
@@ -40,7 +41,11 @@ export type DiscountInfo = {
  */
 export async function getDiscountInfo(
 	discountId: string
-): Promise<DiscountInfo> {
+): Promise<DiscountInfo | null> {
+	if (!isPolarEnabled()) {
+		return null;
+	}
+
 	try {
 		const discount = await polarClient.discounts.get({
 			id: discountId,

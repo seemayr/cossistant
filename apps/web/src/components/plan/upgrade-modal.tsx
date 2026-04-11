@@ -274,6 +274,13 @@ export function UpgradeModal({
 }: UpgradeModalProps) {
 	const trpc = useTRPC();
 	const queryClient = useQueryClient();
+	const isSelfHosted = currentPlan.name === "self_hosted";
+	const currentPlanName: PlanName =
+		currentPlan.name === "free" ||
+		currentPlan.name === "hobby" ||
+		currentPlan.name === "pro"
+			? currentPlan.name
+			: "pro";
 	const preferredPlanName = useMemo<PlanName>(
 		() => (PLAN_CONFIG.pro ? "pro" : initialPlanName),
 		[initialPlanName]
@@ -287,12 +294,12 @@ export function UpgradeModal({
 		}
 	}, [preferredPlanName, open]);
 
-	const currentPlanConfig = PLAN_CONFIG[currentPlan.name] ?? PLAN_CONFIG.free;
+	const currentPlanConfig = PLAN_CONFIG[currentPlanName] ?? PLAN_CONFIG.free;
 	const selectedPlanConfig = PLAN_CONFIG[selectedPlanName] ?? PLAN_CONFIG.free;
 
-	const currentIndex = PLAN_SEQUENCE.indexOf(currentPlan.name);
+	const currentIndex = PLAN_SEQUENCE.indexOf(currentPlanName);
 	const selectedIndex = PLAN_SEQUENCE.indexOf(selectedPlanName);
-	const isSamePlan = currentPlan.name === selectedPlanName;
+	const isSamePlan = currentPlanName === selectedPlanName;
 	const isDowngrade =
 		currentIndex !== -1 && selectedIndex !== -1 && selectedIndex < currentIndex;
 
@@ -339,6 +346,10 @@ export function UpgradeModal({
 			},
 		})
 	);
+
+	if (isSelfHosted) {
+		return null;
+	}
 
 	const handlePlanChange = async () => {
 		if (isSamePlan || !hasPolarProduct) {
@@ -388,7 +399,7 @@ export function UpgradeModal({
 							{PLAN_SEQUENCE.map((planName: PlanName) => {
 								const plan = PLAN_CONFIG[planName];
 								const isSelected = selectedPlanName === planName;
-								const isCurrent = currentPlan.name === planName;
+								const isCurrent = currentPlanName === planName;
 								const hasPromo =
 									typeof plan.price === "number" &&
 									typeof plan.priceWithPromo === "number" &&

@@ -12,11 +12,15 @@ import { env } from "@api/env";
 import { getAiModelsForPlan } from "@api/lib/ai-credits/config";
 import { resolveAiCreditsView } from "@api/lib/ai-credits/plan-view";
 import { getAiCreditMeterState } from "@api/lib/ai-credits/polar-meter";
+import { isPolarEnabled } from "@api/lib/billing-mode";
 import {
 	getDashboardConversationLockCutoff,
 	resolveDashboardHardLimitPolicy,
 } from "@api/lib/hard-limits/dashboard";
-import { getPlanForWebsite } from "@api/lib/plans/access";
+import {
+	getPlanForWebsite,
+	getSelfHostedPlanInfo,
+} from "@api/lib/plans/access";
 import { getPlanConfig, type PlanName } from "@api/lib/plans/config";
 import {
 	EARLY_BIRD_DISCOUNT_ID,
@@ -151,6 +155,7 @@ export const planRouter = createTRPCRouter({
 					price: planInfo.price,
 					features: planInfo.features,
 				},
+				billing: planInfo.billing,
 				usage: {
 					messages,
 					contacts,
@@ -225,6 +230,16 @@ export const planRouter = createTRPCRouter({
 
 			if (websites.length === 0) {
 				return [];
+			}
+
+			if (!isPolarEnabled()) {
+				const selfHostedPlan = getSelfHostedPlanInfo();
+
+				return websites.map((site) => ({
+					websiteId: site.id,
+					planName: selfHostedPlan.planName,
+					displayName: selfHostedPlan.displayName,
+				}));
 			}
 
 			// Get customer state once for the organization
@@ -306,6 +321,13 @@ export const planRouter = createTRPCRouter({
 		)
 		.mutation(async ({ ctx, input }) => {
 			const { targetPlan } = input;
+
+			if (!isPolarEnabled()) {
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message: "Billing is disabled for this deployment.",
+				});
+			}
 
 			const websiteData = await getWebsiteBySlugWithAccess(ctx.db, {
 				userId: ctx.user.id,

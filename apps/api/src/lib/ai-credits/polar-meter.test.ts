@@ -111,6 +111,25 @@ describe("ai credit Polar meter gateway", () => {
 		expect(polar.customers.getStateExternal).not.toHaveBeenCalled();
 	});
 
+	it("returns a disabled state when Polar billing is turned off", async () => {
+		const result = await getAiCreditMeterState("org-1", {
+			deps: {
+				redis,
+				polar,
+				now: () => nowMs,
+				billingEnabled: false,
+				meterId: "meter-ai-1",
+				cacheTtlSeconds: 15,
+				staleTtlSeconds: 300,
+			},
+		});
+
+		expect(result.source).toBe("disabled");
+		expect(result.outage).toBe(false);
+		expect(result.meterBacked).toBe(false);
+		expect(polar.customers.getStateExternal).not.toHaveBeenCalled();
+	});
+
 	it("returns stale cache when lock is contended", async () => {
 		await redis.set(
 			"ai-credit:meter:org-1",
@@ -283,5 +302,39 @@ describe("ai credit Polar meter gateway", () => {
 
 		expect(result.status).toBe("failed");
 		expect(await redis.get("ai-credit:ingest-backoff:org-1")).toBeTruthy();
+	});
+
+	it("skips ingest entirely when billing is disabled", async () => {
+		const result = await ingestAiCreditUsage(
+			{
+				organizationId: "org-1",
+				credits: 1,
+				workflowRunId: "wf-disabled",
+				modelId: "moonshotai/kimi-k2.5",
+				mode: "normal",
+				baseCredits: 1,
+				modelCredits: 0,
+				toolCredits: 0,
+				billableToolCount: 0,
+				excludedToolCount: 0,
+				totalToolCount: 0,
+			},
+			{
+				deps: {
+					redis,
+					polar,
+					now: () => nowMs,
+					billingEnabled: false,
+					meterId: "meter-ai-1",
+					eventName: "ai_usage",
+					cacheTtlSeconds: 15,
+					staleTtlSeconds: 300,
+					ingestBackoffSeconds: 30,
+				},
+			}
+		);
+
+		expect(result.status).toBe("skipped_disabled");
+		expect(polar.events.ingest).not.toHaveBeenCalled();
 	});
 });

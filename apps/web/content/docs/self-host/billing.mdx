@@ -1,0 +1,73 @@
+---
+title: Billing
+description: Control whether self-hosted Cossistant uses Polar for billing and metering, and understand what changes when billing is disabled.
+---
+
+Start with the [Self-Host overview](/docs/self-host) if you want the full deployment picture first. This page focuses on Polar, plan enforcement, and AI credit metering.
+
+## Why Polar is enabled by default
+
+Cossistant ships with Polar enabled by default because that is the same behavior the hosted product relies on:
+
+- plan upgrades and downgrades go through Polar
+- website subscriptions are resolved from Polar customer state
+- AI credits are metered through Polar
+- billing pages and customer portal flows assume Polar is available
+
+That default is important because it keeps the repo aligned with the managed cloud behavior out of the box.
+
+## The self-hosted override
+
+If you do not want any Polar dependency in your deployment, disable it explicitly:
+
+```bash title=".env"
+POLAR_ENABLED=false
+```
+
+The parsing is strict:
+
+- missing `POLAR_ENABLED` means Polar stays enabled
+- `POLAR_ENABLED=true` keeps Polar enabled
+- any other value disables Polar
+
+## What happens when billing is disabled
+
+When `POLAR_ENABLED=false`, Cossistant switches into a self-hosted billing-disabled mode.
+
+That means:
+
+- Polar checkout and customer portal flows are bypassed
+- Polar webhooks are not mounted
+- organization creation does not create Polar customers
+- website creation does not provision free subscriptions
+- website deletion does not try to revoke Polar subscriptions
+- AI credit metering is disabled
+- plan limits and feature gates become effectively unlimited
+
+In practice, the app resolves a synthetic `self_hosted` plan internally. That plan is used to keep the rest of the app simple:
+
+- numeric limits are treated as unlimited
+- boolean-gated features are treated as enabled
+- AI training cooldown becomes immediate
+- hard plan limits are not enforced
+
+So the feature code keeps calling the same plan and entitlement helpers it already uses. The billing mode is centralized instead of spreading `if/else` checks across the product.
+
+## What the dashboard shows
+
+When billing is disabled:
+
+- the plan page shows a self-hosted state instead of hosted pricing copy
+- upgrade and billing actions are hidden
+- the billing route explains that subscription management is disabled for this deployment
+- AI usage is shown as unmetered instead of as an outage or credit-sync problem
+
+## Recommended self-host default
+
+If you are running Cossistant fully on your own infrastructure and do not want hosted billing behavior, set:
+
+```bash title=".env"
+POLAR_ENABLED=false
+```
+
+If you want your self-host deployment to keep the same billing and metering behavior as Cossistant Cloud, leave `POLAR_ENABLED` unset or set it to `true`.

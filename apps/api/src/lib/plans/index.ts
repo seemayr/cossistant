@@ -1,5 +1,11 @@
 // Export public API for plan and feature checking
-export { canUse, getPlanForWebsite, type PlanInfo } from "./access";
+export {
+	canUse,
+	getPlanForWebsite,
+	getSelfHostedPlanInfo,
+	type PlanInfo,
+	type ResolvedPlanName,
+} from "./access";
 export {
 	FEATURE_CONFIG,
 	type FeatureConfig,

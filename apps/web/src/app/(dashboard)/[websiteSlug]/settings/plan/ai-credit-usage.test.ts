@@ -25,6 +25,7 @@ describe("ai credit usage view", () => {
 		const view = getAiCreditUsageView(buildAiCredits());
 
 		expect(view).toEqual({
+			kind: "metered",
 			current: 12.5,
 			limit: 100,
 			remaining: 87.5,
@@ -48,6 +49,27 @@ describe("ai credit usage view", () => {
 
 		expect(view?.remaining).toBe(87.5);
 		expect(view?.remainingLabel).toBe("87.5 left");
+	});
+
+	it("shows unlimited credits when billing is disabled", () => {
+		const view = getAiCreditUsageView(
+			buildAiCredits({
+				balance: null,
+				consumedUnits: null,
+				creditedUnits: null,
+				meterBacked: false,
+				source: "disabled",
+			})
+		);
+
+		expect(view).toEqual({
+			kind: "unlimited",
+			current: 0,
+			limit: null,
+			remaining: null,
+			usageLabel: "Unlimited in self-hosted mode",
+			remainingLabel: null,
+		});
 	});
 
 	it("hides fallback or outage-only credit states", () => {

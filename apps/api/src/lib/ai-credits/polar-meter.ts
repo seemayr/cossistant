@@ -1,4 +1,5 @@
 import { env } from "@api/env";
+import { isPolarEnabled } from "@api/lib/billing-mode";
 import polarClient from "@api/lib/polar";
 import { getRedis } from "@api/redis";
 
@@ -7,7 +8,12 @@ const METER_LOCK_KEY_PREFIX = "ai-credit:meter-lock";
 const INGEST_BACKOFF_KEY_PREFIX = "ai-credit:ingest-backoff";
 const METER_LOCK_TTL_MS = 4000;
 
-export type AiCreditMeterSource = "live" | "cache" | "stale_cache" | "outage";
+export type AiCreditMeterSource =
+	| "live"
+	| "cache"
+	| "stale_cache"
+	| "outage"
+	| "disabled";
 
 export type AiCreditMeterState = {
 	organizationId: string;
@@ -46,7 +52,8 @@ export type IngestAiCreditUsageStatus =
 	| "ingested"
 	| "failed"
 	| "skipped_backoff"
-	| "skipped_zero";
+	| "skipped_zero"
+	| "skipped_disabled";
 
 export type IngestAiCreditUsageResult = {
 	status: IngestAiCreditUsageStatus;
@@ -90,6 +97,7 @@ type GatewayDeps = {
 	redis: RedisLike;
 	polar: PolarLike;
 	now: () => number;
+	billingEnabled: boolean;
 	meterId: string;
 	eventName: string;
 	cacheTtlSeconds: number;
@@ -120,6 +128,7 @@ function resolveDeps(overrides?: Partial<GatewayDeps>): GatewayDeps {
 		redis: (overrides?.redis ?? getRedis()) as RedisLike,
 		polar: (overrides?.polar ?? polarClient) as PolarLike,
 		now: overrides?.now ?? Date.now,
+		billingEnabled: overrides?.billingEnabled ?? isPolarEnabled(),
 		meterId: overrides?.meterId ?? env.POLAR_AI_USAGE_METER_ID,
 		eventName: overrides?.eventName ?? env.AI_CREDIT_USAGE_EVENT_NAME,
 		cacheTtlSeconds:
@@ -128,6 +137,23 @@ function resolveDeps(overrides?: Partial<GatewayDeps>): GatewayDeps {
 			overrides?.staleTtlSeconds ?? env.AI_CREDIT_BALANCE_STALE_TTL_SECONDS,
 		ingestBackoffSeconds:
 			overrides?.ingestBackoffSeconds ?? env.AI_CREDIT_INGEST_BACKOFF_SECONDS,
+	};
+}
+
+function toDisabledState(params: {
+	organizationId: string;
+	nowMs: number;
+}): AiCreditMeterState {
+	return {
+		organizationId: params.organizationId,
+		meterId: null,
+		balance: null,
+		consumedUnits: null,
+		creditedUnits: null,
+		meterBacked: false,
+		source: "disabled",
+		lastSyncedAt: toTimestamp(params.nowMs),
+		outage: false,
 	};
 }
 
@@ -281,6 +307,13 @@ export async function getAiCreditMeterState(
 	const deps = resolveDeps(options?.deps);
 	const nowMs = deps.now();
 	const meterId = deps.meterId || null;
+
+	if (!deps.billingEnabled) {
+		return toDisabledState({
+			organizationId,
+			nowMs,
+		});
+	}
 
 	if (!meterId) {
 		return toOutageState({
@@ -439,6 +472,10 @@ export async function ingestAiCreditUsage(
 	options?: GatewayOptions
 ): Promise<IngestAiCreditUsageResult> {
 	const deps = resolveDeps(options?.deps);
+
+	if (!deps.billingEnabled) {
+		return { status: "skipped_disabled" };
+	}
 
 	if (input.credits <= 0) {
 		return { status: "skipped_zero" };

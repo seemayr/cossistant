@@ -2,24 +2,31 @@ import {
 	createKnowledge,
 	deleteKnowledge,
 	getKnowledgeById,
+	getKnowledgeCountByType,
+	getTotalKnowledgeSizeBytes,
 	listKnowledge,
 	updateKnowledge,
 } from "@api/db/queries/knowledge";
 import { syncLinkSourceStatsFromKnowledge } from "@api/db/queries/link-source";
+import { getPlanForWebsite } from "@api/lib/plans/access";
 import {
 	safelyExtractRequestData,
 	safelyExtractRequestQuery,
 	validateResponse,
 } from "@api/utils/validate";
 import {
+	type CreateKnowledgeRestRequest,
 	createKnowledgeRestRequestSchema,
 	type KnowledgeResponse,
 	knowledgeResponseSchema,
 	listKnowledgeResponseSchema,
 	listKnowledgeRestRequestSchema,
+	type UpdateKnowledgeRestRequest,
 	updateKnowledgeRestRequestSchema,
 } from "@cossistant/types";
 import { OpenAPIHono } from "@hono/zod-openapi";
+import type { Context } from "hono";
+import { HTTPException } from "hono/http-exception";
 import { protectedPrivateApiKeyMiddleware } from "../middleware";
 import { errorJsonResponse, privateControlAuth } from "../openapi";
 import type { RestContext } from "../types";
@@ -53,6 +60,172 @@ function normalizeIsIncluded(
 	}
 
 	return value === "true";
+}
+
+function toNumericLimit(value: number | boolean | null): number | null {
+	if (value === null || value === true) {
+		return null;
+	}
+
+	if (value === false) {
+		return 0;
+	}
+
+	return value;
+}
+
+function getErrorCodeForStatus(status: number): string {
+	switch (status) {
+		case 400:
+			return "BAD_REQUEST";
+		case 401:
+			return "UNAUTHORIZED";
+		case 403:
+			return "FORBIDDEN";
+		case 404:
+			return "NOT_FOUND";
+		case 409:
+			return "CONFLICT";
+		case 429:
+			return "TOO_MANY_REQUESTS";
+		default:
+			return "INTERNAL_SERVER_ERROR";
+	}
+}
+
+function handleKnowledgeRouterError(
+	c: Context<RestContext>,
+	error: unknown,
+	fallbackMessage: string
+) {
+	if (error instanceof HTTPException) {
+		return c.json(
+			{
+				error: getErrorCodeForStatus(error.status),
+				message: error.message,
+			},
+			error.status as 400 | 401 | 403 | 404 | 409 | 429 | 500
+		);
+	}
+
+	console.error(fallbackMessage, error);
+	return c.json(
+		{
+			error: "INTERNAL_SERVER_ERROR",
+			message: fallbackMessage,
+		},
+		500
+	);
+}
+
+async function enforceKnowledgeCreateLimits(params: {
+	db: RestContext["Variables"]["db"];
+	website: RestContext["Variables"]["website"];
+	body: CreateKnowledgeRestRequest;
+}) {
+	const planInfo = await getPlanForWebsite(params.website);
+
+	if (params.body.type === "faq") {
+		const faqLimit = toNumericLimit(
+			planInfo.features["ai-agent-training-faqs"]
+		);
+		if (faqLimit !== null) {
+			const currentCount = await getKnowledgeCountByType(params.db, {
+				websiteId: params.website.id,
+				aiAgentId: params.body.aiAgentId ?? null,
+				type: "faq",
+			});
+
+			if (currentCount >= faqLimit) {
+				throw new HTTPException(403, {
+					message: `You have reached the limit of ${faqLimit} FAQs for your plan. Please upgrade to add more.`,
+				});
+			}
+		}
+	} else if (params.body.type === "article") {
+		const fileLimit = toNumericLimit(
+			planInfo.features["ai-agent-training-files"]
+		);
+		if (fileLimit !== null) {
+			const currentCount = await getKnowledgeCountByType(params.db, {
+				websiteId: params.website.id,
+				aiAgentId: params.body.aiAgentId ?? null,
+				type: "article",
+			});
+
+			if (currentCount >= fileLimit) {
+				throw new HTTPException(403, {
+					message: `You have reached the limit of ${fileLimit} files for your plan. Please upgrade to add more.`,
+				});
+			}
+		}
+	}
+
+	const sizeLimitMb = toNumericLimit(planInfo.features["ai-agent-training-mb"]);
+	if (sizeLimitMb !== null) {
+		const sizeLimitBytes = sizeLimitMb * 1024 * 1024;
+		const currentSize = await getTotalKnowledgeSizeBytes(params.db, {
+			websiteId: params.website.id,
+			aiAgentId: params.body.aiAgentId ?? null,
+		});
+		const newEntrySize = new TextEncoder().encode(
+			JSON.stringify(params.body.payload)
+		).length;
+
+		if (currentSize + newEntrySize > sizeLimitBytes) {
+			throw new HTTPException(403, {
+				message: `Adding this entry would exceed your ${sizeLimitMb}MB knowledge base limit. Please upgrade for more storage.`,
+			});
+		}
+	}
+}
+
+async function enforceKnowledgeUpdateSizeLimit(params: {
+	db: RestContext["Variables"]["db"];
+	website: RestContext["Variables"]["website"];
+	existingEntry: Awaited<ReturnType<typeof getKnowledgeById>>;
+	body: UpdateKnowledgeRestRequest;
+}) {
+	if (!params.existingEntry) {
+		return;
+	}
+
+	if (
+		params.body.payload === undefined &&
+		params.body.aiAgentId === undefined
+	) {
+		return;
+	}
+
+	const planInfo = await getPlanForWebsite(params.website);
+	const sizeLimitMb = toNumericLimit(planInfo.features["ai-agent-training-mb"]);
+	if (sizeLimitMb === null) {
+		return;
+	}
+
+	const targetAiAgentId =
+		params.body.aiAgentId !== undefined
+			? params.body.aiAgentId
+			: params.existingEntry.aiAgentId;
+	const nextSizeBytes =
+		params.body.payload !== undefined
+			? new TextEncoder().encode(JSON.stringify(params.body.payload)).length
+			: params.existingEntry.sizeBytes;
+	const currentScopedSize = await getTotalKnowledgeSizeBytes(params.db, {
+		websiteId: params.website.id,
+		aiAgentId: targetAiAgentId ?? null,
+	});
+	const sizeLimitBytes = sizeLimitMb * 1024 * 1024;
+	const adjustedSize =
+		targetAiAgentId === params.existingEntry.aiAgentId
+			? currentScopedSize - params.existingEntry.sizeBytes + nextSizeBytes
+			: currentScopedSize + nextSizeBytes;
+
+	if (adjustedSize > sizeLimitBytes) {
+		throw new HTTPException(403, {
+			message: `Updating this entry would exceed your ${sizeLimitMb}MB knowledge base limit. Please upgrade for more storage.`,
+		});
+	}
 }
 
 function formatKnowledgeResponse(entry: {
@@ -166,14 +339,11 @@ knowledgeRouter.openapi(
 				200
 			);
 		} catch (error) {
-			console.error("Error listing knowledge:", error);
-			return c.json(
-				{
-					error: "INTERNAL_SERVER_ERROR",
-					message: "Failed to list knowledge entries",
-				},
-				500
-			);
+			return handleKnowledgeRouterError(
+				c,
+				error,
+				"Failed to list knowledge entries"
+			) as never;
 		}
 	}
 );
@@ -255,14 +425,11 @@ knowledgeRouter.openapi(
 				200
 			);
 		} catch (error) {
-			console.error("Error fetching knowledge:", error);
-			return c.json(
-				{
-					error: "INTERNAL_SERVER_ERROR",
-					message: "Failed to fetch knowledge entry",
-				},
-				500
-			);
+			return handleKnowledgeRouterError(
+				c,
+				error,
+				"Failed to fetch knowledge entry"
+			) as never;
 		}
 	}
 );
@@ -296,6 +463,9 @@ knowledgeRouter.openapi(
 			401: errorJsonResponse(
 				"Unauthorized - Invalid or missing private API key"
 			),
+			403: errorJsonResponse(
+				"Forbidden - Plan knowledge limits prevent creating this entry"
+			),
 			500: errorJsonResponse("Internal server error"),
 		},
 		tags: ["Knowledge"],
@@ -314,6 +484,12 @@ knowledgeRouter.openapi(
 					401
 				);
 			}
+
+			await enforceKnowledgeCreateLimits({
+				db,
+				website,
+				body,
+			});
 
 			const entry = await createKnowledge(db, {
 				organizationId: website.organizationId,
@@ -336,14 +512,11 @@ knowledgeRouter.openapi(
 				201
 			);
 		} catch (error) {
-			console.error("Error creating knowledge:", error);
-			return c.json(
-				{
-					error: "INTERNAL_SERVER_ERROR",
-					message: "Failed to create knowledge entry",
-				},
-				500
-			);
+			return handleKnowledgeRouterError(
+				c,
+				error,
+				"Failed to create knowledge entry"
+			) as never;
 		}
 	}
 );
@@ -376,6 +549,9 @@ knowledgeRouter.openapi(
 			400: errorJsonResponse("Invalid request data"),
 			401: errorJsonResponse(
 				"Unauthorized - Invalid or missing private API key"
+			),
+			403: errorJsonResponse(
+				"Forbidden - Plan knowledge limits prevent updating this entry"
 			),
 			404: errorJsonResponse("Knowledge entry not found"),
 			500: errorJsonResponse("Internal server error"),
@@ -417,6 +593,25 @@ knowledgeRouter.openapi(
 				);
 			}
 
+			const existingEntry = await getKnowledgeById(db, {
+				id,
+				websiteId: website.id,
+			});
+
+			if (!existingEntry) {
+				return c.json(
+					{ error: "NOT_FOUND", message: "Knowledge entry not found" },
+					404
+				);
+			}
+
+			await enforceKnowledgeUpdateSizeLimit({
+				db,
+				website,
+				existingEntry,
+				body,
+			});
+
 			const entry = await updateKnowledge(db, {
 				id,
 				websiteId: website.id,
@@ -442,14 +637,11 @@ knowledgeRouter.openapi(
 				200
 			);
 		} catch (error) {
-			console.error("Error updating knowledge:", error);
-			return c.json(
-				{
-					error: "INTERNAL_SERVER_ERROR",
-					message: "Failed to update knowledge entry",
-				},
-				500
-			);
+			return handleKnowledgeRouterError(
+				c,
+				error,
+				"Failed to update knowledge entry"
+			) as never;
 		}
 	}
 );
@@ -460,7 +652,7 @@ knowledgeRouter.openapi(
 		method: "delete",
 		path: "/:id",
 		summary: "Delete a knowledge entry",
-		description: "Soft deletes a knowledge entry",
+		description: "Permanently deletes a knowledge entry",
 		responses: {
 			204: {
 				description: "Knowledge entry deleted successfully",
@@ -538,14 +730,11 @@ knowledgeRouter.openapi(
 
 			return c.body(null, 204);
 		} catch (error) {
-			console.error("Error deleting knowledge:", error);
-			return c.json(
-				{
-					error: "INTERNAL_SERVER_ERROR",
-					message: "Failed to delete knowledge entry",
-				},
-				500
-			);
+			return handleKnowledgeRouterError(
+				c,
+				error,
+				"Failed to delete knowledge entry"
+			) as never;
 		}
 	}
 );

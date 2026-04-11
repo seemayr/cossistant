@@ -7,6 +7,7 @@ const noopMiddleware = async (_c: any, next: () => Promise<void>) => {
 
 mock.module("@api/env", () => ({
 	env: {
+		POLAR_ENABLED: true,
 		TINYBIRD_HOST: "http://localhost:7181",
 		TINYBIRD_TOKEN: "admin",
 		PORT: 8787,
@@ -31,7 +32,14 @@ mock.module("@api/middleware/rate-limit", () => ({
 }));
 
 mock.module("@api/rest/openapi", () => ({
+	actorUserIdHeader: {},
 	openApiSecuritySchemes: {},
+	PRIVATE_API_KEY_SECURITY_SCHEME: {},
+	privateApiKeyAuthorizationHeader: {},
+	PUBLIC_API_KEY_SECURITY_SCHEME: {},
+	publicApiKeyHeader: {},
+	publicApiKeyOriginHeader: {},
+	visitorIdHeader: {},
 }));
 
 mock.module("@api/rest/routers", () => ({

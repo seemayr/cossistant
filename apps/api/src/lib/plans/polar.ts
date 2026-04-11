@@ -1,5 +1,6 @@
 import polarClient from "@api/lib/polar";
 import { getRedis } from "@api/redis";
+import { isPolarEnabled } from "../billing-mode";
 import type { PlanName } from "./config";
 import { getPlanConfig, mapPolarProductToPlan } from "./config";
 
@@ -232,6 +233,10 @@ function classifySubscriptionUpdateError(
 export async function getCustomerByOrganizationId(
 	organizationId: string
 ): Promise<{ id: string } | null> {
+	if (!isPolarEnabled()) {
+		return null;
+	}
+
 	try {
 		const customer = await polarClient.customers.getExternal({
 			externalId: organizationId,
@@ -273,6 +278,10 @@ export async function getCustomerByWebsiteId(
 export async function getCustomerState(
 	customerId: string
 ): Promise<CustomerState | null> {
+	if (!isPolarEnabled()) {
+		return null;
+	}
+
 	try {
 		const state = await polarClient.customers.getState({
 			id: customerId,
@@ -285,21 +294,36 @@ export async function getCustomerState(
 		return {
 			customerId: state.id,
 			activeSubscriptions:
-				state.activeSubscriptions?.map((sub) => ({
-					id: sub.id,
-					productId: sub.productId,
-					productName: undefined,
-					status: sub.status,
-					metadata: sub.metadata,
-					createdAt: toIso(sub.createdAt),
-					currentPeriodStart: toIso(sub.currentPeriodStart),
-				})) ?? [],
+				state.activeSubscriptions?.map(
+					(sub: {
+						id: string;
+						productId: string;
+						status: string;
+						metadata?: Record<string, unknown>;
+						createdAt?: Date | string | null;
+						currentPeriodStart?: Date | string | null;
+					}) => ({
+						id: sub.id,
+						productId: sub.productId,
+						productName: undefined,
+						status: sub.status,
+						metadata: sub.metadata,
+						createdAt: toIso(sub.createdAt),
+						currentPeriodStart: toIso(sub.currentPeriodStart),
+					})
+				) ?? [],
 			grantedBenefits:
-				state.grantedBenefits?.map((benefit) => ({
-					id: benefit.id,
-					benefitId: benefit.benefitId,
-					benefitType: benefit.benefitType,
-				})) ?? [],
+				state.grantedBenefits?.map(
+					(benefit: {
+						id: string;
+						benefitId: string;
+						benefitType: string;
+					}) => ({
+						id: benefit.id,
+						benefitId: benefit.benefitId,
+						benefitType: benefit.benefitType,
+					})
+				) ?? [],
 		};
 	} catch (error) {
 		console.error("Error getting customer state:", error);
@@ -398,6 +422,13 @@ export async function normalizeWebsiteSubscriptions(params: {
 	subscription: WebsiteSubscription | null;
 	revokedSubscriptionIds: string[];
 }> {
+	if (!isPolarEnabled()) {
+		return {
+			subscription: null,
+			revokedSubscriptionIds: [],
+		};
+	}
+
 	const state = await getCustomerStateByOrganizationId(params.organizationId);
 	const subscriptions = getSubscriptionsForWebsite(state, params.websiteId);
 	const preferred = subscriptions[0] ?? null;
@@ -438,6 +469,14 @@ export async function ensureFreeSubscriptionForWebsite(params: {
 	organizationId: string;
 	websiteId: string;
 }): Promise<EnsureFreeSubscriptionResult> {
+	if (!isPolarEnabled()) {
+		return {
+			status: "already_exists",
+			subscriptionId: null,
+			revokedSubscriptionIds: [],
+		};
+	}
+
 	const freePlan = getPlanConfig("free");
 	if (!freePlan.polarProductId) {
 		throw new Error(
@@ -508,6 +547,13 @@ export async function updateWebsiteSubscriptionProduct(params: {
 	productId: string;
 	prorationBehavior?: "invoice" | "prorate";
 }): Promise<WebsiteSubscriptionUpdateResult> {
+	if (!isPolarEnabled()) {
+		return {
+			status: "failed",
+			message: "Polar billing is disabled for this deployment.",
+		};
+	}
+
 	try {
 		const updated = await polarClient.subscriptions.update({
 			id: params.subscriptionId,
@@ -545,6 +591,10 @@ export async function getProductDetails(productId: string): Promise<{
 	id: string;
 	name: string;
 } | null> {
+	if (!isPolarEnabled()) {
+		return null;
+	}
+
 	try {
 		const product = await polarClient.products.get({ id: productId });
 
@@ -568,6 +618,10 @@ export async function getProductDetails(productId: string): Promise<{
 export async function getPlanFromCustomerState(
 	customerState: CustomerState | null
 ): Promise<PlanName | null> {
+	if (!isPolarEnabled()) {
+		return null;
+	}
+
 	if (!customerState) {
 		return null;
 	}

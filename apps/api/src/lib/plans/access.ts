@@ -1,5 +1,10 @@
 import type { website } from "@api/db/schema";
 import {
+	type BillingStatus,
+	getBillingStatus,
+	isPolarEnabled,
+} from "@api/lib/billing-mode";
+import {
 	type FeatureKey,
 	type FeatureValue,
 	getDefaultPlan,
@@ -16,15 +21,20 @@ import {
 
 type Website = typeof website.$inferSelect;
 
-export type HardLimitsUnavailableReason = "billing_provider_unavailable";
+export type ResolvedPlanName = PlanName | "self_hosted";
+
+export type HardLimitsUnavailableReason =
+	| "billing_provider_unavailable"
+	| "billing_disabled";
 
 export type PlanInfo = {
-	planName: PlanName;
+	planName: ResolvedPlanName;
 	displayName: string;
 	price?: number;
 	features: Record<FeatureKey, FeatureValue>;
 	hardLimitsEnforced: boolean;
 	hardLimitsUnavailableReason: HardLimitsUnavailableReason | null;
+	billing: BillingStatus;
 };
 
 const PLAN_CACHE_SUCCESS_TTL_MS = 10_000;
@@ -36,6 +46,40 @@ type CachedPlanEntry = {
 };
 
 const planCache = new Map<string, CachedPlanEntry>();
+
+function resolveSelfHostedFeatures(): Record<FeatureKey, FeatureValue> {
+	const referencePlan = getPlanConfig("pro");
+
+	return Object.fromEntries(
+		Object.entries(referencePlan.features).map(([featureKey, value]) => {
+			if (featureKey === "ai-agent-training-interval") {
+				return [featureKey, 0];
+			}
+
+			if (typeof value === "boolean") {
+				return [featureKey, true];
+			}
+
+			return [featureKey, null];
+		})
+	) as Record<FeatureKey, FeatureValue>;
+}
+
+export function getSelfHostedPlanInfo(): PlanInfo {
+	return {
+		planName: "self_hosted",
+		displayName: "Self-Hosted",
+		price: undefined,
+		features: resolveSelfHostedFeatures(),
+		hardLimitsEnforced: false,
+		hardLimitsUnavailableReason: "billing_disabled",
+		billing: {
+			enabled: false,
+			provider: "disabled",
+			canManageSubscription: false,
+		},
+	};
+}
 
 /**
  * Check if a website can use a specific feature
@@ -69,6 +113,10 @@ export async function canUse(
  * Defaults to free plan if no subscription exists
  */
 export async function getPlanForWebsite(_website: Website): Promise<PlanInfo> {
+	if (!isPolarEnabled()) {
+		return getSelfHostedPlanInfo();
+	}
+
 	const cached = planCache.get(_website.id);
 	if (cached && cached.expiresAt > Date.now()) {
 		return cached.plan;
@@ -118,6 +166,7 @@ export async function getPlanForWebsite(_website: Website): Promise<PlanInfo> {
 			features: planConfig.features,
 			hardLimitsEnforced: true,
 			hardLimitsUnavailableReason: null,
+			billing: getBillingStatus(),
 		};
 
 		planCache.set(_website.id, {
@@ -134,6 +183,7 @@ export async function getPlanForWebsite(_website: Website): Promise<PlanInfo> {
 				...stalePlan,
 				hardLimitsEnforced: false,
 				hardLimitsUnavailableReason: "billing_provider_unavailable",
+				billing: getBillingStatus(),
 			};
 
 			planCache.set(_website.id, {
@@ -154,6 +204,7 @@ export async function getPlanForWebsite(_website: Website): Promise<PlanInfo> {
 			features: defaultPlan.features,
 			hardLimitsEnforced: false,
 			hardLimitsUnavailableReason: "billing_provider_unavailable",
+			billing: getBillingStatus(),
 		};
 
 		planCache.set(_website.id, {

@@ -71,6 +71,10 @@ export function UpgradeSuccessModal({
 	usage,
 	rollingWindowDays = 30,
 }: UpgradeSuccessModalProps) {
+	if (plan.name === "self_hosted") {
+		return null;
+	}
+
 	const pricing = getPlanPricing(plan.name);
 
 	return (

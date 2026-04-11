@@ -81,6 +81,34 @@ export async function getAiAgentForWebsite(
 }
 
 /**
+ * Get a specific AI agent for a website by ID.
+ * Returns null when the agent does not belong to the provided website/organization.
+ */
+export async function getAiAgentForWebsiteById(
+	db: Database,
+	params: {
+		aiAgentId: string;
+		websiteId: string;
+		organizationId: string;
+	}
+): Promise<AiAgentSelect | null> {
+	const [agent] = await db
+		.select()
+		.from(aiAgent)
+		.where(
+			and(
+				eq(aiAgent.id, params.aiAgentId),
+				eq(aiAgent.websiteId, params.websiteId),
+				eq(aiAgent.organizationId, params.organizationId),
+				isNull(aiAgent.deletedAt)
+			)
+		)
+		.limit(1);
+
+	return agent ?? null;
+}
+
+/**
  * Create a new AI agent
  */
 export async function createAiAgent(

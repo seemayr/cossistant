@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, mock } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { identifyContactRequestSchema } from "@cossistant/types/api/contact";
@@ -13,6 +13,25 @@ import {
 	PRIVATE_API_KEY_SECURITY_SCHEME,
 	PUBLIC_API_KEY_SECURITY_SCHEME,
 } from "./openapi";
+
+mock.module("@api/realtime/emitter", () => ({
+	realtime: {
+		emit: mock(async () => {}),
+	},
+}));
+
+mock.module("@api/services/upload", () => ({
+	generateUploadUrl: mock(async () => ({
+		uploadUrl: "https://example.com/upload",
+		key: "uploads/example.txt",
+		bucket: "test-bucket",
+		expiresAt: "2026-04-11T00:00:00.000Z",
+		contentType: "text/plain",
+		publicUrl: "https://cdn.example.com/uploads/example.txt",
+	})),
+}));
+
+const routersModulePromise = import("./routers");
 
 const routersDir = path.resolve(import.meta.dir, "routers");
 const apiIndexPath = path.resolve(import.meta.dir, "../index.ts");
@@ -89,6 +108,59 @@ describe("REST OpenAPI contract guards", () => {
 		expect(content).toContain("connectRealtimeWebSocket");
 		expect(content).toContain('name: "actorUserId"');
 		expect(content).toContain("actorUserIdHeader");
+	});
+
+	it("documents private AI agent routes with shared security and stable response shapes", async () => {
+		const { routers } = await routersModulePromise;
+		const doc = routers.getOpenAPI31Document({
+			openapi: "3.1.0",
+			info: {
+				title: "REST router contract test",
+				version: "1.0.0",
+			},
+		});
+
+		const getAgentPath = doc.paths?.["/ai-agents/{id}"]?.get;
+		const getTrainingPath = doc.paths?.["/ai-agents/{id}/training"]?.get;
+		const startTrainingPath = doc.paths?.["/ai-agents/{id}/training"]?.post;
+		const getTrainingResponse = getTrainingPath?.responses?.["200"] as
+			| OpenAPIJsonContent
+			| undefined;
+		const startTrainingResponse = startTrainingPath?.responses?.["202"] as
+			| OpenAPIJsonContent
+			| undefined;
+		const getTrainingSchema = getTrainingResponse?.content?.["application/json"]
+			?.schema as OpenAPISchemaWithProperties | undefined;
+		const startTrainingSchema = startTrainingResponse?.content?.[
+			"application/json"
+		]?.schema as OpenAPISchemaWithProperties | undefined;
+		const startTrainingParameterNames =
+			startTrainingPath?.parameters?.map((parameter) =>
+				"name" in parameter ? parameter.name : null
+			) ?? [];
+
+		expect(getAgentPath).toBeDefined();
+		expect(getTrainingPath).toBeDefined();
+		expect(startTrainingPath).toBeDefined();
+		expect(getAgentPath?.security).toEqual([
+			{ [PRIVATE_API_KEY_SECURITY_SCHEME]: [] },
+		]);
+		expect(getTrainingPath?.security).toEqual([
+			{ [PRIVATE_API_KEY_SECURITY_SCHEME]: [] },
+		]);
+		expect(startTrainingPath?.security).toEqual([
+			{ [PRIVATE_API_KEY_SECURITY_SCHEME]: [] },
+		]);
+		expect(startTrainingParameterNames).toContain("Authorization");
+		expect(startTrainingParameterNames).toContain("X-Actor-User-Id");
+		expect(getTrainingSchema?.properties).toHaveProperty("status");
+		expect(getTrainingSchema?.properties).toHaveProperty("internalStatus");
+		expect(getTrainingSchema?.properties).toHaveProperty("updatedSourcesCount");
+		expect(startTrainingSchema?.properties).toHaveProperty("jobId");
+		expect(startTrainingSchema?.properties).toHaveProperty("status");
+		expect(startTrainingPath?.responses).toHaveProperty("400");
+		expect(startTrainingPath?.responses).toHaveProperty("409");
+		expect(startTrainingPath?.responses).toHaveProperty("429");
 	});
 
 	it("documents public conversation metadata on create requests and conversation reads", () => {

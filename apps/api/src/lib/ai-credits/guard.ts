@@ -52,6 +52,21 @@ export async function guardAiCreditRun(params: {
 		};
 	}
 
+	if (meterState.source === "disabled") {
+		return {
+			allowed: true,
+			mode: "normal",
+			reason:
+				"Billing is disabled for this deployment, so AI usage is unmetered",
+			blockedReason: null,
+			minimumCharge,
+			balance: null,
+			meterBacked: false,
+			meterSource: meterState.source,
+			lastSyncedAt: meterState.lastSyncedAt,
+		};
+	}
+
 	if (meterState.meterBacked && typeof meterState.balance === "number") {
 		if (meterState.balance >= minimumCharge.totalCredits) {
 			return {

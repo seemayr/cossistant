@@ -15,8 +15,11 @@ import {
 } from "better-auth/plugins";
 import React from "react";
 import { syncUserToDefaultResendAudience } from "./auth-user-audience";
+import { isPolarEnabled } from "./billing-mode";
 
 import polarClient from "./polar";
+
+const billingEnabled = isPolarEnabled();
 
 // Needed for email templates
 export const auth = betterAuth({
@@ -79,6 +82,10 @@ export const auth = betterAuth({
 					console.log("member", member);
 					console.log("user", user);
 
+					if (!billingEnabled) {
+						return;
+					}
+
 					// Create Polar customer for organization
 					try {
 						// Check if customer already exists
@@ -137,12 +144,16 @@ export const auth = betterAuth({
 		}),
 		anonymous(),
 		admin(),
-		// Type assertion needed due to version mismatch between @polar-sh/better-auth and better-auth
-		polar({
-			client: polarClient,
-			createCustomerOnSignUp: false,
-			use: [portal(), usage()],
-		}),
+		...(billingEnabled
+			? [
+					// Type assertion needed due to version mismatch between @polar-sh/better-auth and better-auth
+					polar({
+						client: polarClient,
+						createCustomerOnSignUp: false,
+						use: [portal(), usage()],
+					}),
+				]
+			: []),
 	],
 	// Allow requests from the frontend development server and production domains
 	trustedOrigins: [
