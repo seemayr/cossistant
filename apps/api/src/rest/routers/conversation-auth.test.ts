@@ -259,6 +259,7 @@ function createInboxItem(overrides: Partial<Record<string, unknown>> = {}) {
 		deletedAt: null,
 		lastMessageAt: "2026-04-07T11:00:00.000Z",
 		lastSeenAt: null,
+		teamLastSeenAt: null,
 		lastMessageTimelineItem: null,
 		lastTimelineItem: null,
 		activeClarification: null,
@@ -399,6 +400,47 @@ describe("conversation auth and inbox routes", () => {
 			priority: "vip",
 			mrr: 299,
 		});
+	});
+
+	it("includes teamLastSeenAt in private inbox responses", async () => {
+		listConversationsHeadersMock.mockResolvedValue({
+			items: [
+				createInboxItem({
+					lastSeenAt: "2026-04-07T11:30:00.000Z",
+					teamLastSeenAt: "2026-04-07T12:00:00.000Z",
+				}),
+			],
+			nextCursor: null,
+		});
+		safelyExtractRequestQueryMock.mockResolvedValue({
+			db: {},
+			apiKey: { keyType: APIKeyType.PRIVATE },
+			organization: { id: "org-1" },
+			website: { id: "site-1", organizationId: "org-1", teamId: "team-1" },
+			query: {
+				limit: 20,
+				cursor: null,
+			},
+		});
+
+		const { conversationRouter } = await conversationRouterModulePromise;
+		const response = await conversationRouter.request(
+			new Request("http://localhost/inbox?limit=20", {
+				method: "GET",
+			})
+		);
+		const payload = (await response.json()) as {
+			items: Array<{
+				lastSeenAt: string | null;
+				teamLastSeenAt: string | null;
+			}>;
+		};
+
+		expect(response.status).toBe(200);
+		expect(payload.items[0]?.lastSeenAt).toBe("2026-04-07T11:30:00.000Z");
+		expect(payload.items[0]?.teamLastSeenAt).toBe(
+			"2026-04-07T12:00:00.000Z"
+		);
 	});
 
 	it("allows private API keys to read a conversation without a visitor header", async () => {

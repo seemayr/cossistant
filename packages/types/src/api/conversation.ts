@@ -280,6 +280,10 @@ export const conversationInboxItemSchema = z
 			description:
 				"User-specific last-seen timestamp when available, otherwise null.",
 		}),
+		teamLastSeenAt: nullableApiTimestampSchema.openapi({
+			description:
+				"Most recent last-seen timestamp across all human teammates who have seen the conversation, otherwise null.",
+		}),
 		lastMessageTimelineItem: timelineItemSchema.nullable().openapi({
 			description: "Latest message timeline item for the conversation, if any.",
 		}),

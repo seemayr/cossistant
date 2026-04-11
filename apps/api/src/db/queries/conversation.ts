@@ -589,6 +589,7 @@ export async function listConversationsHeaders(
 
 	const seenDataMap = new Map<string, ConversationSeen[]>();
 	const userLastSeenMap = new Map<string, string | null>();
+	const teamLastSeenMap = new Map<string, string | null>();
 
 	for (const seen of seenRows) {
 		const collection = seenDataMap.get(seen.conversationId) ?? [];
@@ -608,6 +609,19 @@ export async function listConversationsHeaders(
 				const candidateDate = new Date(candidate);
 				if (candidateDate > currentDate) {
 					userLastSeenMap.set(seen.conversationId, candidate);
+				}
+			}
+		}
+
+		if (seen.userId && seen.lastSeenAt) {
+			const currentTeamLastSeen = teamLastSeenMap.get(seen.conversationId);
+			if (!currentTeamLastSeen) {
+				teamLastSeenMap.set(seen.conversationId, seen.lastSeenAt);
+			} else {
+				const currentDate = new Date(currentTeamLastSeen);
+				const candidateDate = new Date(seen.lastSeenAt);
+				if (candidateDate > currentDate) {
+					teamLastSeenMap.set(seen.conversationId, seen.lastSeenAt);
 				}
 			}
 		}
@@ -652,6 +666,7 @@ export async function listConversationsHeaders(
 			viewIds: viewIdsMap.get(conversationId) ?? [],
 			lastMessageAt,
 			lastSeenAt: userLastSeenMap.get(conversationId) ?? null,
+			teamLastSeenAt: teamLastSeenMap.get(conversationId) ?? null,
 			lastMessageTimelineItem,
 			lastTimelineItem,
 			activeClarification:
@@ -808,6 +823,18 @@ export async function getConversationHeader(
 			}, null)
 		: null;
 
+	const teamLastSeenAt = seenRows.reduce<string | null>((acc, seen) => {
+		if (!seen.userId || !seen.lastSeenAt) {
+			return acc;
+		}
+		if (!acc) {
+			return seen.lastSeenAt;
+		}
+		return new Date(seen.lastSeenAt) > new Date(acc)
+			? seen.lastSeenAt
+			: acc;
+	}, null);
+
 	return {
 		...row.conversation,
 		visitor: {
@@ -828,6 +855,7 @@ export async function getConversationHeader(
 		viewIds,
 		lastMessageAt,
 		lastSeenAt: userLastSeenAt ?? null,
+		teamLastSeenAt: teamLastSeenAt ?? null,
 		lastMessageTimelineItem,
 		lastTimelineItem,
 		activeClarification:

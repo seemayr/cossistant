@@ -110,6 +110,7 @@ export const conversationHeaderSchema = z.object({
 	deletedAt: z.string().nullable(),
 	lastMessageAt: z.string().nullable(),
 	lastSeenAt: z.string().nullable(),
+	teamLastSeenAt: z.string().nullable(),
 	lastMessageTimelineItem: timelineItemSchema.nullable(),
 	lastTimelineItem: timelineItemSchema.nullable(),
 	activeClarification: conversationClarificationSummarySchema.nullable(),
