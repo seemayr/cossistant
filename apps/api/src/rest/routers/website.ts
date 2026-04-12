@@ -12,6 +12,7 @@ import {
 } from "@api/utils/validate";
 import { getMostRecentLastOnlineAt } from "@api/utils/website";
 import { normalizeHumanAgentName } from "@cossistant/core";
+import { APIKeyType } from "@cossistant/types";
 import {
 	publicWebsiteResponseSchema,
 	websiteTeamMembersResponseSchema,
@@ -115,6 +116,27 @@ websiteRouter.openapi(
 
 		// iso string indicating support activity - uses most recent lastSeenAt from available human agents
 		const lastOnlineAt = getMostRecentLastOnlineAt(availableHumanAgents);
+		const linkedActorUser =
+			apiKey.keyType === APIKeyType.PRIVATE && apiKey.linkedUserId
+				? websiteAccessUsers.find((user) => user.userId === apiKey.linkedUserId) ??
+					null
+				: null;
+		const privateActor =
+			apiKey.keyType === APIKeyType.PRIVATE
+				? {
+						linkedUserId: apiKey.linkedUserId ?? null,
+						linkedUser: linkedActorUser
+							? {
+									id: linkedActorUser.userId,
+									name: normalizeHumanAgentName(linkedActorUser.name),
+									image: linkedActorUser.image,
+									lastSeenAt:
+										linkedActorUser.lastSeenAt?.toISOString() ?? null,
+								}
+							: null,
+						requiresExplicitActor: apiKey.linkedUserId == null,
+					}
+				: null;
 
 		return c.json(
 			validateResponse(
@@ -129,6 +151,7 @@ websiteRouter.openapi(
 					lastOnlineAt,
 					availableHumanAgents,
 					availableAIAgents,
+					privateActor,
 					visitor: {
 						id: visitor.id,
 						isBlocked: Boolean(visitor.blockedAt),

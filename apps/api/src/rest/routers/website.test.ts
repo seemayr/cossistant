@@ -138,6 +138,7 @@ describe("website route GET /", () => {
 		const payload = (await response.json()) as {
 			lastOnlineAt: string | null;
 			availableHumanAgents: Record<string, unknown>[];
+			privateActor: unknown;
 		};
 
 		expect(response.status).toBe(200);
@@ -163,6 +164,7 @@ describe("website route GET /", () => {
 		]);
 		expect(payload.availableHumanAgents[0]).not.toHaveProperty("email");
 		expect(payload.lastOnlineAt).toBe("2026-03-03T04:05:06.000Z");
+		expect(payload.privateActor).toBeNull();
 	});
 
 	it("returns null lastOnlineAt when website-access users have no valid timestamps", async () => {
@@ -238,6 +240,94 @@ describe("website route GET /", () => {
 				image: "https://cdn.example.com/ai-agent.png",
 			},
 		]);
+	});
+
+	it("returns explicit-actor requirements for unlinked private API keys", async () => {
+		const { db, website } = createWebsiteContext();
+		safelyExtractRequestDataMock.mockResolvedValue({
+			db,
+			website,
+			apiKey: {
+				isTest: false,
+				keyType: APIKeyType.PRIVATE,
+				linkedUserId: null,
+			},
+			visitorIdHeader: "visitor-1",
+		});
+
+		const { websiteRouter } = await websiteRouterModulePromise;
+		const response = await websiteRouter.request(
+			new Request("http://localhost/", {
+				method: "GET",
+			})
+		);
+		const payload = (await response.json()) as {
+			privateActor: {
+				linkedUserId: string | null;
+				linkedUser: unknown;
+				requiresExplicitActor: boolean;
+			} | null;
+		};
+
+		expect(response.status).toBe(200);
+		expect(payload.privateActor).toEqual({
+			linkedUserId: null,
+			linkedUser: null,
+			requiresExplicitActor: true,
+		});
+	});
+
+	it("returns linked actor details for linked private API keys", async () => {
+		const { db, website } = createWebsiteContext();
+		listWebsiteAccessUsersMock.mockResolvedValue([
+			createWebsiteAccessUser({
+				userId: "user-1",
+				name: "Alice",
+				lastSeenAt: new Date("2026-03-03T04:05:06.000Z"),
+				image: "https://cdn.example.com/alice.png",
+			}),
+		]);
+		safelyExtractRequestDataMock.mockResolvedValue({
+			db,
+			website,
+			apiKey: {
+				isTest: false,
+				keyType: APIKeyType.PRIVATE,
+				linkedUserId: "user-1",
+			},
+			visitorIdHeader: "visitor-1",
+		});
+
+		const { websiteRouter } = await websiteRouterModulePromise;
+		const response = await websiteRouter.request(
+			new Request("http://localhost/", {
+				method: "GET",
+			})
+		);
+		const payload = (await response.json()) as {
+			privateActor: {
+				linkedUserId: string | null;
+				linkedUser: {
+					id: string;
+					name: string | null;
+					image: string | null;
+					lastSeenAt: string | null;
+				} | null;
+				requiresExplicitActor: boolean;
+			} | null;
+		};
+
+		expect(response.status).toBe(200);
+		expect(payload.privateActor).toEqual({
+			linkedUserId: "user-1",
+			linkedUser: {
+				id: "user-1",
+				name: "Alice",
+				image: "https://cdn.example.com/alice.png",
+				lastSeenAt: "2026-03-03T04:05:06.000Z",
+			},
+			requiresExplicitActor: false,
+		});
 	});
 
 	it("lists website team members for private API keys", async () => {

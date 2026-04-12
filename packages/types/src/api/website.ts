@@ -409,6 +409,28 @@ export const AvailableAIAgentSchema = z.object({
 	}),
 });
 
+export const privateWebsiteActorSchema = z
+	.object({
+		linkedUserId: z.ulid().nullable().openapi({
+			description:
+				"Teammate linked to the private API key, if one is configured.",
+			example: "01JG000000000000000000001",
+		}),
+		linkedUser: availableHumanAgentSchema.nullable().openapi({
+			description:
+				"Resolved linked teammate details when the private API key is linked to a website member.",
+		}),
+		requiresExplicitActor: z.boolean().openapi({
+			description:
+				"Whether actor-aware private routes still require an explicit X-Actor-User-Id header for this key.",
+			example: true,
+		}),
+	})
+	.openapi({
+		description:
+			"Actor metadata for private API keys, used by dashboard clients to decide whether they must select an acting teammate.",
+	});
+
 /**
  * Website information response schema
  */
@@ -470,6 +492,17 @@ export const publicWebsiteResponseSchema = z.object({
 	 */
 	availableAIAgents: z.array(AvailableAIAgentSchema),
 	/**
+	 * Private API key actor metadata.
+	 *
+	 * Null for public API key requests. Present for private API keys so trusted
+	 * dashboard clients can determine whether the key is already linked to a
+	 * teammate or still needs an explicit actor ID for actor-aware routes.
+	 */
+	privateActor: privateWebsiteActorSchema.nullable().openapi({
+		description:
+			"Private-key actor metadata used by trusted dashboard clients. Null for public key requests.",
+	}),
+	/**
 	 * Current visitor information for the active session.
 	 *
 	 * @remarks `PublicVisitor`
@@ -485,6 +518,7 @@ export const publicWebsiteResponseSchema = z.object({
 export type PublicWebsiteResponse = z.infer<typeof publicWebsiteResponseSchema>;
 export type AvailableHumanAgent = z.infer<typeof availableHumanAgentSchema>;
 export type AvailableAIAgent = z.infer<typeof AvailableAIAgentSchema>;
+export type PrivateWebsiteActor = z.infer<typeof privateWebsiteActorSchema>;
 export type HumanAgent = AvailableHumanAgent;
 export type AIAgent = AvailableAIAgent;
 
