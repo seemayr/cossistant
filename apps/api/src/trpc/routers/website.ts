@@ -212,6 +212,7 @@ export const websiteRouter = createTRPCRouter({
 					slug: website.slug,
 					logoUrl: website.logoUrl,
 					domain: website.domain,
+					defaultLanguage: website.defaultLanguage,
 					organizationId: website.organizationId,
 				})
 				.from(website)
@@ -236,6 +237,8 @@ export const websiteRouter = createTRPCRouter({
 					slug: true,
 					name: true,
 					domain: true,
+					defaultLanguage: true,
+					autoTranslateEnabled: true,
 					contactEmail: true,
 					logoUrl: true,
 					organizationId: true,
@@ -284,6 +287,8 @@ export const websiteRouter = createTRPCRouter({
 					slug: site.slug,
 					name: site.name,
 					domain: site.domain,
+					defaultLanguage: site.defaultLanguage,
+					autoTranslateEnabled: site.autoTranslateEnabled,
 					contactEmail: site.contactEmail ?? null,
 					logoUrl: site.logoUrl ?? null,
 					organizationId: site.organizationId,
@@ -870,6 +875,8 @@ export const websiteRouter = createTRPCRouter({
 					slug: true,
 					name: true,
 					domain: true,
+					defaultLanguage: true,
+					autoTranslateEnabled: true,
 					contactEmail: true,
 					logoUrl: true,
 					organizationId: true,
@@ -914,6 +921,12 @@ export const websiteRouter = createTRPCRouter({
 			}
 			if (input.data.defaultParticipantIds !== undefined) {
 				updateData.defaultParticipantIds = input.data.defaultParticipantIds;
+			}
+			if (input.data.defaultLanguage !== undefined) {
+				updateData.defaultLanguage = input.data.defaultLanguage;
+			}
+			if (input.data.autoTranslateEnabled !== undefined) {
+				updateData.autoTranslateEnabled = input.data.autoTranslateEnabled;
 			}
 			if (input.data.installationTarget !== undefined)
 				updateData.installationTarget = input.data.installationTarget;
@@ -1006,6 +1019,8 @@ export const websiteRouter = createTRPCRouter({
 				slug: updatedSite.slug,
 				name: updatedSite.name,
 				domain: updatedSite.domain,
+				defaultLanguage: updatedSite.defaultLanguage,
+				autoTranslateEnabled: updatedSite.autoTranslateEnabled,
 				contactEmail: updatedSite.contactEmail ?? null,
 				logoUrl: updatedSite.logoUrl ?? null,
 				organizationId: updatedSite.organizationId,

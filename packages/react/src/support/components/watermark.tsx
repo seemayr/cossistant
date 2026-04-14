@@ -1,5 +1,6 @@
-import { useSupport } from "@cossistant/react";
 import { useMemo } from "react";
+import { useSupport } from "../../provider";
+import { useSupportSlotOverrides } from "../context/slot-overrides";
 import { Text } from "../text";
 import { cn } from "../utils";
 import { CossistantLogo } from "./cossistant-branding";
@@ -10,6 +11,9 @@ export type WatermarkProps = {
 
 export const Watermark: React.FC<WatermarkProps> = ({ className }) => {
 	const { website } = useSupport();
+	const { slots, slotProps } = useSupportSlotOverrides();
+	const WatermarkSlot = slots.watermark;
+	const watermarkSlotProps = slotProps.watermark;
 
 	const cossistantUrl = useMemo(() => {
 		if (!website) {
@@ -25,12 +29,25 @@ export const Watermark: React.FC<WatermarkProps> = ({ className }) => {
 		return url.toString();
 	}, [website]);
 
+	if (WatermarkSlot) {
+		return (
+			<WatermarkSlot
+				{...watermarkSlotProps}
+				className={cn(watermarkSlotProps?.className, className)}
+				data-slot="watermark"
+				website={website}
+			/>
+		);
+	}
+
 	return (
 		<a
 			className={cn(
 				"group/watermark flex items-center gap-1.5 font-medium text-co-primary/80 hover:text-co-blue",
+				watermarkSlotProps?.className,
 				className
 			)}
+			data-slot="watermark"
 			href={cossistantUrl}
 			rel="noopener noreferrer"
 			target="_blank"

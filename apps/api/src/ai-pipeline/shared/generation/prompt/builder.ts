@@ -61,6 +61,9 @@ conversationId=${input.conversation.id}
 triggerMessageId=${input.triggerMessageId}
 triggerSenderType=${input.triggerSenderType ?? "unknown"}
 triggerVisibility=${input.triggerVisibility ?? "unknown"}
+websiteDefaultLanguage=${input.websiteDefaultLanguage}
+visitorLanguage=${input.visitorLanguage ?? input.visitorContext?.language ?? "unknown"}
+autoTranslateEnabled=${input.autoTranslateEnabled !== false ? "yes" : "no"}
 conversationEscalated=${input.conversationState.isEscalated ? "yes" : "no"}
 escalationReason=${input.conversationState.escalationReason ?? "none"}
 hasHumanAssignee=${input.conversationState.hasHumanAssignee ? "yes" : "no"}
@@ -86,7 +89,27 @@ Messages are labeled with [BEFORE], [TRIGGER], or [AFTER].
 - [TRIGGER] is the queued message currently being processed in FIFO order.
 - [AFTER] contains newer context for awareness only.
 - Use [AFTER] context to avoid redundant replies, duplicate tool calls, or contradictions.
-- Do not pretend [AFTER] context does not exist.`;
+- Do not pretend [AFTER] context does not exist.
+- Visitor messages may already be translated into the website default language for internal reasoning and knowledge retrieval.`;
+}
+
+function buildLanguagePolicyStage(input: GenerationRuntimeInput): string {
+	const visitorLanguage =
+		input.visitorLanguage ?? input.visitorContext?.language ?? "unknown";
+	const autoTranslateEnabled = input.autoTranslateEnabled !== false;
+
+	return autoTranslateEnabled
+		? `## Language Policy
+- The website default language is ${input.websiteDefaultLanguage}. Use it for internal reasoning, knowledge-base searches, and query rewriting.
+- The visitor's language is ${visitorLanguage}.
+- Always answer the visitor in the visitor's language when it is known.
+- Never switch knowledge-base search to the visitor language unless the website language search fails and you explicitly need a rewrite.`
+		: `## Language Policy
+- Auto-translate is disabled for this website.
+- The website default language is ${input.websiteDefaultLanguage}. Use it for internal reasoning, knowledge-base searches, and visitor-facing replies.
+- The visitor's language is ${visitorLanguage}.
+- Do not switch the reply language just because the visitor speaks another language unless a human explicitly instructs you to do so.
+- Keep knowledge-base search in the website default language.`;
 }
 
 function buildAvailableViewsStage(input: GenerationRuntimeInput): string {
@@ -171,6 +194,7 @@ export function buildGenerationSystemPrompt(params: {
 		buildContextFactsStage(params.input),
 		buildCurrentTriggerStage(params.input),
 		buildTimelineSemanticsStage(),
+		buildLanguagePolicyStage(params.input),
 		buildAvailableViewsStage(params.input),
 		buildToolStage({
 			toolset: params.toolset,

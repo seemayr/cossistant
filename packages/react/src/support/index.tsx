@@ -1,3 +1,6 @@
+"use client";
+
+import type { RouteRegistry } from "@cossistant/core";
 import type { DefaultMessage } from "@cossistant/types";
 import * as React from "react";
 import { useSupportController } from "../controller-context";
@@ -21,6 +24,11 @@ import {
 } from "./context/events";
 import { type SupportHandle, SupportHandleProvider } from "./context/handle";
 import { SupportModeProvider } from "./context/mode";
+import {
+	SupportSlotOverridesProvider,
+	type SupportSlotProps,
+	type SupportSlots,
+} from "./context/slot-overrides";
 import { FooterSlot, HeaderSlot } from "./context/slots";
 import { type CustomPage, Page, Router } from "./router";
 import type { SupportLocale, SupportTextContentOverrides } from "./text";
@@ -147,6 +155,18 @@ export type SupportProps<Locale extends string = SupportLocale> = {
 	 */
 	customPages?: CustomPage[];
 
+	/**
+	 * Quick component overrides for specific parts of the default widget.
+	 * Use this when you want to swap one part without rebuilding the whole tree.
+	 */
+	slots?: SupportSlots;
+
+	/**
+	 * Additional props applied to slot components and key built-in parts.
+	 * Runtime-managed values still win over external overrides when required.
+	 */
+	slotProps?: SupportSlotProps;
+
 	// =========================================================================
 	// Event Callbacks
 	// =========================================================================
@@ -185,6 +205,38 @@ export type SupportProps<Locale extends string = SupportLocale> = {
 	children?: React.ReactNode;
 };
 
+type SupportRuntimeProps<Locale extends string = SupportLocale> = Pick<
+	SupportProps<Locale>,
+	| "content"
+	| "customPages"
+	| "defaultMessages"
+	| "defaultOpen"
+	| "locale"
+	| "mode"
+	| "onConversationEnd"
+	| "onConversationStart"
+	| "onError"
+	| "onMessageReceived"
+	| "onMessageSent"
+	| "onOpenChange"
+	| "open"
+	| "quickOptions"
+	| "slotProps"
+	| "slots"
+	| "theme"
+> & {
+	children: React.ReactNode;
+	forwardedRef: React.Ref<SupportHandle>;
+};
+
+const SupportCustomPagesContext = React.createContext<CustomPage[] | undefined>(
+	undefined
+);
+
+export function useSupportCustomPages(): CustomPage[] | undefined {
+	return React.useContext(SupportCustomPagesContext);
+}
+
 // =============================================================================
 // Child Component Detection
 // =============================================================================
@@ -195,6 +247,48 @@ type ParsedChildren = {
 	pages: React.ReactNode[];
 	other: React.ReactNode[];
 };
+
+function extractCustomPagesFromNodes(nodes: React.ReactNode[]): CustomPage[] {
+	const pages: CustomPage[] = [];
+
+	for (const node of nodes) {
+		if (!React.isValidElement(node)) {
+			continue;
+		}
+
+		const props = node.props as Partial<{
+			name: keyof RouteRegistry;
+			component: CustomPage["component"];
+		}>;
+
+		if (props.name && props.component) {
+			pages.push({
+				name: props.name,
+				component: props.component,
+			});
+		}
+	}
+
+	return pages;
+}
+
+function mergeCustomPages(
+	...groups: Array<CustomPage[] | undefined>
+): CustomPage[] | undefined {
+	const pagesByName = new Map<keyof RouteRegistry, CustomPage>();
+
+	for (const group of groups) {
+		for (const page of group ?? []) {
+			pagesByName.set(page.name, page);
+		}
+	}
+
+	if (pagesByName.size === 0) {
+		return;
+	}
+
+	return Array.from(pagesByName.values());
+}
 
 function parseChildren(children: React.ReactNode): ParsedChildren {
 	const result: ParsedChildren = {
@@ -228,6 +322,85 @@ function parseChildren(children: React.ReactNode): ParsedChildren {
 	});
 
 	return result;
+}
+
+function SupportRuntimeBoundary<Locale extends string = SupportLocale>({
+	children,
+	content,
+	customPages,
+	defaultMessages,
+	defaultOpen,
+	forwardedRef,
+	locale,
+	mode = "floating",
+	onConversationEnd,
+	onConversationStart,
+	onError,
+	onMessageReceived,
+	onMessageSent,
+	onOpenChange,
+	open,
+	quickOptions,
+	slotProps,
+	slots,
+	theme,
+}: SupportRuntimeProps<Locale>): React.ReactElement | null {
+	const { website, configurationError } = useSupport();
+	const controller = useSupportController();
+	const isVisitorBlocked = website?.visitor?.isBlocked ?? false;
+
+	React.useEffect(() => {
+		if (
+			mode === "floating" &&
+			open === undefined &&
+			defaultOpen !== undefined
+		) {
+			controller.updateSupportConfig({ isOpen: defaultOpen });
+		}
+	}, [controller, defaultOpen, mode, open]);
+
+	if (website && isVisitorBlocked) {
+		return null;
+	}
+
+	if (!(website || configurationError)) {
+		return null;
+	}
+
+	return (
+		<SupportModeProvider mode={mode}>
+			<ControlledStateProvider onOpenChange={onOpenChange} open={open}>
+				<SupportEventsProvider
+					onConversationEnd={onConversationEnd}
+					onConversationStart={onConversationStart}
+					onError={onError}
+					onMessageReceived={onMessageReceived}
+					onMessageSent={onMessageSent}
+				>
+					<SupportHandleProvider forwardedRef={forwardedRef}>
+						<ThemeWrapper theme={theme}>
+							<SupportCustomPagesContext.Provider value={customPages}>
+								<SupportSlotOverridesProvider
+									slotProps={slotProps}
+									slots={slots}
+								>
+									<SupportRealtimeProvider>
+										<SupportTextProvider content={content} locale={locale}>
+											{children}
+										</SupportTextProvider>
+									</SupportRealtimeProvider>
+									<SupportConfig
+										defaultMessages={defaultMessages}
+										quickOptions={quickOptions}
+									/>
+								</SupportSlotOverridesProvider>
+							</SupportCustomPagesContext.Provider>
+						</ThemeWrapper>
+					</SupportHandleProvider>
+				</SupportEventsProvider>
+			</ControlledStateProvider>
+		</SupportModeProvider>
+	);
 }
 
 // =============================================================================
@@ -308,6 +481,8 @@ function SupportComponentInner<Locale extends string = SupportLocale>(
 		locale,
 		content,
 		customPages,
+		slots,
+		slotProps,
 		onConversationStart,
 		onConversationEnd,
 		onMessageSent,
@@ -318,27 +493,17 @@ function SupportComponentInner<Locale extends string = SupportLocale>(
 	ref: React.Ref<SupportHandle>
 ): React.ReactElement | null {
 	const { website, configurationError } = useSupport();
-	const controller = useSupportController();
-	const isVisitorBlocked = website?.visitor?.isBlocked ?? false;
-
-	// Initialize store for uncontrolled mode (when open prop is not provided)
-	React.useEffect(() => {
-		if (
-			mode === "floating" &&
-			open === undefined &&
-			defaultOpen !== undefined
-		) {
-			controller.updateSupportConfig({ isOpen: defaultOpen });
-		}
-	}, [controller, defaultOpen, mode, open]);
-
-	// If visitor is blocked, don't render anything
-	if (website && isVisitorBlocked) {
-		return null;
-	}
 
 	// Parse children to detect custom components
 	const parsed = parseChildren(children);
+	const declarativePages = React.useMemo(
+		() => extractCustomPagesFromNodes(parsed.pages),
+		[parsed.pages]
+	);
+	const mergedCustomPages = React.useMemo(
+		() => mergeCustomPages(customPages, declarativePages),
+		[customPages, declarativePages]
+	);
 
 	// Determine which components to render
 	const triggerElement =
@@ -361,63 +526,37 @@ function SupportComponentInner<Locale extends string = SupportLocale>(
 			{configurationError ? (
 				<ConfigurationErrorDisplay error={configurationError} />
 			) : website ? (
-				<Router customPages={customPages}>{parsed.pages}</Router>
+				<Router customPages={mergedCustomPages} />
 			) : null}
 		</Content>
 	);
 
-	// When there's a configuration error, render a minimal version without realtime/events
-	if (configurationError) {
-		return (
-			<SupportModeProvider mode={mode}>
-				<ControlledStateProvider onOpenChange={onOpenChange} open={open}>
-					<SupportHandleProvider forwardedRef={ref}>
-						<ThemeWrapper theme={theme}>
-							<Root className={className}>
-								{triggerElement}
-								{contentElement}
-							</Root>
-						</ThemeWrapper>
-					</SupportHandleProvider>
-				</ControlledStateProvider>
-			</SupportModeProvider>
-		);
-	}
-
-	// Don't render anything while loading or if no website
-	if (!website) {
-		return null;
-	}
-
 	return (
-		<SupportModeProvider mode={mode}>
-			<ControlledStateProvider onOpenChange={onOpenChange} open={open}>
-				<SupportEventsProvider
-					onConversationEnd={onConversationEnd}
-					onConversationStart={onConversationStart}
-					onError={onError}
-					onMessageReceived={onMessageReceived}
-					onMessageSent={onMessageSent}
-				>
-					<SupportHandleProvider forwardedRef={ref}>
-						<ThemeWrapper theme={theme}>
-							<SupportRealtimeProvider>
-								<SupportTextProvider content={content} locale={locale}>
-									<Root className={className}>
-										{triggerElement}
-										{contentElement}
-									</Root>
-								</SupportTextProvider>
-							</SupportRealtimeProvider>
-							<SupportConfig
-								defaultMessages={defaultMessages}
-								quickOptions={quickOptions}
-							/>
-						</ThemeWrapper>
-					</SupportHandleProvider>
-				</SupportEventsProvider>
-			</ControlledStateProvider>
-		</SupportModeProvider>
+		<SupportRuntimeBoundary
+			content={content}
+			customPages={mergedCustomPages}
+			defaultMessages={defaultMessages}
+			defaultOpen={defaultOpen}
+			forwardedRef={ref}
+			locale={locale}
+			mode={mode}
+			onConversationEnd={onConversationEnd}
+			onConversationStart={onConversationStart}
+			onError={onError}
+			onMessageReceived={onMessageReceived}
+			onMessageSent={onMessageSent}
+			onOpenChange={onOpenChange}
+			open={open}
+			quickOptions={quickOptions}
+			slotProps={slotProps}
+			slots={slots}
+			theme={theme}
+		>
+			<Root className={className}>
+				{triggerElement}
+				{contentElement}
+			</Root>
+		</SupportRuntimeBoundary>
 	);
 }
 
@@ -529,18 +668,22 @@ const SupportContent: React.FC<SupportContentProps> = ({
 	avoidCollisions = true,
 	collisionPadding = 8,
 	children,
-}) => (
-	<Content
-		align={align}
-		avoidCollisions={avoidCollisions}
-		className={className}
-		collisionPadding={collisionPadding}
-		side={side}
-		sideOffset={sideOffset}
-	>
-		{children ?? <Router />}
-	</Content>
-);
+}) => {
+	const customPages = useSupportCustomPages();
+
+	return (
+		<Content
+			align={align}
+			avoidCollisions={avoidCollisions}
+			className={className}
+			collisionPadding={collisionPadding}
+			side={side}
+			sideOffset={sideOffset}
+		>
+			{children ?? <Router customPages={customPages} />}
+		</Content>
+	);
+};
 
 (SupportContent as React.FC & { displayName?: string }).displayName =
 	"Support.Content";
@@ -644,6 +787,34 @@ export type SupportRootProps = {
 	 */
 	theme?: "light" | "dark";
 	/**
+	 * Locale string for widget translations.
+	 */
+	locale?: SupportLocale;
+	/**
+	 * Custom text content overrides for internationalization.
+	 */
+	content?: SupportTextContentOverrides;
+	/**
+	 * Custom welcome messages shown before a conversation starts.
+	 */
+	defaultMessages?: DefaultMessage[];
+	/**
+	 * Quick reply options displayed to users.
+	 */
+	quickOptions?: string[];
+	/**
+	 * Custom pages to add to the router when using the built-in router/content.
+	 */
+	customPages?: CustomPage[];
+	/**
+	 * Quick component overrides for specific parts of the default widget.
+	 */
+	slots?: SupportSlots;
+	/**
+	 * Additional props applied to slot components and key built-in parts.
+	 */
+	slotProps?: SupportSlotProps;
+	/**
 	 * Additional CSS classes.
 	 */
 	className?: string;
@@ -714,6 +885,13 @@ const SupportRoot = React.forwardRef<SupportHandle, SupportRootProps>(
 			onOpenChange,
 			defaultOpen,
 			theme,
+			locale,
+			content,
+			defaultMessages,
+			quickOptions,
+			customPages,
+			slots,
+			slotProps,
 			className,
 			onConversationStart,
 			onConversationEnd,
@@ -723,70 +901,30 @@ const SupportRoot = React.forwardRef<SupportHandle, SupportRootProps>(
 			children,
 		},
 		ref
-	) => {
-		const { website, configurationError } = useSupport();
-		const controller = useSupportController();
-		const isVisitorBlocked = website?.visitor?.isBlocked ?? false;
-
-		// Initialize store for uncontrolled mode
-		React.useEffect(() => {
-			if (
-				mode === "floating" &&
-				open === undefined &&
-				defaultOpen !== undefined
-			) {
-				controller.updateSupportConfig({ isOpen: defaultOpen });
-			}
-		}, [controller, defaultOpen, mode, open]);
-
-		// If visitor is blocked, don't render anything
-		if (website && isVisitorBlocked) {
-			return null;
-		}
-
-		// When there's a configuration error, render a minimal version without realtime/events
-		// The children (Trigger + Content) will still render, but Content should show the error
-		if (configurationError) {
-			return (
-				<SupportModeProvider mode={mode}>
-					<ControlledStateProvider onOpenChange={onOpenChange} open={open}>
-						<SupportHandleProvider forwardedRef={ref}>
-							<ThemeWrapper theme={theme}>
-								<Root className={className}>{children}</Root>
-							</ThemeWrapper>
-						</SupportHandleProvider>
-					</ControlledStateProvider>
-				</SupportModeProvider>
-			);
-		}
-
-		// Don't render anything while loading or if no website
-		if (!website) {
-			return null;
-		}
-
-		return (
-			<SupportModeProvider mode={mode}>
-				<ControlledStateProvider onOpenChange={onOpenChange} open={open}>
-					<SupportEventsProvider
-						onConversationEnd={onConversationEnd}
-						onConversationStart={onConversationStart}
-						onError={onError}
-						onMessageReceived={onMessageReceived}
-						onMessageSent={onMessageSent}
-					>
-						<SupportHandleProvider forwardedRef={ref}>
-							<ThemeWrapper theme={theme}>
-								<SupportRealtimeProvider>
-									<Root className={className}>{children}</Root>
-								</SupportRealtimeProvider>
-							</ThemeWrapper>
-						</SupportHandleProvider>
-					</SupportEventsProvider>
-				</ControlledStateProvider>
-			</SupportModeProvider>
-		);
-	}
+	) => (
+		<SupportRuntimeBoundary
+			content={content}
+			customPages={customPages}
+			defaultMessages={defaultMessages}
+			defaultOpen={defaultOpen}
+			forwardedRef={ref}
+			locale={locale}
+			mode={mode}
+			onConversationEnd={onConversationEnd}
+			onConversationStart={onConversationStart}
+			onError={onError}
+			onMessageReceived={onMessageReceived}
+			onMessageSent={onMessageSent}
+			onOpenChange={onOpenChange}
+			open={open}
+			quickOptions={quickOptions}
+			slotProps={slotProps}
+			slots={slots}
+			theme={theme}
+		>
+			<Root className={className}>{children}</Root>
+		</SupportRuntimeBoundary>
+	)
 );
 
 SupportRoot.displayName = "Support.Root";
@@ -817,6 +955,21 @@ export type {
 	RouteRegistry,
 	SupportPage as SupportPageType,
 } from "@cossistant/core";
+export type {
+	SupportComposerSlotProps,
+	SupportConfigurationErrorSlotProps,
+	SupportContentSlotProps,
+	SupportConversationHistoryPageSlotProps,
+	SupportConversationPageSlotProps,
+	SupportFooterSlotProps,
+	SupportHeaderSlotProps,
+	SupportHomePageSlotProps,
+	SupportSlotProps,
+	SupportSlots,
+	SupportTimelineSlotProps,
+	SupportTriggerSlotProps,
+	SupportWatermarkSlotProps,
+} from "./context/slot-overrides";
 // Custom page type
 export type { CustomPage } from "./router";
 // Types from ./types.ts

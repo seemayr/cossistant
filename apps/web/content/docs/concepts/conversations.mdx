@@ -5,14 +5,14 @@ description: Real-time chat threads between visitors and your support team.
 
 ## What are Conversations?
 
-**Conversations** are threaded chat sessions between [visitors](/docs/concepts) (or [contacts](/docs/concepts/contacts)) and your support team. Each conversation has a timeline of [items](/docs/concepts/timeline-items)—messages, events, and more.
+**Conversations** are threaded chat sessions between [visitors](/docs/concepts) (or [contacts](/docs/concepts/contacts)) and your support team. Each conversation has a timeline of [items](/docs/concepts/timeline-items) such as messages, events, identification records, and tool activity.
 
 ## Key Properties
 
 Every conversation includes:
 
-- **status**: `open` or `resolved`
-- **priority**: `low`, `medium`, `high`, or `urgent`
+- **status**: `open`, `resolved`, or `spam`
+- **priority**: `low`, `normal`, `high`, or `urgent`
 - **participants**: Support agents (human or AI) involved
 - **tags**: Labels for categorization (billing, technical, onboarding, etc.)
 - **timeline**: Ordered list of [timeline items](/docs/concepts/timeline-items)
@@ -32,19 +32,21 @@ Conversations are created when:
 
 ```
 open → resolved
-  ↓       ↑
-  └───────┘ (can be reopened)
+  │       ↑
+  │       │
+  └→ spam └─ reopened
 ```
 
 - **open**: Active conversation requiring attention
 - **resolved**: Conversation marked as complete (can be reopened)
+- **spam**: Conversation classified as unwanted or abusive traffic
 
 ### Priority Levels
 
 Conversations can be prioritized:
 
 - **low**: General questions, non-urgent feedback
-- **medium**: Standard support requests (default)
+- **normal**: Standard support requests (default)
 - **high**: Important issues affecting user experience
 - **urgent**: Critical problems requiring immediate attention
 
@@ -67,7 +69,8 @@ Each conversation has a timeline of [items](/docs/concepts/timeline-items):
 
 - **Messages**: Text and files from visitors or agents
 - **Events**: System activities (assigned, resolved, participant joined)
-- **Future items**: AI tool calls, interactive UI, custom actions
+- **Identification records**: Visitor/contact identification activity
+- **Tool items**: AI and tool execution records written into the timeline
 
 The timeline provides a complete audit trail of the conversation.
 

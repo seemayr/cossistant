@@ -495,6 +495,8 @@ export default function PricingPage() {
 						<AccordionContent>
 							AI credits reset monthly with your billing cycle. Any usage beyond
 							your plan's included credits is billed on a usage basis.
+							Auto-translate uses 1 AI credit per conversation when translation
+							is activated.
 						</AccordionContent>
 					</AccordionItem>
 					<AccordionItem value="item-9">

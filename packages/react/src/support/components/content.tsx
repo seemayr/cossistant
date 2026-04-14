@@ -12,6 +12,7 @@ import * as React from "react";
 import * as Primitive from "../../primitives";
 import { useSupportMode } from "../context/mode";
 import { useTriggerRef } from "../context/positioning";
+import { useSupportSlotOverrides } from "../context/slot-overrides";
 import { SlotProvider, useSlots } from "../context/slots";
 import { useSupportConfig } from "../store/support-store";
 import type {
@@ -167,7 +168,9 @@ export const Content: React.FC<ContentPropsType> = ({
 	const mode = useSupportMode();
 	const triggerRefContext = useTriggerRef();
 	const { isOpen } = useSupportConfig();
+	const { slotProps } = useSupportSlotOverrides();
 	const isResponsive = mode === "responsive";
+	const contentSlotProps = slotProps.content;
 
 	// Set up Floating UI middleware
 	const middleware = React.useMemo(() => {
@@ -351,12 +354,17 @@ export const Content: React.FC<ContentPropsType> = ({
 						: cn("md:absolute", getFallbackPositioningClasses(side, align)),
 				],
 
+		contentSlotProps?.className,
 		className
 	);
+
+	const dataState = isOpen ? "open" : "closed";
 
 	const content = (
 		<div
 			className={computedClassName}
+			data-slot="content"
+			data-state={dataState}
 			data-support-mode={mode}
 			ref={isResponsive ? undefined : setFloatingRef}
 			style={computedStyles}

@@ -1,47 +1,101 @@
 # Progress Log
 
-## 2026-03-26
-- Initialized file-based execution workflow for inbox analytics/live activity hardening.
-- Ran session catchup script from the planning-with-files skill.
-- Confirmed no prior `task_plan.md`, `findings.md`, or `progress.md` existed.
-- Captured current dirty worktree status and verified this area must avoid touching unrelated changes.
-- Confirmed initial mismatch with approved plan: websocket was still the canonical live activity writer.
-- Confirmed current dashboard query state: live queries already point at `visitor_activity_events`, use a 5-minute window, and refresh every 2 minutes.
-- Added `visitorActivityRequestSchema` / `visitorActivityResponseSchema` to `packages/types/src/api/visitor.ts`.
-- Added canonical `POST /visitors/:id/activity` ingestion to `apps/api/src/rest/routers/visitor.ts` with server-side geo reuse, Tinybird `trackVisitorActivity`, `markVisitorPresence`, and post-persistence `realtime.emit("visitorPresenceUpdate")`.
-- Switched widget live activity writes in `packages/core/src/rest-client.ts` to HTTP for `connected`, `route_change`, `focus`, and `heartbeat`.
-- Removed websocket as a client write path for `visitorPresenceUpdate` in `apps/api/src/ws/socket.ts` and `apps/api/src/ws/router.ts`.
-- Added a router dispatch fallback to `ctx.visitorId` in `apps/api/src/ws/router.ts` after tests exposed missing visitor fanout for some visitor-facing events.
-- Added or updated tests for:
-  - widget HTTP activity lifecycle in `packages/core/src/rest-client.test.ts`
-  - live activity endpoint enrichment/invalidation in `apps/api/src/rest/routers/visitor.test.ts`
-  - visitor presence routing in `apps/api/src/ws/router.test.ts`
-  - 2-minute live query cadence in `apps/web/src/data/live-presence-query-cadence.test.tsx`
-  - dashboard invalidation on `visitorPresenceUpdate` in `apps/web/src/app/(dashboard)/[websiteSlug]/providers/realtime.test.tsx`
-- Cleaned stale generated `apps/web/.next/types` artifacts after they caused unrelated validator errors during `apps/web` typecheck.
-- Automated verification completed:
-  - `bun test packages/core/src/rest-client.test.ts apps/api/src/lib/tinybird-sdk.test.ts apps/api/src/rest/routers/visitor.test.ts apps/api/src/ws/router.test.ts apps/api/src/ws/socket.test.ts apps/web/src/data/use-inbox-analytics.test.ts apps/web/src/data/use-visitor-presence.test.ts apps/web/src/data/live-presence-query-cadence.test.tsx apps/web/src/components/inbox-analytics/inbox-analytics-display.test.tsx apps/web/src/components/inbox-analytics/live-presence-globe.test.tsx apps/web/src/components/inbox-analytics/live-visitor-activity.test.tsx apps/web/src/components/conversations-list/index.test.tsx apps/web/src/app/'(dashboard)'/'[websiteSlug]'/providers/realtime.test.tsx apps/web/src/app/'(dashboard)'/'[websiteSlug]'/overlays/detail-page-overlay.test.tsx` -> 55 pass / 0 fail
-  - `bunx tsc -p packages/core/tsconfig.json --noEmit` -> pass
-  - `bunx tsc -p packages/react/tsconfig.json --noEmit` -> pass
-  - `bunx tsc -p apps/api/tsconfig.json --noEmit` -> pass
-  - `bunx tsc -p apps/web/tsconfig.json --noEmit` -> pass
-- Tinybird CLI status:
-  - `tb info` in `tinybird/` still fails with `None can't be loaded, remove it and run the command again` and `Expecting value: line 1 column 1 (char 0)`.
-- Remaining release blockers:
-  - manual staging matrix has not been executed in this session
-  - local Tinybird CLI validation is still broken
+## Session: 2026-04-14
 
-## 2026-03-27
-- Investigated new Tinybird Local frontend failures after the analytics hardening landed.
-- Confirmed JWT auth had progressed from signature failures to missing-pipe failures, which narrowed the issue from auth drift to local project loading.
-- Confirmed `tb info` at repo root was loading `/Users/anthonyriera/code/cossistant-monorepo/.tinyb` and treating the monorepo root as the project, while `tinybird/.tinyb` was an invalid comment-only file that broke `tb info` inside `tinybird/`.
-- Updated `/Users/anthonyriera/code/cossistant-monorepo/.tinyb` to include `cwd: "./tinybird"` so Tinybird CLI resolves the real project folder.
-- Removed the invalid `/Users/anthonyriera/code/cossistant-monorepo/tinybird/.tinyb` stub.
-- Updated `/Users/anthonyriera/code/cossistant-monorepo/tinybird/package.json` so the workspace `dev` script runs `tb dev` directly from `tinybird/` instead of `cd .. && tb dev`.
-- Added `/Users/anthonyriera/code/cossistant-monorepo/scripts/tinybird-local-env.sh` to print `TINYBIRD_TOKEN`, `TINYBIRD_SIGNING_KEY`, and `TINYBIRD_WORKSPACE` from the live Tinybird Local `/tokens` endpoint.
-- Updated Tinybird local setup docs in `/Users/anthonyriera/code/cossistant-monorepo/tinybird/README.md`, `/Users/anthonyriera/code/cossistant-monorepo/.env.example`, and `/Users/anthonyriera/code/cossistant-monorepo/apps/api/.env.default` to point developers at the local `/tokens` source of truth.
-- Validation:
-  - `cd tinybird && tb info` -> pass for project discovery; now resolves `.tinyb` at repo root and `project: /Users/anthonyriera/code/cossistant-monorepo/tinybird`
-  - `bunx tsc -p apps/api/tsconfig.json --noEmit` -> pass
-  - `curl -sS http://localhost:7181/tokens` -> failed in this session because Tinybird Local was not reachable
-  - `cd tinybird && tb build` -> blocked by missing Docker/Tinybird Local runtime in this session
+### Phase 1: Baseline and constraints
+- **Status:** complete
+- **Started:** 2026-04-14
+- Actions taken:
+  - Read root `package.json` to confirm `fix`, `check-types`, and `build` scripts.
+  - Read the `planning-with-files` skill instructions and session catchup output.
+  - Confirmed the repo already contains many unrelated modified and untracked files.
+  - Read and replaced prior planning files so this session tracks the current verification task.
+- Files created/modified:
+  - `task_plan.md`
+  - `findings.md`
+  - `progress.md`
+
+### Phase 2: Lint and formatting fixes
+- **Status:** complete
+- Actions taken:
+  - Ran `bun fix` from the repo root.
+  - Captured remaining manual diagnostics after Ultracite auto-fixed 72 files.
+  - Patched the reported array-style, useless fragment, non-null assertion, no-shadow, children prop, and hook-order issues.
+  - Reran `bun fix`, fixed the final suppression and parameter-order issues, and confirmed a clean pass.
+- Files created/modified:
+  - `apps/api/src/rest/routers/conversation.ts`
+  - `apps/api/src/trpc/routers/conversation.ts`
+  - `apps/web/src/app/test/ui/timeline/timeline-ui-test-page.test.tsx`
+  - `apps/web/src/components/support/demo-bubble-and-home/index.tsx`
+  - `apps/web/src/components/support/demo-classic-bubble/index.tsx`
+  - `apps/web/src/components/support/demo-pill-bubble/index.tsx`
+  - `apps/web/src/components/support/docs-demo/provider.tsx`
+  - `apps/web/src/components/support/examples/bubble-and-home.tsx`
+  - `apps/web/src/components/support/examples/classic-bubble.tsx`
+  - `apps/web/src/components/support/examples/pill-bubble.tsx`
+  - `apps/web/src/components/test-ui/composer/composer-ui-test-page.tsx`
+  - `apps/web/src/lib/support-docs-examples.test.tsx`
+  - `packages/react/src/support/components/conversation-timeline.tsx`
+  - `packages/react/src/support/components/header.tsx`
+  - `packages/react/src/support/router.tsx`
+  - `packages/react/src/test-utils/create-mock-support-controller.ts`
+  - `packages/react/src/identify-visitor.tsx`
+  - `packages/react/src/hooks/use-conversation-typing.test.tsx`
+
+### Phase 3: Typecheck fixes
+- **Status:** complete
+- Actions taken:
+  - Ran the root `bun run check-types` script.
+  - Isolated the initial failure to `apps/web`.
+  - Fixed timeline preview/test harness typings in the dashboard preview and fake support context.
+  - Cleared stale generated `apps/web/.next/types` and `apps/web/.next/dev/types` after a deleted page was still referenced by Next-generated validator files.
+  - Verified `apps/web` in isolation with `bun run --filter @cossistant/web check-types`.
+  - Reran the root `bun run check-types` successfully.
+- Files created/modified:
+  - `apps/web/src/components/test-ui/timeline/dashboard-conversation-timeline-list.tsx`
+  - `apps/web/src/components/test-ui/timeline/fake-support-context.tsx`
+  - `apps/web/src/components/test-ui/timeline/fixtures.ts`
+
+### Phase 4: Build verification
+- **Status:** complete
+- Actions taken:
+  - Ran the root `bun run build` script.
+  - Confirmed the Turbo build completed successfully for the scheduled packages, including `@cossistant/web`, `@cossistant/example-nextjs-tailwind`, and `@cossistant/facehash-landing`.
+  - Recorded non-blocking `apps/web` warnings about missing VAPID env vars and a Turbopack NFT trace warning.
+- Files created/modified:
+  -
+
+### Phase 5: Final verification and handoff
+- **Status:** complete
+- Actions taken:
+  - Reran the root `bun run check-types` after the build to confirm regenerated `apps/web` `.next/types` stayed clean.
+  - Reviewed final git status to separate this work from the large pre-existing dirty tree.
+- Files created/modified:
+  - `task_plan.md`
+  - `findings.md`
+  - `progress.md`
+
+## Test Results
+| Test | Input | Expected | Actual | Status |
+|------|-------|----------|--------|--------|
+| Baseline scripts discovery | `sed -n '1,220p' package.json` | Find root verification commands | Found `fix`, `check-types`, `build` scripts | pass |
+| Root lint/fix pass | `bun fix` | All lint and formatting issues resolved | Third pass succeeded after manual cleanup | pass |
+| Root typecheck pass | `bun run check-types` | AI pipeline guard plus all package type checks pass | Passed after `apps/web` fixes and stale type cleanup | pass |
+| Root build pass | `bun run build` | Turbo build succeeds across scheduled packages | Passed with non-blocking `apps/web` warnings only | pass |
+| Post-build typecheck pass | `bun run check-types` | Regenerated `apps/web` types remain valid | Passed from cache after build | pass |
+
+## Error Log
+| Timestamp | Error | Attempt | Resolution |
+|-----------|-------|---------|------------|
+| 2026-04-14 | `bun fix` exited with code 1 after auto-fixes | 1 | Patched reported files and will rerun with a higher diagnostic limit |
+| 2026-04-14 | `bun fix` still failed on 2 residual issues | 2 | Removed stale suppression and fixed test helper signature; next run passed |
+| 2026-04-14 | Root `check-types` failed in `apps/web` | 1 | Fixed timeline preview typing issues and removed stale `.next/types` artifacts |
+
+## 5-Question Reboot Check
+| Question | Answer |
+|----------|--------|
+| Where am I? | Phase 5 complete |
+| Where am I going? | Ready for handoff |
+| What's the goal? | Make `bun fix`, `bun run check-types`, and builds pass safely |
+| What have I learned? | The only meaningful blockers were localized lint/test harness issues plus stale generated web types; builds themselves are healthy |
+| What have I done? | Cleared `bun fix`, cleared root type checks, passed root builds, and confirmed post-build type checks stay green |

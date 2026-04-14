@@ -36,6 +36,7 @@
     "./primitives/*": "./src/primitives/*.ts",
     "./support": "./src/support/index.tsx",
     "./hooks": "./src/hooks/index.ts",
+    "./internal/hooks": "./src/internal/hooks.ts",
     "./support.css": "./src/support.css",
     "./styles.css": "./dist/styles.css",
     "./realtime": "./src/realtime/index.ts",

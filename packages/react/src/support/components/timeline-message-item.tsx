@@ -1,3 +1,4 @@
+import { resolveTimelineItemText } from "@cossistant/core";
 import { formatFileSize } from "@cossistant/core/upload-constants";
 import type { TimelineItem } from "@cossistant/types/api/timeline-item";
 import type React from "react";
@@ -44,13 +45,14 @@ export function TimelineMessageItem({
 	const text = useSupportText();
 	const [lightboxOpen, setLightboxOpen] = useState(false);
 	const [lightboxIndex, setLightboxIndex] = useState(0);
+	const displayText = resolveTimelineItemText(item, "visitor");
 
 	// Extract image and file parts
 	const images = extractImageParts(item.parts);
 	const files = extractFileParts(item.parts);
 	const hasAttachments = images.length > 0 || files.length > 0;
-	const hasText = item.text && item.text.trim().length > 0;
-	const messageWidthClassName = getSupportMessageWidthClasses(item.text);
+	const hasText = Boolean(displayText && displayText.trim().length > 0);
+	const messageWidthClassName = getSupportMessageWidthClasses(displayText);
 	const markdownRenderers = useMemo<TimelineItemContentMarkdownRenderers>(
 		() => ({
 			codeBlock: ({ code, fileName, language }) => (
@@ -119,7 +121,7 @@ export function TimelineMessageItem({
 										)}
 										markdownRenderers={markdownRenderers}
 										renderMarkdown
-										text={item.text}
+										text={displayText}
 									/>
 								)}
 

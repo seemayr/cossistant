@@ -106,6 +106,9 @@ export type PipelineToolContext = {
 	aiAgentId: string;
 	aiAgentName: string;
 	visitorName: string;
+	websiteDefaultLanguage: string;
+	visitorLanguage: string | null;
+	autoTranslateEnabled?: boolean;
 	workflowRunId: string;
 	triggerMessageId: string;
 	triggerMessageText?: string | null;

@@ -1,5 +1,6 @@
 import { and, db, eq } from "@api/db";
 import { member } from "@api/db/schema";
+import { getPlanForWebsite } from "@api/lib/plans/access";
 import { PageContent } from "@/components/ui/layout";
 import {
 	SettingsHeader,
@@ -9,6 +10,7 @@ import {
 import { ensureWebsiteAccess } from "@/lib/auth/website-access";
 import { DefaultParticipantsForm } from "./default-participants-form";
 import { DeleteWebsiteSection } from "./delete-website-section";
+import { LanguageSettingsForm } from "./language-settings-form";
 import { UserProfileForm } from "./user-profile-form";
 import { WebsiteInformationForm } from "./website-information-form";
 
@@ -23,6 +25,7 @@ export default async function GeneralSettingsPage({
 }: GeneralSettingsPageProps) {
 	const { websiteSlug } = await params;
 	const { user, website } = await ensureWebsiteAccess(websiteSlug);
+	const planInfo = await getPlanForWebsite(website);
 	const [membership] = await db
 		.select({ role: member.role })
 		.from(member)
@@ -63,6 +66,24 @@ export default async function GeneralSettingsPage({
 						organizationId={website.organizationId}
 						userId={user.id}
 						websiteId={website.id}
+					/>
+				</SettingsRow>
+				<SettingsRow
+					description="Choose your website's default language and control when Cossistant translates messages and titles."
+					title="Language & translation"
+				>
+					<LanguageSettingsForm
+						currentPlan={{
+							name: planInfo.planName,
+							displayName: planInfo.displayName,
+							price: planInfo.price,
+							features: planInfo.features,
+						}}
+						initialAutoTranslateEnabled={website.autoTranslateEnabled}
+						initialDefaultLanguage={website.defaultLanguage}
+						organizationId={website.organizationId}
+						websiteId={website.id}
+						websiteSlug={website.slug}
 					/>
 				</SettingsRow>
 				<SettingsRow

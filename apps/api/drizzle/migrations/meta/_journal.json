@@ -421,6 +421,20 @@
       "when": 1775805384571,
       "tag": "0059_slippery_the_renegades",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1775865600000,
+      "tag": "0060_auto_translate_language_state",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1775972018256,
+      "tag": "0061_website_auto_translate_toggle",
+      "breakpoints": true
     }
   ]
 }

@@ -4,9 +4,9 @@
 import { FILE_INPUT_ACCEPT } from "@cossistant/core";
 import {
 	CONVERSATION_AUTO_SEEN_DELAY_MS,
-	useMultimodalInput,
 	useWindowVisibilityFocus,
 } from "@cossistant/react";
+import { useMultimodalInput } from "@cossistant/react/internal/hooks";
 import type { AvailableAIAgent } from "@cossistant/types";
 import type { TimelineItem } from "@cossistant/types/api/timeline-item";
 import { useQuery } from "@tanstack/react-query";
@@ -686,6 +686,8 @@ export function ConversationPane({
 		timeline: {
 			availableAIAgents,
 			conversationId,
+			conversationVisitorLanguage:
+				selectedConversation?.visitorLanguage ?? null,
 			currentUserId,
 			items: items as TimelineItem[],
 			onFetchMoreIfNeeded,

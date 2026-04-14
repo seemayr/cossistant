@@ -1,8 +1,8 @@
 "use client";
 
-import { Button } from "@cossistant/react";
 import type React from "react";
 import type { ConfigurationError } from "../../hooks/private/use-rest-client";
+import { useSupportSlotOverrides } from "../context/slot-overrides";
 import { cn } from "../utils";
 import { CoButton } from "./button";
 import { CossistantLogo } from "./cossistant-branding";
@@ -20,15 +20,31 @@ type ConfigurationErrorDisplayProps = {
 export const ConfigurationErrorDisplay: React.FC<
 	ConfigurationErrorDisplayProps
 > = ({ error, className }) => {
+	const { slots, slotProps } = useSupportSlotOverrides();
+	const ConfigurationErrorSlot = slots.configurationError;
+	const configurationErrorSlotProps = slotProps.configurationError;
 	const docsUrl = "https://cossistant.com/docs/quickstart/api-keys";
 	const isInvalidKey = error.type === "invalid_api_key";
+
+	if (ConfigurationErrorSlot) {
+		return (
+			<ConfigurationErrorSlot
+				{...configurationErrorSlotProps}
+				className={cn(configurationErrorSlotProps?.className, className)}
+				data-slot="configuration-error"
+				error={error}
+			/>
+		);
+	}
 
 	return (
 		<div
 			className={cn(
 				"flex h-full flex-col bg-co-background text-co-foreground",
+				configurationErrorSlotProps?.className,
 				className
 			)}
+			data-slot="configuration-error"
 		>
 			{/* Hero section with logo */}
 			<div

@@ -1,3 +1,5 @@
+"use client";
+
 export * from "./feedback";
 export * from "./hooks";
 export * from "./identify-visitor";

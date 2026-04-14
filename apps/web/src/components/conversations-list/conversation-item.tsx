@@ -1,6 +1,7 @@
 "use client";
 
 import type { RouterOutputs } from "@api/trpc/types";
+import { resolveTimelineItemText } from "@cossistant/core";
 import { useConversationTyping } from "@cossistant/react";
 import { formatMessagePreview } from "@cossistant/tiny-markdown/utils";
 import {
@@ -482,7 +483,9 @@ export function ConversationItem({
 			});
 		}
 
-		return formatMessagePreview(lastTimelineItem.text ?? "");
+		return formatMessagePreview(
+			resolveTimelineItemText(lastTimelineItem, "team") ?? ""
+		);
 	}, [availableAIAgents, availableHumanAgents, lastTimelineItem, visitor]);
 
 	const isEventPreview = Boolean(

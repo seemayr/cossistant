@@ -51,6 +51,9 @@ export type GenerationRuntimeInput = {
 	mode: GenerationMode;
 	aiAgent: AiAgentSelect;
 	conversation: ConversationSelect;
+	websiteDefaultLanguage: string;
+	visitorLanguage: string | null;
+	autoTranslateEnabled?: boolean;
 	generationEntries: SegmentedConversationEntry[];
 	visitorContext: VisitorContext | null;
 	conversationState: ConversationState;

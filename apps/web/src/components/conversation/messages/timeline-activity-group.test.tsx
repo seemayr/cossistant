@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { RouterOutputs } from "@api/trpc/types";
-import type { GroupedActivity } from "@cossistant/next/hooks";
+import type { GroupedActivity } from "@cossistant/react/internal/hooks";
 import type { AvailableAIAgent } from "@cossistant/types";
 import { SenderType } from "@cossistant/types";
 import type { TimelineItem } from "@cossistant/types/api/timeline-item";

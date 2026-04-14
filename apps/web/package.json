@@ -10,6 +10,7 @@
     "@cossistant/core": "workspace:*",
     "@cossistant/location": "workspace:*",
     "@cossistant/next": "workspace:*",
+    "@cossistant/react": "workspace:*",
     "@cossistant/tiny-markdown": "workspace:*",
     "@cossistant/transactional": "workspace:*",
     "@cossistant/types": "workspace:*",

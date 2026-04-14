@@ -27,6 +27,18 @@ type ConversationCreatedEventParams = {
 	header: ConversationHeader;
 };
 
+type TranslationUpdateParams = BaseRealtimeContext & {
+	updates: {
+		visitorTitle?: string | null;
+		visitorTitleLanguage?: string | null;
+		visitorLanguage?: string | null;
+		translationActivatedAt?: string | null;
+		translationChargedAt?: string | null;
+		title?: string | null;
+	};
+	aiAgentId?: string | null;
+};
+
 function mapActor(actor: ConversationRealtimeActor) {
 	switch (actor.type) {
 		case "visitor":
@@ -122,6 +134,11 @@ export async function emitConversationCreatedEvent({
 		conversation: {
 			id: conversation.id,
 			title: conversation.title ?? undefined,
+			visitorTitle: conversation.visitorTitle ?? null,
+			visitorTitleLanguage: conversation.visitorTitleLanguage ?? null,
+			visitorLanguage: conversation.visitorLanguage ?? null,
+			translationActivatedAt: conversation.translationActivatedAt ?? null,
+			translationChargedAt: conversation.translationChargedAt ?? null,
 			createdAt: conversation.createdAt,
 			updatedAt: conversation.updatedAt,
 			visitorId: conversation.visitorId,
@@ -132,5 +149,21 @@ export async function emitConversationCreatedEvent({
 			lastTimelineItem: header.lastTimelineItem ?? undefined,
 		},
 		header,
+	});
+}
+
+export async function emitConversationTranslationUpdate({
+	conversation,
+	updates,
+	aiAgentId = null,
+}: TranslationUpdateParams) {
+	await realtime.emit("conversationUpdated", {
+		conversationId: conversation.id,
+		websiteId: conversation.websiteId,
+		organizationId: conversation.organizationId,
+		visitorId: conversation.visitorId ?? null,
+		userId: null,
+		updates,
+		aiAgentId,
 	});
 }

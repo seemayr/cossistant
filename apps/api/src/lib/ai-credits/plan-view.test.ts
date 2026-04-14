@@ -14,6 +14,7 @@ const basePlanInfo: PlanInfo = {
 		"email-notifications": true,
 		"email-reply": true,
 		"dashboard-file-sharing": false,
+		"auto-translate": false,
 		"slack-support": false,
 		"slack-custom-channel": false,
 		"pro-integrations": false,

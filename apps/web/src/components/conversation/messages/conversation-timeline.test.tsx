@@ -16,7 +16,7 @@ mock.module("@cossistant/react", () => ({
 	useSupport: () => ({}),
 }));
 
-mock.module("@cossistant/next/hooks", () => ({
+mock.module("@cossistant/react/internal/hooks", () => ({
 	useGroupedMessages: () => ({
 		items: [],
 		lastReadMessageMap: {},

@@ -9,6 +9,9 @@ import {
 	conversationAssignee,
 	conversationParticipant,
 } from "@api/db/schema/conversation";
+import { website } from "@api/db/schema/website";
+import { getPlanForWebsite } from "@api/lib/plans/access";
+import { isAutomaticTranslationEnabled } from "@api/lib/translation";
 import { and, eq, isNull } from "drizzle-orm";
 import type {
 	ConversationState,
@@ -150,6 +153,9 @@ export async function loadIntakeContext(
 		triggerMetadata: TriggerMessageMetadata;
 	}
 ): Promise<{
+	websiteDefaultLanguage: string;
+	visitorLanguage: string | null;
+	autoTranslateEnabled: boolean;
 	conversationHistory: ConversationTranscriptEntry[];
 	decisionMessages: SegmentedConversationMessage[];
 	generationEntries: SegmentedConversationEntry[];
@@ -160,7 +166,7 @@ export async function loadIntakeContext(
 	hasLaterHumanMessage: boolean;
 	hasLaterAiMessage: boolean;
 }> {
-	const [timelineContext, visitorContext, conversationState] =
+	const [timelineContext, visitorContext, conversationState, websiteRecord] =
 		await Promise.all([
 			buildTriggerCenteredTimelineContext(db, {
 				conversationId: params.conversationId,
@@ -177,16 +183,35 @@ export async function loadIntakeContext(
 				organizationId: params.organizationId,
 				conversation: params.conversation,
 			}),
+			db.query.website.findFirst({
+				where: eq(website.id, params.websiteId),
+			}),
 		]);
 
+	const autoTranslateEnabled = websiteRecord
+		? isAutomaticTranslationEnabled({
+				planAllowsAutoTranslate:
+					(await getPlanForWebsite(websiteRecord)).features[
+						"auto-translate"
+					] === true,
+				websiteAutoTranslateEnabled: websiteRecord.autoTranslateEnabled,
+			})
+		: false;
+
 	return {
+		websiteDefaultLanguage: websiteRecord?.defaultLanguage ?? "en",
+		visitorLanguage: params.conversation.visitorLanguage ?? null,
+		autoTranslateEnabled,
 		conversationHistory: timelineContext.conversationHistory,
 		decisionMessages: timelineContext.decisionMessages,
 		generationEntries: timelineContext.generationEntries,
 		visitorContext,
 		conversationState,
 		triggerMessage: timelineContext.triggerMessage,
-		triggerMessageText: params.triggerMetadata.text ?? null,
+		triggerMessageText:
+			timelineContext.triggerMessage?.content ??
+			params.triggerMetadata.text ??
+			null,
 		hasLaterHumanMessage: timelineContext.hasLaterHumanMessage,
 		hasLaterAiMessage: timelineContext.hasLaterAiMessage,
 	};

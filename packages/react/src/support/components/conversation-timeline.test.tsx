@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterAll, beforeEach, describe, expect, it, mock } from "bun:test";
 import type { TimelineItem } from "@cossistant/types/api/timeline-item";
 import type { ConversationSeen } from "@cossistant/types/schemas";
 import React from "react";
@@ -123,6 +123,10 @@ async function renderTimeline({
 }
 
 describe("ConversationTimelineList live activity", () => {
+	afterAll(() => {
+		mock.restore();
+	});
+
 	beforeEach(() => {
 		currentTimelineState = {
 			groupedMessages: {

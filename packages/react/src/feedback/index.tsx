@@ -1,3 +1,5 @@
+"use client";
+
 import * as React from "react";
 import { useSupport } from "../provider";
 import { ConfigurationErrorDisplay } from "../support/components/configuration-error";

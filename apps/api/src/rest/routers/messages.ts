@@ -3,6 +3,13 @@ import {
 	markConversationAsSeen,
 } from "@api/db/mutations/conversation";
 import { getConversationById } from "@api/db/queries/conversation";
+import { getPlanForWebsite } from "@api/lib/plans/access";
+import {
+	finalizeConversationTranslation,
+	isAutomaticTranslationEnabled,
+	prepareInboundVisitorTranslation,
+	prepareOutboundVisitorTranslation,
+} from "@api/lib/translation";
 import { markUserPresence, markVisitorPresence } from "@api/services/presence";
 import { createParticipantJoinedEvent } from "@api/utils/conversation-events";
 import { emitConversationSeenEvent } from "@api/utils/conversation-realtime";
@@ -202,9 +209,41 @@ messagesRouter.openapi(
 		}
 
 		const timelineItemType = body.item.type ?? ConversationTimelineType.MESSAGE;
+		const planInfo = await getPlanForWebsite(website);
+		const autoTranslateEnabled = isAutomaticTranslationEnabled({
+			planAllowsAutoTranslate: planInfo.features["auto-translate"] === true,
+			websiteAutoTranslateEnabled: website.autoTranslateEnabled,
+		});
 
 		const resolvedUserId = isPublic ? null : (body.item.userId ?? null);
 		const resolvedAiAgentId = isPublic ? null : (body.item.aiAgentId ?? null);
+		const isVisitorMessage =
+			timelineItemType === ConversationTimelineType.MESSAGE &&
+			Boolean(visitorId) &&
+			!resolvedUserId &&
+			!resolvedAiAgentId;
+
+		const inboundTranslation = isVisitorMessage
+			? await prepareInboundVisitorTranslation({
+					text: body.item.text ?? "",
+					websiteDefaultLanguage: website.defaultLanguage,
+					visitorLanguageHint: conversation.visitorLanguage,
+					mode: "auto",
+					autoTranslateEnabled,
+				})
+			: null;
+
+		const outboundTranslation =
+			timelineItemType === ConversationTimelineType.MESSAGE &&
+			!isVisitorMessage &&
+			autoTranslateEnabled
+				? await prepareOutboundVisitorTranslation({
+						text: body.item.text ?? "",
+						sourceLanguage: website.defaultLanguage,
+						visitorLanguage: conversation.visitorLanguage,
+						mode: "auto",
+					})
+				: null;
 
 		const { item: createdTimelineItem, actor } =
 			timelineItemType === ConversationTimelineType.MESSAGE
@@ -216,8 +255,16 @@ messagesRouter.openapi(
 						conversationOwnerVisitorId: visitorId,
 						id: body.item.id,
 						text: body.item.text ?? "",
-						extraParts:
-							body.item.parts?.filter((part) => part.type !== "text") ?? [],
+						extraParts: [
+							...(body.item.parts?.filter((part) => part.type !== "text") ??
+								[]),
+							...(inboundTranslation?.translationPart
+								? [inboundTranslation.translationPart]
+								: []),
+							...(outboundTranslation?.translationPart
+								? [outboundTranslation.translationPart]
+								: []),
+						],
 						visibility: body.item.visibility,
 						userId: resolvedUserId,
 						aiAgentId: resolvedAiAgentId,
@@ -251,6 +298,28 @@ messagesRouter.openapi(
 						}),
 						actor: null,
 					};
+
+		if (isVisitorMessage && inboundTranslation?.visitorLanguage) {
+			await finalizeConversationTranslation({
+				db,
+				conversation,
+				websiteDefaultLanguage: website.defaultLanguage,
+				visitorLanguage: inboundTranslation.visitorLanguage,
+				hasTranslationPart: Boolean(inboundTranslation.translationPart),
+				chargeCredits: autoTranslateEnabled,
+			});
+		}
+
+		if (!isVisitorMessage && outboundTranslation?.translationPart) {
+			await finalizeConversationTranslation({
+				db,
+				conversation,
+				websiteDefaultLanguage: website.defaultLanguage,
+				visitorLanguage: conversation.visitorLanguage,
+				hasTranslationPart: true,
+				chargeCredits: autoTranslateEnabled,
+			});
+		}
 
 		const resolvedActor: ConversationActor | null = resolveTimelineActor({
 			actor,

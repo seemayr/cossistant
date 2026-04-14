@@ -33,6 +33,7 @@ export const Root: React.FC<RootProps> = ({ className, children }) => {
 					mode === "responsive" && "h-full min-h-0 w-full",
 					className
 				)}
+				data-slot="root"
 				data-support-mode={mode}
 			>
 				{children}

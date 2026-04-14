@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterAll, beforeEach, describe, expect, it, mock } from "bun:test";
 import type { ConversationSeen } from "@cossistant/types/schemas";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -86,6 +86,10 @@ async function renderReadIndicator({
 beforeEach(() => {
 	avatarProps.length = 0;
 	useSupportTextMock.mockClear();
+});
+
+afterAll(() => {
+	mock.restore();
 });
 
 describe("ReadIndicator", () => {

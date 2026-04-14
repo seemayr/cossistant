@@ -132,6 +132,15 @@ export const websiteSummarySchema = z
 			description: "The owning organization's unique identifier.",
 			example: "01JG000000000000000000000",
 		}),
+		defaultLanguage: z.string().default("en").openapi({
+			description: "The website's default working language.",
+			example: "en",
+		}),
+		autoTranslateEnabled: z.boolean().default(true).openapi({
+			description:
+				"Whether automatic translation flows are enabled for this website.",
+			example: true,
+		}),
 		whitelistedDomains: z.array(z.url()).openapi({
 			description: "The domains allowed to use the website's public keys.",
 			example: ["https://dub.co", "http://localhost:3000"],
@@ -249,6 +258,8 @@ const websiteUpdateDataSchema = z
 		logoUrl: z.url().nullable().optional(),
 		whitelistedDomains: z.array(z.url()).optional(),
 		defaultParticipantIds: z.array(z.string()).nullable().optional(),
+		defaultLanguage: z.string().min(2).max(20).optional(),
+		autoTranslateEnabled: z.boolean().optional(),
 		installationTarget: z.nativeEnum(WebsiteInstallationTarget).optional(),
 		status: z.enum(WEBSITE_STATUS_VALUES).optional(),
 		teamId: z.string().nullable().optional(),
@@ -443,6 +454,10 @@ export const publicWebsiteResponseSchema = z.object({
 		description: "The organization's unique identifier.",
 		example: "01JG000000000000000000000",
 	}),
+	defaultLanguage: z.string().default("en").openapi({
+		description: "The website's default working language.",
+		example: "en",
+	}),
 	/** Current website status. */
 	status: z.string().openapi({
 		description: "The website's status.",
@@ -495,6 +510,10 @@ export const listByOrganizationRequestSchema = z.object({
 	organizationId: z.ulid().openapi({
 		description: "The organization's unique identifier.",
 		example: "01JG000000000000000000000",
+	}),
+	defaultLanguage: z.string().default("en").openapi({
+		description: "The website's default working language.",
+		example: "en",
 	}),
 });
 

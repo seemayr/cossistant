@@ -1,3 +1,7 @@
+import {
+	resolveConversationTitle,
+	resolveTimelineItemText,
+} from "@cossistant/core";
 import { formatMessagePreview } from "@cossistant/tiny-markdown/utils";
 import type { Conversation } from "@cossistant/types";
 import type { TimelineItem } from "@cossistant/types/api/timeline-item";
@@ -185,7 +189,9 @@ export function useConversationPreview(
 		}
 
 		return {
-			content: formatMessagePreview(lastTimelineMessage.text || ""),
+			content: formatMessagePreview(
+				resolveTimelineItemText(lastTimelineMessage, "visitor") || ""
+			),
 			time: formatTimeAgo(lastTimelineMessage.createdAt),
 			isFromVisitor,
 			senderName,
@@ -331,8 +337,9 @@ export function useConversationPreview(
 	);
 
 	const title = useMemo(() => {
-		if (conversation.title) {
-			return conversation.title;
+		const resolvedTitle = resolveConversationTitle(conversation, "visitor");
+		if (resolvedTitle) {
+			return resolvedTitle;
 		}
 
 		if (lastMessage?.content) {
@@ -340,7 +347,7 @@ export function useConversationPreview(
 		}
 
 		return text("component.conversationButtonLink.fallbackTitle");
-	}, [conversation.title, lastMessage?.content, text]);
+	}, [conversation, lastMessage?.content, text]);
 
 	return {
 		conversation,

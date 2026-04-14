@@ -22,6 +22,7 @@ import {
 } from "@api/db/queries/conversation";
 import { getCompleteVisitorWithContact } from "@api/db/queries/visitor";
 import { getWebsiteBySlugWithAccess } from "@api/db/queries/website";
+import { conversationTimelineItem } from "@api/db/schema/conversation";
 import { env } from "@api/env";
 import {
 	applyDashboardConversationHardLimit,
@@ -31,6 +32,13 @@ import {
 	resolveDashboardHardLimitPolicy,
 } from "@api/lib/hard-limits/dashboard";
 import { getPlanForWebsite } from "@api/lib/plans/access";
+import {
+	finalizeConversationTranslation,
+	isAutomaticTranslationEnabled,
+	prepareInboundVisitorTranslation,
+	prepareOutboundVisitorTranslation,
+	syncConversationVisitorTitle,
+} from "@api/lib/translation";
 import { realtime } from "@api/realtime/emitter";
 import { getRedis } from "@api/redis";
 import { createConversationEvent } from "@api/utils/conversation-event";
@@ -45,7 +53,10 @@ import {
 	isUserParticipant,
 } from "@api/utils/participant-helpers";
 import { triggerMessageNotificationWorkflow } from "@api/utils/send-message-with-notification";
-import { createMessageTimelineItem } from "@api/utils/timeline-item";
+import {
+	createMessageTimelineItem,
+	updateTimelineItem,
+} from "@api/utils/timeline-item";
 import {
 	type ContactMetadata,
 	ConversationEventType,
@@ -55,8 +66,9 @@ import {
 	TimelineItemVisibility,
 	visitorResponseSchema,
 } from "@cossistant/types";
+import { timelineItemSchema } from "@cossistant/types/api/timeline-item";
 import { TRPCError } from "@trpc/server";
-import { sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "../init";
 import { loadConversationContext } from "../utils/conversation";
@@ -98,6 +110,11 @@ async function emitConversationMetadataUpdate(
 	conversation: ConversationRecord,
 	updates: {
 		title?: string | null;
+		visitorTitle?: string | null;
+		visitorTitleLanguage?: string | null;
+		visitorLanguage?: string | null;
+		translationActivatedAt?: string | null;
+		translationChargedAt?: string | null;
 		viewIds?: string[];
 		sentiment?: ConversationRecord["sentiment"];
 		sentimentConfidence?: number | null;
@@ -128,6 +145,120 @@ function buildAiPauseEventMessage(durationMinutes: number): string {
 	}
 
 	return `paused AI answers for ${durationMinutes}-min`;
+}
+
+function replaceAudienceTranslationPart(
+	parts: unknown[],
+	audience: "team" | "visitor",
+	nextPart: unknown
+): unknown[] {
+	return [
+		...parts.filter((part) => {
+			if (!(part && typeof part === "object")) {
+				return true;
+			}
+
+			return !(
+				"type" in part &&
+				part.type === "translation" &&
+				"audience" in part &&
+				part.audience === audience
+			);
+		}),
+		nextPart,
+	];
+}
+
+type MessageTranslationRow = {
+	id: string;
+	text: string | null;
+	parts: unknown;
+	userId: string | null;
+	visitorId: string | null;
+	aiAgentId: string | null;
+};
+
+async function translateConversationMessageRows(params: {
+	db: Parameters<typeof loadConversationContext>[0];
+	rows: MessageTranslationRow[];
+	conversation: ConversationRecord;
+	websiteDefaultLanguage: string;
+	chargeCredits: boolean;
+}) {
+	let resolvedVisitorLanguage = params.conversation.visitorLanguage;
+	const updatedItems: ReturnType<typeof timelineItemSchema.parse>[] = [];
+	const skippedIds: string[] = [];
+
+	for (const row of params.rows) {
+		const existingParts = Array.isArray(row.parts) ? row.parts : [];
+		const isInboundVisitorMessage =
+			Boolean(row.visitorId) && !row.userId && !row.aiAgentId;
+		const preparedTranslation = isInboundVisitorMessage
+			? await prepareInboundVisitorTranslation({
+					text: row.text ?? "",
+					websiteDefaultLanguage: params.websiteDefaultLanguage,
+					visitorLanguageHint: resolvedVisitorLanguage,
+					mode: "manual",
+					autoTranslateEnabled: true,
+				})
+			: await prepareOutboundVisitorTranslation({
+					text: row.text ?? "",
+					sourceLanguage: params.websiteDefaultLanguage,
+					visitorLanguage: resolvedVisitorLanguage,
+					mode: "manual",
+				});
+
+		if (
+			"visitorLanguage" in preparedTranslation &&
+			preparedTranslation.visitorLanguage
+		) {
+			resolvedVisitorLanguage = preparedTranslation.visitorLanguage;
+		}
+
+		const translationPart = preparedTranslation.translationPart;
+
+		if (!translationPart) {
+			skippedIds.push(row.id);
+			continue;
+		}
+
+		const updatedItem = await updateTimelineItem({
+			db: params.db,
+			organizationId: params.conversation.organizationId,
+			websiteId: params.conversation.websiteId,
+			conversationId: params.conversation.id,
+			conversationOwnerVisitorId: params.conversation.visitorId,
+			itemId: row.id,
+			item: {
+				parts: replaceAudienceTranslationPart(
+					existingParts,
+					translationPart.audience,
+					translationPart
+				),
+				text: row.text,
+			},
+		});
+
+		updatedItems.push(timelineItemSchema.parse(updatedItem));
+	}
+
+	if (updatedItems.length > 0) {
+		await finalizeConversationTranslation({
+			db: params.db,
+			conversation: params.conversation,
+			websiteDefaultLanguage: params.websiteDefaultLanguage,
+			visitorLanguage: resolvedVisitorLanguage,
+			hasTranslationPart: true,
+			chargeCredits: params.chargeCredits,
+		});
+	}
+
+	return {
+		items: updatedItems,
+		skippedIds,
+		translatedCount: updatedItems.length,
+		skippedCount: skippedIds.length,
+	};
 }
 
 export const conversationRouter = createTRPCRouter({
@@ -379,6 +510,19 @@ export const conversationRouter = createTRPCRouter({
 
 			const planInfo = await getPlanForWebsite(websiteData);
 			const hardLimitPolicy = resolveDashboardHardLimitPolicy(planInfo);
+			const autoTranslateEnabled = isAutomaticTranslationEnabled({
+				planAllowsAutoTranslate: planInfo.features["auto-translate"] === true,
+				websiteAutoTranslateEnabled: websiteData.autoTranslateEnabled,
+			});
+
+			const outboundTranslation = autoTranslateEnabled
+				? await prepareOutboundVisitorTranslation({
+						text: input.text,
+						sourceLanguage: websiteData.defaultLanguage,
+						visitorLanguage: conversation.visitorLanguage,
+						mode: "auto",
+					})
+				: null;
 
 			const sendMessageWithDb = async (dbClient: typeof db) => {
 				// Check if user needs to be added as participant
@@ -415,7 +559,12 @@ export const conversationRouter = createTRPCRouter({
 					conversationOwnerVisitorId: conversation.visitorId,
 					id: input.timelineItemId,
 					text: input.text,
-					extraParts: input.parts ?? [],
+					extraParts: [
+						...(input.parts ?? []),
+						...(outboundTranslation?.translationPart
+							? [outboundTranslation.translationPart]
+							: []),
+					],
 					visibility: input.visibility,
 					userId: user.id,
 					visitorId: null,
@@ -467,6 +616,17 @@ export const conversationRouter = createTRPCRouter({
 
 							return sendMessageWithDb(txDb);
 						});
+
+			if (outboundTranslation?.translationPart) {
+				await finalizeConversationTranslation({
+					db,
+					conversation,
+					websiteDefaultLanguage: websiteData.defaultLanguage,
+					visitorLanguage: conversation.visitorLanguage,
+					hasTranslationPart: true,
+					chargeCredits: autoTranslateEnabled,
+				});
+			}
 
 			try {
 				await triggerMessageNotificationWorkflow({
@@ -745,7 +905,7 @@ export const conversationRouter = createTRPCRouter({
 		)
 		.output(conversationMutationResponseSchema)
 		.mutation(async ({ ctx: { db, user }, input }) => {
-			const { conversation } = await loadConversationContext(
+			const { website, conversation } = await loadConversationContext(
 				db,
 				user.id,
 				input
@@ -764,11 +924,195 @@ export const conversationRouter = createTRPCRouter({
 				});
 			}
 
-			await emitConversationMetadataUpdate(updatedConversation, {
+			const planInfo = await getPlanForWebsite(website);
+			const titleTranslation = await syncConversationVisitorTitle({
+				db,
+				conversationId: updatedConversation.id,
+				organizationId: updatedConversation.organizationId,
+				websiteId: updatedConversation.websiteId,
 				title: updatedConversation.title,
+				websiteDefaultLanguage: website.defaultLanguage,
+				visitorLanguage: updatedConversation.visitorLanguage,
+				autoTranslateEnabled: isAutomaticTranslationEnabled({
+					planAllowsAutoTranslate: planInfo.features["auto-translate"] === true,
+					websiteAutoTranslateEnabled: website.autoTranslateEnabled,
+				}),
+			});
+			const responseConversation = {
+				...updatedConversation,
+				visitorTitle: titleTranslation.visitorTitle,
+				visitorTitleLanguage: titleTranslation.visitorTitleLanguage,
+			};
+
+			await emitConversationMetadataUpdate(responseConversation, {
+				title: responseConversation.title,
+				visitorTitle: responseConversation.visitorTitle,
+				visitorTitleLanguage: responseConversation.visitorTitleLanguage,
 			});
 
-			return { conversation: toConversationOutput(updatedConversation) };
+			return { conversation: toConversationOutput(responseConversation) };
+		}),
+
+	translateMessage: protectedProcedure
+		.input(
+			z.object({
+				conversationId: z.string(),
+				websiteSlug: z.string(),
+				timelineItemId: z.string(),
+			})
+		)
+		.mutation(async ({ ctx: { db, user }, input }) => {
+			const { website, conversation } = await loadConversationContext(
+				db,
+				user.id,
+				input
+			);
+			const planInfo = await getPlanForWebsite(website);
+			const autoTranslateEnabled = planInfo.features["auto-translate"] === true;
+
+			if (!autoTranslateEnabled) {
+				throw new TRPCError({
+					code: "FORBIDDEN",
+					message: "Auto-translate is only available on Pro plans.",
+				});
+			}
+
+			const [row] = await db
+				.select()
+				.from(conversationTimelineItem)
+				.where(
+					and(
+						eq(conversationTimelineItem.id, input.timelineItemId),
+						eq(
+							conversationTimelineItem.organizationId,
+							conversation.organizationId
+						),
+						eq(conversationTimelineItem.conversationId, conversation.id),
+						eq(conversationTimelineItem.type, "message"),
+						isNull(conversationTimelineItem.deletedAt)
+					)
+				)
+				.limit(1);
+
+			if (!row) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Message not found",
+				});
+			}
+
+			const translationResult = await translateConversationMessageRows({
+				db,
+				rows: [
+					{
+						id: row.id,
+						text: row.text,
+						parts: row.parts,
+						userId: row.userId,
+						visitorId: row.visitorId,
+						aiAgentId: row.aiAgentId,
+					},
+				],
+				conversation,
+				websiteDefaultLanguage: website.defaultLanguage,
+				chargeCredits: true,
+			});
+
+			const updatedItem = translationResult.items[0];
+
+			if (!updatedItem) {
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message: "This message could not be translated.",
+				});
+			}
+
+			return {
+				item: updatedItem,
+			};
+		}),
+
+	translateMessageGroup: protectedProcedure
+		.input(
+			z.object({
+				conversationId: z.string(),
+				websiteSlug: z.string(),
+				timelineItemIds: z.array(z.string()).min(1).max(100),
+			})
+		)
+		.mutation(async ({ ctx: { db, user }, input }) => {
+			const { website, conversation } = await loadConversationContext(
+				db,
+				user.id,
+				input
+			);
+			const planInfo = await getPlanForWebsite(website);
+			const autoTranslateEnabled = planInfo.features["auto-translate"] === true;
+
+			if (!autoTranslateEnabled) {
+				throw new TRPCError({
+					code: "FORBIDDEN",
+					message: "Auto-translate is only available on Pro plans.",
+				});
+			}
+
+			const uniqueTimelineItemIds = [...new Set(input.timelineItemIds)];
+			const orderById = new Map(
+				uniqueTimelineItemIds.map((id, index) => [id, index] as const)
+			);
+			const rows = await db
+				.select({
+					id: conversationTimelineItem.id,
+					text: conversationTimelineItem.text,
+					parts: conversationTimelineItem.parts,
+					userId: conversationTimelineItem.userId,
+					visitorId: conversationTimelineItem.visitorId,
+					aiAgentId: conversationTimelineItem.aiAgentId,
+				})
+				.from(conversationTimelineItem)
+				.where(
+					and(
+						inArray(conversationTimelineItem.id, uniqueTimelineItemIds),
+						eq(
+							conversationTimelineItem.organizationId,
+							conversation.organizationId
+						),
+						eq(conversationTimelineItem.conversationId, conversation.id),
+						eq(conversationTimelineItem.type, "message"),
+						isNull(conversationTimelineItem.deletedAt)
+					)
+				);
+
+			const orderedRows = rows.sort((left, right) => {
+				const leftIndex = orderById.get(left.id) ?? Number.MAX_SAFE_INTEGER;
+				const rightIndex = orderById.get(right.id) ?? Number.MAX_SAFE_INTEGER;
+				return leftIndex - rightIndex;
+			});
+			const foundIds = new Set(orderedRows.map((row) => row.id));
+			const missingIds = uniqueTimelineItemIds.filter(
+				(id) => !foundIds.has(id)
+			);
+
+			const result = await translateConversationMessageRows({
+				db,
+				rows: orderedRows,
+				conversation,
+				websiteDefaultLanguage: website.defaultLanguage,
+				chargeCredits: true,
+			});
+
+			if (result.items.length === 0) {
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message: "None of the selected messages could be translated.",
+				});
+			}
+
+			return {
+				...result,
+				skippedIds: [...result.skippedIds, ...missingIds],
+				skippedCount: result.skippedCount + missingIds.length,
+			};
 		}),
 
 	pauseAi: protectedProcedure

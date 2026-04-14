@@ -3,10 +3,18 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import * as React from "react";
 import { Window } from "../../../../apps/web/node_modules/happy-dom";
-import { SupportProvider } from "../provider";
+import { SupportProvider, useSupport } from "../provider";
 import { createMockSupportController } from "../test-utils/create-mock-support-controller";
 import { PENDING_CONVERSATION_ID } from "../utils/id";
-import { Support, useSupportConfig } from "./index";
+import {
+	Support,
+	type SupportComposerSlotProps,
+	type SupportHomePageSlotProps,
+	type SupportTimelineSlotProps,
+	type SupportTriggerSlotProps,
+	useSupportConfig,
+	useSupportText,
+} from "./index";
 
 type RootHandle = {
 	render(node: React.ReactNode): void;
@@ -152,6 +160,94 @@ function findDataIsOpen(): string | null {
 	);
 }
 
+function findByDataSlot(slot: string): HTMLElement | null {
+	return document.querySelector(`[data-slot="${slot}"]`);
+}
+
+function findByDataPage(page: string): HTMLElement | null {
+	return document.querySelector(`[data-page="${page}"]`);
+}
+
+async function navigateController(
+	controller: ReturnType<typeof createMockSupportController>,
+	options: Parameters<typeof controller.navigate>[0]
+) {
+	const { act } = await import("react");
+
+	await act(async () => {
+		controller.navigate(options);
+	});
+}
+
+function RuntimeProbe() {
+	const { defaultMessages, quickOptions } = useSupport();
+	const text = useSupportText();
+
+	return (
+		<div
+			data-ask-question={text("common.actions.askQuestion")}
+			data-default-message={defaultMessages[0]?.content ?? ""}
+			data-quick-options={quickOptions.join("|")}
+			data-slot="runtime-probe"
+		/>
+	);
+}
+
+function CustomHomeOverride() {
+	return <div data-slot="custom-home-override">Custom home override</div>;
+}
+
+function TriggerSlot({
+	className,
+	isOpen,
+	isTyping: _isTyping,
+	unreadCount,
+	toggle,
+	...props
+}: SupportTriggerSlotProps) {
+	return (
+		<button {...props} className={className} onClick={toggle} type="button">
+			Slot trigger {isOpen ? "open" : "closed"} {unreadCount}
+		</button>
+	);
+}
+
+function HomeSlot({
+	className,
+	quickOptions,
+	"data-page": dataPage,
+	"data-slot": dataSlot,
+}: SupportHomePageSlotProps) {
+	return (
+		<div className={className} data-page={dataPage} data-slot={dataSlot}>
+			Slot home {quickOptions.join("|")}
+		</div>
+	);
+}
+
+function TimelineSlot({
+	className,
+	items,
+	"data-slot": dataSlot,
+}: SupportTimelineSlotProps) {
+	return (
+		<div className={className} data-slot={dataSlot}>
+			Custom timeline {items.length}
+		</div>
+	);
+}
+
+function ComposerSlot({
+	className,
+	"data-slot": dataSlot,
+}: SupportComposerSlotProps) {
+	return (
+		<div className={className} data-slot={dataSlot}>
+			Custom composer
+		</div>
+	);
+}
+
 describe("Support widget", () => {
 	beforeEach(() => {
 		activeRoot = null;
@@ -242,6 +338,186 @@ describe("Support widget", () => {
 		);
 
 		expect(findDataIsOpen()).toBe("true");
+	});
+
+	it("renders built-in pages from Support.Root with default Support.Content", async () => {
+		await renderWithSupport(
+			<Support.Root open={true}>
+				<Support.Content />
+			</Support.Root>
+		);
+
+		expect(document.body.textContent).toContain("Ask us a question");
+		expect(findByDataSlot("home-page")?.getAttribute("data-page")).toBe("HOME");
+	});
+
+	it("forwards runtime props through Support", async () => {
+		await renderWithSupport(
+			<Support
+				content={{ "common.actions.askQuestion": "Parlez-nous" }}
+				defaultMessages={[
+					{
+						content: "Bonjour from Support",
+						senderType: "team_member",
+					},
+				]}
+				locale="fr"
+				open={true}
+				quickOptions={["Planifier un appel"]}
+			>
+				<Support.Content>
+					<RuntimeProbe />
+				</Support.Content>
+			</Support>
+		);
+
+		const probe = findByDataSlot("runtime-probe");
+
+		expect(probe?.getAttribute("data-ask-question")).toBe("Parlez-nous");
+		expect(probe?.getAttribute("data-default-message")).toBe(
+			"Bonjour from Support"
+		);
+		expect(probe?.getAttribute("data-quick-options")).toBe(
+			"Planifier un appel"
+		);
+	});
+
+	it("forwards runtime props through Support.Root", async () => {
+		await renderWithSupport(
+			<Support.Root
+				content={{ "common.actions.askQuestion": "Parlez-nous aussi" }}
+				defaultMessages={[
+					{
+						content: "Bonjour from Support.Root",
+						senderType: "team_member",
+					},
+				]}
+				locale="fr"
+				open={true}
+				quickOptions={["Comparer les plans"]}
+			>
+				<Support.Content>
+					<RuntimeProbe />
+				</Support.Content>
+			</Support.Root>
+		);
+
+		const probe = findByDataSlot("runtime-probe");
+
+		expect(probe?.getAttribute("data-ask-question")).toBe("Parlez-nous aussi");
+		expect(probe?.getAttribute("data-default-message")).toBe(
+			"Bonjour from Support.Root"
+		);
+		expect(probe?.getAttribute("data-quick-options")).toBe(
+			"Comparer les plans"
+		);
+	});
+
+	it("lets customPages replace a built-in page by name in Support.Root", async () => {
+		await renderWithSupport(
+			<Support.Root
+				customPages={[{ component: CustomHomeOverride, name: "HOME" }]}
+				open={true}
+			>
+				<Support.Content />
+			</Support.Root>
+		);
+
+		expect(document.body.textContent).toContain("Custom home override");
+		expect(document.body.textContent).not.toContain("Ask us a question");
+	});
+
+	it("keeps top-level Support.Page overrides working when Support.Content is customized", async () => {
+		await renderWithSupport(
+			<Support open={true}>
+				<Support.Content className="custom-content" />
+				<Support.Page component={CustomHomeOverride} name="HOME" />
+			</Support>
+		);
+
+		expect(document.body.textContent).toContain("Custom home override");
+		expect(document.body.textContent).not.toContain("Ask us a question");
+	});
+
+	it("applies page slots when there is no explicit route override", async () => {
+		await renderWithSupport(
+			<Support.Root
+				open={true}
+				quickOptions={["Replace only the first screen"]}
+				slots={{ homePage: HomeSlot }}
+			>
+				<Support.Content />
+			</Support.Root>
+		);
+
+		expect(document.body.textContent).toContain(
+			"Slot home Replace only the first screen"
+		);
+	});
+
+	it("prefers explicit page overrides over page slots", async () => {
+		await renderWithSupport(
+			<Support.Root
+				customPages={[{ component: CustomHomeOverride, name: "HOME" }]}
+				open={true}
+				quickOptions={["This should not appear"]}
+				slots={{ homePage: HomeSlot }}
+			>
+				<Support.Content />
+			</Support.Root>
+		);
+
+		expect(document.body.textContent).toContain("Custom home override");
+		expect(document.body.textContent).not.toContain("Slot home");
+	});
+
+	it("renders custom trigger slots with merged slotProps and data-state", async () => {
+		await renderWithSupport(
+			<Support
+				slotProps={{ trigger: { className: "slot-trigger" } }}
+				slots={{ trigger: TriggerSlot }}
+			/>
+		);
+
+		const trigger = findByDataSlot("trigger");
+
+		expect(trigger?.textContent).toContain("Slot trigger closed 0");
+		expect(trigger?.className).toContain("slot-trigger");
+		expect(trigger?.getAttribute("data-state")).toBe("closed");
+	});
+
+	it("renders custom timeline and composer slots on the conversation page", async () => {
+		const controller = createMockSupportController();
+
+		await renderWithSupport(
+			<Support
+				open={true}
+				slots={{
+					composer: ComposerSlot,
+					timeline: TimelineSlot,
+				}}
+			/>,
+			controller
+		);
+
+		await navigateController(controller, {
+			page: "CONVERSATION",
+			params: {
+				conversationId: PENDING_CONVERSATION_ID,
+				initialMessage: "Hello from slots",
+			},
+		});
+
+		expect(document.body.textContent).toContain("Custom timeline");
+		expect(document.body.textContent).toContain("Custom composer");
+	});
+
+	it("adds stable data-slot, data-state, and data-page hooks to the default UI", async () => {
+		await renderWithSupport(<Support open={true} />);
+
+		expect(findByDataSlot("trigger")?.getAttribute("data-state")).toBe("open");
+		expect(findByDataSlot("content")?.getAttribute("data-state")).toBe("open");
+		expect(findByDataPage("HOME")?.getAttribute("data-slot")).toBe("home-page");
 	});
 
 	it("keeps open state inert in responsive mode while conversation navigation still works", async () => {

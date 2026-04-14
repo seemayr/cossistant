@@ -74,6 +74,8 @@ function createContext(): PipelineToolContext {
 		aiAgentId: "ai-1",
 		aiAgentName: "Agent",
 		visitorName: "Visitor",
+		websiteDefaultLanguage: "en",
+		visitorLanguage: "en",
 		workflowRunId: "wf-1",
 		triggerMessageId: "trigger-1",
 		allowPublicMessages: true,

@@ -1,29 +1,88 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import {
 	applyConversationSeenEvent,
 	createSeenStore,
 	hydrateConversationSeen,
 	type SeenStore,
 } from "@cossistant/core";
-import React from "react";
-import { renderToStaticMarkup } from "react-dom/server";
+import type { SupportControllerSnapshot } from "@cossistant/core/support-controller";
+import type React from "react";
+import { Window } from "../../../../apps/web/node_modules/happy-dom";
+import { SupportProvider } from "../provider";
+import { createMockSupportController } from "../test-utils/create-mock-support-controller";
+import { useConversationSeen } from "./use-conversation-seen";
 
-const useSupportMock = mock(() => ({
-	client: {
-		seenStore: currentStore,
-	},
-}));
+type RootHandle = {
+	render(node: React.ReactNode): void;
+	unmount(): void;
+};
 
-mock.module("../provider", () => ({
-	useSupport: useSupportMock,
-}));
-
-const useConversationSeenModulePromise = import("./use-conversation-seen");
-
+let activeRoot: RootHandle | null = null;
+let mountNode: HTMLElement | null = null;
+let windowInstance: Window | null = null;
 let currentStore: SeenStore;
 
+const installedGlobalKeys = [
+	"window",
+	"self",
+	"document",
+	"navigator",
+	"Document",
+	"DocumentFragment",
+	"Element",
+	"Event",
+	"EventTarget",
+	"HTMLElement",
+	"MutationObserver",
+	"Node",
+	"Text",
+	"getComputedStyle",
+	"requestAnimationFrame",
+	"cancelAnimationFrame",
+	"IS_REACT_ACT_ENVIRONMENT",
+] as const;
+
+function setGlobalValue(key: string, value: unknown) {
+	Object.defineProperty(globalThis, key, {
+		configurable: true,
+		value,
+		writable: true,
+	});
+}
+
+function installDomGlobals(window: Window) {
+	setGlobalValue("window", window);
+	setGlobalValue("self", window);
+	setGlobalValue("document", window.document);
+	setGlobalValue("navigator", window.navigator);
+	setGlobalValue("Document", window.Document);
+	setGlobalValue("DocumentFragment", window.DocumentFragment);
+	setGlobalValue("Element", window.Element);
+	setGlobalValue("Event", window.Event);
+	setGlobalValue("EventTarget", window.EventTarget);
+	setGlobalValue("HTMLElement", window.HTMLElement);
+	setGlobalValue("MutationObserver", window.MutationObserver);
+	setGlobalValue("Node", window.Node);
+	setGlobalValue("Text", window.Text);
+	setGlobalValue("getComputedStyle", window.getComputedStyle.bind(window));
+	setGlobalValue("requestAnimationFrame", (callback: FrameRequestCallback) =>
+		window.setTimeout(() => callback(Date.now()), 0)
+	);
+	setGlobalValue("cancelAnimationFrame", (id: number) =>
+		window.clearTimeout(id)
+	);
+	setGlobalValue("IS_REACT_ACT_ENVIRONMENT", true);
+}
+
 async function renderSeen(conversationId = "conv-1") {
-	const { useConversationSeen } = await useConversationSeenModulePromise;
+	const { act } = await import("react");
+	const { createRoot } = await import("react-dom/client");
+
+	const controller = createMockSupportController({
+		client: {
+			seenStore: currentStore,
+		} as SupportControllerSnapshot["client"],
+	});
 	let result: ReturnType<typeof useConversationSeen> = [];
 
 	function Harness() {
@@ -31,15 +90,56 @@ async function renderSeen(conversationId = "conv-1") {
 		return null;
 	}
 
-	renderToStaticMarkup(React.createElement(Harness));
+	mountNode = document.createElement("div");
+	document.body.appendChild(mountNode);
+	activeRoot = createRoot(mountNode);
+
+	await act(async () => {
+		activeRoot?.render(
+			<SupportProvider autoConnect={false} controller={controller}>
+				<Harness />
+			</SupportProvider>
+		);
+	});
+
+	await act(async () => {
+		activeRoot?.unmount();
+	});
+
+	controller.destroy();
+	mountNode.remove();
+	activeRoot = null;
+	mountNode = null;
 
 	return result;
 }
 
 describe("useConversationSeen", () => {
 	beforeEach(() => {
+		windowInstance = new Window({
+			url: "https://example.com",
+		});
+		installDomGlobals(windowInstance);
 		currentStore = createSeenStore();
-		useSupportMock.mockClear();
+	});
+
+	afterEach(async () => {
+		const { act } = await import("react");
+
+		if (activeRoot) {
+			await act(async () => {
+				activeRoot?.unmount();
+			});
+		}
+
+		mountNode?.remove();
+		activeRoot = null;
+		mountNode = null;
+		windowInstance = null;
+
+		for (const key of installedGlobalKeys) {
+			Reflect.deleteProperty(globalThis, key);
+		}
 	});
 
 	it("reflects hydrated seen state without changing the conversation id", async () => {

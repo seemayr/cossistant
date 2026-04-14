@@ -3,6 +3,7 @@ import {
 	getConversationTimelineItems,
 	getConversationTimelineItemsAfterCursor,
 } from "@api/db/queries/conversation";
+import { resolveTimelineItemText } from "@cossistant/core";
 import {
 	ConversationTimelineType,
 	TimelineItemVisibility,
@@ -140,7 +141,7 @@ function mapTimelineMessage(
 		return null;
 	}
 
-	const content = normalizeText(item.text ?? "");
+	const content = normalizeText(resolveTimelineItemText(item, "team") ?? "");
 	if (!content) {
 		return null;
 	}

@@ -176,6 +176,17 @@ export {
 	type SupportControllerOptions,
 	type SupportControllerSnapshot,
 } from "./support-controller";
+export {
+	areLanguagesEquivalent,
+	getPrimaryLanguageTag,
+	getTimelineItemTranslation,
+	isTimelinePartTranslation,
+	normalizeLanguageTag,
+	resolveConversationTitle,
+	resolveTimelineItemText,
+	shouldTranslateBetweenLanguages,
+	type TranslationAudience,
+} from "./translation";
 // Core-specific exports
 export { CossistantAPIError } from "./types";
 export type { TypingReporter, TypingReporterConfig } from "./typing-reporter";

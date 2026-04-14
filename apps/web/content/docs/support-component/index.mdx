@@ -1,6 +1,6 @@
 ---
 title: Basic usage
-description: Basic usage of the Support component.
+description: Start with the default Support widget, then grow into slots and full composition when you need more control.
 search:
   kind: component
   tags:
@@ -15,202 +15,151 @@ search:
 
 ## Philosophy
 
-The `<Support />` component is built on **progressive disclosure**. Start with zero config, then customize as you grow.
+The React support SDK has two lanes on purpose:
 
-## How it Works
+- `Support` is the fastest way to ship a ready-to-use support widget.
+- `slots` and `slotProps` are the fastest way to swap one part without rebuilding everything.
+- `Support.Root` plus `Support.*` is the full composition lane when you want your own shell.
+- `Primitives` are the advanced headless building blocks.
 
-- **Zero Config**: Works out of the box with sensible defaults
-- **Progressive Enhancement**: Start simple, customize as needed
-- **Compound Components**: Radix-style API for full control when needed
-- **Real-time Chat**: Built-in WebSocket support for live conversations
-- **Headless Architecture**: Full control through primitive components when needed
+Start with the default widget. Move into composition only when you actually need it.
 
 ## Quick Start
 
-Drop `<Support />` anywhere in your app:
-
 ```tsx
-import { Support } from "@cossistant/next";
+import { Support, SupportProvider } from "@cossistant/react";
+import "@cossistant/react/styles.css";
 
-export default function App() {
+export function App() {
   return (
-    <div>
+    <SupportProvider publicKey="pk_live_...">
       <Support />
-      {/* Your app */}
-    </div>
+    </SupportProvider>
   );
 }
 ```
 
-That's it. You get a fully functional support widget.
+<ComponentPreview name="support-doc" />
 
-## Customizing Messages & Quick Options
+The widget does not inject CSS automatically. Use one of these imports at your
+app root:
 
-Use `<SupportConfig />` to customize messages and quick options per page:
+- `@cossistant/react/styles.css` for plain CSS or any non-Tailwind app
+- `@cossistant/react/support.css` if your app already uses Tailwind CSS v4
+
+## Quick Customization
+
+The easiest way to customize the widget is to keep the default runtime and
+replace only the parts you care about.
+
+```tsx
+import { Support } from "@cossistant/react";
+
+<Support
+  slots={{
+    trigger: CustomBubble,
+    homePage: CustomHomePage,
+  }}
+  slotProps={{
+    content: {
+      className: "rounded-3xl border border-neutral-200 shadow-2xl",
+    },
+  }}
+/>;
+```
+
+Use `slots` when you want a new component. Use `slotProps` when you want to add
+presentational props like `className` without replacing the whole part.
+
+### Bubble only
+
+<ComponentPreview name="support-classic-bubble" />
+
+### Bubble + home page
+
+<ComponentPreview name="support-bubble-and-home" />
+
+## Visitor Identity and Per-Page Defaults
+
+Use `IdentifySupportVisitor` to connect the widget to your signed-in user, and
+use `SupportConfig` when you want page-specific quick options or welcome
+messages.
 
 ```tsx title="app/pricing/page.tsx"
-import { SupportConfig } from "@cossistant/next";
-import { type DefaultMessage, SenderType } from "@cossistant/types";
-
-const user: { name: string | null } = {
-  name: "Jane Doe",
-};
+import {
+  IdentifySupportVisitor,
+  SupportConfig,
+} from "@cossistant/react";
+import { SenderType, type DefaultMessage } from "@cossistant/types";
 
 const defaultMessages: DefaultMessage[] = [
   {
-    content: `Hi ${user.name ?? "there"}, anything I can help with?`,
+    content: "Welcome to pricing. I can help with plans, billing, or migration.",
     senderType: SenderType.TEAM_MEMBER,
   },
 ];
 
-const quickOptions: string[] = [
-  "How does billing work?",
-  "What's included in Pro?",
-  "Can I cancel anytime?",
-];
-
-export default function PricingPage() {
+export function PricingPage({
+  user,
+}: {
+  user: {
+    id: string;
+    email: string;
+    name: string | null;
+    image?: string | null;
+  };
+}) {
   return (
     <>
+      <IdentifySupportVisitor
+        email={user.email}
+        externalId={user.id}
+        image={user.image}
+        name={user.name}
+      />
+
       <SupportConfig
         defaultMessages={defaultMessages}
-        quickOptions={quickOptions}
+        quickOptions={[
+          "How does billing work?",
+          "Can I cancel anytime?",
+          "What is included in Pro?",
+        ]}
       />
-      <h1>Choose your plan</h1>
     </>
-  );
-}
-```
-
-<auto-type-table
-  path="packages/react/src/support-config.tsx"
-  name="SupportConfigProps"
-/>
-
-## Identifying Visitors
-
-By default, visitors are **anonymous**. Use `<IdentifySupportVisitor />` to connect them to your authenticated users:
-
-```tsx title="app/dashboard/layout.tsx"
-import { IdentifySupportVisitor } from "@cossistant/next";
-import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
-
-export default async function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
-
-  return (
-    <div>
-      {session?.user && (
-        <IdentifySupportVisitor
-          externalId={session.user.id}
-          email={session.user.email}
-          name={session.user.name}
-          image={session.user.image}
-          metadata={{
-            plan: session.user.plan,
-            signupDate: session.user.createdAt,
-          }}
-        />
-      )}
-      {children}
-    </div>
   );
 }
 ```
 
 <Alert variant="info" className="mt-6">
   <Icon name="help" className="size-4" />
-  <AlertTitle>What happens when I identify a visitor?</AlertTitle>
+  <AlertTitle>When should I use `SupportConfig`?</AlertTitle>
   <AlertDescription>
-    The anonymous visitor becomes associated with a contact. All their
-    conversations, metadata, and future interactions are linked to this
-    contact—even across different devices. Learn more about{" "}
-    <Link href="/docs/concepts">visitors</Link> and{" "}
-    <Link href="/docs/concepts/contacts">contacts</Link>.
+    Use `SupportConfig` for route-level defaults. Use `slots` when you want to
+    replace UI. Use `Support.Root` when you want to own the full widget shell.
   </AlertDescription>
 </Alert>
 
-### Props
+## Choosing the Right API
 
-<auto-type-table
-  path="packages/react/src/identify-visitor.tsx"
-  name="IdentifySupportVisitorProps"
-/>
+- Use `Support` when you want the ready-made widget.
+- Use `Support` with `slots` when you want to swap the trigger, home page,
+  composer, timeline, or another built-in part.
+- Use `Support.Root`, `Support.Trigger`, `Support.Content`, `Support.Router`,
+  and `Support.Page` when you want full composition.
+- Use `Primitives` when you want a headless build.
 
-## Support Component Props
+## Support Props
 
 <auto-type-table
   path="packages/react/src/support/index.tsx"
   name="SupportPropsReference"
-  type="Pick<SupportProps, 'className' | 'mode' | 'side' | 'align' | 'sideOffset' | 'avoidCollisions' | 'collisionPadding' | 'classNames' | 'theme' | 'open' | 'onOpenChange' | 'defaultOpen' | 'quickOptions' | 'defaultMessages' | 'locale' | 'content' | 'customPages' | 'children'>"
+  type="Pick<SupportProps, 'className' | 'mode' | 'side' | 'align' | 'sideOffset' | 'avoidCollisions' | 'collisionPadding' | 'classNames' | 'theme' | 'open' | 'onOpenChange' | 'defaultOpen' | 'quickOptions' | 'defaultMessages' | 'locale' | 'content' | 'customPages' | 'slots' | 'slotProps' | 'children'>"
 />
 
-### Usage Examples
+## Related Guides
 
-Basic styling:
-
-```tsx
-<Support
-  theme="dark"
-  classNames={{
-    trigger: "bg-purple-600 hover:bg-purple-700",
-    content: "border-purple-200 shadow-2xl",
-  }}
-/>
-```
-
-With positioning:
-
-```tsx
-<Support side="bottom" align="end" sideOffset={8} />
-```
-
-Responsive embed mode:
-
-```tsx
-<div className="h-[640px] rounded-xl border">
-  <Support mode="responsive" />
-</div>
-```
-
-In responsive mode, the widget always renders and fills the container. The parent element must provide height.
-
-With custom page:
-
-```tsx
-import { Support, useSupportNavigation } from "@cossistant/next";
-
-const HelpPage = () => {
-  const { goBack } = useSupportNavigation();
-  return (
-    <div className="p-4">
-      <button onClick={goBack} type="button">← Back</button>
-      <h1>Help Center</h1>
-    </div>
-  );
-};
-
-export default function App() {
-  return (
-    <Support>
-      <Support.Page name="HELP" component={HelpPage} />
-    </Support>
-  );
-}
-```
-
-For advanced customization, see the [Customization](/docs/support-component/customization) guide.
-
-## Types
-
-Shared support widget types now live on the
-[Types](/docs/support-component/types) page. Use that reference for
-`DefaultMessage`, `VisitorMetadata`, `SenderType`, `TriggerRenderProps`, and
-the rest of the canonical support type docs.
+- [Customization](/docs/support-component/customization) for slots, styling, and responsive embeds
+- [Routing & Pages](/docs/support-component/routing) for custom pages and full composition
+- [Primitives](/docs/support-component/primitives) for headless builds
+- [Hooks](/docs/support-component/hooks) for programmatic access

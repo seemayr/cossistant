@@ -145,6 +145,11 @@ export const realtimeSchema = {
 		conversationId: z.string(),
 		updates: z.object({
 			title: z.string().nullable().optional(),
+			visitorTitle: z.string().nullable().optional(),
+			visitorTitleLanguage: z.string().nullable().optional(),
+			visitorLanguage: z.string().nullable().optional(),
+			translationActivatedAt: z.string().nullable().optional(),
+			translationChargedAt: z.string().nullable().optional(),
 			sentiment: z
 				.enum(["positive", "negative", "neutral"])
 				.nullable()

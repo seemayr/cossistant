@@ -163,6 +163,33 @@ describe("REST OpenAPI contract guards", () => {
 		expect(startTrainingPath?.responses).toHaveProperty("429");
 	});
 
+	it("documents the private inbox route as actor-aware", async () => {
+		const { routers } = await routersModulePromise;
+		const doc = routers.getOpenAPI31Document({
+			openapi: "3.1.0",
+			info: {
+				title: "REST router contract test",
+				version: "1.0.0",
+			},
+		});
+
+		const inboxPath = doc.paths?.["/conversations/inbox"]?.get;
+		const inboxParameterNames =
+			inboxPath?.parameters?.map((parameter) =>
+				"name" in parameter ? parameter.name : null
+			) ?? [];
+
+		expect(inboxPath).toBeDefined();
+		expect(inboxPath?.security).toEqual([
+			{ [PRIVATE_API_KEY_SECURITY_SCHEME]: [] },
+		]);
+		expect(inboxParameterNames).toContain("Authorization");
+		expect(inboxParameterNames).toContain("X-Actor-User-Id");
+		expect(inboxPath?.responses).toHaveProperty("200");
+		expect(inboxPath?.responses).toHaveProperty("401");
+		expect(inboxPath?.responses).toHaveProperty("403");
+	});
+
 	it("documents public conversation metadata on create requests and conversation reads", () => {
 		const app = new OpenAPIHono();
 

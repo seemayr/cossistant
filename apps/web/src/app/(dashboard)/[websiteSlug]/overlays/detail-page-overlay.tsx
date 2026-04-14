@@ -26,6 +26,7 @@ import { VisitorSourceBadge } from "@/components/ui/visitor-source-badge";
 import { useWebsite } from "@/contexts/website";
 import { useContactVisitorDetailState } from "@/hooks/use-contact-visitor-detail-state";
 import { formatFullDateTime, formatLastSeenAt } from "@/lib/date";
+import { formatLanguageLabel } from "@/lib/language";
 import { useTRPC } from "@/lib/trpc/client";
 import { cn } from "@/lib/utils";
 import { getVisitorNameWithFallback } from "@/lib/visitors";
@@ -131,35 +132,6 @@ function sortVisitorsByLastSeen(visitors: ContactDetailResponse["visitors"]) {
 
 		return rightTime - leftTime;
 	});
-}
-
-function formatLanguageLabel(language: string | null | undefined) {
-	if (!language) {
-		return "Unknown";
-	}
-
-	try {
-		const locale = new Intl.Locale(language);
-		const languageName = new Intl.DisplayNames(["en"], {
-			type: "language",
-		}).of(locale.language);
-
-		if (!languageName) {
-			return language;
-		}
-
-		if (!locale.region) {
-			return languageName;
-		}
-
-		const regionName = new Intl.DisplayNames(["en"], {
-			type: "region",
-		}).of(locale.region);
-
-		return regionName ? `${languageName} (${regionName})` : languageName;
-	} catch {
-		return language;
-	}
 }
 
 function inferDeviceKind(params: {

@@ -165,11 +165,16 @@ export const conversation = pgTable(
 		sentimentConfidence: real("sentiment_confidence"),
 		channel: text("channel").notNull().default("widget"),
 		title: text("title"),
+		visitorTitle: text("visitor_title"),
+		visitorTitleLanguage: text("visitor_title_language"),
+		visitorLanguage: text("visitor_language"),
 		metadata: jsonb("metadata").$type<Record<
 			string,
 			string | number | boolean | null
 		> | null>(),
 		titleSource: conversationTitleSourceEnum("title_source"),
+		translationActivatedAt: timestamp("translation_activated_at"),
+		translationChargedAt: timestamp("translation_charged_at"),
 		resolutionTime: integer("resolution_time"), // in seconds
 		visitorRating: integer("visitor_rating"), // 1-5 scale
 		visitorRatingAt: timestamp("visitor_rating_at"),

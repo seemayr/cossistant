@@ -122,6 +122,7 @@ websiteRouter.openapi(
 					id: website.id,
 					name: website.name,
 					domain: website.domain,
+					defaultLanguage: website.defaultLanguage,
 					description: website.description,
 					logoUrl: website.logoUrl,
 					organizationId: website.organizationId,

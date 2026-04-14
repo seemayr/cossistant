@@ -41,6 +41,23 @@ const builtInPages = [
 	{ name: "CONVERSATION_HISTORY", component: ConversationHistoryPage },
 ] as PageDefinition[];
 
+function mergePages(
+	...groups: PageDefinition<keyof RouteRegistry>[][]
+): PageDefinition<keyof RouteRegistry>[] {
+	const pagesByName = new Map<
+		keyof RouteRegistry,
+		PageDefinition<keyof RouteRegistry>
+	>();
+
+	for (const group of groups) {
+		for (const page of group) {
+			pagesByName.set(page.name, page);
+		}
+	}
+
+	return Array.from(pagesByName.values());
+}
+
 /**
  * Extract page definitions from Support.Page children.
  * This allows declarative page registration via JSX.
@@ -104,9 +121,11 @@ export const Router: React.FC<RouterProps> = ({
 	// Merge built-in pages, prop-based custom pages, and JSX-declared pages
 	const allPages = React.useMemo(
 		() =>
-			[...builtInPages, ...customPages, ...extractedPages] as PageDefinition<
-				keyof RouteRegistry
-			>[],
+			mergePages(
+				builtInPages as PageDefinition<keyof RouteRegistry>[],
+				customPages as PageDefinition<keyof RouteRegistry>[],
+				extractedPages as PageDefinition<keyof RouteRegistry>[]
+			),
 		[customPages, extractedPages]
 	);
 

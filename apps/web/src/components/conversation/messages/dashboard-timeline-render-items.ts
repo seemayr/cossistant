@@ -2,8 +2,8 @@ import type {
 	ConversationItem,
 	GroupedActivity,
 	TimelineToolItem,
-} from "@cossistant/next/hooks";
-import { TIMELINE_GROUP_WINDOW_MS } from "@cossistant/react/hooks";
+} from "@cossistant/react/internal/hooks";
+import { TIMELINE_GROUP_WINDOW_MS } from "@cossistant/react/internal/hooks";
 import {
 	SenderType,
 	type SenderType as SenderTypeValue,

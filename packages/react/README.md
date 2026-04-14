@@ -1,69 +1,29 @@
 # Cossistant React SDK
 
-Build fully featured customer support experiences in React with the official `@cossistant/react` package. The SDK wraps the REST and WebSocket APIs, comes with a prebuilt widget, hooks, and UI primitives so you can ship your support quickly and customize later.
+Build a ready-to-use support widget in React with good defaults, fast styling,
+and a composable API when you need to go further.
 
-> 📚 **New to Cossistant?** Follow the [Quickstart guide](https://cossistant.com/docs/quickstart) in our official documentation.
-
-## Installation
-
-Pick the command that matches your package manager:
+## Install
 
 ```bash
 bun add @cossistant/react
-# or
-npm install @cossistant/react
-# or
-yarn add @cossistant/react
 ```
 
-## CSS Imports
+## Import styles
 
-The widget does not inject styles automatically. Import one CSS entrypoint at your app root:
-
-### Option 1: Plain CSS
-
-If you're using plain Vite or any non-Tailwind setup, start here:
+Use one stylesheet at your app root:
 
 ```tsx
 import "@cossistant/react/styles.css";
 ```
 
-This file contains all the compiled styles and works in any React application without requiring Tailwind CSS.
-
-### Option 2: Tailwind v4 Source
-
-Only use this entrypoint if your app already runs Tailwind CSS v4 and you want the widget styles compiled through your Tailwind pipeline:
+Or, if your app already uses Tailwind CSS v4:
 
 ```tsx
 import "@cossistant/react/support.css";
 ```
 
-> **Note:** Tailwind v3 is not supported. Use the plain CSS import if you're on Tailwind v3.
-
-## Render the widget
-
-```tsx
-import { SupportProvider, Support } from "@cossistant/react";
-import "@cossistant/react/styles.css";
-
-export function App() {
-  return (
-    <SupportProvider>
-      <Support />
-    </SupportProvider>
-  );
-}
-```
-
-The SDK auto-detects your public key from environment variables: `VITE_COSSISTANT_API_KEY` (Vite), `NEXT_PUBLIC_COSSISTANT_API_KEY` (Next.js), or `COSSISTANT_API_KEY` (other). You can also pass it explicitly via `publicKey`.
-
-1. Wrap the subtree that should access support data with `SupportProvider` (A Cossistant account is mandatory)
-2. Drop the `Support` component anywhere inside that provider to mount the floating widget.
-3. Optionally pass `defaultOpen`, `quickOptions`, `defaultMessages`, or locale overrides straight into `Support` for instant personalization.
-
-### Render the widget inline
-
-Use `mode="responsive"` when you want the widget to live inside your app layout instead of opening from a floating trigger.
+## Quickstart
 
 ```tsx
 import { Support, SupportProvider } from "@cossistant/react";
@@ -71,54 +31,126 @@ import "@cossistant/react/styles.css";
 
 export function App() {
   return (
-    <SupportProvider>
-      <div style={{ height: 640, width: "100%" }}>
-        <Support mode="responsive" />
-      </div>
+    <SupportProvider publicKey="pk_live_...">
+      <Support />
     </SupportProvider>
   );
 }
 ```
 
-In responsive mode, the widget always renders and fills its parent container. The parent is responsible for height, width, and any outer shell styling.
+`Support` is the batteries-included widget. It ships with the default trigger,
+router, home page, conversation page, timeline, composer, and styling hooks.
 
-### Identify visitors and seed defaults
+## Swap One Part with `slots`
 
-Use the helper components to identify a visitor, attach metadata or display different default messages or quick options.
+Use `slots` when you want better DX than rebuilding the whole widget tree.
 
 ```tsx
 import {
-  IdentifySupportVisitor,
   Support,
-  SupportConfig,
-  SupportProvider,
-  SenderType,
+  type SupportHomePageSlotProps,
+  type SupportTriggerSlotProps,
 } from "@cossistant/react";
 
-export function Dashboard({
-  visitor,
-}: {
-  visitor: { id: string; email: string };
-}) {
+function CustomBubble({
+  isOpen,
+  unreadCount,
+  toggle,
+  className,
+  ...props
+}: SupportTriggerSlotProps) {
   return (
-    <>
-      <IdentifySupportVisitor externalId={visitor.id} email={visitor.email} />
-      <SupportConfig
-        defaultMessages={[
-          {
-            content:
-              "Welcome to your dashboard. If you need any help, I'm here!",
-            senderType: SenderType.TeamMember,
-          },
-        ]}
-      />
-    </>
+    <button
+      {...props}
+      className={className}
+      onClick={toggle}
+      type="button"
+    >
+      {isOpen ? "Close" : "Need help?"} ({unreadCount})
+    </button>
+  );
+}
+
+function CustomHomePage({
+  quickOptions,
+  startConversation,
+}: SupportHomePageSlotProps) {
+  return (
+    <div className="flex h-full flex-col gap-3 p-6">
+      <h2 className="text-2xl font-semibold">Real support, instantly.</h2>
+      {quickOptions.map((option) => (
+        <button
+          key={option}
+          onClick={() => startConversation(option)}
+          type="button"
+        >
+          {option}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+<Support
+  slots={{
+    trigger: CustomBubble,
+    homePage: CustomHomePage,
+  }}
+  slotProps={{
+    content: {
+      className: "rounded-3xl border shadow-2xl",
+    },
+  }}
+/>;
+```
+
+## Full Composition with `Support.Root`
+
+Use `Support.Root` when you want a custom shell and explicit page registration.
+
+```tsx
+import { Support } from "@cossistant/react";
+
+function LaunchChecklistPage() {
+  return <div className="p-6">Your custom home page</div>;
+}
+
+export function App() {
+  return (
+    <Support.Root open>
+      <Support.Trigger asChild>
+        <button type="button">Compose support</button>
+      </Support.Trigger>
+
+      <Support.Content className="rounded-3xl border shadow-2xl">
+        <Support.Router>
+          <Support.Page component={LaunchChecklistPage} name="HOME" />
+        </Support.Router>
+      </Support.Content>
+    </Support.Root>
   );
 }
 ```
 
-Make sure `IdentifySupportVisitor` and `SupportConfig` are rendered inside `SupportProvider`, and keep `<Support />` mounted somewhere in that tree.
+## Styling Hooks
 
-## Need help or spot a typo?
+Start with:
 
-Open an issue in the main repository or start a discussion so we can improve the docs together. Screenshots, reproduction steps, and suggestions are welcome.
+- `classNames.trigger`
+- `classNames.content`
+- `slotProps`
+
+The default widget also exposes stable DOM hooks:
+
+- `data-slot`
+- `data-state`
+- `data-page`
+
+That makes it easy to style with plain CSS or Tailwind selectors without
+rewriting the widget.
+
+## More Docs
+
+- [React Support docs](https://cossistant.com/docs/support-component)
+- [Customization guide](https://cossistant.com/docs/support-component/customization)
+- [Routing guide](https://cossistant.com/docs/support-component/routing)

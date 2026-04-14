@@ -9,6 +9,7 @@ export type FeatureKey =
 	| "email-notifications"
 	| "email-reply"
 	| "dashboard-file-sharing"
+	| "auto-translate"
 	| "slack-support"
 	| "slack-custom-channel"
 	| "pro-integrations"
@@ -108,6 +109,13 @@ export const FEATURE_CONFIG: Record<FeatureKey, FeatureConfig> = {
 		key: "dashboard-file-sharing",
 		name: "Dashboard File Sharing",
 		description: "Send files and images to visitors from the dashboard",
+		category: "primary",
+	},
+	"auto-translate": {
+		key: "auto-translate",
+		name: "Auto Translate",
+		description:
+			"Automatically detect, translate, and reply in the visitor's language. Uses 1 AI credit per conversation when translation is activated.",
 		category: "primary",
 	},
 	"slack-support": {
@@ -292,6 +300,7 @@ export const PLAN_CONFIG: Record<PlanName, PlanConfig> = {
 			"email-notifications": true, // Included
 			"email-reply": true, // Included
 			"dashboard-file-sharing": false, // Paid only
+			"auto-translate": false, // Pro only
 			"slack-support": false, // Paid only
 			"slack-custom-channel": false, // Pro only
 			"pro-integrations": false, // Pro only
@@ -330,6 +339,7 @@ export const PLAN_CONFIG: Record<PlanName, PlanConfig> = {
 			"email-notifications": true, // Included
 			"email-reply": true, // Included
 			"dashboard-file-sharing": true, // Included
+			"auto-translate": false, // Pro only
 			"slack-support": true, // Included
 			"slack-custom-channel": false, // Pro only
 			"pro-integrations": false, // Pro only
@@ -368,6 +378,7 @@ export const PLAN_CONFIG: Record<PlanName, PlanConfig> = {
 			"email-notifications": true, // Included
 			"email-reply": true, // Included
 			"dashboard-file-sharing": true, // Included
+			"auto-translate": true, // Included
 			"slack-support": true, // Included
 			"slack-custom-channel": true, // Custom Slack channel included
 			"pro-integrations": true, // Pro integrations included

@@ -12,8 +12,10 @@ import { Header } from "../components/header";
 import { MultimodalInput } from "../components/multimodal-input";
 import { IdentificationTimelineTool } from "../components/timeline-identification-tool";
 import { SearchKnowledgeTimelineTool } from "../components/timeline-search-knowledge-tool";
+import { useSupportSlotOverrides } from "../context/slot-overrides";
 import { useSupportConfig, useSupportNavigation } from "../store";
 import { Text, useSupportText } from "../text";
+import { cn } from "../utils";
 
 type ConversationPageProps = {
 	/**
@@ -63,6 +65,9 @@ export const ConversationPage: ConversationPageComponent = ({
 	const { navigate, replace, goBack, canGoBack } = useSupportNavigation();
 	const { isOpen } = useSupportConfig();
 	const text = useSupportText();
+	const { slots, slotProps } = useSupportSlotOverrides();
+	const ConversationPageSlot = slots.conversationPage;
+	const conversationPageSlotProps = slotProps.conversationPage;
 	const playNewMessageSound = useNewMessageSound({
 		volume: 0.7,
 		playbackRate: 1.0,
@@ -182,9 +187,37 @@ export const ConversationPage: ConversationPageComponent = ({
 		previousItemsRef.current = currentItems;
 	}, [conversation.items, playNewMessageSound]);
 
+	if (ConversationPageSlot) {
+		return (
+			<ConversationPageSlot
+				{...conversationPageSlotProps}
+				activeConversation={activeConversation ?? null}
+				availableAIAgents={availableAIAgents}
+				availableHumanAgents={availableHumanAgents}
+				canGoBack={canGoBack}
+				className={cn(conversationPageSlotProps?.className)}
+				conversation={conversation}
+				data-page="CONVERSATION"
+				data-slot="conversation-page"
+				isConversationClosed={isConversationClosed}
+				isSubmittingRating={isSubmittingRating}
+				onGoBack={handleGoBack}
+				onRateConversation={handleRateConversation}
+				params={params}
+				resolvedRating={resolvedRating}
+				visitor={visitor}
+				website={website}
+			/>
+		);
+	}
+
 	return (
-		<div className="flex h-full flex-col gap-0 overflow-hidden">
-			<Header onGoBack={handleGoBack}>
+		<div
+			className="flex h-full flex-col gap-0 overflow-hidden"
+			data-page="CONVERSATION"
+			data-slot="conversation-page"
+		>
+			<Header onGoBack={handleGoBack} page="CONVERSATION">
 				<div className="flex w-full items-center justify-between gap-2 py-3">
 					<div className="flex flex-col">
 						<p className="font-medium text-co-primary text-sm">

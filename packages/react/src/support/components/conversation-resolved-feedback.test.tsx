@@ -1,55 +1,57 @@
-import { describe, expect, it } from "bun:test";
+import { afterAll, describe, expect, it, mock } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { ConversationStatus } from "@cossistant/types";
 import type React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { type CossistantContextValue, SupportContext } from "../../provider";
-import { SupportTextProvider } from "../text";
-import { ConversationResolvedFeedback } from "./conversation-resolved-feedback";
 
-function createSupportContextValue(): CossistantContextValue {
-	return {
-		website: {
-			id: "site_123",
-			name: "Acme",
-			availableAIAgents: [],
-			availableHumanAgents: [],
-			visitor: {
-				id: "visitor_123",
-				language: "en",
-				contact: null,
-				isBlocked: false,
-			},
-		} as CossistantContextValue["website"],
-		defaultMessages: [],
-		quickOptions: [],
-		setDefaultMessages: () => {},
-		setQuickOptions: () => {},
-		unreadCount: 0,
-		setUnreadCount: () => {},
-		isLoading: false,
-		error: null,
-		configurationError: null,
-		client: null,
-		isOpen: false,
-		open: () => {},
-		close: () => {},
-		toggle: () => {},
-	};
-}
+mock.module("../text", () => ({
+	Text: ({
+		textKey,
+		...props
+	}: React.ComponentProps<"span"> & { textKey: string }) => {
+		const copy: Record<string, string> = {
+			"component.conversationPage.closedMessage":
+				"This conversation has been closed.",
+			"component.conversationPage.commentPlaceholder":
+				"Tell us more about your experience",
+			"component.conversationPage.ratingLabel": "Rating",
+			"component.conversationPage.ratingPrompt": "How did we do?",
+			"component.conversationPage.ratingThanks": "Thanks for your feedback!",
+			"component.conversationPage.spamMessage":
+				"This conversation was marked as spam.",
+			"component.conversationPage.submitFeedback": "Submit feedback",
+		};
 
-function renderWithSupportText(node: React.ReactNode): string {
-	return renderToStaticMarkup(
-		<SupportContext.Provider value={createSupportContextValue()}>
-			<SupportTextProvider>{node}</SupportTextProvider>
-		</SupportContext.Provider>
-	);
-}
+		return <span {...props}>{copy[textKey] ?? textKey}</span>;
+	},
+	useSupportText: () => (key: string, variables?: { rating?: number }) => {
+		if (key === "component.conversationPage.ratingLabel") {
+			return `Rating ${variables?.rating ?? ""}`.trim();
+		}
+
+		const copy: Record<string, string> = {
+			"component.conversationPage.commentPlaceholder":
+				"Tell us more about your experience",
+			"component.conversationPage.ratingPrompt": "How did we do?",
+			"component.conversationPage.ratingThanks": "Thanks for your feedback!",
+			"component.conversationPage.submitFeedback": "Submit feedback",
+		};
+
+		return copy[key] ?? key;
+	},
+}));
+
+const modulePromise = import("./conversation-resolved-feedback");
 
 describe("ConversationResolvedFeedback", () => {
-	it("renders the shared rating primitive in the resolved thank-you state", () => {
-		const html = renderWithSupportText(
+	afterAll(() => {
+		mock.restore();
+	});
+
+	it("renders the shared rating primitive in the resolved thank-you state", async () => {
+		const { ConversationResolvedFeedback } = await modulePromise;
+		const html = renderToStaticMarkup(
 			<ConversationResolvedFeedback
 				rating={5}
 				status={ConversationStatus.RESOLVED}

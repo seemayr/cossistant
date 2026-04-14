@@ -130,6 +130,7 @@ export async function upsertConversation(
 		conversationId?: string;
 		channel?: string;
 		metadata?: Record<string, string | number | boolean | null>;
+		visitorLanguage?: string | null;
 	}
 ): Promise<UpsertConversationResult> {
 	const newConversationId = params.conversationId ?? generateShortPrimaryId();
@@ -148,6 +149,9 @@ export async function upsertConversation(
 	}
 
 	insertValues.channel = params.channel ?? "widget";
+	if (params.visitorLanguage) {
+		insertValues.visitorLanguage = params.visitorLanguage;
+	}
 
 	// Upsert conversation
 	const [insertedConversation] = await db

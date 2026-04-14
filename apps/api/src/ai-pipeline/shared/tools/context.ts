@@ -4,7 +4,13 @@ import {
 	updateContact,
 } from "@api/db/queries/contact";
 import { getCompleteVisitorWithContact } from "@api/db/queries/visitor";
+import {
+	detectMessageLanguage,
+	didTranslationSucceed,
+	maybeTranslateText,
+} from "@api/lib/translation";
 import { findSimilarKnowledge } from "@api/utils/vector-search";
+import { shouldTranslateBetweenLanguages } from "@cossistant/core";
 import { tool } from "ai";
 import { z } from "zod";
 import { maybeCreateImmediateClarificationFromSearchResult } from "../knowledge-gap/immediate-clarification";
@@ -109,10 +115,38 @@ export function createSearchKnowledgeBaseTool(ctx: PipelineToolContext) {
 				guidance: string | null;
 			}>
 		> => {
-			const results = await findSimilarKnowledge(ctx.db, query, ctx.websiteId, {
-				limit: 5,
-				minSimilarity: 0.3,
+			const queryLanguageDetection = detectMessageLanguage({
+				text: query,
+				hintLanguage: ctx.visitorLanguage,
 			});
+			const queryLanguage =
+				queryLanguageDetection.language ?? ctx.visitorLanguage ?? null;
+			const translatedQuery =
+				ctx.autoTranslateEnabled !== false &&
+				shouldTranslateBetweenLanguages(
+					queryLanguage,
+					ctx.websiteDefaultLanguage
+				)
+					? await maybeTranslateText({
+							text: query,
+							sourceLanguage: queryLanguage,
+							targetLanguage: ctx.websiteDefaultLanguage,
+						})
+					: null;
+			const searchQuery =
+				translatedQuery && didTranslationSucceed(translatedQuery)
+					? translatedQuery.text
+					: query;
+
+			const results = await findSimilarKnowledge(
+				ctx.db,
+				searchQuery,
+				ctx.websiteId,
+				{
+					limit: 5,
+					minSimilarity: 0.3,
+				}
+			);
 			const articles = results.map((item) => {
 				const metadata =
 					typeof item.metadata === "object" && item.metadata !== null
@@ -171,7 +205,7 @@ export function createSearchKnowledgeBaseTool(ctx: PipelineToolContext) {
 
 			const searchResult = {
 				articles,
-				query,
+				query: searchQuery,
 				questionContext: questionContext?.trim() || null,
 				totalFound,
 				maxSimilarity,

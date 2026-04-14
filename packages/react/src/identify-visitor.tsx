@@ -1,4 +1,4 @@
-/** biome-ignore-all lint/correctness/useExhaustiveDependencies: wanted here */
+"use client";
 
 import type { VisitorMetadata } from "@cossistant/types";
 import { type ReactElement, useEffect, useState } from "react";

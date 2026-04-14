@@ -1,4 +1,6 @@
-import { Support } from "@cossistant/next";
+"use client";
+
+import { Support } from "@cossistant/react";
 import React from "react";
 
 function SupportWidget() {

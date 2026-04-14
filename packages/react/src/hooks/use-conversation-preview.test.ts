@@ -1,27 +1,17 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterAll, beforeEach, describe, expect, it, mock } from "bun:test";
+import {
+	createTypingStore,
+	setTypingState,
+	type TypingStore,
+} from "@cossistant/core";
+import type { SupportControllerSnapshot } from "@cossistant/core/support-controller";
 import { type Conversation, ConversationStatus } from "@cossistant/types";
 import type { TimelineItem } from "@cossistant/types/api/timeline-item";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { SupportProvider } from "../provider";
 import type { SupportTextResolvedFormatter } from "../support/text/locales/keys";
-
-type SupportState = {
-	availableHumanAgents: Array<{
-		id: string;
-		name: string | null;
-		image: string | null;
-		lastSeenAt: string | null;
-	}>;
-	availableAIAgents: Array<{
-		id: string;
-		name: string;
-		image: string | null;
-	}>;
-	visitor: {
-		id: string;
-		contact: null;
-	};
-};
+import { createMockSupportController } from "../test-utils/create-mock-support-controller";
 
 function createTextFormatter(): SupportTextResolvedFormatter {
 	return ((key: string, variables?: Record<string, string>) => {
@@ -44,15 +34,9 @@ function createTextFormatter(): SupportTextResolvedFormatter {
 	}) as SupportTextResolvedFormatter;
 }
 
-const useSupportMock = mock(() => currentSupportState);
 const useSupportTextMock = mock(() => createTextFormatter());
 const useConversationTimelineItemsMock = mock(() => ({
 	items: currentTimelineItems,
-}));
-const useConversationTypingMock = mock(() => []);
-
-mock.module("../provider", () => ({
-	useSupport: useSupportMock,
 }));
 
 mock.module("../support/text", () => ({
@@ -61,10 +45,6 @@ mock.module("../support/text", () => ({
 
 mock.module("./use-conversation-timeline-items", () => ({
 	useConversationTimelineItems: useConversationTimelineItemsMock,
-}));
-
-mock.module("./use-conversation-typing", () => ({
-	useConversationTyping: useConversationTypingMock,
 }));
 
 const useConversationPreviewModulePromise = import(
@@ -83,8 +63,9 @@ const baseConversation: Conversation = {
 	title: "Need help",
 };
 
-let currentSupportState: SupportState;
 let currentTimelineItems: TimelineItem[];
+let currentTypingStore: TypingStore;
+let currentWebsite: SupportControllerSnapshot["website"];
 
 function createMessageItem(
 	overrides: Partial<TimelineItem> = {}
@@ -108,6 +89,12 @@ function createMessageItem(
 
 async function renderPreview(conversation: Conversation) {
 	const { useConversationPreview } = await useConversationPreviewModulePromise;
+	const controller = createMockSupportController({
+		client: {
+			typingStore: currentTypingStore,
+		} as SupportControllerSnapshot["client"],
+		website: currentWebsite,
+	});
 	let result: ReturnType<typeof useConversationPreview> | null = null;
 
 	function Harness() {
@@ -115,31 +102,52 @@ async function renderPreview(conversation: Conversation) {
 		return null;
 	}
 
-	renderToStaticMarkup(React.createElement(Harness));
+	renderToStaticMarkup(
+		React.createElement(
+			SupportProvider,
+			{ autoConnect: false, controller },
+			React.createElement(Harness)
+		)
+	);
+	controller.destroy();
 	return result;
 }
 
 describe("useConversationPreview", () => {
+	afterAll(() => {
+		mock.restore();
+	});
+
 	beforeEach(() => {
-		currentSupportState = {
-			availableHumanAgents: [],
+		currentTypingStore = createTypingStore();
+		currentWebsite = {
+			description: null,
+			domain: "acme.test",
+			defaultLanguage: "en",
+			id: "website-1",
+			lastOnlineAt: null,
+			logoUrl: null,
+			name: "Acme",
+			organizationId: "org-1",
+			status: "online",
 			availableAIAgents: [],
+			availableHumanAgents: [],
 			visitor: {
 				id: "visitor-1",
+				language: "en",
 				contact: null,
+				isBlocked: false,
 			},
 		};
 		currentTimelineItems = [];
 
-		useSupportMock.mockClear();
 		useSupportTextMock.mockClear();
 		useConversationTimelineItemsMock.mockClear();
-		useConversationTypingMock.mockClear();
 	});
 
 	it("uses Support team and a stable seed when the assigned human has a blank name", async () => {
-		currentSupportState = {
-			...currentSupportState,
+		currentWebsite = {
+			...currentWebsite,
 			availableHumanAgents: [
 				{
 					id: "human-1",
@@ -187,8 +195,8 @@ describe("useConversationPreview", () => {
 	});
 
 	it("ignores AI typing for visitor-facing preview state", async () => {
-		currentSupportState = {
-			...currentSupportState,
+		currentWebsite = {
+			...currentWebsite,
 			availableAIAgents: [
 				{
 					id: "ai-1",
@@ -197,14 +205,12 @@ describe("useConversationPreview", () => {
 				},
 			],
 		};
-		useConversationTypingMock.mockReturnValue([
-			{
-				actorType: "ai_agent",
-				actorId: "ai-1",
-				preview: null,
-				updatedAt: 1,
-			},
-		]);
+		setTypingState(currentTypingStore, {
+			conversationId: baseConversation.id,
+			actorType: "ai_agent",
+			actorId: "ai-1",
+			isTyping: true,
+		});
 
 		const preview = await renderPreview(baseConversation);
 

@@ -11,7 +11,10 @@ import {
 	visitor,
 	website,
 } from "@api/db/schema";
-import { getVisitorNameWithFallback } from "@cossistant/core";
+import {
+	getVisitorNameWithFallback,
+	resolveTimelineItemText,
+} from "@cossistant/core";
 import {
 	ConversationParticipationStatus,
 	MemberNotificationChannel,
@@ -225,6 +228,7 @@ export async function getUnseenMessagesForRecipient(
 		.select({
 			id: conversationTimelineItem.id,
 			text: conversationTimelineItem.text,
+			parts: conversationTimelineItem.parts,
 			createdAt: conversationTimelineItem.createdAt,
 			userId: conversationTimelineItem.userId,
 			visitorId: conversationTimelineItem.visitorId,
@@ -328,7 +332,14 @@ export async function getMessagesForEmail(
 			}
 
 			return {
-				text: message.text ?? "",
+				text:
+					resolveTimelineItemText(
+						{
+							text: message.text,
+							parts: Array.isArray(message.parts) ? message.parts : [],
+						},
+						params.recipientUserId ? "team" : "visitor"
+					) ?? "",
 				createdAt: new Date(message.createdAt),
 				sender: {
 					id:
@@ -439,6 +450,7 @@ export async function getLatestMessageForPush(
 	const [latestMessage] = await db
 		.select({
 			text: conversationTimelineItem.text,
+			parts: conversationTimelineItem.parts,
 			userId: conversationTimelineItem.userId,
 			visitorId: conversationTimelineItem.visitorId,
 		})
@@ -455,7 +467,17 @@ export async function getLatestMessageForPush(
 		.orderBy(desc(conversationTimelineItem.createdAt))
 		.limit(1);
 
-	if (!latestMessage?.text) {
+	const latestMessageText =
+		latestMessage &&
+		resolveTimelineItemText(
+			{
+				text: latestMessage.text,
+				parts: Array.isArray(latestMessage.parts) ? latestMessage.parts : [],
+			},
+			"team"
+		);
+
+	if (!latestMessageText) {
 		return null;
 	}
 
@@ -495,7 +517,7 @@ export async function getLatestMessageForPush(
 	}
 
 	return {
-		text: latestMessage.text,
+		text: latestMessageText,
 		senderName,
 	};
 }

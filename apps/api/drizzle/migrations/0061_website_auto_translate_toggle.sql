@@ -1,0 +1,1 @@
+ALTER TABLE "website" ADD COLUMN "auto_translate_enabled" boolean DEFAULT true NOT NULL;

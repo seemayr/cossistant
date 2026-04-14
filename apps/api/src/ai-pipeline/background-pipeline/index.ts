@@ -115,6 +115,15 @@ async function runBackgroundIntake(ctx: BackgroundPipelineContext): Promise<
 			conversation: NonNullable<
 				Awaited<ReturnType<typeof loadConversationSeed>>["conversation"]
 			>;
+			websiteDefaultLanguage: Awaited<
+				ReturnType<typeof loadIntakeContext>
+			>["websiteDefaultLanguage"];
+			visitorLanguage: Awaited<
+				ReturnType<typeof loadIntakeContext>
+			>["visitorLanguage"];
+			autoTranslateEnabled: Awaited<
+				ReturnType<typeof loadIntakeContext>
+			>["autoTranslateEnabled"];
 			decisionMessages: Awaited<
 				ReturnType<typeof loadIntakeContext>
 			>["decisionMessages"];
@@ -219,6 +228,9 @@ async function runBackgroundIntake(ctx: BackgroundPipelineContext): Promise<
 		toolAllowlist,
 		modelResolution,
 		conversation,
+		websiteDefaultLanguage: intakeContext.websiteDefaultLanguage,
+		visitorLanguage: intakeContext.visitorLanguage,
+		autoTranslateEnabled: intakeContext.autoTranslateEnabled,
 		decisionMessages: intakeContext.decisionMessages,
 		generationEntries: intakeContext.generationEntries,
 		conversationHistory: intakeContext.conversationHistory,
@@ -318,6 +330,9 @@ export async function runBackgroundPipeline(
 			mode: "background_only",
 			aiAgent: intakeResult.aiAgent,
 			conversation: intakeResult.conversation,
+			websiteDefaultLanguage: intakeResult.websiteDefaultLanguage,
+			visitorLanguage: intakeResult.visitorLanguage,
+			autoTranslateEnabled: intakeResult.autoTranslateEnabled,
 			generationEntries: intakeResult.generationEntries,
 			visitorContext: intakeResult.visitorContext,
 			conversationState: intakeResult.conversationState,

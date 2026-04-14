@@ -56,6 +56,11 @@ function isSameConversation(
 	const basicMatch =
 		a.id === b.id &&
 		a.title === b.title &&
+		a.visitorTitle === b.visitorTitle &&
+		a.visitorTitleLanguage === b.visitorTitleLanguage &&
+		a.visitorLanguage === b.visitorLanguage &&
+		a.translationActivatedAt === b.translationActivatedAt &&
+		a.translationChargedAt === b.translationChargedAt &&
 		a.status === b.status &&
 		a.visitorId === b.visitorId &&
 		a.websiteId === b.websiteId &&
@@ -84,6 +89,8 @@ function isSameConversation(
 	return (
 		a.lastTimelineItem.id === b.lastTimelineItem.id &&
 		a.lastTimelineItem.text === b.lastTimelineItem.text &&
+		JSON.stringify(a.lastTimelineItem.parts) ===
+			JSON.stringify(b.lastTimelineItem.parts) &&
 		isSameDate(a.lastTimelineItem.createdAt, b.lastTimelineItem.createdAt)
 	);
 }

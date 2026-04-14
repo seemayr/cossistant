@@ -58,6 +58,8 @@ function createIntake(): IntakeReadyContext {
 			websiteId: "site-1",
 			visitorId: "visitor-1",
 		} as never,
+		websiteDefaultLanguage: "en",
+		visitorLanguage: "en",
 		conversationHistory: [
 			{
 				messageId: "msg-1",
@@ -134,6 +136,8 @@ function createToolContext(
 		aiAgentId: "ai-1",
 		aiAgentName: "Agent",
 		visitorName: "Visitor",
+		websiteDefaultLanguage: "en",
+		visitorLanguage: "en",
 		workflowRunId: "wf-1",
 		triggerMessageId: "msg-1",
 		triggerMessageText: "How do I permanently delete my account?",

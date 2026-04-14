@@ -1,7 +1,14 @@
 import { db } from "@api/db";
 import { getConversationById } from "@api/db/queries/conversation";
-import { member, user } from "@api/db/schema";
+import { member, user, website } from "@api/db/schema";
 import { env } from "@api/env";
+import { getPlanForWebsite } from "@api/lib/plans/access";
+import {
+	finalizeConversationTranslation,
+	isAutomaticTranslationEnabled,
+	prepareInboundVisitorTranslation,
+	prepareOutboundVisitorTranslation,
+} from "@api/lib/translation";
 import type { ParsedInboundReplyAddress } from "@api/utils/email-threading";
 import { parseInboundReplyAddress } from "@api/utils/email-threading";
 import { triggerMessageNotificationWorkflow } from "@api/utils/send-message-with-notification";
@@ -109,6 +116,38 @@ export async function handleReceivedEmail(
 		}
 	}
 
+	const websiteRecord = await db.query.website.findFirst({
+		where: eq(website.id, conversation.websiteId),
+	});
+	const autoTranslateEnabled = websiteRecord
+		? isAutomaticTranslationEnabled({
+				planAllowsAutoTranslate:
+					(await getPlanForWebsite(websiteRecord)).features[
+						"auto-translate"
+					] === true,
+				websiteAutoTranslateEnabled: websiteRecord.autoTranslateEnabled,
+			})
+		: false;
+	const inboundTranslation =
+		timelineVisitorId && websiteRecord
+			? await prepareInboundVisitorTranslation({
+					text: messageText,
+					websiteDefaultLanguage: websiteRecord.defaultLanguage,
+					visitorLanguageHint: conversation.visitorLanguage,
+					mode: "auto",
+					autoTranslateEnabled,
+				})
+			: null;
+	const outboundTranslation =
+		timelineUserId && websiteRecord && autoTranslateEnabled
+			? await prepareOutboundVisitorTranslation({
+					text: messageText,
+					sourceLanguage: websiteRecord.defaultLanguage,
+					visitorLanguage: conversation.visitorLanguage,
+					mode: "auto",
+				})
+			: null;
+
 	const { item: createdTimelineItem, actor } = await createMessageTimelineItem({
 		db,
 		organizationId: conversation.organizationId,
@@ -116,11 +155,45 @@ export async function handleReceivedEmail(
 		conversationId: conversation.id,
 		conversationOwnerVisitorId: conversation.visitorId,
 		text: messageText,
-		extraParts: [{ type: "metadata", source: "email" }],
+		extraParts: [
+			{ type: "metadata", source: "email" },
+			...(inboundTranslation?.translationPart
+				? [inboundTranslation.translationPart]
+				: []),
+			...(outboundTranslation?.translationPart
+				? [outboundTranslation.translationPart]
+				: []),
+		],
 		userId: timelineUserId,
 		visitorId: timelineVisitorId,
 		aiAgentId: null,
 	});
+
+	if (
+		timelineVisitorId &&
+		websiteRecord &&
+		inboundTranslation?.visitorLanguage
+	) {
+		await finalizeConversationTranslation({
+			db,
+			conversation,
+			websiteDefaultLanguage: websiteRecord.defaultLanguage,
+			visitorLanguage: inboundTranslation.visitorLanguage,
+			hasTranslationPart: Boolean(inboundTranslation.translationPart),
+			chargeCredits: autoTranslateEnabled,
+		});
+	}
+
+	if (timelineUserId && websiteRecord && outboundTranslation?.translationPart) {
+		await finalizeConversationTranslation({
+			db,
+			conversation,
+			websiteDefaultLanguage: websiteRecord.defaultLanguage,
+			visitorLanguage: conversation.visitorLanguage,
+			hasTranslationPart: true,
+			chargeCredits: autoTranslateEnabled,
+		});
+	}
 
 	if (actor) {
 		try {

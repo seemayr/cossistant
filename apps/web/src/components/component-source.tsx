@@ -4,6 +4,7 @@ import type * as React from "react";
 import { highlightCode } from "@/lib/highlight-code";
 import { cn } from "@/lib/utils";
 import { Index } from "@/registry/__index__";
+import { resolveRegistrySourceDescriptor } from "@/registry/source";
 import { ComponentCode } from "./component-code";
 
 export async function ComponentSource({
@@ -18,8 +19,14 @@ export async function ComponentSource({
 		return null;
 	}
 
-	const fullPath = path.join(process.cwd(), item.path);
-	const code = await fs.readFile(fullPath, "utf-8");
+	const source = resolveRegistrySourceDescriptor(item);
+	const code =
+		source.type === "inline"
+			? source.code
+			: await fs.readFile(
+					path.join(/* turbopackIgnore: true */ process.cwd(), source.path),
+					"utf-8"
+				);
 	const highlightedCode = await highlightCode(code, "tsx");
 
 	return (

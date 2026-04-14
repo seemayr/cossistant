@@ -57,6 +57,7 @@ const installedGlobalKeys = [
 	"SVGElement",
 	"SyntaxError",
 	"Text",
+	"getComputedStyle",
 	"IS_REACT_ACT_ENVIRONMENT",
 ] as const;
 
@@ -95,6 +96,7 @@ function installDomGlobals(window: Window) {
 	});
 	setGlobalValue("SyntaxError", syntaxErrorCtor);
 	setGlobalValue("Text", window.Text);
+	setGlobalValue("getComputedStyle", window.getComputedStyle.bind(window));
 	setGlobalValue("IS_REACT_ACT_ENVIRONMENT", true);
 }
 
@@ -142,7 +144,7 @@ describe("ComposerUiTestPage", () => {
 		activeRoot = null;
 		mountNode = null;
 		windowInstance = new Window({
-			url: "https://example.com/composer-ui-test",
+			url: "https://example.com/test/ui/composer",
 		});
 		installDomGlobals(windowInstance);
 	});

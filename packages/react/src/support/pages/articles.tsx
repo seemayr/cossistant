@@ -7,8 +7,12 @@ type ArticlesPageProps = {
 };
 
 export const ArticlesPage: React.FC<ArticlesPageProps> = (_props = {}) => (
-	<>
-		<Header>
+	<div
+		className="flex h-full flex-col"
+		data-page="ARTICLES"
+		data-slot="articles-page"
+	>
+		<Header page="ARTICLES">
 			<NavigationTab />
 		</Header>
 		<div className="flex flex-1 flex-col p-2">
@@ -42,5 +46,5 @@ export const ArticlesPage: React.FC<ArticlesPageProps> = (_props = {}) => (
 				</div>
 			</div>
 		</div>
-	</>
+	</div>
 );

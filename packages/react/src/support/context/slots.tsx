@@ -113,11 +113,6 @@ export type SlotProps = {
 	 * Content to render in the slot.
 	 */
 	children: React.ReactNode;
-	/**
-	 * When true, renders children directly without a wrapper.
-	 * Useful when you want your component to receive all props.
-	 */
-	asChild?: boolean;
 };
 
 /**
@@ -132,13 +127,8 @@ export type SlotProps = {
  *   <Support.Router />
  * </Support.Content>
  *
- * @example
- * // With asChild pattern
- * <Support.Header asChild>
- *   <MyCustomHeader showBackButton />
- * </Support.Header>
  */
-export const HeaderSlot: React.FC<SlotProps> = ({ children, asChild }) => {
+export const HeaderSlot: React.FC<SlotProps> = ({ children }) => {
 	const registration = useSlotRegistration();
 
 	React.useEffect(() => {
@@ -168,13 +158,8 @@ export const HeaderSlot: React.FC<SlotProps> = ({ children, asChild }) => {
  *   </Support.Footer>
  * </Support.Content>
  *
- * @example
- * // With asChild pattern
- * <Support.Footer asChild>
- *   <MyCustomFooter showBranding={false} />
- * </Support.Footer>
  */
-export const FooterSlot: React.FC<SlotProps> = ({ children, asChild }) => {
+export const FooterSlot: React.FC<SlotProps> = ({ children }) => {
 	const registration = useSlotRegistration();
 
 	React.useEffect(() => {

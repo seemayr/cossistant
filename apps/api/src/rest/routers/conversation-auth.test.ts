@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { AuthValidationError } from "@api/lib/auth-validation";
 import { APIKeyType } from "@cossistant/types";
 
 const safelyExtractRequestDataMock = mock((async () => ({})) as (
@@ -48,6 +49,20 @@ const listConversationsHeadersMock = mock((async () => ({
 const mergeConversationMetadataMock = mock(
 	(async () => null) as (...args: unknown[]) => Promise<unknown>
 );
+const resolvePrivateApiKeyActorUserMock = mock((async () => ({
+	userId: "user-1",
+	member: {
+		id: "user-1",
+		name: "Alice",
+		email: "alice@example.com",
+		image: null,
+		role: "member",
+		createdAt: "2026-04-01T00:00:00.000Z",
+		updatedAt: "2026-04-01T00:00:00.000Z",
+		lastSeenAt: null,
+	},
+	source: "linked_key",
+})) as (...args: unknown[]) => Promise<unknown>);
 
 mock.module("@api/utils/validate", () => ({
 	safelyExtractRequestData: safelyExtractRequestDataMock,
@@ -93,6 +108,7 @@ mock.module("@api/db/mutations/conversation", () => ({
 		conversation: null,
 		lastSeenAt: null,
 	})),
+	markConversationAsSeen: mock(async () => new Date().toISOString()),
 	mergeConversationMetadata: mergeConversationMetadataMock,
 	markConversationAsSeenByVisitor: mock(async () => ({
 		conversationId: "conv-1",
@@ -144,6 +160,7 @@ mock.module("@api/utils/conversation-realtime", () => ({
 	emitConversationCreatedEvent: mock(async () => {}),
 	emitConversationSeenEvent: mock(async () => {}),
 	emitConversationTypingEvent: mock(async () => {}),
+	emitConversationTranslationUpdate: mock(async () => {}),
 }));
 
 mock.module("@api/ai-pipeline/shared/safety/kill-switch", () => ({
@@ -165,6 +182,10 @@ mock.module("@api/lib/plans/access", () => ({
 	getPlanForWebsite: mock(async () => ({})),
 }));
 
+mock.module("@api/lib/private-api-key-actor", () => ({
+	resolvePrivateApiKeyActorUser: resolvePrivateApiKeyActorUserMock,
+}));
+
 mock.module("@api/lib/hard-limits/dashboard", () => ({
 	applyDashboardConversationHardLimit: mock(
 		({ conversation }: { conversation: unknown }) => conversation
@@ -175,6 +196,7 @@ mock.module("@api/lib/hard-limits/dashboard", () => ({
 
 mock.module("@api/services/presence", () => ({
 	markVisitorPresence: mock(async () => {}),
+	markUserPresence: mock(async () => {}),
 }));
 
 mock.module("@api/utils/geo-helpers", () => ({
@@ -189,6 +211,7 @@ mock.module("./feedback-shared", () => ({
 
 mock.module("../middleware", () => ({
 	protectedPublicApiKeyMiddleware: [],
+	protectedPrivateApiKeyMiddleware: [],
 }));
 
 const conversationRouterModulePromise = import("./conversation");
@@ -282,6 +305,7 @@ describe("conversation auth and inbox routes", () => {
 		getConversationSeenDataMock.mockReset();
 		listConversationsHeadersMock.mockReset();
 		mergeConversationMetadataMock.mockReset();
+		resolvePrivateApiKeyActorUserMock.mockReset();
 
 		validateResponseMock.mockImplementation((value) => value);
 		getVisitorMock.mockResolvedValue({
@@ -318,14 +342,28 @@ describe("conversation auth and inbox routes", () => {
 			nextCursor: "cursor_2",
 		});
 		mergeConversationMetadataMock.mockResolvedValue(createConversationRecord());
+		resolvePrivateApiKeyActorUserMock.mockResolvedValue({
+			userId: "user-1",
+			member: {
+				id: "user-1",
+				name: "Alice",
+				email: "alice@example.com",
+				image: null,
+				role: "member",
+				createdAt: "2026-04-01T00:00:00.000Z",
+				updatedAt: "2026-04-01T00:00:00.000Z",
+				lastSeenAt: null,
+			},
+			source: "linked_key",
+		});
 	});
 
-	it("lists inbox conversations for private API keys", async () => {
+	it("forwards the resolved actor user ID to private inbox queries", async () => {
 		safelyExtractRequestQueryMock.mockResolvedValue({
 			db: {},
-			apiKey: { keyType: APIKeyType.PRIVATE },
+			apiKey: { keyType: APIKeyType.PRIVATE, linkedUserId: "user-1" },
 			organization: { id: "org-1" },
-			website: { id: "site-1", organizationId: "org-1" },
+			website: { id: "site-1", organizationId: "org-1", teamId: "team-1" },
 			query: {
 				limit: 20,
 				cursor: null,
@@ -347,6 +385,60 @@ describe("conversation auth and inbox routes", () => {
 		expect(response.status).toBe(200);
 		expect(payload.nextCursor).toBe("cursor_2");
 		expect(payload.items[0]?.id).toBe(conversationId);
+		expect(resolvePrivateApiKeyActorUserMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				apiKey: expect.objectContaining({
+					keyType: APIKeyType.PRIVATE,
+					linkedUserId: "user-1",
+				}),
+				organizationId: "org-1",
+				websiteTeamId: "team-1",
+				explicitActorUserId: null,
+				required: false,
+			})
+		);
+		expect(listConversationsHeadersMock).toHaveBeenCalledWith(
+			{},
+			{
+				organizationId: "org-1",
+				websiteId: "site-1",
+				userId: "user-1",
+				limit: 20,
+				cursor: null,
+			}
+		);
+	});
+
+	it("keeps private inbox queries best-effort for unlinked keys without an actor header", async () => {
+		resolvePrivateApiKeyActorUserMock.mockResolvedValueOnce(null);
+		safelyExtractRequestQueryMock.mockResolvedValue({
+			db: {},
+			apiKey: { keyType: APIKeyType.PRIVATE, linkedUserId: null },
+			organization: { id: "org-1" },
+			website: { id: "site-1", organizationId: "org-1", teamId: "team-1" },
+			query: {
+				limit: 20,
+				cursor: null,
+			},
+		});
+
+		const { conversationRouter } = await conversationRouterModulePromise;
+		const response = await conversationRouter.request(
+			new Request("http://localhost/inbox?limit=20", {
+				method: "GET",
+			})
+		);
+
+		expect(response.status).toBe(200);
+		expect(resolvePrivateApiKeyActorUserMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				apiKey: expect.objectContaining({
+					keyType: APIKeyType.PRIVATE,
+					linkedUserId: null,
+				}),
+				required: false,
+			})
+		);
 		expect(listConversationsHeadersMock).toHaveBeenCalledWith(
 			{},
 			{
@@ -357,6 +449,41 @@ describe("conversation auth and inbox routes", () => {
 				cursor: null,
 			}
 		);
+	});
+
+	it("returns 403 when the explicit inbox actor is not allowed for the website", async () => {
+		resolvePrivateApiKeyActorUserMock.mockImplementationOnce(async () => {
+			throw new AuthValidationError(
+				403,
+				"Actor user is not allowed for this website"
+			);
+		});
+		safelyExtractRequestQueryMock.mockResolvedValue({
+			db: {},
+			apiKey: { keyType: APIKeyType.PRIVATE, linkedUserId: null },
+			organization: { id: "org-1" },
+			website: { id: "site-1", organizationId: "org-1", teamId: "team-1" },
+			query: {
+				limit: 20,
+				cursor: null,
+			},
+		});
+
+		const { conversationRouter } = await conversationRouterModulePromise;
+		const response = await conversationRouter.request(
+			new Request("http://localhost/inbox?limit=20", {
+				method: "GET",
+				headers: {
+					"X-Actor-User-Id": "user-invalid",
+				},
+			})
+		);
+
+		expect(response.status).toBe(403);
+		expect(await response.text()).toContain(
+			"Actor user is not allowed for this website"
+		);
+		expect(listConversationsHeadersMock).toHaveBeenCalledTimes(0);
 	});
 
 	it("includes conversation metadata in private inbox responses", async () => {
@@ -374,9 +501,9 @@ describe("conversation auth and inbox routes", () => {
 		});
 		safelyExtractRequestQueryMock.mockResolvedValue({
 			db: {},
-			apiKey: { keyType: APIKeyType.PRIVATE },
+			apiKey: { keyType: APIKeyType.PRIVATE, linkedUserId: "user-1" },
 			organization: { id: "org-1" },
-			website: { id: "site-1", organizationId: "org-1" },
+			website: { id: "site-1", organizationId: "org-1", teamId: "team-1" },
 			query: {
 				limit: 20,
 				cursor: null,

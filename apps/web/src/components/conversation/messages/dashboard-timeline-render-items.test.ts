@@ -3,7 +3,7 @@ import type {
 	ConversationItem,
 	GroupedActivity,
 	TimelineToolItem,
-} from "@cossistant/next/hooks";
+} from "@cossistant/react/internal/hooks";
 import { SenderType } from "@cossistant/types";
 import type { TimelineItem } from "@cossistant/types/api/timeline-item";
 import { buildDashboardTimelineRenderItems } from "./dashboard-timeline-render-items";

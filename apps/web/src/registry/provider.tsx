@@ -1,6 +1,6 @@
 "use client";
 
-import { SupportProvider } from "@cossistant/next";
+import { SupportProvider } from "@cossistant/react";
 
 export function CossistantProvider({
 	children,

@@ -156,6 +156,16 @@ export function useWebsite() {
 	return context.website;
 }
 
+export function useOptionalWebsite() {
+	const context = useContext(WebsiteContext);
+
+	if (!context) {
+		return null;
+	}
+
+	return context.website ?? null;
+}
+
 export function useUserSession() {
 	const context = useContext(WebsiteContext);
 

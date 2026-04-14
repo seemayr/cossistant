@@ -22,6 +22,7 @@ import {
 	type ComposerSlotBlocks,
 } from "@/components/conversation/composer/composer-view-model";
 import { useKnowledgeClarificationDraftReviewState } from "@/components/knowledge-clarification/draft-review";
+import { TestUiPageShell } from "@/components/test-ui/page-shell";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -30,7 +31,6 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
@@ -590,121 +590,121 @@ export function ComposerUiTestPage() {
 	};
 
 	return (
-		<div
-			className="min-h-screen bg-background p-6 dark:bg-background-100"
-			data-composer-ui-test="true"
-		>
-			<div className="mx-auto grid max-w-[1600px] gap-6 lg:grid-cols-[320px_minmax(0,1fr)_320px]">
-				<div className="space-y-4" data-composer-ui-controls="true">
-					<Card>
-						<CardHeader>
-							<CardTitle>Composer UI Test</CardTitle>
-							<CardDescription>
-								Switch local states and inspect the real composer.
-							</CardDescription>
-						</CardHeader>
-						<CardContent className="grid grid-cols-2 gap-2">
-							{PRESET_ORDER.map((preset) => (
-								<Button
-									className={cn(
-										"justify-start",
-										debugState.preset === preset && "pointer-events-none"
-									)}
-									data-composer-ui-preset={preset}
-									key={preset}
-									onClick={() => handlePresetChange(preset)}
-									size="xs"
-									type="button"
-									variant={
-										debugState.preset === preset ? "secondary" : "outline"
-									}
-								>
-									{preset}
-								</Button>
-							))}
-						</CardContent>
-					</Card>
+		<div className="min-h-[calc(100vh-13rem)]" data-composer-ui-test="true">
+			<TestUiPageShell
+				controls={
+					<>
+						<Card>
+							<CardHeader>
+								<CardTitle>Composer UI Test</CardTitle>
+								<CardDescription>
+									Switch local states and inspect the real composer.
+								</CardDescription>
+							</CardHeader>
+							<CardContent className="grid grid-cols-2 gap-2">
+								{PRESET_ORDER.map((preset) => (
+									<Button
+										className={cn(
+											"justify-start",
+											debugState.preset === preset && "pointer-events-none"
+										)}
+										data-composer-ui-preset={preset}
+										key={preset}
+										onClick={() => handlePresetChange(preset)}
+										size="xs"
+										type="button"
+										variant={
+											debugState.preset === preset ? "secondary" : "outline"
+										}
+									>
+										{preset}
+									</Button>
+								))}
+							</CardContent>
+						</Card>
 
-					<Card>
-						<CardHeader>
-							<CardTitle>Controls</CardTitle>
-							<CardDescription>
-								Edit core composer props without leaving the page.
-							</CardDescription>
-						</CardHeader>
-						<CardContent className="space-y-4">
-							<div className="space-y-2">
-								<Label>Visibility</Label>
-								<div className="flex gap-2">
-									<Button
-										aria-pressed={debugState.visibility === "public"}
-										data-composer-ui-visibility="public"
-										onClick={() => updateState({ visibility: "public" })}
-										size="xs"
-										type="button"
-										variant={
-											debugState.visibility === "public"
-												? "secondary"
-												: "outline"
-										}
-									>
-										Public
-									</Button>
-									<Button
-										aria-pressed={debugState.visibility === "private"}
-										data-composer-ui-visibility="private"
-										onClick={() => updateState({ visibility: "private" })}
-										size="xs"
-										type="button"
-										variant={
-											debugState.visibility === "private"
-												? "secondary"
-												: "outline"
-										}
-									>
-										Private
-									</Button>
+						<Card>
+							<CardHeader>
+								<CardTitle>Controls</CardTitle>
+								<CardDescription>
+									Edit core composer props without leaving the page.
+								</CardDescription>
+							</CardHeader>
+							<CardContent className="space-y-4">
+								<div className="space-y-2">
+									<Label>Visibility</Label>
+									<div className="flex gap-2">
+										<Button
+											aria-pressed={debugState.visibility === "public"}
+											data-composer-ui-visibility="public"
+											onClick={() => updateState({ visibility: "public" })}
+											size="xs"
+											type="button"
+											variant={
+												debugState.visibility === "public"
+													? "secondary"
+													: "outline"
+											}
+										>
+											Public
+										</Button>
+										<Button
+											aria-pressed={debugState.visibility === "private"}
+											data-composer-ui-visibility="private"
+											onClick={() => updateState({ visibility: "private" })}
+											size="xs"
+											type="button"
+											variant={
+												debugState.visibility === "private"
+													? "secondary"
+													: "outline"
+											}
+										>
+											Private
+										</Button>
+									</div>
 								</div>
-							</div>
 
-							<div className="space-y-2">
-								<Label htmlFor="composer-ui-text-value">Textarea value</Label>
-								<Textarea
-									id="composer-ui-text-value"
-									onChange={(event) =>
-										updateState({ value: event.target.value })
-									}
-									rows={5}
-									value={debugState.value}
-								/>
-							</div>
-						</CardContent>
-					</Card>
+								<div className="space-y-2">
+									<Label htmlFor="composer-ui-text-value">Textarea value</Label>
+									<Textarea
+										id="composer-ui-text-value"
+										onChange={(event) =>
+											updateState({ value: event.target.value })
+										}
+										rows={5}
+										value={debugState.value}
+									/>
+								</div>
+							</CardContent>
+						</Card>
 
-					<p
-						className="px-1 text-muted-foreground text-xs"
-						data-composer-ui-last-action={lastAction ?? "none"}
-					>
-						Last action: {lastAction ?? "none"}
-					</p>
-				</div>
-
-				<ComposerPreview
-					debugState={debugState}
-					onAction={setLastAction}
-					onFreeAnswerChange={(value) => updateState({ freeAnswer: value })}
-					onPresetChange={handlePresetChange}
-					onSelectedSuggestedAnswerChange={(value) =>
-						updateState({
-							selectedSuggestedAnswer: value,
-							freeAnswer: value === "Other" ? debugState.freeAnswer : "",
-						})
-					}
-					onValueChange={(value) => updateState({ value })}
-					onVisibilityChange={(visibility) => updateState({ visibility })}
-				/>
-
-				<div className="space-y-4" data-composer-ui-advanced="true">
+						<p
+							className="px-1 text-muted-foreground text-xs"
+							data-composer-ui-last-action={lastAction ?? "none"}
+						>
+							Last action: {lastAction ?? "none"}
+						</p>
+					</>
+				}
+				controlsProps={{ "data-composer-ui-controls": "true" }}
+				preview={
+					<ComposerPreview
+						debugState={debugState}
+						onAction={setLastAction}
+						onFreeAnswerChange={(value) => updateState({ freeAnswer: value })}
+						onPresetChange={handlePresetChange}
+						onSelectedSuggestedAnswerChange={(value) =>
+							updateState({
+								selectedSuggestedAnswer: value,
+								freeAnswer: value === "Other" ? debugState.freeAnswer : "",
+							})
+						}
+						onValueChange={(value) => updateState({ value })}
+						onVisibilityChange={(visibility) => updateState({ visibility })}
+					/>
+				}
+				secondary={
 					<Card>
 						<CardHeader>
 							<CardTitle>Advanced</CardTitle>
@@ -790,8 +790,9 @@ export function ComposerUiTestPage() {
 							/>
 						</CardContent>
 					</Card>
-				</div>
-			</div>
+				}
+				secondaryProps={{ "data-composer-ui-advanced": "true" }}
+			/>
 		</div>
 	);
 }

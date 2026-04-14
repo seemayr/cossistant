@@ -1,3 +1,5 @@
+"use client";
+
 import type {
 	CossistantClient,
 	CossistantClientOptions,
@@ -303,6 +305,7 @@ function SupportProviderInner({
  */
 export function SupportProvider({
 	children,
+	controller,
 	apiUrl = "https://api.cossistant.com/v1",
 	wsUrl = "wss://api.cossistant.com/ws",
 	publicKey,
@@ -319,6 +322,7 @@ export function SupportProvider({
 		<SupportProviderInner
 			apiUrl={apiUrl}
 			autoConnect={autoConnect}
+			controller={controller}
 			defaultMessages={defaultMessages}
 			defaultOpen={defaultOpen}
 			onWsConnect={onWsConnect}

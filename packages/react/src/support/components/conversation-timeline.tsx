@@ -17,6 +17,7 @@ import {
 	DaySeparatorLine,
 	defaultFormatDate,
 } from "../../primitives/day-separator";
+import { useSupportSlotOverrides } from "../context/slot-overrides";
 import { cn } from "../utils";
 import { ConversationEvent } from "./conversation-event";
 import { TimelineActivityGroup } from "./timeline-activity-group";
@@ -68,17 +69,37 @@ export const ConversationTimelineList: React.FC<ConversationTimelineProps> = ({
 	tools,
 	renderDaySeparator,
 }) => {
+	const { slots, slotProps } = useSupportSlotOverrides();
+	const TimelineSlot = slots.timeline;
+	const timelineSlotProps = slotProps.timeline;
 	const timeline = useConversationTimeline({
 		conversationId,
 		items: timelineItems,
 		currentVisitorId,
 	});
 
-	// Play typing sound when someone is typing
-	useTypingSound(timeline.typingParticipants.length > 0, {
+	// Keep hook order stable even when a custom timeline slot replaces the default UI.
+	useTypingSound(!TimelineSlot && timeline.typingParticipants.length > 0, {
 		volume: 1,
 		playbackRate: 1.3,
 	});
+
+	if (TimelineSlot) {
+		return (
+			<TimelineSlot
+				{...timelineSlotProps}
+				availableAIAgents={availableAIAgents}
+				availableHumanAgents={availableHumanAgents}
+				className={cn(timelineSlotProps?.className, className)}
+				conversationId={conversationId}
+				currentVisitorId={currentVisitorId}
+				data-slot="timeline"
+				items={timelineItems}
+				renderDaySeparator={renderDaySeparator}
+				tools={tools}
+			/>
+		);
+	}
 
 	return (
 		<PrimitiveConversationTimeline
@@ -87,8 +108,10 @@ export const ConversationTimelineList: React.FC<ConversationTimelineProps> = ({
 				"overflow-y-scroll px-3 py-6",
 				"co-scrollbar-thin",
 				"h-full w-full",
+				timelineSlotProps?.className,
 				className
 			)}
+			data-slot="timeline"
 			id="conversation-timeline"
 			items={timelineItems}
 		>

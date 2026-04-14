@@ -1,5 +1,9 @@
 import type { RouterOutputs } from "@api/trpc/types";
 import {
+	getTimelineItemTranslation,
+	shouldTranslateBetweenLanguages,
+} from "@cossistant/core";
+import {
 	TimelineItemGroup as PrimitiveTimelineItemGroup,
 	TimelineItemGroupAvatar,
 	TimelineItemGroupContent,
@@ -9,13 +13,19 @@ import type { AvailableAIAgent, VisitorPresenceEntry } from "@cossistant/types";
 import { SenderType } from "@cossistant/types";
 import type { TimelineItem } from "@cossistant/types/api/timeline-item";
 import type { ConversationSeen } from "@cossistant/types/schemas";
+import { useMutation } from "@tanstack/react-query";
 import { motion } from "motion/react";
 import type React from "react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { toast } from "sonner";
+import { ButtonWithPaywall } from "@/components/plan/button-with-paywall";
 import { Avatar } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/ui/logo";
 import type { ConversationHeader } from "@/contexts/inboxes";
+import { useOptionalWebsite } from "@/contexts/website";
 import { resolveDashboardHumanAgentDisplay } from "@/lib/human-agent-display";
+import { useTRPC } from "@/lib/trpc/client";
 import { cn } from "@/lib/utils";
 import { getVisitorNameWithFallback } from "@/lib/visitors";
 import { ReadIndicator } from "./read-indicator";
@@ -35,6 +45,7 @@ type TimelineMessageGroupProps = {
 	items: TimelineItem[];
 	availableAIAgents: AvailableAIAgent[];
 	teamMembers: RouterOutputs["user"]["getWebsiteMembers"];
+	conversationVisitorLanguage?: string | null;
 	lastReadMessageIds?: Map<string, string>; // Map of userId -> lastMessageId they read
 	currentUserId?: string;
 	visitor: ConversationHeader["visitor"];
@@ -46,12 +57,16 @@ export function TimelineMessageGroup({
 	items,
 	availableAIAgents,
 	teamMembers,
+	conversationVisitorLanguage,
 	lastReadMessageIds,
 	currentUserId,
 	visitor,
 	visitorPresence,
 	seenData,
 }: TimelineMessageGroupProps) {
+	const website = useOptionalWebsite();
+	const trpc = useTRPC();
+	const [showOriginal, setShowOriginal] = useState(false);
 	// Get agent info for the sender
 	const firstItem = items[0];
 	const humanAgent = teamMembers.find(
@@ -67,6 +82,47 @@ export function TimelineMessageGroup({
 		(agent) => agent.id === firstItem?.aiAgentId
 	);
 	const visitorName = getVisitorNameWithFallback(visitor);
+	const isVisitorGroup =
+		Boolean(firstItem?.visitorId) &&
+		!firstItem?.userId &&
+		!firstItem?.aiAgentId;
+	const translatedVisitorItemCount = useMemo(
+		() =>
+			items.filter(
+				(item) => item.visitorId && getTimelineItemTranslation(item, "team")
+			).length,
+		[items]
+	);
+	const visitorTranslatableMessageIds = useMemo(
+		() =>
+			items
+				.filter(
+					(item) =>
+						item.visitorId &&
+						item.text?.trim() &&
+						!getTimelineItemTranslation(item, "team")
+				)
+				.map((item) => item.id)
+				.filter((id): id is string => Boolean(id)),
+		[items]
+	);
+	const canOfferGroupTranslate =
+		isVisitorGroup &&
+		Boolean(website) &&
+		visitorTranslatableMessageIds.length > 0 &&
+		shouldTranslateBetweenLanguages(
+			conversationVisitorLanguage,
+			website?.defaultLanguage
+		);
+	const canToggleOriginal = isVisitorGroup && translatedVisitorItemCount > 0;
+	const { mutateAsync: translateMessageGroup, isPending: isTranslatingGroup } =
+		useMutation(
+			trpc.conversation.translateMessageGroup.mutationOptions({
+				onSuccess: () => {
+					setShowOriginal(false);
+				},
+			})
+		);
 
 	// Check if any message in the group was sent via email
 	const isFromEmail = useMemo(
@@ -88,6 +144,27 @@ export function TimelineMessageGroup({
 	if (items.length === 0) {
 		return null;
 	}
+
+	const handleTranslateGroup = async () => {
+		if (!(firstItem?.conversationId && website)) {
+			toast.error("These messages cannot be translated right now.");
+			return;
+		}
+
+		try {
+			await translateMessageGroup({
+				conversationId: firstItem.conversationId,
+				websiteSlug: website.slug,
+				timelineItemIds: visitorTranslatableMessageIds,
+			});
+		} catch (error) {
+			toast.error(
+				error instanceof Error
+					? error.message
+					: "Unable to translate these messages right now."
+			);
+		}
+	};
 
 	return (
 		<PrimitiveTimelineItemGroup
@@ -180,9 +257,57 @@ export function TimelineMessageGroup({
 											isLast={index === items.length - 1}
 											isSentByViewer={isSentByViewer}
 											item={item}
+											showOriginal={showOriginal}
 										/>
 									</motion.div>
 								))}
+
+								{lastItem ? (
+									<div
+										className="mt-1 flex items-center gap-1 px-1 text-muted-foreground text-xs"
+										data-translation-group-footer="true"
+									>
+										<span>
+											{new Date(lastItem.createdAt).toLocaleTimeString([], {
+												hour: "2-digit",
+												minute: "2-digit",
+											})}
+											{isAI && " • AI agent"}
+										</span>
+										{canOfferGroupTranslate ? (
+											<>
+												<span aria-hidden="true">•</span>
+												<ButtonWithPaywall
+													className="h-auto p-0 text-muted-foreground text-xs hover:bg-transparent hover:text-foreground"
+													data-translation-group-action="translate"
+													disabled={isTranslatingGroup}
+													featureKey="auto-translate"
+													onClick={handleTranslateGroup}
+													size="sm"
+													type="button"
+													variant="ghost"
+													websiteSlug={website?.slug ?? ""}
+												>
+													{isTranslatingGroup ? "Translating..." : "Translate"}
+												</ButtonWithPaywall>
+											</>
+										) : canToggleOriginal ? (
+											<>
+												<span aria-hidden="true">•</span>
+												<Button
+													className="h-auto p-0 text-muted-foreground text-xs hover:bg-transparent hover:text-foreground"
+													data-translation-group-action="toggle-original"
+													onClick={() => setShowOriginal((current) => !current)}
+													size="sm"
+													type="button"
+													variant="ghost"
+												>
+													{showOriginal ? "Show translation" : "Show original"}
+												</Button>
+											</>
+										) : null}
+									</div>
+								) : null}
 							</TimelineItemGroupContent>
 						</div>
 

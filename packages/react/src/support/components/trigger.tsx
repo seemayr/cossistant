@@ -5,6 +5,7 @@ import { useNewMessageSound } from "../../hooks/use-new-message-sound";
 import { useTransitionSwap } from "../../hooks/use-transition-swap";
 import { useTypingSound } from "../../hooks/use-typing-sound";
 import * as Primitive from "../../primitives";
+import { useSupportSlotOverrides } from "../context/slot-overrides";
 import type { TriggerRenderProps } from "../types";
 import { cn } from "../utils";
 import Icon from "./icons";
@@ -113,23 +114,56 @@ export type DefaultTriggerProps = {
  */
 export const DefaultTrigger: React.FC<DefaultTriggerProps> = ({
 	className,
-}) => (
-	<Primitive.Trigger asChild>
-		{({ isOpen, unreadCount, isTyping }: TriggerRenderProps) => (
-			<button
-				className={cn(
-					"relative z-[9999] flex size-14 cursor-pointer items-center justify-center rounded-full bg-co-primary text-co-primary-foreground transition-colors hover:bg-co-primary/90 active:scale-95 active:transition-transform data-[open=true]:bg-co-primary/90",
-					className
-				)}
-				data-open={isOpen}
-				type="button"
-			>
-				<TriggerContent
-					isOpen={isOpen}
-					isTyping={isTyping}
-					unreadCount={unreadCount}
-				/>
-			</button>
-		)}
-	</Primitive.Trigger>
-);
+}) => {
+	const { slots, slotProps } = useSupportSlotOverrides();
+	const TriggerSlot = slots.trigger;
+	const triggerSlotProps = slotProps.trigger;
+
+	return (
+		<Primitive.Trigger asChild>
+			{({ isOpen, unreadCount, isTyping, toggle }: TriggerRenderProps) => {
+				const sharedClassName = cn(triggerSlotProps?.className, className);
+				const dataState = isOpen ? "open" : "closed";
+
+				if (TriggerSlot) {
+					return (
+						<TriggerSlot
+							{...triggerSlotProps}
+							aria-expanded={isOpen}
+							aria-haspopup="dialog"
+							className={sharedClassName}
+							data-slot="trigger"
+							data-state={dataState}
+							isOpen={isOpen}
+							isTyping={isTyping}
+							onClick={toggle}
+							toggle={toggle}
+							type="button"
+							unreadCount={unreadCount}
+						/>
+					);
+				}
+
+				return (
+					<button
+						className={cn(
+							"relative z-[9999] flex size-14 cursor-pointer items-center justify-center rounded-full bg-co-primary text-co-primary-foreground transition-colors hover:bg-co-primary/90 active:scale-95 active:transition-transform data-[state=open]:bg-co-primary/90",
+							sharedClassName
+						)}
+						data-open={isOpen}
+						data-slot="trigger"
+						data-state={dataState}
+						onClick={toggle}
+						type="button"
+					>
+						<TriggerContent
+							isOpen={isOpen}
+							isTyping={isTyping}
+							unreadCount={unreadCount}
+						/>
+					</button>
+				);
+			}}
+		</Primitive.Trigger>
+	);
+};

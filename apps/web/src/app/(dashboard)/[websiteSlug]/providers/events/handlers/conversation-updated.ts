@@ -125,6 +125,26 @@ function createHeaderUpdaterFromUpdates(
 			updatedHeader.title = updates.title;
 		}
 
+		if (updates.visitorTitle !== undefined) {
+			updatedHeader.visitorTitle = updates.visitorTitle;
+		}
+
+		if (updates.visitorTitleLanguage !== undefined) {
+			updatedHeader.visitorTitleLanguage = updates.visitorTitleLanguage;
+		}
+
+		if (updates.visitorLanguage !== undefined) {
+			updatedHeader.visitorLanguage = updates.visitorLanguage;
+		}
+
+		if (updates.translationActivatedAt !== undefined) {
+			updatedHeader.translationActivatedAt = updates.translationActivatedAt;
+		}
+
+		if (updates.translationChargedAt !== undefined) {
+			updatedHeader.translationChargedAt = updates.translationChargedAt;
+		}
+
 		if (updates.escalatedAt !== undefined) {
 			updatedHeader.escalatedAt = updates.escalatedAt;
 		}

@@ -211,8 +211,27 @@ export const conversationInboxItemSchema = z
 		title: z.string().nullable().openapi({
 			description: "Conversation title if one has been generated or set.",
 		}),
+		visitorTitle: z.string().nullable().optional().openapi({
+			description:
+				"Conversation title localized for the visitor, when available.",
+		}),
+		visitorTitleLanguage: z.string().nullable().optional().openapi({
+			description:
+				"Language code used for the visitor-facing conversation title.",
+		}),
+		visitorLanguage: z.string().nullable().optional().openapi({
+			description: "Detected visitor language for this conversation.",
+		}),
 		titleSource: z.enum(["ai", "user"]).nullable().openapi({
 			description: "Whether the title was set by AI or a user.",
+		}),
+		translationActivatedAt: nullableApiTimestampSchema.optional().openapi({
+			description:
+				"Timestamp when automatic translation was first activated for this conversation.",
+		}),
+		translationChargedAt: nullableApiTimestampSchema.optional().openapi({
+			description:
+				"Timestamp when the one-time translation credit was charged for this conversation.",
 		}),
 		sentiment: conversationInboxSentimentSchema.openapi({
 			description: "Most recent inferred conversation sentiment.",

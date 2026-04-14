@@ -1,6 +1,6 @@
 ---
 title: Customization
-description: Style and customize the Support widget with Tailwind classes and compound components.
+description: Customize the Support widget with slots, slotProps, Tailwind, CSS variables, and full composition.
 search:
   kind: guide
   tags:
@@ -8,314 +8,88 @@ search:
     - tailwind
     - classNames
     - theme
+    - slots
   aliases:
     - classNames.trigger
     - classNames.content
-    - sideOffset
+    - slotProps
+    - Support.Root
 ---
 
 ## Overview
 
-The Support widget follows **progressive disclosure**. Start with zero config, add styling, then compose your own components when needed.
+The recommended customization path is:
 
-## Level 1: Style Overrides
+1. Keep `Support` for the runtime and defaults.
+2. Use `classNames` and `slotProps` for styling.
+3. Use `slots` to replace only the parts you need.
+4. Move to `Support.Root` only when you want a custom shell.
 
-Override styles with `classNames`:
+## Styling Basics
+
+Import one stylesheet at your app root:
+
+```tsx
+import "@cossistant/react/styles.css";
+```
+
+Or, if your app already uses Tailwind CSS v4:
+
+```tsx
+import "@cossistant/react/support.css";
+```
+
+For quick styling changes, start with `classNames` and `slotProps`:
 
 ```tsx
 <Support
   classNames={{
-    trigger: "bg-purple-600 hover:bg-purple-700",
-    content: "border-purple-200 shadow-2xl",
+    trigger: "bg-black text-white",
+    content: "border-neutral-200 shadow-2xl",
+  }}
+  slotProps={{
+    content: {
+      className: "rounded-[28px]",
+    },
   }}
 />
 ```
 
-### Available classNames
+If you want broader theming without replacing components, override the theme
+tokens exposed by the stylesheet:
 
-- **`trigger`** - The floating chat button
-- **`content`** - The main widget dialog
-
-## Level 2: Positioning
-
-Control where the content appears relative to the trigger:
-
-```tsx
-<Support
-  side="bottom"    // "top" | "bottom" | "left" | "right"
-  align="end"      // "start" | "center" | "end"
-  sideOffset={16}  // Distance in pixels
-/>
-```
-
-### Auto Collision Avoidance
-
-The widget automatically repositions itself to stay within the viewport. When there isn't enough space on the preferred side, it flips to the opposite side. It also shifts along the axis to prevent clipping at screen edges.
-
-```tsx
-// Collision avoidance is enabled by default
-<Support side="top" align="end" />
-
-// Disable collision avoidance for static positioning
-<Support avoidCollisions={false} />
-
-// Custom padding from viewport edges (default: 8px)
-<Support collisionPadding={16} />
-
-// Per-side collision padding
-<Support collisionPadding={{ top: 8, bottom: 32, left: 8, right: 8 }} />
-```
-
-## Responsive Mode
-
-Use `mode="responsive"` when the widget should live inside your app layout instead of opening from a floating trigger.
-
-```tsx
-<div className="h-[640px] overflow-hidden rounded-xl border border-border">
-  <Support mode="responsive" />
-</div>
-```
-
-Responsive mode changes the widget behavior:
-
-- The widget is always rendered
-- It fills the full width and height of its parent container
-- The default floating trigger is not rendered
-- `open`, `defaultOpen`, and `onOpenChange` are not needed for visibility
-
-### Container requirements
-
-- The parent container must provide an explicit height
-- The parent container owns outer border, radius, shadow, and layout
-- Use `classNames.content` or `<Support.Content />` when you want to add inner widget styling
-
-## Level 3: Custom Trigger
-
-Replace the default trigger with `<Support.Trigger>`:
-
-```tsx
-import { Support, type TriggerRenderProps } from "@cossistant/next";
-
-<Support side="bottom" align="end">
-  <Support.Trigger className="flex items-center gap-2 px-4 py-2 bg-blue-600 rounded-lg">
-    {({ isOpen, unreadCount }: TriggerRenderProps) => (
-      <>
-        <span>{isOpen ? "Close" : "Help"}</span>
-        {unreadCount > 0 && (
-          <span className="bg-red-500 text-white text-xs px-1.5 rounded-full">
-            {unreadCount}
-          </span>
-        )}
-      </>
-    )}
-  </Support.Trigger>
-</Support>
-```
-
-### Trigger Render Props
-
-| Prop          | Type         | Description                           |
-| ------------- | ------------ | ------------------------------------- |
-| `isOpen`      | `boolean`    | Whether the widget is currently open  |
-| `unreadCount` | `number`     | Number of unread messages             |
-| `isTyping`    | `boolean`    | Whether an agent is typing            |
-| `toggle`      | `() => void` | Function to toggle widget open/closed |
-
-## Level 4: Custom Content
-
-Control the content positioning and styling with `<Support.Content>`:
-
-```tsx
-<Support>
-  <Support.Trigger className="...">
-    {(props) => <MyTriggerContent {...props} />}
-  </Support.Trigger>
-  <Support.Content
-    side="bottom"
-    align="end"
-    sideOffset={8}
-    className="border-2 border-purple-500"
-  >
-    <Support.Router />
-  </Support.Content>
-</Support>
-```
-
-## Level 5: Full Composition
-
-For complete control, use `<Support.Root>`:
-
-```tsx
-import { Support } from "@cossistant/next";
-
-export default function App() {
-  return (
-    <Support.Root defaultOpen={false} theme="dark">
-      <Support.Trigger asChild>
-        <button className="px-4 py-2 bg-indigo-600 rounded" type="button">
-          Help
-        </button>
-      </Support.Trigger>
-      <Support.Content side="bottom" align="end" className="custom-content">
-        <Support.Router />
-      </Support.Content>
-    </Support.Root>
-  );
+```css
+:root {
+  --co-theme-radius: 1.5rem;
+  --co-theme-background: oklch(99% 0.01 95);
+  --co-theme-foreground: oklch(18% 0.01 95);
+  --co-theme-primary: oklch(22% 0.03 250);
+  --co-theme-primary-foreground: white;
+  --co-theme-border: oklch(90% 0.01 95);
 }
 ```
 
-## Custom Trigger in a Topbar
+### Stable styling hooks
 
-A common use case is placing the trigger in your navigation bar:
+The default widget exposes stable DOM attributes for CSS and Tailwind selectors:
 
-```tsx
-import { Support, type TriggerRenderProps } from "@cossistant/next";
+- `data-slot`
+- `data-state`
+- `data-page`
 
-function Topbar() {
-  return (
-    <header className="flex items-center justify-between px-4 h-16">
-      <Logo />
-      <nav className="flex items-center gap-4">
-        <Link href="/settings">Settings</Link>
-        <Support side="bottom" align="end" sideOffset={8}>
-          <Support.Trigger className="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-100">
-            {({ isOpen, unreadCount }: TriggerRenderProps) => (
-              <>
-                <span>{isOpen ? "Close" : "Help"}</span>
-                {unreadCount > 0 && (
-                  <span className="bg-red-500 text-white text-xs px-1.5 rounded-full">
-                    {unreadCount}
-                  </span>
-                )}
-              </>
-            )}
-          </Support.Trigger>
-        </Support>
-      </nav>
-    </header>
-  );
+```css
+[data-slot="trigger"][data-state="open"] {
+  transform: scale(1.02);
+}
+
+[data-slot="content"] {
+  backdrop-filter: blur(12px);
 }
 ```
 
-## Custom Pages
+## Replace Only the Bubble
 
-Add custom pages to the router:
+Use `slots.trigger` when you want a different launcher without rebuilding the
+panel or router.
 
-```tsx
-import { Support, useSupportNavigation } from "@cossistant/next";
-
-const FAQPage = () => {
-  const { goBack } = useSupportNavigation();
-  return (
-    <div className="p-4">
-      <button onClick={goBack} type="button">← Back</button>
-      <h1>Frequently Asked Questions</h1>
-    </div>
-  );
-};
-
-<Support>
-  <Support.Page name="FAQ" component={FAQPage} />
-</Support>
-```
-
-Or with the router directly:
-
-```tsx
-<Support>
-  <Support.Content>
-    <Support.Router>
-      <Support.Page name="FAQ" component={FAQPage} />
-      <Support.Page name="SETTINGS" component={SettingsPage} />
-    </Support.Router>
-  </Support.Content>
-</Support>
-```
-
-## Type Reference
-
-### TriggerRenderProps
-
-```tsx
-type TriggerRenderProps = {
-  isOpen: boolean;
-  isTyping: boolean;
-  unreadCount: number;
-  toggle: () => void;
-};
-```
-
-### ContentProps
-
-```tsx
-type CollisionPadding =
-  | number
-  | { top?: number; right?: number; bottom?: number; left?: number };
-
-type ContentProps = {
-  className?: string;
-  side?: "top" | "bottom" | "left" | "right";
-  align?: "start" | "center" | "end";
-  sideOffset?: number;
-  avoidCollisions?: boolean;       // default: true
-  collisionPadding?: CollisionPadding; // default: 8
-  children?: React.ReactNode;
-};
-```
-
-### SupportProps
-
-```tsx
-type SupportProps = {
-  className?: string;
-  mode?: "floating" | "responsive";
-  side?: "top" | "bottom" | "left" | "right";
-  align?: "start" | "center" | "end";
-  sideOffset?: number;
-  avoidCollisions?: boolean;       // default: true
-  collisionPadding?: CollisionPadding; // default: 8
-  classNames?: {
-    trigger?: string;
-    content?: string;
-  };
-  theme?: "light" | "dark";
-  defaultOpen?: boolean;
-  locale?: string;
-  content?: SupportTextContentOverrides;
-  quickOptions?: string[];
-  defaultMessages?: DefaultMessage[];
-  customPages?: CustomPage[];
-  children?: React.ReactNode;
-};
-```
-
-## Full Example
-
-Combining multiple customizations:
-
-```tsx
-import { Support, type TriggerRenderProps } from "@cossistant/next";
-import { MessageCircle, X } from "lucide-react";
-
-const TriggerContent = ({ isOpen, unreadCount }: TriggerRenderProps) => (
-  <>
-    {isOpen ? <X className="size-5" /> : <MessageCircle className="size-6" />}
-    {unreadCount > 0 && (
-      <span className="absolute -top-1 -right-1 flex size-5 items-center justify-center rounded-full bg-red-500 text-white text-xs">
-        {unreadCount}
-      </span>
-    )}
-  </>
-);
-
-export default function App() {
-  return (
-    <Support theme="dark" side="top" align="end">
-      <Support.Trigger className="relative flex size-14 items-center justify-center rounded-full bg-indigo-600 text-white hover:bg-indigo-700">
-        {(props) => <TriggerContent {...props} />}
-      </Support.Trigger>
-      <Support.Content className="border-indigo-200" />
-    </Support>
-  );
-}
-```
+<ComponentPreview name="support-classic-bubble" />

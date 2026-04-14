@@ -20,8 +20,8 @@ describe("provider remount regressions", () => {
 
 		expect(realtimeSource).not.toContain("if (!isBrowser)");
 		expect(realtimeSource).not.toContain("setIsBrowser(");
-		expect(realtimeSource).toContain("function RealtimeProviderInternal");
-		expect(realtimeSource).toContain("<RealtimeProviderInternal");
+		expect(realtimeSource).toContain("export function RealtimeProvider");
+		expect(realtimeSource).toContain("useSyncExternalStore(");
 	});
 	it("resets connection metadata when auth identity changes", () => {
 		const realtimeSource = readFileSync(
@@ -29,12 +29,12 @@ describe("provider remount regressions", () => {
 			"utf8"
 		);
 
-		expect(realtimeSource).toContain("function toRealtimeAuthIdentity");
-		expect(realtimeSource).toContain("function hasRealtimeAuthIdentityChanged");
-		expect(realtimeSource).toContain("setConnectionId(null)");
-		expect(realtimeSource).toContain("setLastEvent(null)");
-		expect(realtimeSource).toContain("setConnectionError(null)");
-		expect(realtimeSource).toContain("hasRealtimeAuthIdentityChanged(");
-		expect(realtimeSource).toContain("authIdentity");
+		expect(realtimeSource).toContain("function extractAuthIdentity");
+		expect(realtimeSource).toContain(
+			"const identity = useMemo(() => extractAuthIdentity(auth), [auth])"
+		);
+		expect(realtimeSource).toContain("visitorId: identity.visitorId");
+		expect(realtimeSource).toContain("websiteId: identity.websiteId");
+		expect(realtimeSource).toContain("userId: identity.userId");
 	});
 });

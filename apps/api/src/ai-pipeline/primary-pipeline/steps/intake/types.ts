@@ -14,6 +14,9 @@ export type IntakeReadyContext = {
 	aiAgent: AiAgentSelect;
 	modelResolution: ModelResolution;
 	conversation: ConversationSelect;
+	websiteDefaultLanguage: string;
+	visitorLanguage: string | null;
+	autoTranslateEnabled?: boolean;
 	conversationHistory: ConversationTranscriptEntry[];
 	decisionMessages: SegmentedConversationMessage[];
 	generationEntries: SegmentedConversationEntry[];

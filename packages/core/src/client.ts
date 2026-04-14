@@ -646,6 +646,21 @@ export class CossistantClient {
 		const nextConversation = {
 			...existingConversation,
 			...(updates.title !== undefined && { title: updates.title ?? undefined }),
+			...(updates.visitorTitle !== undefined && {
+				visitorTitle: updates.visitorTitle,
+			}),
+			...(updates.visitorTitleLanguage !== undefined && {
+				visitorTitleLanguage: updates.visitorTitleLanguage,
+			}),
+			...(updates.visitorLanguage !== undefined && {
+				visitorLanguage: updates.visitorLanguage,
+			}),
+			...(updates.translationActivatedAt !== undefined && {
+				translationActivatedAt: updates.translationActivatedAt,
+			}),
+			...(updates.translationChargedAt !== undefined && {
+				translationChargedAt: updates.translationChargedAt,
+			}),
 			...(updates.status !== undefined && { status: updates.status }),
 			...(updates.deletedAt !== undefined && {
 				deletedAt: updates.deletedAt,

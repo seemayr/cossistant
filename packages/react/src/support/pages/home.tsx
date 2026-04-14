@@ -5,11 +5,14 @@ import { PENDING_CONVERSATION_ID } from "../../utils/id";
 import { AvatarStack } from "../components/avatar-stack";
 import { CoButton } from "../components/button";
 import { ConversationButtonLink } from "../components/conversation-button-link";
+import { FooterSurface } from "../components/footer-surface";
 import { Header } from "../components/header";
 import Icon from "../components/icons";
 import { Watermark } from "../components/watermark";
+import { useSupportSlotOverrides } from "../context/slot-overrides";
 import { useSupportNavigation } from "../store/support-store";
 import { Text, useSupportText } from "../text";
+import { cn } from "../utils";
 
 type HomePageProps = {
 	params?: undefined;
@@ -22,6 +25,9 @@ export const HomePage = (_props: HomePageProps = {}): ReactElement => {
 	const { website, availableHumanAgents, visitor, quickOptions } = useSupport();
 	const { navigate } = useSupportNavigation();
 	const text = useSupportText();
+	const { slots, slotProps } = useSupportSlotOverrides();
+	const HomePageSlot = slots.homePage;
+	const homePageSlotProps = slotProps.homePage;
 
 	// Main home page hook - handles all logic
 	const home = useHomePage({
@@ -49,9 +55,38 @@ export const HomePage = (_props: HomePageProps = {}): ReactElement => {
 		},
 	});
 
+	if (HomePageSlot) {
+		return (
+			<HomePageSlot
+				{...homePageSlotProps}
+				availableAIAgents={website?.availableAIAgents || []}
+				availableConversationsCount={home.availableConversationsCount}
+				availableHumanAgents={availableHumanAgents}
+				className={cn(homePageSlotProps?.className)}
+				conversations={home.conversations}
+				data-page="HOME"
+				data-slot="home-page"
+				error={home.error}
+				hasConversations={home.hasConversations}
+				isLoading={home.isLoading}
+				lastOpenConversation={home.lastOpenConversation}
+				openConversation={home.openConversation}
+				openConversationHistory={home.openConversationHistory}
+				quickOptions={quickOptions}
+				startConversation={home.startConversation}
+				visitor={visitor}
+				website={website}
+			/>
+		);
+	}
+
 	return (
-		<>
-			<Header>{/* <NavigationTab /> */}</Header>
+		<div
+			className="flex h-full flex-col"
+			data-page="HOME"
+			data-slot="home-page"
+		>
+			<Header page="HOME">{/* <NavigationTab /> */}</Header>
 			<div className="sticky top-0 flex flex-1 px-6">
 				<div className="flex flex-col gap-2">
 					<div
@@ -93,7 +128,10 @@ export const HomePage = (_props: HomePageProps = {}): ReactElement => {
 					)}
 				</div>
 			</div>
-			<div className="flex flex-shrink-0 flex-col items-center justify-center gap-2 px-6 pb-4">
+			<FooterSurface
+				className="flex flex-shrink-0 flex-col items-center justify-center gap-2 px-6 pb-4"
+				page="HOME"
+			>
 				{home.availableConversationsCount > 0 && (
 					<CoButton
 						className="relative w-full text-co-primary/40 text-xs hover:text-co-primary"
@@ -140,7 +178,7 @@ export const HomePage = (_props: HomePageProps = {}): ReactElement => {
 					<Watermark className="mt-4 mb-0" />
 				</div>
 				<div />
-			</div>
-		</>
+			</FooterSurface>
+		</div>
 	);
 };

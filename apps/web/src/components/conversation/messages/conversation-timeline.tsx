@@ -1,5 +1,4 @@
 import type { RouterOutputs } from "@api/trpc/types";
-import { useGroupedMessages } from "@cossistant/next/hooks";
 import {
 	ConversationTimelineContainer,
 	DaySeparator,
@@ -8,6 +7,7 @@ import {
 	ConversationTimeline as PrimitiveConversationTimeline,
 } from "@cossistant/next/primitives";
 import { useConversationTyping } from "@cossistant/react";
+import { useGroupedMessages } from "@cossistant/react/internal/hooks";
 
 import type { AvailableAIAgent } from "@cossistant/types";
 import type { TimelineItem } from "@cossistant/types/api/timeline-item";
@@ -47,6 +47,7 @@ type ConversationTimelineListProps = {
 	availableAIAgents: AvailableAIAgent[];
 	seenData?: ConversationSeen[];
 	visitor: ConversationHeader["visitor"];
+	conversationVisitorLanguage?: string | null;
 	currentUserId: string;
 	conversationId: string;
 	className?: string;
@@ -66,6 +67,7 @@ export function ConversationTimelineList({
 	className,
 	onFetchMoreIfNeeded,
 	visitor,
+	conversationVisitorLanguage,
 	inputHeight = 140,
 }: ConversationTimelineListProps) {
 	const fallbackRef = useRef<HTMLDivElement | null>(null);
@@ -286,6 +288,9 @@ export function ConversationTimelineList({
 							return (
 								<TimelineMessageGroup
 									availableAIAgents={availableAIAgents}
+									conversationVisitorLanguage={
+										conversationVisitorLanguage ?? null
+									}
 									currentUserId={currentUserId}
 									items={item.items || []}
 									key={groupKey}

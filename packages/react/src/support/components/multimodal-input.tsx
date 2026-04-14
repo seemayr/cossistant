@@ -10,6 +10,7 @@ import type React from "react";
 import { useRef } from "react";
 import { useComposerRefocus } from "../../hooks/use-composer-refocus";
 import * as Primitive from "../../primitives";
+import { useSupportSlotOverrides } from "../context/slot-overrides";
 import { useSupportText } from "../text";
 import { cn } from "../utils";
 import Icon from "./icons";
@@ -52,6 +53,9 @@ export const MultimodalInput: React.FC<MultimodalInputProps> = ({
 	maxFileSize = MAX_FILE_SIZE,
 	allowedFileTypes = FILE_INPUT_ACCEPT,
 }) => {
+	const { slots, slotProps } = useSupportSlotOverrides();
+	const ComposerSlot = slots.composer;
+	const composerSlotProps = slotProps.composer;
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const hasContent = value.trim().length > 0 || files.length > 0;
 	const { focusComposer, inputRef } = useComposerRefocus({
@@ -63,6 +67,17 @@ export const MultimodalInput: React.FC<MultimodalInputProps> = ({
 	const text = useSupportText();
 	const resolvedPlaceholder =
 		placeholder ?? text("component.multimodalInput.placeholder");
+	const composer = {
+		message: value,
+		files,
+		isSubmitting,
+		isUploading,
+		canSubmit,
+		setMessage: onChange,
+		addFiles: onFileSelect ?? (() => {}),
+		removeFile: onRemoveFile ?? (() => {}),
+		submit: onSubmit,
+	};
 
 	const handleSubmit = () => {
 		if (!canSubmit) {
@@ -89,8 +104,38 @@ export const MultimodalInput: React.FC<MultimodalInputProps> = ({
 		}
 	};
 
+	if (ComposerSlot) {
+		return (
+			<ComposerSlot
+				{...composerSlotProps}
+				allowedFileTypes={allowedFileTypes}
+				className={cn(composerSlotProps?.className, className)}
+				composer={composer}
+				data-slot="composer"
+				disabled={disabled}
+				error={error}
+				files={files}
+				isSubmitting={isSubmitting}
+				isUploading={isUploading}
+				maxFileSize={maxFileSize}
+				maxFiles={maxFiles}
+				onChange={onChange}
+				onFileSelect={onFileSelect}
+				onRemoveFile={onRemoveFile}
+				onSubmit={onSubmit}
+				placeholder={resolvedPlaceholder}
+				uploadProgress={uploadProgress}
+				value={value}
+			/>
+		);
+	}
+
 	return (
-		<form className="flex flex-col gap-2" onSubmit={handleFormSubmit}>
+		<form
+			className="flex flex-col gap-2"
+			data-slot="composer"
+			onSubmit={handleFormSubmit}
+		>
 			{/* Error message */}
 			{error && (
 				<div
@@ -155,6 +200,7 @@ export const MultimodalInput: React.FC<MultimodalInputProps> = ({
 						autoFocus
 						className={cn(
 							"w-full resize-none overflow-hidden p-3 text-co-foreground text-sm placeholder:text-co-primary/50 focus-visible:outline-none",
+							composerSlotProps?.className,
 							className
 						)}
 						disabled={disabled}

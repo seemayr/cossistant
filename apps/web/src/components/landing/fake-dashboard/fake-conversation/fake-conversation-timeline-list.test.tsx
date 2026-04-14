@@ -1,9 +1,31 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, mock } from "bun:test";
 import type { TimelineItem } from "@cossistant/types/api/timeline-item";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ConversationHeader } from "@/contexts/inboxes";
 import type { ConversationTimelineItem } from "@/data/conversation-message-cache";
+
+mock.module("@/lib/trpc/client", () => ({
+	useTRPC: () => ({
+		conversation: {
+			translateMessageGroup: {
+				mutationOptions: () => ({}),
+			},
+		},
+	}),
+}));
+
+mock.module("@tanstack/react-query", () => ({
+	useMutation: () => ({
+		mutateAsync: async () => null,
+		isPending: false,
+	}),
+}));
+
+mock.module("@/contexts/website", () => ({
+	useOptionalWebsite: () => null,
+}));
+
 import { FakeConversationTimelineList } from "./fake-conversation-timeline-list";
 
 function createTimelineItem(overrides: Partial<TimelineItem>): TimelineItem {

@@ -4,7 +4,7 @@ import { getSupportMessageWidthClasses } from "./timeline-message-item";
 describe("getSupportMessageWidthClasses", () => {
 	it("keeps regular text messages constrained", () => {
 		const className = getSupportMessageWidthClasses("Hello there");
-		expect(className).toBe("max-w-[90%]");
+		expect(className).toBe("max-w-[92%]");
 	});
 
 	it("expands fenced code messages to full width", () => {

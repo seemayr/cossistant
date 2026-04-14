@@ -13,7 +13,7 @@ export function TimelineCommandBlock({
 }: TimelineCommandBlockProps): React.ReactElement {
 	return (
 		<PrimitiveTimelineCommandBlock
-			className={`mt-1 w-full overflow-hidden rounded border border-co-border bg-co-background-200 ${className ?? ""}`.trim()}
+			className={`mt-1 w-full overflow-hidden rounded border border-co-border bg-co-background-200 text-co-foreground ${className ?? ""}`.trim()}
 			commands={commands}
 		>
 			{({
@@ -25,7 +25,7 @@ export function TimelineCommandBlock({
 				setPackageManager,
 			}) => (
 				<>
-					<div className="flex items-center justify-between gap-2 px-2 py-1.5">
+					<div className="flex items-center justify-between gap-2 px-2 py-1.5 text-co-muted-foreground">
 						<div className="flex items-center gap-1">
 							{packageManagers.map((packageManager) => (
 								<CoButton
@@ -56,8 +56,10 @@ export function TimelineCommandBlock({
 						</CoButton>
 					</div>
 
-					<pre className="no-scrollbar overflow-x-auto p-3 text-xs leading-relaxed">
-						<code className="language-bash">{activeCommand}</code>
+					<pre className="no-scrollbar overflow-x-auto p-3 font-co-mono text-co-foreground text-xs leading-relaxed">
+						<code className="language-bash font-co-mono text-co-foreground">
+							{activeCommand}
+						</code>
 					</pre>
 				</>
 			)}

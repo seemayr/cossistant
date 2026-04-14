@@ -51,6 +51,12 @@ export const website = pgTable(
 		name: text("name").notNull(),
 		slug: text("slug").notNull().unique(),
 		domain: text("domain").notNull(),
+		defaultLanguage: varchar("default_language", { length: 20 })
+			.default("en")
+			.notNull(),
+		autoTranslateEnabled: boolean("auto_translate_enabled")
+			.default(true)
+			.notNull(),
 		contactEmail: text("contact_email"),
 		isDomainOwnershipVerified: boolean("is_domain_ownership_verified")
 			.default(false)

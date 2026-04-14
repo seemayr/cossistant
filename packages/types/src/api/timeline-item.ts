@@ -247,6 +247,32 @@ const imagePartSchema = z.object({
 // These are Cossistant-specific parts not in AI SDK
 // ============================================================================
 
+const timelinePartTranslationSchema = z.object({
+	type: z.literal("translation").openapi({
+		description:
+			"Stored translation for a timeline item message, scoped to an audience",
+	}),
+	text: z.string().openapi({
+		description: "Translated text content",
+	}),
+	sourceLanguage: z.string().openapi({
+		description: "Detected/source language of the original message",
+	}),
+	targetLanguage: z.string().openapi({
+		description: "Language of the translated text",
+	}),
+	audience: z.enum(["team", "visitor"]).openapi({
+		description: "Audience this translated text is meant for",
+	}),
+	mode: z.enum(["auto", "manual"]).openapi({
+		description:
+			"Whether this translation was created automatically or manually",
+	}),
+	modelId: z.string().nullable().optional().openapi({
+		description: "Model identifier used to generate the translation, if any",
+	}),
+});
+
 const timelinePartEventSchema = z.object({
 	type: z.literal("event").openapi({
 		description: "Type of timeline part - always 'event' for event parts",
@@ -317,6 +343,7 @@ export const timelineItemPartsSchema = z
 			filePartSchema,
 			imagePartSchema,
 			// Cossistant-specific parts
+			timelinePartTranslationSchema,
 			timelinePartEventSchema,
 			timelinePartMetadataSchema,
 		])
@@ -395,6 +422,9 @@ export type FilePart = z.infer<typeof filePartSchema>;
 export type ImagePart = z.infer<typeof imagePartSchema>;
 
 // Cossistant-specific part types
+export type TimelinePartTranslation = z.infer<
+	typeof timelinePartTranslationSchema
+>;
 export type TimelinePartEvent = z.infer<typeof timelinePartEventSchema>;
 export type TimelinePartMetadata = z.infer<typeof timelinePartMetadataSchema>;
 
@@ -428,6 +458,7 @@ export {
 	stepStartPartSchema,
 	filePartSchema,
 	imagePartSchema,
+	timelinePartTranslationSchema,
 	timelinePartEventSchema,
 	timelinePartMetadataSchema,
 	cossistantProviderMetadataSchema,

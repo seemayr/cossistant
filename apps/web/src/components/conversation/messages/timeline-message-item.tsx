@@ -1,4 +1,8 @@
-import { formatFileSize } from "@cossistant/core";
+import {
+	formatFileSize,
+	getTimelineItemTranslation,
+	resolveTimelineItemText,
+} from "@cossistant/core";
 import {
 	extractFileParts,
 	extractImageParts,
@@ -6,14 +10,12 @@ import {
 	TimelineItem as PrimitiveTimelineItem,
 	TimelineItemContent,
 	type TimelineItemContentMarkdownRenderers,
-	TimelineItemTimestamp,
 } from "@cossistant/next/primitives";
 import type { TimelineItem } from "@cossistant/types/api/timeline-item";
 import type React from "react";
 import { useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import Icon from "@/components/ui/icons";
-import { TooltipOnHover } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { TimelineCodeBlock } from "./timeline-code-block";
 import { TimelineCommandBlock } from "./timeline-command-block";
@@ -22,6 +24,7 @@ export type TimelineMessageItemProps = {
 	item: TimelineItem;
 	isLast?: boolean;
 	isSentByViewer?: boolean;
+	showOriginal?: boolean;
 };
 
 function usesExpandedMessageLayout(text: string | null | undefined): boolean {
@@ -48,20 +51,27 @@ export function TimelineMessageItem({
 	item,
 	isLast = false,
 	isSentByViewer = false,
+	showOriginal = false,
 }: TimelineMessageItemProps) {
 	const [lightboxOpen, setLightboxOpen] = useState(false);
 	const [lightboxIndex, setLightboxIndex] = useState(0);
+	const teamTranslation = getTimelineItemTranslation(item, "team");
+	const resolvedDisplayText =
+		showOriginal && teamTranslation
+			? item.text
+			: resolveTimelineItemText(item, "team");
 
 	// Extract image and file parts
 	const images = extractImageParts(item.parts);
 	const files = extractFileParts(item.parts);
 	const hasAttachments = images.length > 0 || files.length > 0;
-	const hasText = item.text && item.text.trim().length > 0;
-	const messageContainerWidthClassName =
-		getDashboardMessageContainerWidthClasses(item.text);
-	const messageBubbleWidthClassName = getDashboardMessageBubbleWidthClasses(
-		item.text
+	const hasText = Boolean(
+		resolvedDisplayText && resolvedDisplayText.trim().length > 0
 	);
+	const messageContainerWidthClassName =
+		getDashboardMessageContainerWidthClasses(resolvedDisplayText);
+	const messageBubbleWidthClassName =
+		getDashboardMessageBubbleWidthClasses(resolvedDisplayText);
 	const isPrivate = item.visibility === "private";
 	const markdownRenderers = useMemo<TimelineItemContentMarkdownRenderers>(
 		() => ({
@@ -94,7 +104,7 @@ export function TimelineMessageItem({
 	return (
 		<>
 			<PrimitiveTimelineItem item={item}>
-				{({ isAI, timestamp }) => (
+				{() => (
 					<div
 						className={cn(
 							"flex w-full gap-2",
@@ -139,7 +149,7 @@ export function TimelineMessageItem({
 												className="block min-w-0 max-w-full break-words text-foreground text-sm"
 												markdownRenderers={markdownRenderers}
 												renderMarkdown
-												text={item.text}
+												text={resolvedDisplayText}
 											/>
 											<span className="mt-6 flex items-center gap-1 font-medium text-cossistant-yellow-700 text-xs opacity-40 dark:text-cossistant-yellow-600">
 												<Icon
@@ -166,7 +176,7 @@ export function TimelineMessageItem({
 											)}
 											markdownRenderers={markdownRenderers}
 											renderMarkdown
-											text={item.text}
+											text={resolvedDisplayText}
 										/>
 									)}
 								</div>
@@ -232,23 +242,6 @@ export function TimelineMessageItem({
 										</a>
 									))}
 								</div>
-							)}
-
-							{isLast && (
-								<TimelineItemTimestamp
-									className="px-1 text-muted-foreground text-xs"
-									timestamp={timestamp}
-								>
-									{() => (
-										<>
-											{timestamp.toLocaleTimeString([], {
-												hour: "2-digit",
-												minute: "2-digit",
-											})}
-											{isAI && " • AI agent"}
-										</>
-									)}
-								</TimelineItemTimestamp>
 							)}
 						</div>
 					</div>

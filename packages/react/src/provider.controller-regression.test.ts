@@ -6,6 +6,7 @@ import { SupportProvider, useSupport } from "./provider";
 import { processingStoreSingleton } from "./realtime/processing-store";
 import { seenStoreSingleton } from "./realtime/seen-store";
 import { typingStoreSingleton } from "./realtime/typing-store";
+import { createMockSupportController } from "./test-utils/create-mock-support-controller";
 
 describe("provider controller regression coverage", () => {
 	it("creates the support controller inside the provider", () => {
@@ -18,16 +19,34 @@ describe("provider controller regression coverage", () => {
 		expect(source).toContain("<SupportControllerContext.Provider");
 	});
 
-	it("supports injecting an existing controller into the provider", () => {
-		const source = readFileSync(
-			new URL("./provider.tsx", import.meta.url),
-			"utf8"
+	it("supports injecting an existing controller into the provider at runtime", () => {
+		const controller = createMockSupportController();
+		const open = () => {};
+		const toggle = () => {};
+		let support: ReturnType<typeof useSupport> | null = null;
+
+		controller.open = open;
+		controller.toggle = toggle;
+
+		function Harness() {
+			support = useSupport();
+			return null;
+		}
+
+		renderToStaticMarkup(
+			React.createElement(
+				SupportProvider,
+				{
+					controller,
+				},
+				React.createElement(Harness)
+			)
 		);
 
-		expect(source).toContain("controller?: SupportController");
-		expect(source).toContain(
-			"const controller = externalController ?? ownedController"
-		);
+		expect(support).not.toBeNull();
+		expect(support?.open).toBe(open);
+		expect(support?.toggle).toBe(toggle);
+		expect(support?.website?.id).toBe("site_123");
 	});
 
 	it("routes support store access through the controller context", () => {

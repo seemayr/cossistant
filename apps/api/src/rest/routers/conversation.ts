@@ -44,6 +44,15 @@ import {
 	type ResolvedPrivateApiKeyActor,
 	resolvePrivateApiKeyActorUser,
 } from "@api/lib/private-api-key-actor";
+import {
+	detectMessageLanguage,
+	finalizeConversationTranslation,
+	isAutomaticTranslationEnabled,
+	prepareInboundVisitorTranslation,
+	prepareOutboundVisitorTranslation,
+	shouldMaskTypingPreview,
+	syncConversationVisitorTitle,
+} from "@api/lib/translation";
 import { realtime } from "@api/realtime/emitter";
 import { getRedis } from "@api/redis";
 import { markVisitorPresence } from "@api/services/presence";
@@ -161,6 +170,11 @@ const serializeConversationForResponse = (
 	const serializedConversation = conversationSchema.parse({
 		id: record.id,
 		title: record.title ?? undefined,
+		visitorTitle: record.visitorTitle ?? null,
+		visitorTitleLanguage: record.visitorTitleLanguage ?? null,
+		visitorLanguage: record.visitorLanguage ?? null,
+		translationActivatedAt: record.translationActivatedAt ?? null,
+		translationChargedAt: record.translationChargedAt ?? null,
 		metadata:
 			typeof record.metadata === "object" && record.metadata !== null
 				? (record.metadata as Record<string, string | number | boolean | null>)
@@ -241,6 +255,88 @@ function buildDefaultTimelineItemId(params: {
 	return generateIdempotentULID(
 		`conversation-default:${params.conversationId}:${params.index}:${JSON.stringify(canonicalizeForStableStringify(normalizedShape))}`
 	);
+}
+
+function replaceAudienceTranslationPart(
+	parts: unknown[],
+	audience: "team" | "visitor",
+	nextPart: unknown
+): unknown[] {
+	return [
+		...parts.filter((part) => {
+			if (!(part && typeof part === "object")) {
+				return true;
+			}
+
+			return !(
+				"type" in part &&
+				part.type === "translation" &&
+				"audience" in part &&
+				part.audience === audience
+			);
+		}),
+		nextPart,
+	];
+}
+
+function resolveCreateConversationVisitorLanguage(params: {
+	defaultTimelineItems: ReturnType<typeof mapDefaultTimelineItemForCreation>[];
+	visitorLanguage: string | null;
+}) {
+	if (params.visitorLanguage) {
+		return params.visitorLanguage;
+	}
+
+	for (const item of params.defaultTimelineItems) {
+		if (item.kind !== "message") {
+			continue;
+		}
+
+		const isVisitorMessage =
+			Boolean(item.input.visitorId) &&
+			!item.input.userId &&
+			!item.input.aiAgentId;
+
+		if (!isVisitorMessage) {
+			continue;
+		}
+
+		const detection = detectMessageLanguage({
+			text: item.input.text,
+			hintLanguage: params.visitorLanguage,
+		});
+
+		if (detection.language) {
+			return detection.language;
+		}
+	}
+
+	return params.visitorLanguage;
+}
+
+function applyTranslationFinalizeResult(
+	conversationRecord: ConversationRecord,
+	result: Awaited<ReturnType<typeof finalizeConversationTranslation>>
+): ConversationRecord {
+	if (result.status === "activated") {
+		return {
+			...conversationRecord,
+			visitorLanguage: result.visitorLanguage,
+			translationActivatedAt: result.translationActivatedAt,
+			translationChargedAt: result.translationChargedAt,
+			visitorTitle: result.visitorTitle,
+			visitorTitleLanguage: result.visitorTitleLanguage,
+		};
+	}
+
+	if (result.status === "language_updated") {
+		return {
+			...conversationRecord,
+			visitorLanguage: result.visitorLanguage,
+		};
+	}
+
+	return conversationRecord;
 }
 
 const conversationIdPathParameter = {
@@ -359,6 +455,8 @@ async function emitPrivateConversationUpdate(
 		deletedAt?: string | null;
 		aiPausedUntil?: string | null;
 		title?: string | null;
+		visitorTitle?: string | null;
+		visitorTitleLanguage?: string | null;
 	}
 ) {
 	await realtime.emit("conversationUpdated", {
@@ -576,6 +674,7 @@ conversationRouter.openapi(
 			conversationId: body.conversationId,
 			channel: body.channel,
 			metadata: body.metadata,
+			visitorLanguage: visitor.language ?? null,
 		});
 		if (upsertResult.status === "conflict") {
 			return c.json(
@@ -599,26 +698,107 @@ conversationRouter.openapi(
 			});
 		}
 
+		const planInfo = await getPlanForWebsite(website);
+		const autoTranslateEnabled = isAutomaticTranslationEnabled({
+			planAllowsAutoTranslate: planInfo.features["auto-translate"] === true,
+			websiteAutoTranslateEnabled: website.autoTranslateEnabled,
+		});
 		const defaults = body.defaultTimelineItems ?? [];
+		const preparedDefaults = defaults.map((item, index) =>
+			mapDefaultTimelineItemForCreation({
+				...item,
+				id:
+					item.id ??
+					buildDefaultTimelineItemId({
+						conversationId: conversationRecord.id,
+						index,
+						item,
+					}),
+			})
+		);
+		let resolvedVisitorLanguage = resolveCreateConversationVisitorLanguage({
+			defaultTimelineItems: preparedDefaults,
+			visitorLanguage: conversationRecord.visitorLanguage ?? null,
+		});
+		let hasBootstrapTranslationPart = false;
+		const translatedDefaults: ReturnType<
+			typeof mapDefaultTimelineItemForCreation
+		>[] = [];
+
+		for (const preparedItem of preparedDefaults) {
+			if (preparedItem.kind !== "message") {
+				translatedDefaults.push(preparedItem);
+				continue;
+			}
+
+			const isVisitorMessage =
+				Boolean(preparedItem.input.visitorId) &&
+				!preparedItem.input.userId &&
+				!preparedItem.input.aiAgentId;
+			const inboundTranslation = isVisitorMessage
+				? await prepareInboundVisitorTranslation({
+						text: preparedItem.input.text,
+						websiteDefaultLanguage: website.defaultLanguage,
+						visitorLanguageHint: resolvedVisitorLanguage,
+						mode: "auto",
+						autoTranslateEnabled,
+					})
+				: null;
+			const outboundTranslation =
+				!isVisitorMessage && autoTranslateEnabled
+					? await prepareOutboundVisitorTranslation({
+							text: preparedItem.input.text,
+							sourceLanguage: website.defaultLanguage,
+							visitorLanguage: resolvedVisitorLanguage,
+							mode: "auto",
+						})
+					: null;
+
+			if (inboundTranslation?.visitorLanguage) {
+				resolvedVisitorLanguage = inboundTranslation.visitorLanguage;
+			}
+
+			let extraParts = preparedItem.input.extraParts;
+
+			if (inboundTranslation?.translationPart) {
+				hasBootstrapTranslationPart = true;
+				extraParts = replaceAudienceTranslationPart(
+					extraParts,
+					"team",
+					inboundTranslation.translationPart
+				);
+			}
+
+			if (outboundTranslation?.translationPart) {
+				hasBootstrapTranslationPart = true;
+				extraParts = replaceAudienceTranslationPart(
+					extraParts,
+					"visitor",
+					outboundTranslation.translationPart
+				);
+			}
+
+			translatedDefaults.push({
+				...preparedItem,
+				input: {
+					...preparedItem.input,
+					extraParts,
+				},
+			});
+		}
+
 		const createdItemsWithActors: Array<{
 			item: (ConversationTimelineItemRow & { parts: unknown }) | TimelineItem;
 			actor: MessageTimelineActor | null;
 			isNew: boolean;
 		}> = [];
 
-		for (const [index, item] of defaults.entries()) {
-			const timelineItemId =
-				item.id ??
-				buildDefaultTimelineItemId({
-					conversationId: conversationRecord.id,
-					index,
-					item,
-				});
+		for (const preparedItem of translatedDefaults) {
+			const timelineItemId = preparedItem.input.id;
 
-			const preparedItem = mapDefaultTimelineItemForCreation({
-				...item,
-				id: timelineItemId,
-			});
+			if (!timelineItemId) {
+				throw new Error("Expected prepared default timeline item id");
+			}
 
 			try {
 				if (preparedItem.kind === "message") {
@@ -705,6 +885,26 @@ conversationRouter.openapi(
 		}
 
 		const createdItems = createdItemsWithActors.map(({ item }) => item);
+		const shouldFinalizeBootstrapTranslation =
+			hasBootstrapTranslationPart ||
+			Boolean(
+				resolvedVisitorLanguage &&
+					resolvedVisitorLanguage !== conversationRecord.visitorLanguage
+			);
+		const responseConversation = shouldFinalizeBootstrapTranslation
+			? applyTranslationFinalizeResult(
+					conversationRecord,
+					await finalizeConversationTranslation({
+						db,
+						conversation: conversationRecord,
+						websiteDefaultLanguage: website.defaultLanguage,
+						visitorLanguage: resolvedVisitorLanguage,
+						hasTranslationPart: hasBootstrapTranslationPart,
+						chargeCredits: autoTranslateEnabled,
+						emitRealtime: false,
+					})
+				)
+			: conversationRecord;
 
 		// Trigger notification workflow for initial message items explicitly.
 		for (const { item, actor, isNew } of createdItemsWithActors) {
@@ -740,7 +940,6 @@ conversationRouter.openapi(
 		});
 
 		if (header && upsertResult.status === "created") {
-			const planInfo = await getPlanForWebsite(website);
 			const hardLimitPolicy = resolveDashboardHardLimitPolicy(planInfo);
 			const lockCutoff = await getDashboardConversationLockCutoff(db, {
 				websiteId: website.id,
@@ -754,7 +953,7 @@ conversationRouter.openapi(
 			});
 
 			await emitConversationCreatedEvent({
-				conversation: conversationRecord,
+				conversation: responseConversation,
 				header: eventHeader,
 			});
 		}
@@ -765,7 +964,7 @@ conversationRouter.openapi(
 		const response = {
 			initialTimelineItems: createdItems.map(serializeTimelineItemForResponse),
 			conversation: serializeConversationForResponse({
-				...conversationRecord,
+				...responseConversation,
 				lastTimelineItem,
 			}),
 		};
@@ -1659,12 +1858,35 @@ conversationRouter.openapi(
 			);
 		}
 
-		await emitPrivateConversationUpdate(updatedConversation, {
+		const planInfo = await getPlanForWebsite(privateContext.website);
+		const titleTranslation = await syncConversationVisitorTitle({
+			db: extracted.db,
+			conversationId: updatedConversation.id,
+			organizationId: updatedConversation.organizationId,
+			websiteId: updatedConversation.websiteId,
 			title: updatedConversation.title,
+			websiteDefaultLanguage: privateContext.website.defaultLanguage,
+			visitorLanguage: updatedConversation.visitorLanguage,
+			autoTranslateEnabled: isAutomaticTranslationEnabled({
+				planAllowsAutoTranslate: planInfo.features["auto-translate"] === true,
+				websiteAutoTranslateEnabled:
+					privateContext.website.autoTranslateEnabled,
+			}),
+		});
+		const responseConversation = {
+			...updatedConversation,
+			visitorTitle: titleTranslation.visitorTitle,
+			visitorTitleLanguage: titleTranslation.visitorTitleLanguage,
+		};
+
+		await emitPrivateConversationUpdate(responseConversation, {
+			title: responseConversation.title,
+			visitorTitle: responseConversation.visitorTitle,
+			visitorTitleLanguage: responseConversation.visitorTitleLanguage,
 		});
 
 		return c.json(
-			createPrivateConversationMutationResponse(updatedConversation),
+			createPrivateConversationMutationResponse(responseConversation),
 			200
 		);
 	}
@@ -2030,7 +2252,9 @@ conversationRouter.openapi(
 			403: errorJsonResponse("Forbidden - Private API key required"),
 			500: errorJsonResponse("Internal server error"),
 		},
-		...privateControlAuth(),
+		...privateControlAuth({
+			includeActorUserIdHeader: true,
+		}),
 	},
 	async (c) => {
 		const extracted = await safelyExtractRequestQuery(
@@ -2043,12 +2267,21 @@ conversationRouter.openapi(
 			return privateContext;
 		}
 
+		const actor = await requirePrivateConversationActor({
+			c,
+			db: extracted.db,
+			apiKey: privateContext.apiKey,
+			organizationId: privateContext.organization.id,
+			websiteTeamId: privateContext.website.teamId,
+			required: false,
+		});
+
 		const [planInfo, result] = await Promise.all([
 			getPlanForWebsite(privateContext.website),
 			listConversationsHeaders(extracted.db, {
 				organizationId: privateContext.organization.id,
 				websiteId: privateContext.website.id,
-				userId: null,
+				userId: actor?.userId ?? null,
 				limit: extracted.query.limit,
 				cursor: extracted.query.cursor ?? null,
 			}),
@@ -2354,10 +2587,35 @@ conversationRouter.openapi(
 		}
 
 		const trimmedPreview = body.visitorPreview?.trim() ?? "";
-		const effectivePreview =
+		let effectivePreview =
 			body.isTyping && trimmedPreview.length > 0
 				? trimmedPreview.slice(0, 2000)
 				: null;
+
+		if (effectivePreview) {
+			const stickyVisitorLanguage =
+				conversationRecord.visitorLanguage ?? visitor.language ?? null;
+			const autoTranslateEnabled =
+				website.autoTranslateEnabled === true
+					? isAutomaticTranslationEnabled({
+							planAllowsAutoTranslate:
+								(await getPlanForWebsite(website)).features[
+									"auto-translate"
+								] === true,
+							websiteAutoTranslateEnabled: website.autoTranslateEnabled,
+						})
+					: false;
+			if (
+				autoTranslateEnabled &&
+				shouldMaskTypingPreview({
+					preview: effectivePreview,
+					websiteDefaultLanguage: website.defaultLanguage,
+					visitorLanguageHint: stickyVisitorLanguage,
+				})
+			) {
+				effectivePreview = "Typing in another language";
+			}
+		}
 
 		await emitConversationTypingEvent({
 			conversation: conversationRecord,

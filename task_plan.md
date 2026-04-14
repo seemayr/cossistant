@@ -1,47 +1,54 @@
-# Inbox Analytics And Live Visitor Activity Hardening
+# Repo Check And Build Recovery
 
 ## Goal
-Make inbox analytics and live visitor activity trustworthy enough to release by moving canonical live activity ingestion to widget HTTP, keeping websocket for invalidation/fanout, and proving the end-to-end data flow with written verification evidence.
+Get this monorepo back to a clean verification state by making `bun fix`, `bun run check-types`, and package build commands pass without reverting unrelated user work already in the dirty tree.
+
+## Current Phase
+Phase 5
 
 ## Phases
-- [completed] Phase 1: Baseline audit and repo isolation
-  - Confirm current implementation shape and dirty worktree boundaries
-  - Create planning files and capture initial risks
-  - Exit criteria: implementation scope and pre-existing repo state documented
-- [completed] Phase 2: HTTP live activity design and API contract
-  - Add a dedicated visitor activity request schema and REST endpoint
-  - Define server enrichment and realtime invalidation behavior
-  - Exit criteria: types, endpoint contract, and websocket role are aligned
-- [completed] Phase 3: Client, server, and Tinybird implementation
-  - Switch widget live writes to HTTP
-  - Keep PATCH visitor sync for snapshot/page_view behavior
-  - Remove websocket as canonical writer for `visitor_activity_events`
-  - Exit criteria: one canonical ingestion path for live activity
-- [completed] Phase 4: Automated verification
-  - Update API, client, dashboard, and Tinybird-facing tests
-  - Run targeted tests and typechecks
-  - Exit criteria: targeted suites and typechecks pass
-- [completed] Phase 5: Validation evidence and sign-off notes
-  - Record Tinybird CLI state, remaining risks, and manual staging matrix
-  - Exit criteria: release blockers and unresolved follow-ups clearly documented
+- [ ] Phase 1: Baseline and constraints
+  - Capture repo scripts, current planning context, and dirty worktree constraints
+  - Confirm the command sequence we need to make green
+  - **Status:** complete
+- [ ] Phase 2: Lint and formatting fixes
+  - Run `bun fix`
+  - Resolve all reported issues
+  - **Status:** complete
+- [ ] Phase 3: Typecheck fixes
+  - Run `bun run check-types`
+  - Resolve source or config issues until it passes
+  - **Status:** complete
+- [ ] Phase 4: Build verification
+  - Run repo/package build commands
+  - Resolve build failures
+  - **Status:** complete
+- [ ] Phase 5: Final verification and handoff
+  - Re-run fixed commands
+  - Record results and remaining risks
+  - **Status:** complete
 
-## Release Gates
-- Do not release if websocket is still the canonical writer for live activity.
-- Do not release if live count, list, and map are not backed by the same 5-minute logic.
-- Do not release if the 2-minute live query cadence is inconsistent across presence surfaces.
-- Do not release if local Tinybird CLI validation is still broken without a documented reason and mitigation.
+## Key Questions
+1. Which failures are current, reproducible, and relevant to this task?
+2. Which touched files are ours to modify versus unrelated pre-existing changes?
+3. What is the smallest safe set of edits needed to restore green checks?
+
+## Decisions Made
+| Decision | Rationale |
+|----------|-----------|
+| Treat the repo as intentionally dirty | Avoid reverting or disturbing unrelated user work |
+| Use the actual root scripts first | Fixes should be driven by real command output, not assumptions |
+| Verify builds after lint and type checks | Build issues can be downstream of earlier failures |
 
 ## Errors Encountered
-| Error | Status | Notes |
-|---|---|---|
-| `tb info` fails with `None can't be loaded` | Resolved | Root `.tinyb` now points at `./tinybird`, the invalid `tinybird/.tinyb` stub was removed, and `tb info` now resolves the correct project root |
-| Frontend Tinybird requests return `The pipe 'unique_visitors' does not exist` | Resolved in repo | Root cause was `tb dev` launching from the monorepo root instead of the Tinybird project folder, so local pipes were never loaded |
-| Tinybird Local is unreachable on `http://localhost:7181` in this session | Open | Current validation is blocked by local Docker/runtime availability, not by repo configuration |
-| `apps/web/.next/types/validator.ts` stale errors blocked `apps/web` typecheck | Resolved | Cleared generated `.next/types` artifacts and reran `bunx tsc -p apps/web/tsconfig.json --noEmit` successfully |
+| Error | Attempt | Resolution |
+|-------|---------|------------|
+| `bun fix` exited with remaining Ultracite diagnostics after auto-fixing 72 files | 1 | Manually patching the reported files, then rerunning with a higher diagnostic limit |
+| `bun fix` second pass still failed on 2 residual issues | 2 | Removed the stale file-level suppression and fixed the test helper parameter order; third pass succeeded |
+| Root `check-types` failed in `apps/web` | 1 | Fixed dashboard/test fixture typing, annotated fake support controller helpers, and cleared stale `apps/web/.next/types` artifacts |
+| None in build verification | 1 | Root `bun run build` completed successfully; only non-blocking warnings remained |
 
-## Outcome
-- Canonical live visitor activity ingestion now runs through `POST /visitors/:id/activity`.
-- Widget websocket no longer writes live activity; websocket remains for dashboard invalidation/fanout.
-- Live count, list, and map cadence is verified at 2 minutes, with a shared 5-minute online window.
-- Automated verification passed across client, API, realtime routing, Tinybird payload, and dashboard surfaces.
-- Local Tinybird project discovery is now fixed, but release is still gated on manual staging validation and a live local/staging Tinybird runtime check.
+## Notes
+- Existing repo changes are extensive and mostly unrelated to this task.
+- Only edit files required to make the requested checks and builds pass.
+- Build warnings remain for missing VAPID env vars in `apps/web` and a Turbopack NFT trace warning in `apps/web/next.config.mjs`, but they did not block the build.

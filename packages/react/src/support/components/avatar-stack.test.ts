@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterAll, beforeEach, describe, expect, it, mock } from "bun:test";
 import type { AvailableAIAgent, AvailableHumanAgent } from "@cossistant/types";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -32,6 +32,10 @@ mock.module("./avatar", () => ({
 const avatarStackModulePromise = import("./avatar-stack");
 
 describe("AvatarStack", () => {
+	afterAll(() => {
+		mock.restore();
+	});
+
 	beforeEach(() => {
 		useSupportTextMock.mockClear();
 	});

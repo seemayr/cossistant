@@ -1,5 +1,45 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 
+type TranslationPartMock = {
+	type: "translation";
+	text: string;
+	sourceLanguage: string;
+	targetLanguage: string;
+	audience: "team" | "visitor";
+	mode: "auto" | "manual";
+	modelId: string;
+};
+
+type InboundTranslationResultMock =
+	| {
+			status: "skipped";
+			reason: string;
+			sourceLanguage: string | null;
+			targetLanguage: string | null;
+	  }
+	| {
+			status: "translated";
+			text: string;
+			sourceLanguage: string;
+			targetLanguage: string;
+			modelId: string;
+	  };
+
+type OutboundTranslationResultMock =
+	| {
+			status: "skipped";
+			reason: string;
+			sourceLanguage: string;
+			targetLanguage: string | null;
+	  }
+	| {
+			status: "translated";
+			text: string;
+			sourceLanguage: string;
+			targetLanguage: string;
+			modelId: string;
+	  };
+
 const safelyExtractRequestDataMock = mock((async () => ({})) as (
 	...args: unknown[]
 ) => Promise<unknown>);
@@ -60,6 +100,66 @@ const triggerMessageNotificationWorkflowMock = mock((async () => {}) as (
 const emitConversationCreatedEventMock = mock((async () => {}) as (
 	...args: unknown[]
 ) => Promise<void>);
+const detectMessageLanguageMock = mock(
+	(params: { hintLanguage?: string | null; text?: string | null } = {}) => ({
+		language: params.hintLanguage ?? null,
+		confidence: "low" as "low" | "high",
+		source: (params.hintLanguage ? "hint" : "unknown") as
+			| "hint"
+			| "unknown"
+			| "stopword",
+	})
+);
+const isAutomaticTranslationEnabledMock = mock(() => false);
+const prepareInboundVisitorTranslationMock = mock(
+	async (
+		params: { visitorLanguageHint?: string | null } = {}
+	): Promise<{
+		visitorLanguage: string | null;
+		translationPart: TranslationPartMock | null;
+		translationResult: InboundTranslationResultMock;
+	}> => ({
+		visitorLanguage: params.visitorLanguageHint ?? null,
+		translationPart: null,
+		translationResult: {
+			status: "skipped" as const,
+			reason: "missing_language" as const,
+			sourceLanguage: params.visitorLanguageHint ?? null,
+			targetLanguage: "en",
+		},
+	})
+);
+const prepareOutboundVisitorTranslationMock = mock(
+	async (params: {
+		sourceLanguage: string;
+		visitorLanguage?: string | null;
+	}): Promise<{
+		sourceLanguage: string;
+		translationPart: TranslationPartMock | null;
+		translationResult: OutboundTranslationResultMock;
+	}> => ({
+		sourceLanguage: params.sourceLanguage,
+		translationPart: null,
+		translationResult: {
+			status: "skipped" as const,
+			reason: "missing_language" as const,
+			sourceLanguage: params.sourceLanguage,
+			targetLanguage: null,
+		},
+	})
+);
+const finalizeConversationTranslationMock = mock((async () => ({
+	status: "noop" as const,
+})) as (...args: unknown[]) => Promise<unknown>);
+const syncConversationVisitorTitleMock = mock((async () => ({
+	visitorTitle: null,
+	visitorTitleLanguage: null,
+})) as (...args: unknown[]) => Promise<unknown>);
+const getPlanForWebsiteMock = mock((async () => ({
+	features: {
+		"auto-translate": false,
+	},
+})) as (...args: unknown[]) => Promise<unknown>);
 
 mock.module("@api/utils/validate", () => ({
 	safelyExtractRequestData: safelyExtractRequestDataMock,
@@ -125,6 +225,16 @@ mock.module("@api/utils/conversation-realtime", () => ({
 	emitConversationTypingEvent: mock(async () => {}),
 }));
 
+mock.module("@api/lib/translation", () => ({
+	detectMessageLanguage: detectMessageLanguageMock,
+	finalizeConversationTranslation: finalizeConversationTranslationMock,
+	isAutomaticTranslationEnabled: isAutomaticTranslationEnabledMock,
+	prepareInboundVisitorTranslation: prepareInboundVisitorTranslationMock,
+	prepareOutboundVisitorTranslation: prepareOutboundVisitorTranslationMock,
+	shouldMaskTypingPreview: mock(() => false),
+	syncConversationVisitorTitle: syncConversationVisitorTitleMock,
+}));
+
 mock.module("@api/ai-pipeline/shared/safety/kill-switch", () => ({
 	pauseAiForConversation: mock(async () => null),
 	resumeAiForConversation: mock(async () => null),
@@ -137,7 +247,7 @@ mock.module("@api/realtime/emitter", () => ({
 }));
 
 mock.module("@api/lib/plans/access", () => ({
-	getPlanForWebsite: mock(async () => ({})),
+	getPlanForWebsite: getPlanForWebsiteMock,
 }));
 
 mock.module("@api/lib/hard-limits/dashboard", () => ({
@@ -223,9 +333,14 @@ function createDbHarness(params: {
 	};
 }
 
-const baseWebsite = { id: "site-1", organizationId: "org-1" };
+const baseWebsite = {
+	id: "site-1",
+	organizationId: "org-1",
+	defaultLanguage: "en",
+	autoTranslateEnabled: true,
+};
 const baseOrganization = { id: "org-1" };
-const baseVisitor = { id: "visitor-1" };
+const baseVisitor = { id: "visitor-1", language: null };
 const baseConversation = {
 	id: "conv-1",
 	organizationId: "org-1",
@@ -234,6 +349,11 @@ const baseConversation = {
 	channel: "widget",
 	metadata: null,
 	status: "open",
+	visitorTitle: null,
+	visitorTitleLanguage: null,
+	visitorLanguage: null,
+	translationActivatedAt: null,
+	translationChargedAt: null,
 	createdAt: "2026-02-26T00:00:00.000Z",
 	updatedAt: "2026-02-26T00:00:00.000Z",
 	deletedAt: null,
@@ -257,6 +377,13 @@ describe("POST /v1/conversations", () => {
 		resolveMessageTimelineActorMock.mockReset();
 		triggerMessageNotificationWorkflowMock.mockReset();
 		emitConversationCreatedEventMock.mockReset();
+		detectMessageLanguageMock.mockReset();
+		isAutomaticTranslationEnabledMock.mockReset();
+		prepareInboundVisitorTranslationMock.mockReset();
+		prepareOutboundVisitorTranslationMock.mockReset();
+		finalizeConversationTranslationMock.mockReset();
+		syncConversationVisitorTitleMock.mockReset();
+		getPlanForWebsiteMock.mockReset();
 
 		validateResponseMock.mockImplementation((value) => value);
 		getVisitorMock.mockResolvedValue(baseVisitor);
@@ -322,6 +449,53 @@ describe("POST /v1/conversations", () => {
 		);
 		triggerMessageNotificationWorkflowMock.mockResolvedValue(undefined);
 		emitConversationCreatedEventMock.mockResolvedValue(undefined);
+		detectMessageLanguageMock.mockImplementation(
+			(params: { hintLanguage?: string | null } = {}) => ({
+				language: params.hintLanguage ?? null,
+				confidence: "low" as const,
+				source: params.hintLanguage ? ("hint" as const) : ("unknown" as const),
+			})
+		);
+		isAutomaticTranslationEnabledMock.mockReturnValue(false);
+		prepareInboundVisitorTranslationMock.mockImplementation(
+			async (params: { visitorLanguageHint?: string | null } = {}) => ({
+				visitorLanguage: params.visitorLanguageHint ?? null,
+				translationPart: null,
+				translationResult: {
+					status: "skipped" as const,
+					reason: "missing_language" as const,
+					sourceLanguage: params.visitorLanguageHint ?? null,
+					targetLanguage: "en",
+				},
+			})
+		);
+		prepareOutboundVisitorTranslationMock.mockImplementation(
+			async (params: {
+				sourceLanguage: string;
+				visitorLanguage?: string | null;
+			}) => ({
+				sourceLanguage: params.sourceLanguage,
+				translationPart: null,
+				translationResult: {
+					status: "skipped" as const,
+					reason: "missing_language" as const,
+					sourceLanguage: params.sourceLanguage,
+					targetLanguage: null,
+				},
+			})
+		);
+		finalizeConversationTranslationMock.mockResolvedValue({
+			status: "noop" as const,
+		});
+		syncConversationVisitorTitleMock.mockResolvedValue({
+			visitorTitle: null,
+			visitorTitleLanguage: null,
+		});
+		getPlanForWebsiteMock.mockResolvedValue({
+			features: {
+				"auto-translate": false,
+			},
+		});
 	});
 
 	it("returns 200 for existing same-owner conversation without crashing", async () => {
@@ -786,5 +960,326 @@ describe("POST /v1/conversations", () => {
 		]);
 		expect(createMessageTimelineItemMock).toHaveBeenCalledTimes(1);
 		expect(triggerMessageNotificationWorkflowMock).not.toHaveBeenCalled();
+	});
+
+	it("adds a team translation part to the first visitor bootstrap message", async () => {
+		const dbHarness = createDbHarness({});
+		isAutomaticTranslationEnabledMock.mockReturnValue(true);
+		detectMessageLanguageMock.mockImplementation(
+			(
+				params: { hintLanguage?: string | null; text?: string | null } = {}
+			) => ({
+				language: params.text?.includes("Hola") ? "es" : null,
+				confidence: "high" as const,
+				source: "stopword" as const,
+			})
+		);
+		prepareInboundVisitorTranslationMock.mockResolvedValue({
+			visitorLanguage: "es",
+			translationPart: {
+				type: "translation",
+				text: "Hello team",
+				sourceLanguage: "es",
+				targetLanguage: "en",
+				audience: "team",
+				mode: "auto",
+				modelId: "test-model",
+			},
+			translationResult: {
+				status: "translated",
+				text: "Hello team",
+				sourceLanguage: "es",
+				targetLanguage: "en",
+				modelId: "test-model",
+			},
+		});
+		finalizeConversationTranslationMock.mockResolvedValue({
+			status: "activated",
+			visitorLanguage: "es",
+			translationActivatedAt: "2026-02-26T00:00:01.000Z",
+			translationChargedAt: "2026-02-26T00:00:01.000Z",
+			visitorTitle: null,
+			visitorTitleLanguage: "es",
+		});
+		safelyExtractRequestDataMock.mockResolvedValue({
+			db: dbHarness.db,
+			website: baseWebsite,
+			organization: baseOrganization,
+			visitorIdHeader: "visitor-1",
+			body: {
+				conversationId: "conv-1",
+				visitorId: "visitor-1",
+				defaultTimelineItems: [
+					{
+						type: "message",
+						text: "Hola, necesito ayuda",
+						parts: [{ type: "text", text: "Hola, necesito ayuda" }],
+						visibility: "public",
+						userId: null,
+						visitorId: "visitor-1",
+						aiAgentId: null,
+						createdAt: "2026-02-26T00:00:00.000Z",
+						deletedAt: null,
+					},
+				],
+				channel: "widget",
+			},
+		});
+		upsertConversationMock.mockResolvedValue({
+			status: "created",
+			conversation: baseConversation,
+		});
+
+		const { conversationRouter } = await conversationRouterModulePromise;
+		const response = await conversationRouter.request(
+			createValidConversationPostRequest()
+		);
+
+		expect(response.status).toBe(200);
+		const createCall = createMessageTimelineItemMock.mock.calls[0]?.[0] as
+			| { extraParts?: unknown[] }
+			| undefined;
+		expect(createCall?.extraParts).toContainEqual({
+			type: "translation",
+			text: "Hello team",
+			sourceLanguage: "es",
+			targetLanguage: "en",
+			audience: "team",
+			mode: "auto",
+			modelId: "test-model",
+		});
+		expect(finalizeConversationTranslationMock).toHaveBeenCalledTimes(1);
+		expect(finalizeConversationTranslationMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				hasTranslationPart: true,
+				visitorLanguage: "es",
+				emitRealtime: false,
+			})
+		);
+	});
+
+	it("uses inferred visitor language for earlier AI bootstrap replies", async () => {
+		const dbHarness = createDbHarness({});
+		isAutomaticTranslationEnabledMock.mockReturnValue(true);
+		detectMessageLanguageMock.mockImplementation(
+			(
+				params: { hintLanguage?: string | null; text?: string | null } = {}
+			) => ({
+				language: params.text?.includes("Hola") ? "es" : null,
+				confidence: "high" as const,
+				source: "stopword" as const,
+			})
+		);
+		prepareOutboundVisitorTranslationMock.mockResolvedValue({
+			sourceLanguage: "en",
+			translationPart: {
+				type: "translation",
+				text: "Bienvenido",
+				sourceLanguage: "en",
+				targetLanguage: "es",
+				audience: "visitor",
+				mode: "auto",
+				modelId: "test-model",
+			},
+			translationResult: {
+				status: "translated",
+				text: "Bienvenido",
+				sourceLanguage: "en",
+				targetLanguage: "es",
+				modelId: "test-model",
+			},
+		});
+		prepareInboundVisitorTranslationMock.mockResolvedValue({
+			visitorLanguage: "es",
+			translationPart: {
+				type: "translation",
+				text: "Hello",
+				sourceLanguage: "es",
+				targetLanguage: "en",
+				audience: "team",
+				mode: "auto",
+				modelId: "test-model",
+			},
+			translationResult: {
+				status: "translated",
+				text: "Hello",
+				sourceLanguage: "es",
+				targetLanguage: "en",
+				modelId: "test-model",
+			},
+		});
+		safelyExtractRequestDataMock.mockResolvedValue({
+			db: dbHarness.db,
+			website: baseWebsite,
+			organization: baseOrganization,
+			visitorIdHeader: "visitor-1",
+			body: {
+				conversationId: "conv-1",
+				visitorId: "visitor-1",
+				defaultTimelineItems: [
+					{
+						type: "message",
+						text: "Welcome to Cossistant",
+						parts: [{ type: "text", text: "Welcome to Cossistant" }],
+						visibility: "public",
+						userId: null,
+						visitorId: null,
+						aiAgentId: "ai-1",
+						createdAt: "2026-02-26T00:00:00.000Z",
+						deletedAt: null,
+					},
+					{
+						type: "message",
+						text: "Hola, necesito ayuda",
+						parts: [{ type: "text", text: "Hola, necesito ayuda" }],
+						visibility: "public",
+						userId: null,
+						visitorId: "visitor-1",
+						aiAgentId: null,
+						createdAt: "2026-02-26T00:00:01.000Z",
+						deletedAt: null,
+					},
+				],
+				channel: "widget",
+			},
+		});
+		upsertConversationMock.mockResolvedValue({
+			status: "created",
+			conversation: baseConversation,
+		});
+
+		const { conversationRouter } = await conversationRouterModulePromise;
+		const response = await conversationRouter.request(
+			createValidConversationPostRequest()
+		);
+
+		expect(response.status).toBe(200);
+		expect(prepareOutboundVisitorTranslationMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				text: "Welcome to Cossistant",
+				visitorLanguage: "es",
+			})
+		);
+		const firstCreateCall = createMessageTimelineItemMock.mock.calls[0]?.[0] as
+			| { extraParts?: unknown[] }
+			| undefined;
+		expect(firstCreateCall?.extraParts).toContainEqual({
+			type: "translation",
+			text: "Bienvenido",
+			sourceLanguage: "en",
+			targetLanguage: "es",
+			audience: "visitor",
+			mode: "auto",
+			modelId: "test-model",
+		});
+		expect(finalizeConversationTranslationMock).toHaveBeenCalledTimes(1);
+	});
+
+	it("returns finalized translation state in the create response and created event", async () => {
+		const dbHarness = createDbHarness({});
+		isAutomaticTranslationEnabledMock.mockReturnValue(true);
+		detectMessageLanguageMock.mockImplementation(
+			(
+				params: { hintLanguage?: string | null; text?: string | null } = {}
+			) => ({
+				language: params.text?.includes("Hola") ? "es" : null,
+				confidence: "high" as const,
+				source: "stopword" as const,
+			})
+		);
+		prepareInboundVisitorTranslationMock.mockResolvedValue({
+			visitorLanguage: "es",
+			translationPart: {
+				type: "translation",
+				text: "Hello team",
+				sourceLanguage: "es",
+				targetLanguage: "en",
+				audience: "team",
+				mode: "auto",
+				modelId: "test-model",
+			},
+			translationResult: {
+				status: "translated",
+				text: "Hello team",
+				sourceLanguage: "es",
+				targetLanguage: "en",
+				modelId: "test-model",
+			},
+		});
+		finalizeConversationTranslationMock.mockResolvedValue({
+			status: "activated",
+			visitorLanguage: "es",
+			translationActivatedAt: "2026-02-26T00:00:01.000Z",
+			translationChargedAt: "2026-02-26T00:00:01.000Z",
+			visitorTitle: "Pregunta de soporte",
+			visitorTitleLanguage: "es",
+		});
+		getConversationHeaderMock.mockResolvedValue({
+			id: "conv-1",
+			lastTimelineItem: null,
+		});
+		safelyExtractRequestDataMock.mockResolvedValue({
+			db: dbHarness.db,
+			website: baseWebsite,
+			organization: baseOrganization,
+			visitorIdHeader: "visitor-1",
+			body: {
+				conversationId: "conv-1",
+				visitorId: "visitor-1",
+				defaultTimelineItems: [
+					{
+						type: "message",
+						text: "Hola, necesito ayuda",
+						parts: [{ type: "text", text: "Hola, necesito ayuda" }],
+						visibility: "public",
+						userId: null,
+						visitorId: "visitor-1",
+						aiAgentId: null,
+						createdAt: "2026-02-26T00:00:00.000Z",
+						deletedAt: null,
+					},
+				],
+				channel: "widget",
+			},
+		});
+		upsertConversationMock.mockResolvedValue({
+			status: "created",
+			conversation: baseConversation,
+		});
+
+		const { conversationRouter } = await conversationRouterModulePromise;
+		const response = await conversationRouter.request(
+			createValidConversationPostRequest()
+		);
+		const payload = (await response.json()) as {
+			conversation: {
+				visitorLanguage: string | null;
+				translationActivatedAt: string | null;
+				translationChargedAt: string | null;
+				visitorTitle: string | null;
+				visitorTitleLanguage: string | null;
+			};
+		};
+
+		expect(response.status).toBe(200);
+		expect(finalizeConversationTranslationMock).toHaveBeenCalledTimes(1);
+		expect(payload.conversation).toMatchObject({
+			visitorLanguage: "es",
+			translationActivatedAt: "2026-02-26T00:00:01.000Z",
+			translationChargedAt: "2026-02-26T00:00:01.000Z",
+			visitorTitle: "Pregunta de soporte",
+			visitorTitleLanguage: "es",
+		});
+		expect(emitConversationCreatedEventMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				conversation: expect.objectContaining({
+					visitorLanguage: "es",
+					translationActivatedAt: "2026-02-26T00:00:01.000Z",
+					translationChargedAt: "2026-02-26T00:00:01.000Z",
+					visitorTitle: "Pregunta de soporte",
+					visitorTitleLanguage: "es",
+				}),
+			})
+		);
 	});
 });

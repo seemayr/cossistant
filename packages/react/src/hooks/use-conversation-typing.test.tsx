@@ -1,27 +1,80 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import {
 	createTypingStore,
 	setTypingState as setStoreTypingState,
 	type TypingStore,
 } from "@cossistant/core";
-import React from "react";
-import { renderToStaticMarkup } from "react-dom/server";
+import type { SupportControllerSnapshot } from "@cossistant/core/support-controller";
+import type React from "react";
+import { Window } from "../../../../apps/web/node_modules/happy-dom";
+import { SupportProvider } from "../provider";
 import {
 	setTypingState as setSharedTypingState,
 	typingStoreSingleton,
 } from "../realtime/typing-store";
+import { createMockSupportController } from "../test-utils/create-mock-support-controller";
+import { useConversationTyping } from "./use-conversation-typing";
 
-let currentClient: { typingStore: TypingStore } | null = null;
+type RootHandle = {
+	render(node: React.ReactNode): void;
+	unmount(): void;
+};
 
-const useSupportMock = mock(() => ({
-	client: currentClient,
-}));
+let activeRoot: RootHandle | null = null;
+let mountNode: HTMLElement | null = null;
+let windowInstance: Window | null = null;
 
-mock.module("../provider", () => ({
-	useSupport: useSupportMock,
-}));
+const installedGlobalKeys = [
+	"window",
+	"self",
+	"document",
+	"navigator",
+	"Document",
+	"DocumentFragment",
+	"Element",
+	"Event",
+	"EventTarget",
+	"HTMLElement",
+	"MutationObserver",
+	"Node",
+	"Text",
+	"getComputedStyle",
+	"requestAnimationFrame",
+	"cancelAnimationFrame",
+	"IS_REACT_ACT_ENVIRONMENT",
+] as const;
 
-const modulePromise = import("./use-conversation-typing");
+function setGlobalValue(key: string, value: unknown) {
+	Object.defineProperty(globalThis, key, {
+		configurable: true,
+		value,
+		writable: true,
+	});
+}
+
+function installDomGlobals(window: Window) {
+	setGlobalValue("window", window);
+	setGlobalValue("self", window);
+	setGlobalValue("document", window.document);
+	setGlobalValue("navigator", window.navigator);
+	setGlobalValue("Document", window.Document);
+	setGlobalValue("DocumentFragment", window.DocumentFragment);
+	setGlobalValue("Element", window.Element);
+	setGlobalValue("Event", window.Event);
+	setGlobalValue("EventTarget", window.EventTarget);
+	setGlobalValue("HTMLElement", window.HTMLElement);
+	setGlobalValue("MutationObserver", window.MutationObserver);
+	setGlobalValue("Node", window.Node);
+	setGlobalValue("Text", window.Text);
+	setGlobalValue("getComputedStyle", window.getComputedStyle.bind(window));
+	setGlobalValue("requestAnimationFrame", (callback: FrameRequestCallback) =>
+		window.setTimeout(() => callback(Date.now()), 0)
+	);
+	setGlobalValue("cancelAnimationFrame", (id: number) =>
+		window.clearTimeout(id)
+	);
+	setGlobalValue("IS_REACT_ACT_ENVIRONMENT", true);
+}
 
 function clearSharedTypingStore() {
 	for (const conversationId of Object.keys(
@@ -32,14 +85,20 @@ function clearSharedTypingStore() {
 }
 
 async function renderTyping(
-	conversationId = "conv-1",
+	conversationId: string,
+	client: { typingStore: TypingStore } | null,
 	options: {
 		excludeVisitorId?: string | null;
 		excludeUserId?: string | null;
 		excludeAiAgentId?: string | null;
 	} = {}
 ) {
-	const { useConversationTyping } = await modulePromise;
+	const { act } = await import("react");
+	const { createRoot } = await import("react-dom/client");
+
+	const controller = createMockSupportController({
+		client: client as SupportControllerSnapshot["client"],
+	});
 	let result: ReturnType<typeof useConversationTyping> = [];
 
 	function Harness() {
@@ -47,28 +106,71 @@ async function renderTyping(
 		return null;
 	}
 
-	renderToStaticMarkup(React.createElement(Harness));
+	mountNode = document.createElement("div");
+	document.body.appendChild(mountNode);
+	activeRoot = createRoot(mountNode);
+
+	await act(async () => {
+		activeRoot?.render(
+			<SupportProvider autoConnect={false} controller={controller}>
+				<Harness />
+			</SupportProvider>
+		);
+	});
+
+	await act(async () => {
+		activeRoot?.unmount();
+	});
+
+	controller.destroy();
+	mountNode.remove();
+	activeRoot = null;
+	mountNode = null;
 
 	return result;
 }
 
 describe("useConversationTyping", () => {
 	beforeEach(() => {
-		currentClient = null;
-		useSupportMock.mockClear();
+		windowInstance = new Window({
+			url: "https://example.com",
+		});
+		installDomGlobals(windowInstance);
 		clearSharedTypingStore();
 	});
 
+	afterEach(async () => {
+		const { act } = await import("react");
+
+		if (activeRoot) {
+			await act(async () => {
+				activeRoot?.unmount();
+			});
+		}
+
+		mountNode?.remove();
+		activeRoot = null;
+		mountNode = null;
+		windowInstance = null;
+		clearSharedTypingStore();
+
+		for (const key of installedGlobalKeys) {
+			Reflect.deleteProperty(globalThis, key);
+		}
+	});
+
 	it("falls back to the shared typing store when the provider client is absent", async () => {
+		const conversationId = "conv-typing-hook-fallback";
+
 		setSharedTypingState({
-			conversationId: "conv-1",
+			conversationId,
 			actorType: "visitor",
 			actorId: "visitor-1",
 			isTyping: true,
 			preview: "Hello from the dashboard",
 		});
 
-		const entries = await renderTyping();
+		const entries = await renderTyping(conversationId, null);
 
 		expect(entries).toEqual([
 			{
@@ -81,6 +183,7 @@ describe("useConversationTyping", () => {
 	});
 
 	it("ignores the current user while keeping visitor and AI typing entries", async () => {
+		const conversationId = "conv-typing-hook-filtering";
 		let now = 0;
 		const typingStore = createTypingStore(undefined, {
 			now: () => {
@@ -89,33 +192,35 @@ describe("useConversationTyping", () => {
 			},
 		});
 
-		currentClient = { typingStore };
-
 		setStoreTypingState(typingStore, {
-			conversationId: "conv-1",
+			conversationId,
 			actorType: "visitor",
 			actorId: "visitor-1",
 			isTyping: true,
 			preview: "I am typing",
 		});
 		setStoreTypingState(typingStore, {
-			conversationId: "conv-1",
+			conversationId,
 			actorType: "user",
 			actorId: "user-1",
 			isTyping: true,
 			preview: null,
 		});
 		setStoreTypingState(typingStore, {
-			conversationId: "conv-1",
+			conversationId,
 			actorType: "ai_agent",
 			actorId: "ai-1",
 			isTyping: true,
 			preview: null,
 		});
 
-		const entries = await renderTyping("conv-1", {
-			excludeUserId: "user-1",
-		});
+		const entries = await renderTyping(
+			conversationId,
+			{ typingStore },
+			{
+				excludeUserId: "user-1",
+			}
+		);
 
 		expect(
 			entries.map((entry) => ({

@@ -9,6 +9,12 @@
 import type { Database } from "@api/db";
 import type { ConversationSelect } from "@api/db/schema/conversation";
 import { conversation } from "@api/db/schema/conversation";
+import { website } from "@api/db/schema/website";
+import { getPlanForWebsite } from "@api/lib/plans/access";
+import {
+	isAutomaticTranslationEnabled,
+	syncConversationVisitorTitle,
+} from "@api/lib/translation";
 import { realtime } from "@api/realtime/emitter";
 import { createTimelineItem } from "@api/utils/timeline-item";
 import {
@@ -97,6 +103,30 @@ export async function updateTitle(params: UpdateTitleParams): Promise<{
 		})
 		.where(eq(conversation.id, currentConversation.id));
 
+	const websiteRecord = await db.query.website.findFirst({
+		where: eq(website.id, websiteId),
+	});
+	const planInfo = websiteRecord
+		? await getPlanForWebsite(websiteRecord)
+		: null;
+	const titleTranslation =
+		websiteRecord && planInfo
+			? await syncConversationVisitorTitle({
+					db,
+					conversationId: currentConversation.id,
+					organizationId,
+					websiteId,
+					title,
+					websiteDefaultLanguage: websiteRecord.defaultLanguage,
+					visitorLanguage: currentConversation.visitorLanguage,
+					autoTranslateEnabled: isAutomaticTranslationEnabled({
+						planAllowsAutoTranslate:
+							planInfo.features["auto-translate"] === true,
+						websiteAutoTranslateEnabled: websiteRecord.autoTranslateEnabled,
+					}),
+				})
+			: { visitorTitle: null, visitorTitleLanguage: null };
+
 	if (emitTimelineEvent) {
 		const eventText = isUpdate
 			? `AI updated title: "${title}" (was: "${currentConversation.title}")`
@@ -127,6 +157,8 @@ export async function updateTitle(params: UpdateTitleParams): Promise<{
 		conversationId: currentConversation.id,
 		updates: {
 			title,
+			visitorTitle: titleTranslation.visitorTitle,
+			visitorTitleLanguage: titleTranslation.visitorTitleLanguage,
 		},
 		aiAgentId,
 	});

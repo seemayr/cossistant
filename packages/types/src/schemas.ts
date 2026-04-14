@@ -21,6 +21,11 @@ export type InboxView = z.infer<typeof viewSchema>;
 export const conversationSchema = z.object({
 	id: z.string(),
 	title: z.string().optional(),
+	visitorTitle: z.string().nullable().optional(),
+	visitorTitleLanguage: z.string().nullable().optional(),
+	visitorLanguage: z.string().nullable().optional(),
+	translationActivatedAt: nullableApiTimestampSchema.optional(),
+	translationChargedAt: nullableApiTimestampSchema.optional(),
 	metadata: conversationMetadataSchema.nullable().optional(),
 	createdAt: apiTimestampSchema,
 	updatedAt: apiTimestampSchema,

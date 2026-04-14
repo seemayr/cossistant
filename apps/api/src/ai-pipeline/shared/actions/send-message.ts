@@ -6,7 +6,15 @@
  */
 
 import type { Database } from "@api/db";
+import { getConversationById } from "@api/db/queries/conversation";
 import { conversationTimelineItem } from "@api/db/schema/conversation";
+import { website } from "@api/db/schema/website";
+import { getPlanForWebsite } from "@api/lib/plans/access";
+import {
+	finalizeConversationTranslation,
+	isAutomaticTranslationEnabled,
+	prepareOutboundVisitorTranslation,
+} from "@api/lib/translation";
 import { getRedis } from "@api/redis";
 import { generateIdempotentULID } from "@api/utils/db/ids";
 import { createMessageTimelineItem } from "@api/utils/timeline-item";
@@ -93,6 +101,34 @@ export async function sendMessage(
 		};
 	}
 
+	const [conversationRecord, websiteRecord] = await Promise.all([
+		getConversationById(db, {
+			conversationId,
+		}),
+		db.query.website.findFirst({
+			where: eq(website.id, websiteId),
+		}),
+	]);
+
+	const autoTranslateEnabled = websiteRecord
+		? isAutomaticTranslationEnabled({
+				planAllowsAutoTranslate:
+					(await getPlanForWebsite(websiteRecord)).features[
+						"auto-translate"
+					] === true,
+				websiteAutoTranslateEnabled: websiteRecord.autoTranslateEnabled,
+			})
+		: false;
+	const outboundTranslation =
+		autoTranslateEnabled && websiteRecord && conversationRecord
+			? await prepareOutboundVisitorTranslation({
+					text,
+					sourceLanguage: websiteRecord.defaultLanguage,
+					visitorLanguage: conversationRecord.visitorLanguage,
+					mode: "auto",
+				})
+			: null;
+
 	const result = await createMessageTimelineItem({
 		db,
 		organizationId,
@@ -100,6 +136,9 @@ export async function sendMessage(
 		conversationId,
 		conversationOwnerVisitorId: visitorId,
 		text,
+		extraParts: outboundTranslation?.translationPart
+			? [outboundTranslation.translationPart]
+			: undefined,
 		aiAgentId,
 		id: messageId, // Use deterministic ULID for deduplication
 		userId: null,
@@ -125,6 +164,22 @@ export async function sendMessage(
 			`[ai-agent:send-message] conv=${conversationId} | Failed to run rogue protection:`,
 			error
 		);
+	}
+
+	if (
+		conversationRecord &&
+		websiteRecord &&
+		outboundTranslation?.translationPart
+	) {
+		await finalizeConversationTranslation({
+			db,
+			conversation: conversationRecord,
+			websiteDefaultLanguage: websiteRecord.defaultLanguage,
+			visitorLanguage: conversationRecord.visitorLanguage,
+			hasTranslationPart: true,
+			chargeCredits: autoTranslateEnabled,
+			aiAgentId,
+		});
 	}
 
 	return {

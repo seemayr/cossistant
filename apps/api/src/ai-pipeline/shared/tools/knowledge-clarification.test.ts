@@ -45,6 +45,8 @@ function createContext(): PipelineToolContext {
 		aiAgentId: "ai-1",
 		aiAgentName: "Agent",
 		visitorName: "Visitor",
+		websiteDefaultLanguage: "en",
+		visitorLanguage: "en",
 		workflowRunId: "wf-1",
 		triggerMessageId: "msg-1",
 		triggerMessageText: "How do I permanently delete my account?",

@@ -1,15 +1,18 @@
-import { useSupport } from "@cossistant/react";
-import { PENDING_CONVERSATION_ID } from "@cossistant/react/utils/id";
 import type React from "react";
 import { useConversationHistoryPage } from "../../hooks/use-conversation-history-page";
+import { useSupport } from "../../provider";
+import { PENDING_CONVERSATION_ID } from "../../utils/id";
 import { AvatarStack } from "../components/avatar-stack";
 import { CoButton } from "../components/button";
 import { ConversationButtonLink } from "../components/conversation-button-link";
+import { FooterSurface } from "../components/footer-surface";
 import { Header } from "../components/header";
 import Icon from "../components/icons";
 import { Watermark } from "../components/watermark";
+import { useSupportSlotOverrides } from "../context/slot-overrides";
 import { useSupportNavigation } from "../store/support-store";
 import { Text, useSupportText } from "../text";
+import { cn } from "../utils";
 
 type ConversationHistoryPageProps = {
 	params?: undefined;
@@ -24,6 +27,9 @@ export const ConversationHistoryPage: React.FC<ConversationHistoryPageProps> = (
 	const { goBack, canGoBack, navigate } = useSupportNavigation();
 	const { availableAIAgents, availableHumanAgents } = useSupport();
 	const text = useSupportText();
+	const { slots, slotProps } = useSupportSlotOverrides();
+	const ConversationHistoryPageSlot = slots.conversationHistoryPage;
+	const conversationHistoryPageSlotProps = slotProps.conversationHistoryPage;
 
 	const history = useConversationHistoryPage({
 		initialVisibleCount: 4,
@@ -56,9 +62,39 @@ export const ConversationHistoryPage: React.FC<ConversationHistoryPageProps> = (
 		}
 	};
 
+	if (ConversationHistoryPageSlot) {
+		return (
+			<ConversationHistoryPageSlot
+				{...conversationHistoryPageSlotProps}
+				availableAIAgents={availableAIAgents}
+				availableHumanAgents={availableHumanAgents}
+				canGoBack={canGoBack}
+				className={cn(conversationHistoryPageSlotProps?.className)}
+				conversations={history.conversations}
+				data-page="CONVERSATION_HISTORY"
+				data-slot="conversation-history-page"
+				error={history.error}
+				hasMore={history.hasMore}
+				isLoading={history.isLoading}
+				onGoBack={handleGoBack}
+				openConversation={history.openConversation}
+				remainingCount={history.remainingCount}
+				showAll={history.showAll}
+				showMore={history.showMore}
+				startConversation={history.startConversation}
+				visibleConversations={history.visibleConversations}
+				visibleCount={history.visibleCount}
+			/>
+		);
+	}
+
 	return (
-		<>
-			<Header onGoBack={handleGoBack}>
+		<div
+			className="flex h-full flex-col"
+			data-page="CONVERSATION_HISTORY"
+			data-slot="conversation-history-page"
+		>
+			<Header onGoBack={handleGoBack} page="CONVERSATION_HISTORY">
 				<div className="flex w-full items-center justify-between gap-2 py-3">
 					<div className="flex flex-col">
 						<h2 className="max-w-xs text-balance font-co-sans text-md leading-normal">
@@ -76,7 +112,10 @@ export const ConversationHistoryPage: React.FC<ConversationHistoryPageProps> = (
 				</div>
 			</Header>
 
-			<div className="flex flex-1 flex-col items-center justify-between gap-2 px-6 pb-4">
+			<FooterSurface
+				className="flex flex-1 flex-col items-center justify-between gap-2 px-6 pb-4"
+				page="CONVERSATION_HISTORY"
+			>
 				{history.conversations.length > 0 && (
 					<div className="flex w-full flex-col items-center justify-between gap-2 pt-4">
 						<div className="flex w-full flex-col overflow-clip rounded-md border border-co-border/80">
@@ -121,7 +160,7 @@ export const ConversationHistoryPage: React.FC<ConversationHistoryPageProps> = (
 					</CoButton>
 					<Watermark className="mt-4 mb-2" />
 				</div>
-			</div>
-		</>
+			</FooterSurface>
+		</div>
 	);
 };

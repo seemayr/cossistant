@@ -1,10 +1,10 @@
 import type { RouterOutputs } from "@api/trpc/types";
-import type { GroupedActivity } from "@cossistant/next/hooks";
 import {
 	TimelineItemGroup as PrimitiveTimelineItemGroup,
 	TimelineItemGroupAvatar,
 	TimelineItemGroupContent,
 } from "@cossistant/next/primitives";
+import type { GroupedActivity } from "@cossistant/react/internal/hooks";
 import type { AvailableAIAgent } from "@cossistant/types";
 import { SenderType } from "@cossistant/types";
 import type {
