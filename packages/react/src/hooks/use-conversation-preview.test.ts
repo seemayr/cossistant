@@ -145,13 +145,14 @@ describe("useConversationPreview", () => {
 		useConversationTimelineItemsMock.mockClear();
 	});
 
-	it("uses Support team and a stable seed when the assigned human has a blank name", async () => {
+	it("uses the human email as Facehash name when the assigned human has a blank name", async () => {
 		currentWebsite = {
 			...currentWebsite,
 			availableHumanAgents: [
 				{
 					id: "human-1",
 					name: "   ",
+					email: "human-1@example.com",
 					image: null,
 					lastSeenAt: null,
 				},
@@ -168,13 +169,14 @@ describe("useConversationPreview", () => {
 		expect(preview?.assignedAgent).toEqual({
 			type: "human",
 			name: "Support team",
-			facehashSeed: "public:human-1",
+			facehashName: "human-1@example.com",
+			facehashSeed: "human-1@example.com",
 			image: null,
 			lastSeenAt: null,
 		});
 	});
 
-	it("derives the facehash seed from the timeline userId when the human roster entry is missing", async () => {
+	it("uses the fallback label as Facehash name when the human roster entry is missing", async () => {
 		const conversation = {
 			...baseConversation,
 			lastTimelineItem: createMessageItem({
@@ -188,7 +190,8 @@ describe("useConversationPreview", () => {
 		expect(preview?.assignedAgent).toEqual({
 			type: "human",
 			name: "Support team",
-			facehashSeed: "public:human-404",
+			facehashName: "Support team",
+			facehashSeed: "Support team",
 			image: null,
 			lastSeenAt: null,
 		});

@@ -235,7 +235,7 @@ export const mdxComponents = {
 			return (
 				<code
 					className={cn(
-						"relative rounded border border-dashed bg-background-300 px-[0.3rem] py-[0.2rem] font-mono text-[0.8rem] outline-none dark:bg-background-400",
+						"relative border border-dashed bg-background-300 px-[0.3rem] py-[0.2rem] font-mono text-[0.8rem] outline-none dark:bg-background-400",
 						className
 					)}
 					{...props}
@@ -277,7 +277,7 @@ export const mdxComponents = {
 	}: React.ComponentProps<"img">) => (
 		<Image
 			alt={alt || ""}
-			className={cn("mt-6 rounded border", className)}
+			className={cn("mt-6 border", className)}
 			height={Number(height)}
 			src={(src as string) || ""}
 			width={Number(width)}
@@ -300,7 +300,7 @@ export const mdxComponents = {
 	}: React.ComponentProps<typeof TabsList>) => (
 		<TabsList
 			className={cn(
-				"justify-start gap-4 rounded-none bg-transparent px-2 md:px-0",
+				"justify-start gap-4 bg-transparent px-2 md:px-0",
 				className
 			)}
 			{...props}
@@ -363,7 +363,7 @@ export const mdxComponents = {
 	}: React.ComponentProps<typeof Link>) => (
 		<Link
 			className={cn(
-				"group relative w-full rounded-[1px] border bg-background-100 p-4 text-surface-foreground transition-colors hover:bg-background-200 sm:p-6",
+				"group relative w-full border bg-background-100 p-4 text-surface-foreground transition-colors hover:bg-background-200 sm:p-6",
 				className
 			)}
 			{...props}
@@ -375,7 +375,7 @@ export const mdxComponents = {
 		</Link>
 	),
 	CodeBlockWrapper: ({ ...props }) => (
-		<CodeBlockWrapper className="rounded-md border" {...props} />
+		<CodeBlockWrapper className="border" {...props} />
 	),
 	AutoTypeTable,
 	TypeTable,

@@ -36,6 +36,7 @@ const fakeWebsite: PublicWebsiteResponse = {
 		{
 			id: TEST_UI_TEAM_MEMBER_ID,
 			name: "Anthony Riera",
+			email: "anthony@example.com",
 			image: "https://github.com/rieranthony.png",
 			lastSeenAt: "2026-04-14T09:58:00.000Z",
 		},

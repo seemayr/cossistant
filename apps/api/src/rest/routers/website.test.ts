@@ -105,7 +105,7 @@ describe("website route GET /", () => {
 		listWebsiteAccessUsersMock.mockResolvedValue([]);
 	});
 
-	it("uses website-access users, normalizes blank names, and omits public email", async () => {
+	it("uses website-access users, normalizes blank names, and includes email for avatar fallbacks", async () => {
 		const { db, findManyMock, website } = createWebsiteContext();
 		findManyMock.mockResolvedValue([{ id: "ai-1", name: "Support AI" }]);
 		listWebsiteAccessUsersMock.mockResolvedValue([
@@ -151,17 +151,18 @@ describe("website route GET /", () => {
 			{
 				id: "user-1",
 				name: null,
+				email: "hidden@example.com",
 				image: null,
 				lastSeenAt: null,
 			},
 			{
 				id: "user-2",
 				name: "Alice",
+				email: "alice@example.com",
 				image: null,
 				lastSeenAt: "2026-03-03T04:05:06.000Z",
 			},
 		]);
-		expect(payload.availableHumanAgents[0]).not.toHaveProperty("email");
 		expect(payload.lastOnlineAt).toBe("2026-03-03T04:05:06.000Z");
 	});
 

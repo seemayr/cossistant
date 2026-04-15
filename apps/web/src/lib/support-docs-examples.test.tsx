@@ -29,6 +29,7 @@ const docsMdxComponentsPath = path.resolve(
 	import.meta.dir,
 	"../app/(lander-docs)/components/docs/mdx-components.tsx"
 );
+const roundedClassPattern = /\brounded(?:-\[[^\]]+\]|-[a-z0-9:/[\].]+)?\b/;
 
 async function renderWithSuspense(element: React.ReactNode) {
 	const stream = await renderToReadableStream(
@@ -72,6 +73,10 @@ describe("support docs examples", () => {
 			"support-full-composition",
 			"support-responsive-embed",
 		] as const;
+		const triggerDemoNames = new Set([
+			"support-classic-bubble",
+			"support-pill-bubble",
+		]);
 
 		for (const name of demoNames) {
 			const item = Index[name];
@@ -88,11 +93,58 @@ describe("support docs examples", () => {
 				"utf8"
 			);
 
-			expect(runtimeCode).toContain("SupportDocsProvider");
 			expect(runtimeCode).toContain("SupportDemoStage");
 			expect(sourceCode).toContain("@cossistant/react");
 			expect(sourceCode).not.toContain("SupportDocsProvider");
+
+			if (triggerDemoNames.has(name)) {
+				expect(runtimeCode).toContain("SupportTriggerStatePreview");
+				expect(runtimeCode).toContain("../examples/");
+				expect(runtimeCode).not.toContain("SupportDocsProvider");
+				expect(runtimeCode).not.toContain('from "@cossistant/react"');
+				expect(runtimeCode).not.toMatch(/<Support(?:\s|>|\.)/);
+				expect(runtimeCode).not.toContain("../custom-trigger");
+			} else {
+				expect(runtimeCode).toContain("SupportDocsProvider");
+			}
 		}
+	});
+
+	it("keeps trigger preview code and trigger preview UI wired to the same components", () => {
+		const classicItem = Index["support-classic-bubble"];
+		const pillItem = Index["support-pill-bubble"];
+
+		if (!(classicItem?.sourcePath && pillItem?.sourcePath)) {
+			throw new Error("Missing trigger demo registry source paths");
+		}
+
+		const classicRuntime = readFileSync(
+			path.resolve(process.cwd(), classicItem.path),
+			"utf8"
+		);
+		const classicSource = readFileSync(
+			path.resolve(process.cwd(), classicItem.sourcePath),
+			"utf8"
+		);
+		const pillRuntime = readFileSync(
+			path.resolve(process.cwd(), pillItem.path),
+			"utf8"
+		);
+		const pillSource = readFileSync(
+			path.resolve(process.cwd(), pillItem.sourcePath),
+			"utf8"
+		);
+
+		expect(classicSource).toContain("export const ClassicBubble");
+		expect(classicSource).toContain("ExampleClassicBubble");
+		expect(classicRuntime).toContain(
+			'import { ClassicBubble } from "../examples/classic-bubble";'
+		);
+		expect(pillSource).toContain("export const PillBubble");
+		expect(pillSource).toContain("ExamplePillBubble");
+		expect(pillRuntime).toContain(
+			'import { PillBubble } from "../examples/pill-bubble";'
+		);
 	});
 
 	it("keeps the support docs React-first, ordered by learning path, and preview-backed", () => {
@@ -194,6 +246,88 @@ describe("support docs examples", () => {
 		);
 	});
 
+	it("keeps support docs, previews, and install examples sharp-cornered", () => {
+		const demoNames = [
+			"support-doc",
+			"support-classic-bubble",
+			"support-pill-bubble",
+			"support-custom-home",
+			"support-bubble-and-home",
+			"support-full-composition",
+			"support-responsive-embed",
+		] as const;
+		const checkedFiles = new Set<string>([
+			path.join(docsRoot, "customization.mdx"),
+			path.join(docsRoot, "routing.mdx"),
+			path.join(docsRoot, "hooks.mdx"),
+			path.join(docsRoot, "theme.mdx"),
+			path.resolve(
+				import.meta.dir,
+				"../../content/docs/advanced/primitives.mdx"
+			),
+			docsMdxComponentsPath,
+			path.resolve(
+				import.meta.dir,
+				"../app/(lander-docs)/components/docs/component-preview.tsx"
+			),
+			path.resolve(
+				import.meta.dir,
+				"../app/(lander-docs)/components/docs/component-preview-tabs.tsx"
+			),
+			path.resolve(import.meta.dir, "../components/component-preview.tsx"),
+			path.resolve(import.meta.dir, "../components/component-preview-tabs.tsx"),
+			path.resolve(import.meta.dir, "../components/code-block-command.tsx"),
+			path.resolve(
+				import.meta.dir,
+				"../components/code-collapsible-wrapper.tsx"
+			),
+			path.resolve(
+				import.meta.dir,
+				"../components/support/docs-demo/trigger-state-preview.tsx"
+			),
+			path.resolve(
+				import.meta.dir,
+				"../app/(lander-docs)/components/install/index.tsx"
+			),
+			path.resolve(
+				import.meta.dir,
+				"../app/(lander-docs)/components/install/framework-install-command-tabs.tsx"
+			),
+		]);
+
+		for (const name of demoNames) {
+			const item = Index[name];
+			if (!item?.sourcePath) {
+				throw new Error(`Missing docs example registration for ${name}`);
+			}
+			checkedFiles.add(path.resolve(process.cwd(), item.path));
+			checkedFiles.add(path.resolve(process.cwd(), item.sourcePath));
+		}
+
+		for (const file of checkedFiles) {
+			const source = readFileSync(file, "utf8");
+			const match = source.match(roundedClassPattern);
+
+			if (match) {
+				throw new Error(`${file} still contains ${match[0]}`);
+			}
+		}
+	});
+
+	it("adds square color swatches to the theme token tables", () => {
+		const themeDoc = readFileSync(path.join(docsRoot, "theme.mdx"), "utf8");
+
+		expect(themeDoc).toContain("export function ColorSwatch");
+		expect(themeDoc).toContain(
+			'className="inline-block size-4 border border-dashed border-border align-middle"'
+		);
+		expect(themeDoc).toContain('<ColorSwatch value="oklch(99% 0 0)" />');
+		expect(themeDoc).toContain("### Status colors");
+		expect(themeDoc).toContain("### Avatar accents");
+		expect(themeDoc).toContain("### Background shades");
+		expect(themeDoc).toContain("--co-theme-radius: 0px;");
+	});
+
 	it("renders docs previews through the docs-only wrapper and support alias", async () => {
 		const mdxComponentsSource = readFileSync(docsMdxComponentsPath, "utf8");
 		const html = await renderWithSuspense(
@@ -235,7 +369,13 @@ describe("support docs examples", () => {
 		);
 
 		expect(html).toContain("border-dashed");
+		expect(html).toContain('data-slot="component-preview-tabs"');
+		expect(html).toContain('data-slot="component-preview-frame"');
+		expect(html.indexOf('data-slot="component-preview-tabs"')).toBeLessThan(
+			html.indexOf('data-slot="component-preview-frame"')
+		);
 		expect(html).toContain("items-center");
 		expect(html).toContain("justify-center");
+		expect(html).not.toContain("rounded");
 	});
 });

@@ -102,7 +102,10 @@ function FakeConversationView({
 				</div>
 			</FakeHeader>
 
-			<div className="min-h-0 flex-1" style={{ scrollbarGutter: "stable" }}>
+			<div
+				className="min-h-0 flex-1 overflow-hidden"
+				style={{ scrollbarGutter: "stable" }}
+			>
 				<FakeConversationTimelineList
 					availableAIAgents={availableAIAgents}
 					availableHumanAgents={availableHumanAgents}

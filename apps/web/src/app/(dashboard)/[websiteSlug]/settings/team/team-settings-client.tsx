@@ -408,6 +408,7 @@ export function TeamSettingsClient({
 					<div className="divide-y divide-primary/10">
 						{settings.members.map((member) => {
 							const memberDisplay = resolveDashboardHumanAgentDisplay({
+								email: member.email ?? null,
 								id: member.userId,
 								name: member.name,
 							});

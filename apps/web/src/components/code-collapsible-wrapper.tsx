@@ -27,7 +27,7 @@ export function CodeCollapsibleWrapper({
 			<CollapsibleTrigger asChild>
 				<div className="absolute top-1.5 right-9 z-10 flex items-center">
 					<Button
-						className="h-7 rounded px-2 text-muted-foreground"
+						className="h-7 px-2 text-muted-foreground"
 						size="sm"
 						variant="ghost"
 					>
@@ -42,7 +42,7 @@ export function CodeCollapsibleWrapper({
 			>
 				{children}
 			</CollapsibleContent>
-			<CollapsibleTrigger className="-bottom-2 absolute inset-x-0 flex h-20 items-center justify-center rounded-b-lg bg-gradient-to-b from-code/70 to-code text-muted-foreground text-sm group-data-[state=open]/collapsible:hidden">
+			<CollapsibleTrigger className="-bottom-2 absolute inset-x-0 flex h-20 items-center justify-center bg-gradient-to-b from-code/70 to-code text-muted-foreground text-sm group-data-[state=open]/collapsible:hidden">
 				{isOpened ? "Collapse" : "Expand"}
 			</CollapsibleTrigger>
 		</Collapsible>

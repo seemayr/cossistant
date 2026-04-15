@@ -42,7 +42,7 @@ function CustomHomePage() {
       </p>
 
       <button
-        className="rounded-xl border px-4 py-3 text-left"
+        className="border px-4 py-3 text-left"
         onClick={() =>
           navigate({
             page: "CONVERSATION",
@@ -81,7 +81,7 @@ import { Support } from "@cossistant/react";
 
 export default function SupportPanel() {
   return (
-    <div className="h-[560px] overflow-hidden rounded-[24px] border">
+    <div className="h-[560px] overflow-hidden border">
       <Support mode="responsive" />
     </div>
   );
@@ -108,7 +108,7 @@ export default function App() {
         <button type="button">Compose support</button>
       </Support.Trigger>
 
-      <Support.Content className="rounded-3xl border shadow-2xl">
+      <Support.Content className="border shadow-2xl">
         <Support.Router>
           <Support.Page component={LaunchChecklistPage} name="HOME" />
         </Support.Router>

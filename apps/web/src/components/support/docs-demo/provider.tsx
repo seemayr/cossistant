@@ -45,6 +45,7 @@ function createDocsSupportController(): SupportController {
 			{
 				id: "user_docs_1",
 				name: "Anthony Riera",
+				email: "anthony@example.com",
 				image: "https://github.com/rieranthony.png",
 				lastSeenAt: new Date().toISOString(),
 			},

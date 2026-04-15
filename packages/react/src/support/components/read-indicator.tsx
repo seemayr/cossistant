@@ -23,7 +23,7 @@ type ReadReceiptParticipant =
 			type: "human";
 			name: string;
 			image: string | null;
-			facehashSeed: string;
+			facehashName: string;
 	  }
 	| {
 			type: "ai";
@@ -95,7 +95,7 @@ export function ReadIndicator({
 				type: "human",
 				name: display.displayName,
 				image: humanAgent?.image ?? null,
-				facehashSeed: display.facehashSeed,
+				facehashName: display.facehashName,
 			};
 		},
 	});
@@ -127,7 +127,7 @@ export function ReadIndicator({
 						{reader.participant.type === "human" ? (
 							<Avatar
 								className="size-5"
-								facehashSeed={reader.participant.facehashSeed}
+								facehashName={reader.participant.facehashName}
 								image={reader.participant.image}
 								name={reader.participant.name}
 							/>

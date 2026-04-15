@@ -28,17 +28,34 @@ export function DocsComponentPreviewTabs({
 			className={cn("mt-6 w-full min-w-0", className)}
 			data-slot="docs-component-preview"
 		>
-			<Tabs className="relative w-full" onValueChange={setTab} value={tab}>
+			<Tabs
+				className="relative w-full gap-2"
+				onValueChange={setTab}
+				value={tab}
+			>
+				<div
+					className="flex items-center"
+					data-slot="docs-component-preview-tabs"
+				>
+					<TabsList className="justify-start gap-4 bg-transparent p-0">
+						<TabsTrigger
+							className="h-8 flex-none px-0 text-muted-foreground data-[state=active]:text-foreground data-[state=active]:shadow-none"
+							value="preview"
+						>
+							Preview
+						</TabsTrigger>
+						<TabsTrigger
+							className="h-8 flex-none px-0 text-muted-foreground data-[state=active]:text-foreground data-[state=active]:shadow-none"
+							value="code"
+						>
+							Code
+						</TabsTrigger>
+					</TabsList>
+				</div>
 				<div
 					className="relative min-w-0 overflow-hidden border border-border/70 border-dashed bg-background/60"
 					data-slot="docs-component-preview-frame"
 				>
-					<div className="px-4 pt-4 pb-3">
-						<TabsList className="grid w-full max-w-[220px] grid-cols-2">
-							<TabsTrigger value="preview">Preview</TabsTrigger>
-							<TabsTrigger value="code">Code</TabsTrigger>
-						</TabsList>
-					</div>
 					{tab === "preview" && (
 						<div
 							className={cn(

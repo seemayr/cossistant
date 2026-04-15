@@ -88,7 +88,7 @@ export const TimelineMessageGroup: React.FC<TimelineMessageGroupProps> = ({
 								) : (
 									<Avatar
 										className="size-6"
-										facehashSeed={humanDisplay.facehashSeed}
+										facehashName={humanDisplay.facehashName}
 										image={humanAgent?.image}
 										name={humanDisplay.displayName}
 									/>

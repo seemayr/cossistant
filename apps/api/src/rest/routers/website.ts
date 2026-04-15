@@ -102,6 +102,7 @@ websiteRouter.openapi(
 			.map((humanAgent) => ({
 				id: humanAgent.userId,
 				name: normalizeHumanAgentName(humanAgent.name),
+				email: humanAgent.email ?? null,
 				image: humanAgent.image,
 				lastSeenAt: humanAgent.lastSeenAt?.toISOString() ?? null,
 			}));

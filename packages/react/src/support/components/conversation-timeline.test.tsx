@@ -104,6 +104,7 @@ async function renderTimeline({
 	availableAIAgents?: Array<{ id: string; name: string; image: string | null }>;
 	availableHumanAgents?: Array<{
 		id: string;
+		email: string | null;
 		name: string | null;
 		image: string | null;
 		lastSeenAt: string | null;
@@ -379,6 +380,7 @@ describe("ConversationTimelineList live activity", () => {
 			availableHumanAgents: [
 				{
 					id: "user-1",
+					email: null,
 					name: "Alex",
 					image: null,
 					lastSeenAt: null,
@@ -427,6 +429,7 @@ describe("ConversationTimelineList live activity", () => {
 			availableHumanAgents: [
 				{
 					id: "user-1",
+					email: null,
 					name: "Alex",
 					image: null,
 					lastSeenAt: null,

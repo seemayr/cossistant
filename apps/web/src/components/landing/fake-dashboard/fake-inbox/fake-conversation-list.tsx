@@ -19,6 +19,7 @@ const fakeAvailableHumanAgents = [
 	{
 		id: "01JGUSER1111111111111111",
 		name: "Anthony Riera",
+		email: "anthony@example.com",
 		image: "https://github.com/rieranthony.png",
 		lastSeenAt: new Date().toISOString(),
 	},

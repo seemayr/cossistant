@@ -24,7 +24,7 @@ function LaunchChecklistPage() {
 					"Choose slots or full composition",
 				].map((item) => (
 					<div
-						className="rounded-2xl border border-border/80 bg-background-50 px-4 py-3 text-sm"
+						className="border border-border/80 bg-background-50 px-4 py-3 text-sm"
 						key={item}
 					>
 						{item}
@@ -34,7 +34,7 @@ function LaunchChecklistPage() {
 
 			<div className="mt-auto px-5 pb-5">
 				<button
-					className="w-full rounded-full bg-primary px-4 py-3 text-primary-foreground text-sm"
+					className="w-full bg-primary px-4 py-3 text-primary-foreground text-sm"
 					onClick={() =>
 						navigate({
 							page: "CONVERSATION",
@@ -58,7 +58,7 @@ export default function SupportFullCompositionDemo() {
 		<SupportDocsProvider>
 			<SupportDemoStage variant="panel">
 				<Support.Root mode="responsive">
-					<Support.Content className="border border-border shadow-2xl md:rounded-[24px]">
+					<Support.Content className="border border-border shadow-2xl">
 						<Support.Router>
 							<Support.Page component={LaunchChecklistPage} name="HOME" />
 						</Support.Router>

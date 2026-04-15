@@ -389,6 +389,11 @@ export const availableHumanAgentSchema = z.object({
 		description: "The agent's name.",
 		example: "John Doe",
 	}),
+	/** The agent's email address, used as a fallback avatar identity. */
+	email: z.email().nullable().openapi({
+		description: "The agent's email address.",
+		example: "john@example.com",
+	}),
 	/** URL to the agent's avatar image. */
 	image: z.string().nullable().openapi({
 		description: "The agent's avatar URL.",

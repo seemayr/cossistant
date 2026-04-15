@@ -157,7 +157,7 @@ export const TimelineActivityGroup: React.FC<TimelineActivityGroupProps> = ({
 						) : (
 							<Avatar
 								className="size-6"
-								facehashSeed={humanDisplay.facehashSeed}
+								facehashName={humanDisplay.facehashName}
 								image={humanAgent?.image}
 								name={isTeamMember ? humanDisplay.displayName : "Visitor"}
 							/>

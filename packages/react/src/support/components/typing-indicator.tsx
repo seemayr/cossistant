@@ -112,7 +112,7 @@ export const TypingIndicator = React.forwardRef<
 								return (
 									<Avatar
 										className="size-6"
-										facehashSeed={humanDisplay.facehashSeed}
+										facehashName={humanDisplay.facehashName}
 										image={agent.image}
 										key={agent.id}
 										lastSeenAt={agent.lastSeenAt}

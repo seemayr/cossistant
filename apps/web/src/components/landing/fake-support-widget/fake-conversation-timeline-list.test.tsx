@@ -66,6 +66,7 @@ const AVAILABLE_HUMAN_AGENTS: AvailableHumanAgent[] = [
 	{
 		id: "human-1",
 		name: "Anthony Riera",
+		email: "anthony@example.com",
 		image: "https://example.com/anthony.png",
 		lastSeenAt: null,
 	},
@@ -75,6 +76,7 @@ function renderTimeline(options: {
 	items: TimelineItem[];
 	typingActors?: FakeSupportTypingActor[];
 	currentVisitorId?: string;
+	className?: string;
 }): string {
 	return renderToStaticMarkup(
 		React.createElement(FakeConversationTimelineList, {
@@ -84,11 +86,26 @@ function renderTimeline(options: {
 			availableHumanAgents: AVAILABLE_HUMAN_AGENTS,
 			currentVisitorId: options.currentVisitorId ?? "visitor-1",
 			typingActors: options.typingActors ?? [],
+			className: options.className,
 		})
 	);
 }
 
 describe("FakeSupportWidget timeline activity grouping", () => {
+	it("keeps the fake widget wrapper height-constrained and the timeline scrollable", () => {
+		const html = renderTimeline({
+			items: [],
+			className: "px-4 py-20",
+		});
+
+		expect(html).toContain('class="cossistant h-full min-h-0 w-full"');
+		expect(html).toContain('role="log"');
+		expect(html).toContain('aria-label="Conversation timeline"');
+		expect(html).toContain(
+			"w-full overflow-y-auto overflow-x-hidden h-full min-h-0 px-4 py-20"
+		);
+	});
+
 	it("renders visible AI tool rows with the shared tool structure", () => {
 		const html = renderTimeline({
 			items: [

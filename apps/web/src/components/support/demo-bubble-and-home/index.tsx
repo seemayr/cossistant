@@ -22,14 +22,14 @@ const EditorialBubble = React.forwardRef<
 		<button
 			{...props}
 			className={cn(
-				"flex items-center gap-3 rounded-full bg-black px-4 py-3 text-white shadow-2xl",
+				"flex items-center gap-3 bg-black px-4 py-3 text-white shadow-2xl",
 				className
 			)}
 			onClick={toggle}
 			ref={ref}
 			type="button"
 		>
-			<div className="relative flex size-8 items-center justify-center rounded-full bg-white/10">
+			<div className="relative flex size-8 items-center justify-center bg-white/10">
 				<LandingTriggerContent
 					isOpen={isOpen}
 					isTyping={isTyping}
@@ -72,7 +72,7 @@ function LaunchHomePage({
 			<div className="grid gap-3 px-6 py-5">
 				{quickOptions.map((option) => (
 					<button
-						className="hover:-translate-y-0.5 rounded-2xl border border-black/6 bg-white px-4 py-3 text-left text-sm shadow-sm transition-transform"
+						className="hover:-translate-y-0.5 border border-black/6 bg-white px-4 py-3 text-left text-sm shadow-sm transition-transform"
 						key={option}
 						onClick={() => startConversation(option)}
 						type="button"
@@ -101,7 +101,7 @@ export default function SupportBubbleAndHomeDemo() {
 					]}
 					slotProps={{
 						content: {
-							className: "border border-black/8 shadow-2xl md:rounded-[28px]",
+							className: "border border-black/8 shadow-2xl",
 						},
 						trigger: {
 							className: "absolute bottom-0 left-1/2 -translate-x-1/2",

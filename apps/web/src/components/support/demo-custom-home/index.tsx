@@ -33,7 +33,7 @@ function CustomHomePage({
 			<div className="flex flex-1 flex-col gap-3 px-6 py-5">
 				{quickOptions.map((option) => (
 					<button
-						className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-left text-sm transition-colors hover:bg-white/10"
+						className="border border-white/10 bg-white/5 px-4 py-3 text-left text-sm transition-colors hover:bg-white/10"
 						key={option}
 						onClick={() => startConversation(option)}
 						type="button"
@@ -67,8 +67,7 @@ export default function SupportCustomHomeDemo() {
 					]}
 					slotProps={{
 						content: {
-							className:
-								"border border-neutral-200 shadow-2xl md:rounded-[24px]",
+							className: "border border-neutral-200 shadow-2xl",
 						},
 					}}
 					slots={{ homePage: CustomHomePage }}

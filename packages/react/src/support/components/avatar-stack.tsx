@@ -168,7 +168,7 @@ export function AvatarStack({
 								return (
 									<Avatar
 										className={cn("size-full")}
-										facehashSeed={humanDisplay.facehashSeed}
+										facehashName={humanDisplay.facehashName}
 										image={item.agent.image}
 										lastSeenAt={item.agent.lastSeenAt}
 										name={humanDisplay.displayName}

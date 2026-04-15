@@ -30,6 +30,8 @@ export type ConversationPreviewLastMessage = {
 export type ConversationPreviewAssignedAgent = {
 	name: string;
 	image: string | null;
+	facehashName?: string;
+	/** @deprecated Use facehashName. */
 	facehashSeed?: string;
 	type: "human" | "ai" | "fallback";
 	/** Last seen timestamp for human agents, used for online status indicator */
@@ -221,21 +223,23 @@ export function useConversationPreview(
 				return {
 					type: "human" as const,
 					name: humanDisplay.displayName,
-					facehashSeed: humanDisplay.facehashSeed,
+					facehashName: humanDisplay.facehashName,
+					facehashSeed: humanDisplay.facehashName,
 					image: human.image ?? null,
 					lastSeenAt: human.lastSeenAt ?? null,
 				};
 			}
 
 			const humanDisplay = resolveSupportHumanAgentDisplay(
-				{ id: lastAgentItem.userId, name: null },
+				{ id: lastAgentItem.userId, email: null, name: null },
 				supportFallbackName
 			);
 
 			return {
 				type: "human" as const,
 				name: humanDisplay.displayName,
-				facehashSeed: humanDisplay.facehashSeed,
+				facehashName: humanDisplay.facehashName,
+				facehashSeed: humanDisplay.facehashName,
 				image: null,
 				lastSeenAt: null,
 			};
@@ -271,7 +275,8 @@ export function useConversationPreview(
 			return {
 				type: "human" as const,
 				name: humanDisplay.displayName,
-				facehashSeed: humanDisplay.facehashSeed,
+				facehashName: humanDisplay.facehashName,
+				facehashSeed: humanDisplay.facehashName,
 				image: fallbackHuman.image ?? null,
 				lastSeenAt: fallbackHuman.lastSeenAt ?? null,
 			};
@@ -289,7 +294,8 @@ export function useConversationPreview(
 		return {
 			type: "fallback" as const,
 			name: supportFallbackName,
-			facehashSeed: "public:support-fallback",
+			facehashName: supportFallbackName,
+			facehashSeed: supportFallbackName,
 			image: null,
 		};
 	}, [knownTimelineItems, availableHumanAgents, availableAIAgents, text]);

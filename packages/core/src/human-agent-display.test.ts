@@ -26,25 +26,27 @@ describe("resolveHumanAgentDisplay", () => {
 			)
 		).toEqual({
 			displayName: "Jane Doe",
+			facehashName: "Jane Doe",
 			facehashSeed: "Jane Doe",
 			normalizedName: "Jane Doe",
 		});
 	});
 
-	it("uses the public fallback label and a stable synthetic seed", () => {
+	it("uses email as the public Facehash name when the display name is missing", () => {
 		expect(
 			resolveHumanAgentDisplay(
-				{ id: "agent-1", name: "   " },
+				{ id: "agent-1", name: "   ", email: " jane@example.com " },
 				{ surface: "public" }
 			)
 		).toEqual({
 			displayName: "Support team",
-			facehashSeed: "public:agent-1",
+			facehashName: "jane@example.com",
+			facehashSeed: "jane@example.com",
 			normalizedName: null,
 		});
 	});
 
-	it("uses the internal fallback label and a stable synthetic seed", () => {
+	it("uses the internal fallback label as Facehash name without a name or email", () => {
 		expect(
 			resolveHumanAgentDisplay(
 				{ id: "agent-2", name: null },
@@ -52,7 +54,8 @@ describe("resolveHumanAgentDisplay", () => {
 			)
 		).toEqual({
 			displayName: "Team member",
-			facehashSeed: "internal:agent-2",
+			facehashName: "Team member",
+			facehashSeed: "Team member",
 			normalizedName: null,
 		});
 	});
@@ -68,12 +71,13 @@ describe("resolveHumanAgentDisplay", () => {
 			)
 		).toEqual({
 			displayName: "Support",
-			facehashSeed: "public:agent-3",
+			facehashName: "Support",
+			facehashSeed: "Support",
 			normalizedName: null,
 		});
 	});
 
-	it("keeps fallback seeds unique even when labels match", () => {
+	it("uses matching fallback labels as matching Facehash names", () => {
 		const first = resolveHumanAgentDisplay(
 			{ id: "agent-1", name: "" },
 			{ surface: "internal" }
@@ -84,6 +88,6 @@ describe("resolveHumanAgentDisplay", () => {
 		);
 
 		expect(first.displayName).toBe(second.displayName);
-		expect(first.facehashSeed).not.toBe(second.facehashSeed);
+		expect(first.facehashName).toBe(second.facehashName);
 	});
 });

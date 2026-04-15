@@ -1,7 +1,7 @@
 import { SupportConfig } from "@cossistant/react/support-config";
 import { SenderType } from "@cossistant/types";
 import Link from "next/link";
-import { FakeDashboard } from "@/components/landing/fake-dashboard";
+import { FakeDashboardClientOnly } from "@/components/landing/fake-dashboard/client-only";
 import { JsonLdScripts } from "@/components/seo/json-ld";
 import { Button } from "@/components/ui/button";
 import { Logos } from "@/components/ui/logos";
@@ -83,7 +83,7 @@ export default function Landing() {
 						<FullWidthBorder className="top-0" />
 						<BrowserWithBackground containerClassName="w-full">
 							<div className="fake-dashboard-container">
-								<FakeDashboard />
+								<FakeDashboardClientOnly />
 							</div>
 						</BrowserWithBackground>
 						<FullWidthBorder className="bottom-0" />

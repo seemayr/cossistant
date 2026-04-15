@@ -22,10 +22,10 @@ mock.module("../text", () => ({
 }));
 
 mock.module("./avatar", () => ({
-	Avatar: ({ name, facehashSeed }: { name: string; facehashSeed?: string }) =>
+	Avatar: ({ name, facehashName }: { name: string; facehashName?: string }) =>
 		React.createElement("div", {
 			"data-avatar-name": name,
-			"data-facehash-seed": facehashSeed ?? "",
+			"data-facehash-name": facehashName ?? "",
 		}),
 }));
 
@@ -40,12 +40,36 @@ describe("AvatarStack", () => {
 		useSupportTextMock.mockClear();
 	});
 
-	it("uses Support team and a stable facehash seed for nameless human agents", async () => {
+	it("passes the human name to Facehash when present", async () => {
+		const { AvatarStack } = await avatarStackModulePromise;
+		const humanAgents = [
+			{
+				id: "human-1",
+				name: "  Ada Lovelace  ",
+				email: "ada@example.com",
+				image: null,
+				lastSeenAt: null,
+			},
+		] as AvailableHumanAgent[];
+
+		const html = renderToStaticMarkup(
+			React.createElement(AvatarStack, {
+				humanAgents,
+				aiAgents: [] as AvailableAIAgent[],
+			})
+		);
+
+		expect(html).toContain('data-avatar-name="Ada Lovelace"');
+		expect(html).toContain('data-facehash-name="Ada Lovelace"');
+	});
+
+	it("passes the human email to Facehash when the name is missing", async () => {
 		const { AvatarStack } = await avatarStackModulePromise;
 		const humanAgents = [
 			{
 				id: "human-1",
 				name: "   ",
+				email: "ada@example.com",
 				image: null,
 				lastSeenAt: null,
 			},
@@ -59,6 +83,29 @@ describe("AvatarStack", () => {
 		);
 
 		expect(html).toContain('data-avatar-name="Support team"');
-		expect(html).toContain('data-facehash-seed="public:human-1"');
+		expect(html).toContain('data-facehash-name="ada@example.com"');
+	});
+
+	it("uses Support team as the Facehash input when name and email are missing", async () => {
+		const { AvatarStack } = await avatarStackModulePromise;
+		const humanAgents = [
+			{
+				id: "human-1",
+				name: "   ",
+				email: null,
+				image: null,
+				lastSeenAt: null,
+			},
+		] as AvailableHumanAgent[];
+
+		const html = renderToStaticMarkup(
+			React.createElement(AvatarStack, {
+				humanAgents,
+				aiAgents: [] as AvailableAIAgent[],
+			})
+		);
+
+		expect(html).toContain('data-avatar-name="Support team"');
+		expect(html).toContain('data-facehash-name="Support team"');
 	});
 });

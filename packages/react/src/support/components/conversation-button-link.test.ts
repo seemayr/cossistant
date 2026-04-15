@@ -44,10 +44,10 @@ mock.module("../text", () => ({
 }));
 
 mock.module("./avatar", () => ({
-	Avatar: ({ name, facehashSeed }: { name: string; facehashSeed?: string }) =>
+	Avatar: ({ name, facehashName }: { name: string; facehashName?: string }) =>
 		React.createElement("div", {
 			"data-avatar": name,
-			"data-facehash-seed": facehashSeed ?? "",
+			"data-facehash-name": facehashName ?? "",
 		}),
 }));
 
@@ -261,11 +261,11 @@ describe("ConversationButtonLink", () => {
 		expect(html).not.toContain("dot-bounce-1");
 	});
 
-	it("forwards the preview facehash seed to the avatar", async () => {
+	it("forwards the preview Facehash name to the avatar", async () => {
 		currentPreview = createPreview({
 			assignedAgent: {
 				name: "Support Team",
-				facehashSeed: "public:agent-1",
+				facehashName: "support@example.com",
 				image: null,
 				type: "human",
 				lastSeenAt: null,
@@ -275,6 +275,6 @@ describe("ConversationButtonLink", () => {
 		const html = await renderConversationButtonLink();
 
 		expect(html).toContain('data-avatar="Support Team"');
-		expect(html).toContain('data-facehash-seed="public:agent-1"');
+		expect(html).toContain('data-facehash-name="support@example.com"');
 	});
 });

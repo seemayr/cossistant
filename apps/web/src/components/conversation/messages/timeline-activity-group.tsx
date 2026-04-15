@@ -65,6 +65,7 @@ export function TimelineActivityGroup({
 				return {
 					id: member.id,
 					name: memberDisplay.senderDisplayName,
+					email: member.email ?? null,
 					image: member.image,
 					lastSeenAt: member.lastSeenAt,
 				};

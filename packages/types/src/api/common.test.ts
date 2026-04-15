@@ -198,6 +198,7 @@ describe("REST timestamp serialization", () => {
 				{
 					id: "01ARZ3NDEKTSV4RRFFQ69G5FAZ",
 					name: "Jane",
+					email: "jane@example.com",
 					image: null,
 					lastSeenAt: "2026-04-06T14:37:05.82+00:00",
 				},

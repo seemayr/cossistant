@@ -312,6 +312,7 @@ export function ConversationItem({
 				return {
 					id: member.id,
 					name: memberDisplay.displayName,
+					email: member.email ?? null,
 					image: member.image,
 					lastSeenAt: member.lastSeenAt,
 				};
@@ -431,6 +432,7 @@ export function ConversationItem({
 		if (entry?.actorType === "user") {
 			const member = members.find((m) => m.id === entry.actorId);
 			const memberDisplay = resolveDashboardHumanAgentDisplay({
+				email: member?.email ?? null,
 				id: member?.id ?? entry.actorId,
 				name: member?.name ?? null,
 			});

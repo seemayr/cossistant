@@ -10,7 +10,7 @@ export function ComponentPreviewTabs({
 	align = "center",
 	component,
 	source,
-	withOrnament = false,
+	withOrnament: _withOrnament,
 	sizeClasses = "min-h-[350px] md:min-h-[450px]",
 }: React.ComponentProps<"div"> & {
 	align?: "center" | "start" | "end";
@@ -30,74 +30,34 @@ export function ComponentPreviewTabs({
 		<div
 			className={cn("group relative flex h-full w-full flex-col", className)}
 		>
-			<Tabs className="relative w-full" onValueChange={setTab} value={tab}>
-				<div className="relative overflow-hidden rounded-[24px] border border-border/70 border-dashed bg-background/60">
-					{withOrnament && (
-						<>
-							<motion.div
-								animate={{ scaleY: 1 }}
-								className="-top-10 -bottom-10 pointer-events-none absolute left-0 hidden w-px bg-primary/20 md:block"
-								initial={{ scaleY: 0 }}
-								style={{ originY: 0.5 }}
-								transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
-							/>
-							<motion.div
-								animate={{ scaleY: 1 }}
-								className="-top-6 -bottom-6 pointer-events-none absolute left-4 z-[-1] hidden w-px bg-primary/20 md:block"
-								initial={{ scaleY: 0 }}
-								style={{ originY: 0.5 }}
-								transition={{ duration: 0.8, delay: 0.4, ease: "easeOut" }}
-							/>
-							<motion.div
-								animate={{ scaleY: 1 }}
-								className="-top-10 -bottom-10 -right-px pointer-events-none absolute hidden w-px bg-primary/20 md:block"
-								initial={{ scaleY: 0 }}
-								style={{ originY: 0.5 }}
-								transition={{ duration: 0.8, delay: 0, ease: "easeOut" }}
-							/>
-							<motion.div
-								animate={{ scaleY: 1 }}
-								className="-top-6 -bottom-6 pointer-events-none absolute right-4 z-[-1] hidden w-px bg-primary/20 md:block"
-								initial={{ scaleY: 0 }}
-								style={{ originY: 0.5 }}
-								transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
-							/>
-							<motion.div
-								animate={{ scaleX: 1 }}
-								className="-left-6 -right-6 pointer-events-none absolute top-0 hidden h-px bg-primary/20 md:block"
-								initial={{ scaleX: 0 }}
-								style={{ originX: 0.5 }}
-								transition={{ duration: 0.8, delay: 0.8, ease: "easeOut" }}
-							/>
-							<motion.div
-								animate={{ scaleX: 1 }}
-								className="-left-6 -right-6 pointer-events-none absolute top-4 z-[-1] hidden h-px bg-primary/20 md:block"
-								initial={{ scaleX: 0 }}
-								style={{ originX: 0.5 }}
-								transition={{ duration: 0.8, delay: 1, ease: "easeOut" }}
-							/>
-							<motion.div
-								animate={{ scaleX: 1 }}
-								className="-left-6 -right-6 pointer-events-none absolute bottom-0 hidden h-px bg-primary/20 md:block"
-								initial={{ scaleX: 0 }}
-								style={{ originX: 0.5 }}
-								transition={{ duration: 0.8, delay: 1.6, ease: "easeOut" }}
-							/>
-							<motion.div
-								animate={{ scaleX: 1 }}
-								className="-left-6 -right-6 pointer-events-none absolute bottom-4 z-[-1] hidden h-px bg-primary/20 md:block"
-								initial={{ scaleX: 0 }}
-								style={{ originX: 0.5 }}
-								transition={{ duration: 0.8, delay: 1.8, ease: "easeOut" }}
-							/>
-						</>
-					)}
-					<div className="border-border/70 border-b border-dashed px-4 pt-4">
-						<TabsList className="grid w-full max-w-[220px] grid-cols-2">
-							<TabsTrigger value="preview">Preview</TabsTrigger>
-							<TabsTrigger value="code">Code</TabsTrigger>
-						</TabsList>
-					</div>
+			<Tabs
+				className="relative w-full gap-2"
+				onValueChange={setTab}
+				value={tab}
+			>
+				<div
+					className="flex items-center px-6"
+					data-slot="component-preview-tabs"
+				>
+					<TabsList className="justify-start gap-4 bg-transparent p-0">
+						<TabsTrigger
+							className="h-8 flex-none px-0 text-muted-foreground data-[state=active]:text-foreground data-[state=active]:shadow-none"
+							value="preview"
+						>
+							Preview
+						</TabsTrigger>
+						<TabsTrigger
+							className="h-8 flex-none px-0 text-muted-foreground data-[state=active]:text-foreground data-[state=active]:shadow-none"
+							value="code"
+						>
+							Code
+						</TabsTrigger>
+					</TabsList>
+				</div>
+				<div
+					className="relative overflow-hidden border border-border/70 border-dashed bg-transparent"
+					data-slot="component-preview-frame"
+				>
 					{tab === "preview" && (
 						<div
 							className={cn(

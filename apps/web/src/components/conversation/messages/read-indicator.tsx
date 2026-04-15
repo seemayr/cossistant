@@ -30,6 +30,7 @@ type ReaderInfo =
 	| {
 			id: string;
 			type: "human";
+			email: string | null;
 			name: string | null;
 			image: string | null;
 	  }
@@ -101,6 +102,7 @@ export function ReadIndicator({
 				if (human) {
 					return {
 						id,
+						email: human.email ?? null,
 						name: human.name ?? null,
 						image: human.image,
 						type: "human" as const,
@@ -146,6 +148,7 @@ export function ReadIndicator({
 							const displayName =
 								reader.participant.type === "human"
 									? resolveDashboardHumanAgentDisplay({
+											email: reader.participant.email,
 											id: reader.participant.id,
 											name: reader.participant.name,
 										}).displayName
@@ -186,6 +189,7 @@ export function ReadIndicator({
 							{reader.participant.type === "human" ? (
 								(() => {
 									const humanDisplay = resolveDashboardHumanAgentDisplay({
+										email: reader.participant.email,
 										id: reader.id,
 										name: reader.participant.name,
 									});

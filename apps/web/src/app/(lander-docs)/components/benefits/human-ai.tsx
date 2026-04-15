@@ -218,6 +218,7 @@ const availableHumanAgents: AvailableHumanAgent[] = [
 	{
 		id: "anthony",
 		name: "Anthony",
+		email: "anthony@example.com",
 		image: anthonyAvatar,
 		lastSeenAt: new Date().toISOString(),
 	},

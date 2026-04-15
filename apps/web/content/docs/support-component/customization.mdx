@@ -36,7 +36,7 @@ import { Support } from "@cossistant/react";
   }}
   slotProps={{
     content: {
-      className: "rounded-[28px]",
+      className: "border border-neutral-200 shadow-2xl",
     },
   }}
 />;
@@ -68,24 +68,38 @@ Use `slots.trigger` when the launcher is the only thing that should change.
 import { Support, type SupportTriggerSlotProps } from "@cossistant/react";
 import * as React from "react";
 
-const CustomBubble = React.forwardRef<HTMLButtonElement, SupportTriggerSlotProps>(
-  function CustomBubble({ className, isOpen, toggle, unreadCount, ...props }, ref) {
+function mergeClassNames(...classes: Array<string | undefined>) {
+  return classes.filter(Boolean).join(" ");
+}
+
+const ClassicBubble = React.forwardRef<HTMLButtonElement, SupportTriggerSlotProps>(
+  function ClassicBubbleTrigger(
+    { className, isOpen, isTyping: _isTyping, toggle, unreadCount, ...props },
+    ref
+  ) {
     return (
       <button
         {...props}
-        className={className}
+        className={mergeClassNames(
+          "relative flex size-14 items-center justify-center border border-black bg-black font-medium text-white text-sm shadow-xl transition-transform hover:scale-[1.02]",
+          className
+        )}
         onClick={toggle}
         ref={ref}
         type="button"
       >
         {isOpen ? "Close" : "Chat"}
-        {unreadCount > 0 ? ` (${unreadCount})` : null}
+        {unreadCount > 0 ? (
+          <span className="-right-1 -top-1 absolute flex size-5 items-center justify-center border border-white bg-orange-500 text-[11px]">
+            {unreadCount}
+          </span>
+        ) : null}
       </button>
     );
   }
 );
 
-<Support slots={{ trigger: CustomBubble }} />;
+<Support slots={{ trigger: ClassicBubble }} />;
 ```
 
 <ComponentPreview name="support-classic-bubble" />
@@ -98,17 +112,35 @@ The same slot can feel more like an in-product button instead of a floating chat
 import { Support, type SupportTriggerSlotProps } from "@cossistant/react";
 import * as React from "react";
 
+function mergeClassNames(...classes: Array<string | undefined>) {
+  return classes.filter(Boolean).join(" ");
+}
+
 const PillBubble = React.forwardRef<HTMLButtonElement, SupportTriggerSlotProps>(
-  function PillBubble({ className, isTyping, toggle, ...props }, ref) {
+  function PillBubble(
+    {
+      className,
+      isOpen: _isOpen,
+      isTyping,
+      unreadCount: _unreadCount,
+      toggle,
+      ...props
+    },
+    ref
+  ) {
     return (
       <button
         {...props}
-        className={className}
+        className={mergeClassNames(
+          "flex h-12 items-center gap-2 border border-black bg-white px-4 font-medium text-black text-sm shadow-xl transition-transform hover:scale-[1.01]",
+          className
+        )}
         onClick={toggle}
         ref={ref}
         type="button"
       >
-        {isTyping ? "Support is typing..." : "Open support"}
+        <span className="size-2 bg-orange-500" />
+        <span>{isTyping ? "Support is typing..." : "Open support"}</span>
       </button>
     );
   }
@@ -154,7 +186,7 @@ function CustomHomePage({
 <Support
   slotProps={{
     content: {
-      className: "rounded-3xl border shadow-2xl",
+      className: "border shadow-2xl",
     },
   }}
   slots={{ homePage: CustomHomePage }}

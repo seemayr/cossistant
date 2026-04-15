@@ -3,13 +3,7 @@
 import * as React from "react";
 import { CodeBlockCommand } from "@/components/code-block-command";
 import { Logos } from "@/components/ui/logos";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
 	getSupportInstallCommands,
 	type SupportIntegrationFramework,
@@ -48,32 +42,26 @@ export function FrameworkInstallCommandTabs({
 	);
 
 	return (
-		<div className="flex flex-col">
-			<div className="flex items-center px-1 py-1">
-				<Select
-					onValueChange={(value) =>
-						setFramework(value as SupportIntegrationFramework)
-					}
-					value={framework}
-				>
-					<SelectTrigger
-						aria-label="Select framework"
-						className="w-[112px] border-transparent bg-transparent px-[9px] shadow-none dark:bg-transparent"
-						size="sm"
+		<Tabs
+			className="flex flex-col gap-2"
+			onValueChange={(value) =>
+				setFramework(value as SupportIntegrationFramework)
+			}
+			value={framework}
+		>
+			<TabsList className="justify-start gap-4 bg-transparent p-0">
+				{FRAMEWORK_OPTIONS.map(({ value, label, icon: Icon }) => (
+					<TabsTrigger
+						className="h-8 flex-none gap-2 px-0 text-muted-foreground data-[state=active]:text-foreground data-[state=active]:shadow-none"
+						key={value}
+						value={value}
 					>
-						<SelectValue placeholder="Select framework" />
-					</SelectTrigger>
-					<SelectContent alignOffset={-3}>
-						{FRAMEWORK_OPTIONS.map(({ value, label, icon: Icon }) => (
-							<SelectItem key={value} value={value}>
-								<Icon className="size-3.5 fill-current" />
-								{label}
-							</SelectItem>
-						))}
-					</SelectContent>
-				</Select>
-			</div>
-			<div className="border border-dashed bg-background-100">
+						<Icon className="size-3.5 fill-current" />
+						{label}
+					</TabsTrigger>
+				))}
+			</TabsList>
+			<div className="bg-background-100">
 				<CodeBlockCommand
 					__bun__={installCommands.bun}
 					__npm__={installCommands.npm}
@@ -81,6 +69,6 @@ export function FrameworkInstallCommandTabs({
 					__yarn__={installCommands.yarn}
 				/>
 			</div>
-		</div>
+		</Tabs>
 	);
 }

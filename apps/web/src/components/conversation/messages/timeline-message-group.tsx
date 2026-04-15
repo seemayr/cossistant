@@ -74,6 +74,7 @@ export function TimelineMessageGroup({
 	);
 	const humanDisplay = firstItem?.userId
 		? resolveDashboardHumanAgentDisplay({
+				email: humanAgent?.email ?? null,
 				id: humanAgent?.id ?? firstItem.userId,
 				name: humanAgent?.name ?? null,
 			})

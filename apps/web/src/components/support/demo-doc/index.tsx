@@ -17,8 +17,7 @@ function CossistantSupport() {
 					]}
 					slotProps={{
 						content: {
-							className:
-								"border border-border bg-background shadow-sm md:rounded-[24px]",
+							className: "border border-border bg-background shadow-sm",
 						},
 					}}
 				/>

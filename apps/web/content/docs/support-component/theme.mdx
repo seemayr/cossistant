@@ -14,6 +14,17 @@ search:
     - --co-theme-radius
 ---
 
+export function ColorSwatch({ value, label = value }) {
+  return (
+    <span
+      aria-label={label}
+      className="inline-block size-4 border border-dashed border-border align-middle"
+      style={{ background: value }}
+      title={label}
+    />
+  );
+}
+
 You can make the widget feel like part of your product without replacing any components.
 
 ## Use this when
@@ -33,7 +44,7 @@ Set the widget tokens once and keep the default UI.
   --co-theme-background: #ffffff;
   --co-theme-foreground: #111827;
   --co-theme-border: #e5e7eb;
-  --co-theme-radius: 18px;
+  --co-theme-radius: 0px;
 }
 ```
 
@@ -79,23 +90,46 @@ This keeps the widget aligned with the rest of your app instead of inventing a s
 
 ## Core token reference
 
-| Variable                        | Default (Light)    | Default (Dark)     |
-| ------------------------------- | ------------------ | ------------------ |
-| `--co-theme-background`         | `oklch(99% 0 0)`   | `oklch(15.5% 0 0)` |
-| `--co-theme-foreground`         | `oklch(14.5% 0 0)` | `oklch(98.5% 0 0)` |
-| `--co-theme-primary`            | `oklch(20.5% 0 0)` | `oklch(98.5% 0 0)` |
-| `--co-theme-primary-foreground` | `oklch(98.5% 0 0)` | `oklch(20.5% 0 0)` |
-| `--co-theme-border`             | `oklch(92.2% 0 0)` | `oklch(26.9% 0 0)` |
-| `--co-theme-muted`              | Color-mixed        | Color-mixed        |
-| `--co-theme-muted-foreground`   | Color-mixed        | Color-mixed        |
-| `--co-theme-radius`             | `0.375rem`         | `0.375rem`         |
+| Variable                        | Light preview                                             | Default (Light)    | Dark preview                                              | Default (Dark)     |
+| ------------------------------- | --------------------------------------------------------- | ------------------ | --------------------------------------------------------- | ------------------ |
+| `--co-theme-background`         | <ColorSwatch value="oklch(99% 0 0)" />                   | `oklch(99% 0 0)`   | <ColorSwatch value="oklch(15.5% 0 0)" />                 | `oklch(15.5% 0 0)` |
+| `--co-theme-foreground`         | <ColorSwatch value="oklch(20.5% 0 0)" />                 | `oklch(20.5% 0 0)` | <ColorSwatch value="oklch(95% 0 0)" />                   | `oklch(95% 0 0)`   |
+| `--co-theme-primary`            | <ColorSwatch value="oklch(14.5% 0 0)" />                 | `oklch(14.5% 0 0)` | <ColorSwatch value="oklch(98.5% 0 0)" />                 | `oklch(98.5% 0 0)` |
+| `--co-theme-primary-foreground` | <ColorSwatch value="oklch(98.5% 0 0)" />                 | `oklch(98.5% 0 0)` | <ColorSwatch value="oklch(14.5% 0 0)" />                 | `oklch(14.5% 0 0)` |
+| `--co-theme-border`             | <ColorSwatch value="oklch(92.2% 0 0)" />                 | `oklch(92.2% 0 0)` | <ColorSwatch value="oklch(26.9% 0 0)" />                 | `oklch(26.9% 0 0)` |
+| `--co-theme-muted`              | <ColorSwatch value="color-mix(in oklch, oklch(99% 0 0) 85%, oklch(20.5% 0 0))" /> | Color-mixed        | <ColorSwatch value="color-mix(in oklch, oklch(15.5% 0 0) 55%, oklch(95% 0 0))" /> | Color-mixed        |
+| `--co-theme-muted-foreground`   | <ColorSwatch value="color-mix(in oklch, oklch(20.5% 0 0) 70%, white)" /> | Color-mixed        | <ColorSwatch value="color-mix(in oklch, oklch(95% 0 0) 65%, white)" /> | Color-mixed        |
+| `--co-theme-radius`             | -                                                         | `0.375rem`         | -                                                         | `0.375rem`         |
 
 ## Extra tokens
 
 Use these when the core tokens are not enough:
 
-- Status colors: `--co-theme-destructive`, `--co-theme-success`, `--co-theme-warning`, `--co-theme-neutral`
-- Avatar accents: `--co-theme-pink`, `--co-theme-yellow`, `--co-theme-blue`, `--co-theme-orange`
-- Background shades: `--co-theme-background-50`, `--co-theme-background-100`, `--co-theme-background-200`, `--co-theme-background-300`
+### Status colors
+
+| Variable                 | Light preview                              | Default (Light)          | Dark preview                               | Default (Dark)            |
+| ------------------------ | ------------------------------------------ | ------------------------ | ------------------------------------------ | ------------------------- |
+| `--co-theme-destructive` | <ColorSwatch value="oklch(57.7% 0.245 27.325)" /> | `oklch(57.7% 0.245 27.325)` | <ColorSwatch value="oklch(39.6% 0.141 25.723)" /> | `oklch(39.6% 0.141 25.723)` |
+| `--co-theme-success`     | <ColorSwatch value="oklch(71.7% 0.18 142)" /> | `oklch(71.7% 0.18 142)` | <ColorSwatch value="oklch(60% 0.15 142)" /> | `oklch(60% 0.15 142)`     |
+| `--co-theme-warning`     | <ColorSwatch value="oklch(86.4% 0.144 99)" /> | `oklch(86.4% 0.144 99)` | <ColorSwatch value="oklch(90.3% 0.111 99)" /> | `oklch(90.3% 0.111 99)`   |
+| `--co-theme-neutral`     | <ColorSwatch value="oklch(60.8% 0 0)" />  | `oklch(60.8% 0 0)`      | <ColorSwatch value="oklch(50% 0 0)" />     | `oklch(50% 0 0)`          |
+
+### Avatar accents
+
+| Variable            | Light preview                             | Default (Light)        | Dark preview                              | Default (Dark)         |
+| ------------------- | ----------------------------------------- | ---------------------- | ----------------------------------------- | ---------------------- |
+| `--co-theme-pink`   | <ColorSwatch value="oklch(76.3% 0.152 354)" /> | `oklch(76.3% 0.152 354)` | <ColorSwatch value="oklch(84.2% 0.109 354)" /> | `oklch(84.2% 0.109 354)` |
+| `--co-theme-yellow` | <ColorSwatch value="oklch(86.4% 0.144 99)" /> | `oklch(86.4% 0.144 99)` | <ColorSwatch value="oklch(90.3% 0.111 99)" /> | `oklch(90.3% 0.111 99)` |
+| `--co-theme-blue`   | <ColorSwatch value="oklch(72.5% 0.132 241)" /> | `oklch(72.5% 0.132 241)` | <ColorSwatch value="oklch(79.8% 0.089 241)" /> | `oklch(79.8% 0.089 241)` |
+| `--co-theme-orange` | <ColorSwatch value="oklch(74.5% 0.166 50)" /> | `oklch(74.5% 0.166 50)` | <ColorSwatch value="oklch(68.2% 0.194 50)" /> | `oklch(68.2% 0.194 50)` |
+
+### Background shades
+
+| Variable                    | Light preview | Default (Light) | Dark preview | Default (Dark) |
+| --------------------------- | ------------- | --------------- | ------------ | -------------- |
+| `--co-theme-background-50`  | <ColorSwatch value="color-mix(in oklch, oklch(99% 0 0) 98%, oklch(20.5% 0 0))" /> | Color-mixed | <ColorSwatch value="color-mix(in oklch, oklch(15.5% 0 0) 98%, oklch(95% 0 0))" /> | Color-mixed |
+| `--co-theme-background-100` | <ColorSwatch value="color-mix(in oklch, oklch(99% 0 0) 97%, oklch(20.5% 0 0))" /> | Color-mixed | <ColorSwatch value="color-mix(in oklch, oklch(15.5% 0 0) 96%, oklch(95% 0 0))" /> | Color-mixed |
+| `--co-theme-background-200` | <ColorSwatch value="color-mix(in oklch, oklch(99% 0 0) 96%, oklch(20.5% 0 0))" /> | Color-mixed | <ColorSwatch value="color-mix(in oklch, oklch(15.5% 0 0) 94%, oklch(95% 0 0))" /> | Color-mixed |
+| `--co-theme-background-300` | <ColorSwatch value="color-mix(in oklch, oklch(99% 0 0) 95%, oklch(20.5% 0 0))" /> | Color-mixed | <ColorSwatch value="color-mix(in oklch, oklch(15.5% 0 0) 92%, oklch(95% 0 0))" /> | Color-mixed |
 
 The background shades are derived from your base colors with `color-mix()` unless you override them directly.

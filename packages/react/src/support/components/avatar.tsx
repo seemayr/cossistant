@@ -25,7 +25,7 @@ type AvatarProps = {
 	className?: string;
 	image?: string | null;
 	name: string;
-	facehashSeed?: string;
+	facehashName?: string;
 	/** Whether this avatar is for an AI agent */
 	isAI?: boolean;
 	/** Whether to show the background circle (default: true) */
@@ -61,7 +61,7 @@ export function Avatar({
 	className,
 	image,
 	name,
-	facehashSeed,
+	facehashName,
 	isAI = false,
 	showBackground = true,
 	colorClasses = DEFAULT_AVATAR_COLORS,
@@ -69,7 +69,7 @@ export function Avatar({
 	indicatorSize = 6,
 }: AvatarProps): ReactElement {
 	const agentStatus = isAI ? "offline" : getAgentStatus(lastSeenAt);
-	const resolvedFacehashSeed = facehashSeed?.trim() || name.trim() || "avatar";
+	const resolvedFacehashName = facehashName?.trim() || name.trim() || "avatar";
 
 	// AI agent without image: show just the logo (no avatar wrapper)
 	// Unless showBackground is true (e.g. in avatar stack), then wrap in a box
@@ -104,8 +104,7 @@ export function Avatar({
 						className="size-full text-black"
 						colorClasses={colorClasses}
 						interactive={false}
-						name={resolvedFacehashSeed}
-						showInitial={false}
+						name={resolvedFacehashName}
 						size="100%"
 					/>
 				</AvatarFallback>
@@ -126,8 +125,7 @@ export function Avatar({
 						className="size-full text-black"
 						colorClasses={colorClasses}
 						interactive={false}
-						name={resolvedFacehashSeed}
-						showInitial={false}
+						name={resolvedFacehashName}
 						size="100%"
 					/>
 				</AvatarFallback>

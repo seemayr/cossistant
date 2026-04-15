@@ -50,7 +50,7 @@ export default function ExampleBubbleAndHome() {
 		<Support
 			slotProps={{
 				content: {
-					className: "rounded-[28px] border shadow-2xl",
+					className: "border shadow-2xl",
 				},
 			}}
 			slots={{

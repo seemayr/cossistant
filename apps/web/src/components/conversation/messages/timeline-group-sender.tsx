@@ -24,6 +24,7 @@ export function resolveDashboardTimelineSender(
 	const humanDisplay =
 		senderType === SenderType.TEAM_MEMBER
 			? resolveDashboardHumanAgentDisplay({
+					email: humanAgent?.email ?? null,
 					id: humanAgent?.id ?? senderId ?? "unknown-member",
 					name: humanAgent?.name ?? null,
 				})

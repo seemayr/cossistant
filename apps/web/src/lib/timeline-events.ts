@@ -83,6 +83,7 @@ function getActorName(params: EventDisplayParams): {
 		(agent) => agent.id === event.actorUserId
 	);
 	const humanDisplay = resolveDashboardHumanAgentDisplay({
+		email: humanAgent?.email ?? null,
 		id: humanAgent?.id ?? event.actorUserId ?? "unknown-member",
 		name: humanAgent?.name ?? null,
 	});

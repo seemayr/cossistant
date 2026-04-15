@@ -36,7 +36,7 @@ export default function ExampleCustomHome() {
 		<Support
 			slotProps={{
 				content: {
-					className: "rounded-3xl border shadow-2xl",
+					className: "border shadow-2xl",
 				},
 			}}
 			slots={{ homePage: CustomHomePage }}

@@ -8,7 +8,7 @@ export default function SupportResponsiveEmbedDemo() {
 	return (
 		<SupportDocsProvider>
 			<SupportDemoStage variant="responsive">
-				<div className="h-full w-full overflow-hidden rounded-[24px] border border-border bg-background shadow-sm">
+				<div className="h-full w-full overflow-hidden border border-border bg-background shadow-sm">
 					<Support
 						mode="responsive"
 						quickOptions={[

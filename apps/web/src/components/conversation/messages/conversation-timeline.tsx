@@ -119,6 +119,7 @@ export function ConversationTimelineList({
 				return {
 					id: member.id,
 					name: memberDisplay.displayName,
+					email: member.email ?? null,
 					image: member.image,
 					lastSeenAt: member.lastSeenAt,
 				};

@@ -6,7 +6,7 @@ import type { SupportTextResolvedFormatter } from "../text/locales/keys";
 
 type MockAvatarProps = {
 	className?: string;
-	facehashSeed?: string;
+	facehashName?: string;
 	image?: string | null;
 	isAI?: boolean;
 	name: string;
@@ -37,7 +37,7 @@ mock.module("./avatar", () => ({
 
 		return React.createElement("div", {
 			"data-avatar-class": props.className ?? "",
-			"data-avatar-facehash-seed": props.facehashSeed ?? "",
+			"data-avatar-facehash-name": props.facehashName ?? "",
 			"data-avatar-image": props.image ?? "",
 			"data-avatar-is-ai": props.isAI ? "true" : "false",
 			"data-avatar-name": props.name,
@@ -62,6 +62,7 @@ async function renderReadIndicator({
 	availableAIAgents?: Array<{ id: string; image: string | null; name: string }>;
 	availableHumanAgents?: Array<{
 		id: string;
+		email: string | null;
 		image: string | null;
 		lastSeenAt: string | null;
 		name: string | null;
@@ -170,6 +171,7 @@ describe("ReadIndicator", () => {
 			availableHumanAgents: [
 				{
 					id: "user-1",
+					email: null,
 					image: null,
 					lastSeenAt: null,
 					name: " Alex ",
@@ -194,11 +196,11 @@ describe("ReadIndicator", () => {
 		expect(avatarProps).toHaveLength(1);
 		expect(avatarProps[0]).toMatchObject({
 			className: "size-5",
-			facehashSeed: "Alex",
+			facehashName: "Alex",
 			image: null,
 			name: "Alex",
 		});
-		expect(html).toContain('data-avatar-facehash-seed="Alex"');
+		expect(html).toContain('data-avatar-facehash-name="Alex"');
 		expect(html).toContain('title="Seen by Alex');
 	});
 });

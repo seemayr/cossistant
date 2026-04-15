@@ -2,7 +2,7 @@ import { Support } from "@cossistant/react";
 
 export default function ExampleResponsiveEmbed() {
 	return (
-		<div className="h-[560px] overflow-hidden rounded-[24px] border">
+		<div className="h-[560px] overflow-hidden border">
 			<Support
 				mode="responsive"
 				quickOptions={[

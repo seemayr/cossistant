@@ -124,7 +124,7 @@ export const ConversationEvent: React.FC<ConversationEventProps> = ({
 	) : (
 		<Avatar
 			className="size-6 flex-shrink-0"
-			facehashSeed={humanDisplay.facehashSeed}
+			facehashName={humanDisplay.facehashName}
 			image={humanAgent?.image}
 			name={humanDisplay.displayName}
 		/>
