@@ -1,5 +1,6 @@
 import type { RouteRegistry } from "@cossistant/core";
 import * as React from "react";
+import { parseCompoundChildren } from "../internal/compound-children";
 import type { PageDefinition } from "../primitives";
 import * as Primitive from "../primitives";
 import { useSupport } from "../provider";
@@ -63,27 +64,31 @@ function mergePages(
  * This allows declarative page registration via JSX.
  */
 function extractPagesFromChildren(children: React.ReactNode): CustomPage[] {
-	const pages: CustomPage[] = [];
+	const { matched } = parseCompoundChildren(children, [
+		{
+			name: "page",
+			matches: (child) => {
+				const props = child.props as {
+					name?: string;
+					component?: React.ComponentType;
+				};
 
-	React.Children.forEach(children, (child) => {
-		if (!React.isValidElement(child)) {
-			return;
-		}
+				return Boolean(props.name && props.component);
+			},
+		},
+	] as const);
 
-		// Check if this is a Page component by looking for name and component props
+	return matched.page.map((child) => {
 		const props = child.props as {
-			name?: string;
-			component?: React.ComponentType;
+			name: keyof RouteRegistry;
+			component: CustomPage["component"];
 		};
-		if (props.name && props.component) {
-			pages.push({
-				name: props.name as keyof RouteRegistry,
-				component: props.component,
-			});
-		}
-	});
 
-	return pages;
+		return {
+			name: props.name,
+			component: props.component,
+		};
+	});
 }
 
 /**

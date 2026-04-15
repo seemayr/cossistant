@@ -1,6 +1,10 @@
 "use client";
 
 import * as React from "react";
+import {
+	getCompoundDisplayName,
+	parseCompoundChildren,
+} from "../internal/compound-children";
 import { useSupport } from "../provider";
 import { ConfigurationErrorDisplay } from "../support/components/configuration-error";
 import { ThemeWrapper } from "../support/components/theme-wrapper";
@@ -48,29 +52,31 @@ type ParsedChildren = {
 };
 
 function parseChildren(children: React.ReactNode): ParsedChildren {
-	const result: ParsedChildren = {
-		trigger: null,
-		content: null,
+	const { matched } = parseCompoundChildren(children, [
+		{
+			name: "trigger",
+			matches: (child) => {
+				const displayName = getCompoundDisplayName(child);
+				return (
+					displayName === "Feedback.Trigger" || child.type === FeedbackTrigger
+				);
+			},
+		},
+		{
+			name: "content",
+			matches: (child) => {
+				const displayName = getCompoundDisplayName(child);
+				return (
+					displayName === "Feedback.Content" || child.type === FeedbackContent
+				);
+			},
+		},
+	] as const);
+
+	return {
+		trigger: matched.trigger[0] ?? null,
+		content: matched.content[0] ?? null,
 	};
-
-	React.Children.forEach(children, (child) => {
-		if (!React.isValidElement(child)) {
-			return;
-		}
-
-		const displayName = (child.type as React.ComponentType)?.displayName ?? "";
-
-		if (displayName === "Feedback.Trigger" || child.type === FeedbackTrigger) {
-			result.trigger = child;
-			return;
-		}
-
-		if (displayName === "Feedback.Content" || child.type === FeedbackContent) {
-			result.content = child;
-		}
-	});
-
-	return result;
 }
 
 type FeedbackBoundaryProps = {

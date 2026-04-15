@@ -95,26 +95,103 @@ describe("support docs examples", () => {
 		}
 	});
 
-	it("keeps the support docs React-first and preview-backed", () => {
+	it("keeps the support docs React-first, ordered by learning path, and preview-backed", () => {
+		const topMeta = JSON.parse(
+			readFileSync(
+				path.resolve(import.meta.dir, "../../content/docs/meta.json"),
+				"utf8"
+			)
+		) as { pages: string[] };
+		const meta = JSON.parse(
+			readFileSync(path.join(docsRoot, "meta.json"), "utf8")
+		) as { pages: string[] };
+		const advancedMeta = JSON.parse(
+			readFileSync(
+				path.resolve(import.meta.dir, "../../content/docs/advanced/meta.json"),
+				"utf8"
+			)
+		) as { pages: string[] };
 		const indexDoc = readFileSync(path.join(docsRoot, "index.mdx"), "utf8");
 		const customizationDoc = readFileSync(
 			path.join(docsRoot, "customization.mdx"),
 			"utf8"
 		);
 		const routingDoc = readFileSync(path.join(docsRoot, "routing.mdx"), "utf8");
+		const advancedIndexDoc = readFileSync(
+			path.resolve(import.meta.dir, "../../content/docs/advanced/index.mdx"),
+			"utf8"
+		);
+		const advancedPrimitivesDoc = readFileSync(
+			path.resolve(
+				import.meta.dir,
+				"../../content/docs/advanced/primitives.mdx"
+			),
+			"utf8"
+		);
+		const quickstartDoc = readFileSync(
+			path.resolve(import.meta.dir, "../../content/docs/quickstart/index.mdx"),
+			"utf8"
+		);
+		const reactQuickstartDoc = readFileSync(
+			path.resolve(import.meta.dir, "../../content/docs/quickstart/react.mdx"),
+			"utf8"
+		);
+
+		expect(topMeta.pages).toEqual([
+			"(root)",
+			"quickstart",
+			"support-component",
+			"advanced",
+			"concepts",
+			"others",
+			"self-host",
+		]);
+		expect(meta.pages).toEqual([
+			"index",
+			"customization",
+			"theme",
+			"routing",
+			"text",
+			"hooks",
+			"events",
+			"types",
+		]);
+		expect(advancedMeta.pages).toEqual(["index", "primitives"]);
 
 		expect(indexDoc).not.toContain("@cossistant/next");
 		expect(customizationDoc).not.toContain("@cossistant/next");
 		expect(routingDoc).not.toContain("@cossistant/next");
 
+		expect(indexDoc).toContain("title: Overview");
 		expect(indexDoc).toContain('name="support-doc"');
-		expect(indexDoc).toContain('name="support-classic-bubble"');
-		expect(indexDoc).toContain('name="support-bubble-and-home"');
+		expect(indexDoc).toContain("[Advanced](/docs/advanced)");
 		expect(indexDoc).not.toContain("sizeClasses=");
+		expect(customizationDoc).toContain("title: Change One Thing");
 		expect(customizationDoc).toContain('name="support-classic-bubble"');
+		expect(customizationDoc).toContain('name="support-pill-bubble"');
+		expect(customizationDoc).toContain('name="support-custom-home"');
 		expect(customizationDoc).not.toContain("sizeClasses=");
+		expect(routingDoc).toContain("title: Pages & Layouts");
+		expect(routingDoc).toContain('name="support-responsive-embed"');
 		expect(routingDoc).toContain('name="support-full-composition"');
+		expect(routingDoc).toContain("[Advanced](/docs/advanced)");
 		expect(routingDoc).not.toContain("sizeClasses=");
+		expect(routingDoc).not.toContain("/docs/support-component/primitives");
+		expect(advancedIndexDoc).toContain("title: Advanced");
+		expect(advancedIndexDoc).toContain("Templates are coming soon");
+		expect(advancedIndexDoc).toContain(
+			"https://github.com/cossistantcom/cossistant/tree/main/packages/react/src/support"
+		);
+		expect(advancedPrimitivesDoc).toContain("title: Primitives");
+		expect(advancedPrimitivesDoc).toContain("/docs/advanced");
+		expect(quickstartDoc).toContain("## Next in the Support docs");
+		expect(quickstartDoc).toContain(
+			"[Change One Thing](/docs/support-component/customization)"
+		);
+		expect(reactQuickstartDoc).toContain("## Next in the Support docs");
+		expect(reactQuickstartDoc).toContain(
+			"[Match Your Brand](/docs/support-component/theme)"
+		);
 	});
 
 	it("renders docs previews through the docs-only wrapper and support alias", async () => {

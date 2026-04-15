@@ -1,6 +1,6 @@
 ---
-title: Theme
-description: Customize the Support widget's colors and style.
+title: Match Your Brand
+description: Brand the Support widget with CSS variables, the theme prop, and your app tokens.
 search:
   kind: guide
   tags:
@@ -14,246 +14,44 @@ search:
     - --co-theme-radius
 ---
 
-## Overview
+You can make the widget feel like part of your product without replacing any components.
 
-The Support widget is **fully isolated** from your app's styles by default. All widget styles use the `co-` prefix, so they won't clash with your existing CSS.
+## Use this when
 
-## How Theming Works
+- the default widget shape is good and you mainly need branding
+- you want a copy-paste way to set colors and radius
+- you want the widget to follow your app theme or force light or dark mode
 
-The widget checks two places for every style value:
+## Smallest working change
 
-1. **Your override** (`--co-theme-*` variables)
-2. **Built-in default** (sensible OKLCH colors)
+Set the widget tokens once and keep the default UI.
 
-```css
-/* Widget looks for --co-theme-primary first */
---co-primary: var(--co-theme-primary, oklch(20.5% 0 0));
-```
-
-## Quick Start
-
-Override widget colors by setting `--co-theme-*` variables:
-
-```css
+```css title="src/index.css"
 .cossistant {
-  --co-theme-primary: #3b82f6;
+  --co-theme-primary: #111827;
+  --co-theme-primary-foreground: #ffffff;
   --co-theme-background: #ffffff;
-  --co-theme-foreground: #0f172a;
-  --co-theme-radius: 12px;
+  --co-theme-foreground: #111827;
+  --co-theme-border: #e5e7eb;
+  --co-theme-radius: 18px;
 }
 ```
 
-## Available Theme Variables
+That is usually enough to make the widget feel like yours.
 
-| Variable                        | Default (Light)    | Default (Dark)     |
-| ------------------------------- | ------------------ | ------------------ |
-| `--co-theme-background`         | `oklch(99% 0 0)`   | `oklch(15.5% 0 0)` |
-| `--co-theme-foreground`         | `oklch(14.5% 0 0)` | `oklch(98.5% 0 0)` |
-| `--co-theme-primary`            | `oklch(20.5% 0 0)` | `oklch(98.5% 0 0)` |
-| `--co-theme-primary-foreground` | `oklch(98.5% 0 0)` | `oklch(20.5% 0 0)` |
-| `--co-theme-border`             | `oklch(92.2% 0 0)` | `oklch(26.9% 0 0)` |
-| `--co-theme-muted`              | Color-mixed        | Color-mixed        |
-| `--co-theme-muted-foreground`   | Color-mixed        | Color-mixed        |
-| `--co-theme-radius`             | `0.375rem`         | `0.375rem`         |
+## Common variants
 
-<div className="grid grid-cols-2 md:grid-cols-4 gap-3 my-6 not-prose">
-  <div className="flex flex-col gap-2 rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
-    <div className="h-12 rounded-md" style={{ background: "oklch(99% 0 0)" }} />
-    <div className="text-xs">
-      <p className="font-medium">Background</p>
-      <code className="text-[10px] text-neutral-500">oklch(99% 0 0)</code>
-    </div>
-  </div>
-  <div className="flex flex-col gap-2 rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
-    <div
-      className="h-12 rounded-md"
-      style={{ background: "oklch(14.5% 0 0)" }}
-    />
-    <div className="text-xs">
-      <p className="font-medium">Foreground</p>
-      <code className="text-[10px] text-neutral-500">oklch(14.5% 0 0)</code>
-    </div>
-  </div>
-  <div className="flex flex-col gap-2 rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
-    <div
-      className="h-12 rounded-md"
-      style={{ background: "oklch(20.5% 0 0)" }}
-    />
-    <div className="text-xs">
-      <p className="font-medium">Primary</p>
-      <code className="text-[10px] text-neutral-500">oklch(20.5% 0 0)</code>
-    </div>
-  </div>
-  <div className="flex flex-col gap-2 rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
-    <div
-      className="h-12 rounded-md"
-      style={{ background: "oklch(92.2% 0 0)" }}
-    />
-    <div className="text-xs">
-      <p className="font-medium">Border</p>
-      <code className="text-[10px] text-neutral-500">oklch(92.2% 0 0)</code>
-    </div>
-  </div>
-</div>
-
-### Status Colors
-
-| Variable                 | Default                     |
-| ------------------------ | --------------------------- |
-| `--co-theme-destructive` | `oklch(57.7% 0.245 27.325)` |
-| `--co-theme-success`     | `oklch(71.7% 0.18 142)`     |
-| `--co-theme-warning`     | `oklch(86.4% 0.144 99)`     |
-| `--co-theme-neutral`     | `oklch(60.8% 0 0)`          |
-
-<div className="grid grid-cols-2 md:grid-cols-4 gap-3 my-6 not-prose">
-  <div className="flex flex-col gap-2 rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
-    <div
-      className="h-12 rounded-md"
-      style={{ background: "oklch(57.7% 0.245 27.325)" }}
-    />
-    <div className="text-xs">
-      <p className="font-medium">Destructive</p>
-      <code className="text-[10px] text-neutral-500">
-        oklch(57.7% 0.245 27.325)
-      </code>
-    </div>
-  </div>
-  <div className="flex flex-col gap-2 rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
-    <div
-      className="h-12 rounded-md"
-      style={{ background: "oklch(71.7% 0.18 142)" }}
-    />
-    <div className="text-xs">
-      <p className="font-medium">Success</p>
-      <code className="text-[10px] text-neutral-500">
-        oklch(71.7% 0.18 142)
-      </code>
-    </div>
-  </div>
-  <div className="flex flex-col gap-2 rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
-    <div
-      className="h-12 rounded-md"
-      style={{ background: "oklch(86.4% 0.144 99)" }}
-    />
-    <div className="text-xs">
-      <p className="font-medium">Warning</p>
-      <code className="text-[10px] text-neutral-500">
-        oklch(86.4% 0.144 99)
-      </code>
-    </div>
-  </div>
-  <div className="flex flex-col gap-2 rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
-    <div
-      className="h-12 rounded-md"
-      style={{ background: "oklch(60.8% 0 0)" }}
-    />
-    <div className="text-xs">
-      <p className="font-medium">Neutral</p>
-      <code className="text-[10px] text-neutral-500">oklch(60.8% 0 0)</code>
-    </div>
-  </div>
-</div>
-
-### Accent Colors
-
-These colors are used for avatar fallbacks when no profile image is available.
-
-| Variable            | Default                  |
-| ------------------- | ------------------------ |
-| `--co-theme-pink`   | `oklch(76.3% 0.152 354)` |
-| `--co-theme-yellow` | `oklch(86.4% 0.144 99)`  |
-| `--co-theme-blue`   | `oklch(72.5% 0.132 241)` |
-| `--co-theme-orange` | `oklch(74.5% 0.166 50)`  |
-
-<div className="grid grid-cols-2 md:grid-cols-4 gap-3 my-6 not-prose">
-  <div className="flex flex-col gap-2 rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
-    <div
-      className="h-12 rounded-md"
-      style={{ background: "oklch(76.3% 0.152 354)" }}
-    />
-    <div className="text-xs">
-      <p className="font-medium">Pink</p>
-      <code className="text-[10px] text-neutral-500">
-        oklch(76.3% 0.152 354)
-      </code>
-    </div>
-  </div>
-  <div className="flex flex-col gap-2 rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
-    <div
-      className="h-12 rounded-md"
-      style={{ background: "oklch(86.4% 0.144 99)" }}
-    />
-    <div className="text-xs">
-      <p className="font-medium">Yellow</p>
-      <code className="text-[10px] text-neutral-500">
-        oklch(86.4% 0.144 99)
-      </code>
-    </div>
-  </div>
-  <div className="flex flex-col gap-2 rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
-    <div
-      className="h-12 rounded-md"
-      style={{ background: "oklch(72.5% 0.132 241)" }}
-    />
-    <div className="text-xs">
-      <p className="font-medium">Blue</p>
-      <code className="text-[10px] text-neutral-500">
-        oklch(72.5% 0.132 241)
-      </code>
-    </div>
-  </div>
-  <div className="flex flex-col gap-2 rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
-    <div
-      className="h-12 rounded-md"
-      style={{ background: "oklch(74.5% 0.166 50)" }}
-    />
-    <div className="text-xs">
-      <p className="font-medium">Orange</p>
-      <code className="text-[10px] text-neutral-500">
-        oklch(74.5% 0.166 50)
-      </code>
-    </div>
-  </div>
-</div>
-
-## Light and Dark Mode
-
-### Using the theme prop
-
-Force a specific theme regardless of your app's settings:
+### Force light or dark mode
 
 ```tsx
-// Force dark theme
-<Support theme="dark" />
+import { Support } from "@cossistant/react";
 
-// Force light theme (default)
-<Support theme="light" />
+<Support theme="dark" />;
 ```
 
-### Automatic theme detection (default)
+By default, the widget follows your app theme. It checks for `.dark` or `data-color-scheme="dark"` on parent elements.
 
-By default, the widget automatically adapts to your app's theme. It looks for:
-
-1. `.dark` class on any parent element
-2. `data-color-scheme="dark"` attribute on any parent element
-
-This works seamlessly with popular theme libraries like **next-themes** and **shadcn's theme system**.
-
-```tsx
-// Widget adapts automatically
-<body className="dark">
-  <Support />
-</body>
-
-// Or with data attribute
-<div data-color-scheme="dark">
-  <Support />
-</div>
-```
-
-## Using shadcn/ui Colors
-
-Want the widget to match your shadcn/ui theme? Map shadcn variables to widget variables:
+### Reuse your shadcn tokens
 
 ```css
 :root {
@@ -266,34 +64,38 @@ Want the widget to match your shadcn/ui theme? Map shadcn variables to widget va
 }
 ```
 
-This gives you full control—the widget only uses shadcn colors when you explicitly connect them.
+This keeps the widget aligned with the rest of your app instead of inventing a second theme.
 
-## Custom Branding
+## When to stop here
 
-Match your brand identity with custom colors:
+- colors, radius, and dark mode are enough
+- you want the default layout to stay in place
+- you do not need custom pages or a custom shell
 
-```css
-.cossistant {
-  --co-theme-primary: #ff6b35;
-  --co-theme-primary-foreground: #ffffff;
-  --co-theme-background: #fafafa;
-  --co-theme-foreground: #1a1a1a;
-  --co-theme-border: #e5e5e5;
-  --co-theme-radius: 16px;
-}
-```
+## Next step
 
-## Advanced: Per-Shade Overrides
+- [Pages & Layouts](/docs/support-component/routing) when you need a different first screen, an inline embed, or your own shell
+- [Copy & Locale](/docs/support-component/text) when the next change is wording instead of UI
 
-Fine-tune background shades for depth and hierarchy:
+## Core token reference
 
-```css
-.cossistant {
-  --co-theme-background-50: #fafafa;
-  --co-theme-background-100: #f5f5f5;
-  --co-theme-background-200: #eeeeee;
-  --co-theme-background-300: #e0e0e0;
-}
-```
+| Variable                        | Default (Light)    | Default (Dark)     |
+| ------------------------------- | ------------------ | ------------------ |
+| `--co-theme-background`         | `oklch(99% 0 0)`   | `oklch(15.5% 0 0)` |
+| `--co-theme-foreground`         | `oklch(14.5% 0 0)` | `oklch(98.5% 0 0)` |
+| `--co-theme-primary`            | `oklch(20.5% 0 0)` | `oklch(98.5% 0 0)` |
+| `--co-theme-primary-foreground` | `oklch(98.5% 0 0)` | `oklch(20.5% 0 0)` |
+| `--co-theme-border`             | `oklch(92.2% 0 0)` | `oklch(26.9% 0 0)` |
+| `--co-theme-muted`              | Color-mixed        | Color-mixed        |
+| `--co-theme-muted-foreground`   | Color-mixed        | Color-mixed        |
+| `--co-theme-radius`             | `0.375rem`         | `0.375rem`         |
 
-By default, these are generated with `color-mix()` from your base colors.
+## Extra tokens
+
+Use these when the core tokens are not enough:
+
+- Status colors: `--co-theme-destructive`, `--co-theme-success`, `--co-theme-warning`, `--co-theme-neutral`
+- Avatar accents: `--co-theme-pink`, `--co-theme-yellow`, `--co-theme-blue`, `--co-theme-orange`
+- Background shades: `--co-theme-background-50`, `--co-theme-background-100`, `--co-theme-background-200`, `--co-theme-background-300`
+
+The background shades are derived from your base colors with `color-mix()` unless you override them directly.

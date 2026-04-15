@@ -512,6 +512,68 @@ describe("Support widget", () => {
 		expect(document.body.textContent).toContain("Custom composer");
 	});
 
+	it("only applies defaultOpen on the initial uncontrolled mount", async () => {
+		const controller = createMockSupportController();
+		const { act } = await import("react");
+
+		await renderWithSupport(
+			<Support.Root defaultOpen={false}>
+				<ConfigProbe />
+			</Support.Root>,
+			controller
+		);
+
+		expect(findDataIsOpen()).toBe("false");
+
+		await act(async () => {
+			controller.open();
+		});
+
+		expect(findDataIsOpen()).toBe("true");
+
+		await act(async () => {
+			activeRoot?.render(
+				<SupportProvider controller={controller}>
+					<Support.Root defaultOpen={false}>
+						<ConfigProbe />
+					</Support.Root>
+				</SupportProvider>
+			);
+		});
+
+		expect(findDataIsOpen()).toBe("true");
+	});
+
+	it("registers fragment-wrapped compound children", async () => {
+		await renderWithSupport(
+			<Support.Root open={true}>
+				<React.Fragment key="wrapped-support-children">
+					<Support.Trigger>Fragment trigger</Support.Trigger>
+					<Support.Content>
+						<div>Fragment content</div>
+					</Support.Content>
+				</React.Fragment>
+			</Support.Root>
+		);
+
+		expect(document.body.textContent).toContain("Fragment trigger");
+		expect(document.body.textContent).toContain("Fragment content");
+	});
+
+	it("registers fragment-wrapped page overrides", async () => {
+		await renderWithSupport(
+			<Support open={true}>
+				<Support.Content />
+				<React.Fragment key="wrapped-support-page">
+					<Support.Page component={CustomHomeOverride} name="HOME" />
+				</React.Fragment>
+			</Support>
+		);
+
+		expect(document.body.textContent).toContain("Custom home override");
+		expect(document.body.textContent).not.toContain("Ask us a question");
+	});
+
 	it("adds stable data-slot, data-state, and data-page hooks to the default UI", async () => {
 		await renderWithSupport(<Support open={true} />);
 

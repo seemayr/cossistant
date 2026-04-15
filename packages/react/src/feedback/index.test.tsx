@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import type React from "react";
+import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { SupportControllerContext } from "../controller-context";
 import { type CossistantContextValue, SupportContext } from "../provider";
@@ -104,6 +104,22 @@ describe("Feedback widget", () => {
 		expect(html).toContain("Open feedback");
 		expect(html).toContain("Custom feedback body");
 		expect(html).toContain('data-color-scheme="dark"');
+	});
+
+	it("registers fragment-wrapped trigger and content children", () => {
+		const html = renderWithSupportContext(
+			<Feedback.Root open>
+				<React.Fragment key="wrapped-feedback-children">
+					<Feedback.Trigger>Open feedback</Feedback.Trigger>
+					<Feedback.Content>
+						<div>Fragment feedback body</div>
+					</Feedback.Content>
+				</React.Fragment>
+			</Feedback.Root>
+		);
+
+		expect(html).toContain("Open feedback");
+		expect(html).toContain("Fragment feedback body");
 	});
 
 	it("forwards topic, trigger, conversation, and visitor context in the widget payload", () => {

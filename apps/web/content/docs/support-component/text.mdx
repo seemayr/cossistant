@@ -1,8 +1,8 @@
 ---
-title: Locale & Text
-description: Configure widget copy with type-safe locales and overrides.
+title: Copy & Locale
+description: Change widget copy and language without rewriting the UI.
 search:
-  kind: type
+  kind: guide
   tags:
     - localization
     - i18n
@@ -15,27 +15,46 @@ search:
     - common.actions.askQuestion
 ---
 
-## Overview
+Change the widget voice the same way you change the widget UI: keep the default runtime and override only what you need.
 
-The support widget ships with a fully typed translation layer powered by the
-`<Text />` component and the `useSupportText()` hook. Every key is defined in a
-single source of truth so you get auto-complete, variable hints and compiler
-errors if a required placeholder is missing.
+## Use this when
 
-- Built-in locales: **English (`en`)**, **French (`fr`)** and **Spanish (`es`)**
-- Fallback order: provided `locale` prop → browser locale → English defaults
-- Keys always render with a `data-key-name="…"` attribute so you can discover
-  them quickly in dev tools
+- you want to rename labels or buttons
+- you need a second language
+- you want copy that reacts to visitor or app context
 
-## Rendering copy
+## Smallest working change
 
-Use the typed `<Text />` component for static markup or the hook when you need
-raw strings.
+```tsx
+import { Support } from "@cossistant/react";
+
+<Support
+  locale="fr"
+  content={{
+    "common.actions.askQuestion": {
+      en: "Reach out",
+      fr: "Contactez-nous",
+    },
+    "page.home.greeting": {
+      en: "Need help?",
+      fr: "Besoin d'aide ?",
+    },
+  }}
+/>;
+```
+
+Built-in locales are `en`, `fr`, and `es`. Fallback order is: explicit `locale`, browser locale, then English.
+
+## Common variants
+
+### Use typed copy inside custom UI
+
+Use `<Text />` for markup or `useSupportText()` when you need a string in code.
 
 ```tsx
 import { Text, useSupportText } from "@cossistant/react";
 
-export const AskButton = () => {
+export function AskButton() {
   const text = useSupportText();
 
   return (
@@ -46,47 +65,35 @@ export const AskButton = () => {
       </span>
     </button>
   );
-};
+}
 ```
 
-Both APIs are memo-friendly; the formatter is stable between renders and only
-re-computes when locale, overrides or context change.
+### Add a custom locale
 
-## Providing locales & overrides
-
-Developers control the active locale and individual strings through the
-`Support` component. You can pass literal strings, per-locale overrides or
-formatter functions with full access to widget context (visitor, agents) plus
-utility helpers.
+You can pass any locale code as long as you provide the strings for it.
 
 ```tsx
 <Support
-  locale="fr"
+  locale="en-support"
   content={{
-    "page.home.greeting": ({ variables, context, utils }) => {
-      const period = utils.timeOfDay();
-      const visitorName =
-        variables?.visitorName ?? context.visitor?.contact?.name ?? "";
-      const prefix = period.token === "evening" ? "Bonsoir" : "Salut";
-      return `${prefix} ${visitorName}!`;
-    },
     "common.actions.askQuestion": {
-      en: "Reach out",
-      fr: "Contactez-nous",
+      "en-support": "Talk to us",
     },
   }}
 />
 ```
 
-Custom locales are supported too—just pass a new locale code and supply the
-strings under `content`.
+## When to stop here
 
-## Debugging helpers
+- the default UI is fine and you only need different wording
+- one or two overrides are enough
+- your team wants the widget to follow product voice without a custom page
 
-Every rendered `<Text />` sets `data-key-name="<key>"`, making it easy to
-inspect copy in the DOM. The translation utilities also expose helpers such as
-`formatNumber`, `pluralize`, `titleCase` and a `timeOfDay()` helper, available
-to formatter functions via the `utils` parameter.
+## Next step
 
-These guarantees keep the widget copy consistent, type-safe and ready for your
-team's voice.
+- [Hooks Reference](/docs/support-component/hooks) if you need code-level control in custom components
+- [Types Reference](/docs/support-component/types) when you need the shared widget types behind these APIs
+
+## Debugging tip
+
+Every rendered `<Text />` includes `data-key-name="..."` in the DOM, so you can inspect which key is driving a string before you override it.

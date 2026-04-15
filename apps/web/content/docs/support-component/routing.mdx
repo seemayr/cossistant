@@ -1,6 +1,6 @@
 ---
-title: Routing & Pages
-description: Add or replace support pages with type-safe routing, customPages, and full composition.
+title: Pages & Layouts
+description: Keep the default widget until you need custom pages, inline embeds, or your own shell.
 search:
   kind: guide
   tags:
@@ -16,24 +16,17 @@ search:
     - goBack
 ---
 
-## Overview
+`Support` stretches pretty far before you need the full-custom track. Most layout changes still fit inside the built-in runtime.
 
-The widget ships with four built-in pages:
+## Use this when
 
-- `HOME`
-- `ARTICLES`
-- `CONVERSATION`
-- `CONVERSATION_HISTORY`
+- you want a different first screen or an extra page
+- you want support inline instead of floating
+- you need your own widget shell but still want the Support router and state
 
-You can extend or replace them in two ways:
+## Smallest working change
 
-- `customPages` for the default router
-- `Support.Router` plus `Support.Page` for full composition
-
-## Replace a Built-In Page with `customPages`
-
-If you want to keep the default widget shell and router, pass a page override
-directly to `Support` or `Support.Root`.
+Use `customPages` when you want to replace one built-in page and keep the default shell.
 
 ```tsx
 import { Support, useSupportNavigation } from "@cossistant/react";
@@ -42,14 +35,14 @@ function CustomHomePage() {
   const { navigate } = useSupportNavigation();
 
   return (
-    <div className="flex h-full flex-col p-6">
+    <div className="flex h-full flex-col gap-4 p-6">
       <h2 className="text-2xl font-semibold">Launch support</h2>
-      <p className="mt-2 text-sm text-zinc-500">
-        Swap the default home page without rebuilding the conversation flow.
+      <p className="text-sm text-zinc-500">
+        Keep the default conversation page. Only change the first screen.
       </p>
 
       <button
-        className="mt-6 rounded-xl border px-4 py-3 text-left"
+        className="rounded-xl border px-4 py-3 text-left"
         onClick={() =>
           navigate({
             page: "CONVERSATION",
@@ -77,41 +70,29 @@ function CustomHomePage() {
 />;
 ```
 
-`customPages` beats the built-in page. If you also pass `slots.homePage`, the
-explicit route override still wins.
+## Common variants
 
-## Use `Support.Page` with the Default Widget
+### Embed support inline
 
-Top-level `Support.Page` registration works with `Support`, even when you also
-render `Support.Content` for custom positioning or styling.
+Use `mode="responsive"` when support should live inside the page instead of floating above it.
 
 ```tsx
-import { Support, useSupportNavigation } from "@cossistant/react";
+import { Support } from "@cossistant/react";
 
-function FAQPage() {
-  const { goBack } = useSupportNavigation();
-
+export default function SupportPanel() {
   return (
-    <div className="p-6">
-      <button onClick={goBack} type="button">
-        Back
-      </button>
-      <h2 className="mt-4 text-xl font-semibold">FAQ</h2>
+    <div className="h-[560px] overflow-hidden rounded-[24px] border">
+      <Support mode="responsive" />
     </div>
   );
 }
-
-<Support open>
-  <Support.Content className="rounded-3xl border shadow-2xl" />
-  <Support.Page component={FAQPage} name="FAQ" />
-</Support>;
 ```
 
-## Full Composition with `Support.Root`
+<ComponentPreview name="support-responsive-embed" />
 
-Use `Support.Root` when you want your own shell and explicit router tree.
+### Own the shell with `Support.Root`
 
-<ComponentPreview name="support-full-composition" />
+Use full composition when you want your own trigger, content wrapper, and page registration.
 
 ```tsx
 import { Support } from "@cossistant/react";
@@ -120,9 +101,9 @@ function LaunchChecklistPage() {
   return <div className="p-6">Your custom page</div>;
 }
 
-export function App() {
+export default function App() {
   return (
-    <Support.Root open>
+    <Support.Root>
       <Support.Trigger asChild>
         <button type="button">Compose support</button>
       </Support.Trigger>
@@ -137,67 +118,17 @@ export function App() {
 }
 ```
 
-With `Support.Root`, place custom pages inside `Support.Router` or pass
-`customPages` to `Support.Root` when you want the default router inside
-`Support.Content`.
+<ComponentPreview name="support-full-composition" />
 
-## Navigation Hook
+`Support.Page` also works with `Support` when you want to keep the default widget and register one extra page.
 
-Use `useSupportNavigation()` anywhere inside the widget tree.
+## When to stop here
 
-```tsx
-import { useSupportNavigation } from "@cossistant/react";
+- `customPages`, `mode="responsive"`, or `Support.Root` give you enough control
+- you still want the Support router, state, and built-in conversation flow
+- you do not need a headless build
 
-function NavigationButtons() {
-  const { canGoBack, goBack, navigate, page, replace } = useSupportNavigation();
+## Next step
 
-  return (
-    <div className="flex gap-2">
-      {canGoBack && (
-        <button onClick={goBack} type="button">
-          Back
-        </button>
-      )}
-
-      <button onClick={() => navigate({ page: "HOME" })} type="button">
-        Home
-      </button>
-
-      <button onClick={() => replace({ page: "ARTICLES" })} type="button">
-        Articles
-      </button>
-
-      <span>Current page: {page}</span>
-    </div>
-  );
-}
-```
-
-<auto-type-table
-  path="packages/react/src/support/store/support-store.ts"
-  name="UseSupportNavigationResult"
-  variant="return"
-/>
-
-## Type Augmentation for Custom Routes
-
-If you add custom routes, you can extend the route registry for full TypeScript
-autocomplete.
-
-```tsx
-declare module "@cossistant/core" {
-  interface RouteRegistry {
-    FAQ: undefined;
-    SETTINGS: { tab: string };
-  }
-}
-```
-
-Then your navigation calls become type-safe:
-
-```tsx
-navigate({
-  page: "SETTINGS",
-  params: { tab: "profile" },
-});
-```
+- [Copy & Locale](/docs/support-component/text) if the next change is wording
+- [Advanced](/docs/advanced) when you want to leave the ready-made widget path and build your own UI

@@ -1,6 +1,6 @@
 ---
-title: Hooks
-description: Programmatic access to support widget state, navigation, visitor management, and more.
+title: Hooks Reference
+description: Programmatic access to Support widget state, navigation, visitor identity, and custom page behavior.
 search:
   kind: hook
   tags:
@@ -17,14 +17,23 @@ search:
     - useConversationPage
 ---
 
-## Overview
+## Use this page when
 
-Cossistant provides React hooks for programmatic control over every aspect of the support widget. These hooks follow a layered architecture:
+Reach for hooks when prop-level customization is not enough.
 
-- **Core hooks** (`useSupport`, `useVisitor`) - Primary integration points
-- **Widget state hooks** (`useSupportConfig`, `useSupportNavigation`) - Control widget behavior
-- **Page hooks** (`useHomePage`, `useConversationPage`) - Build custom pages
-- **Utility hooks** (`useFileUpload`, `useMessageComposer`) - Compose functionality
+- open or close the widget from your own UI
+- read or change navigation state
+- identify visitors or sync contact metadata in code
+- build custom pages on top of the Support runtime
+
+If you are still shaping the widget, start with [Overview](/docs/support-component), [Change One Thing](/docs/support-component/customization), or [Pages & Layouts](/docs/support-component/routing).
+
+## Hook families
+
+- `useSupport` and `useSupportConfig` for widget state
+- `useSupportNavigation` and page hooks for route-aware UI
+- `useVisitor` for identity and contact metadata
+- conversation hooks for custom pages, drafts, typing, uploads, and send flows
 
 ## useSupport
 

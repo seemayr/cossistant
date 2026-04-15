@@ -1,6 +1,6 @@
 ---
-title: Customization
-description: Customize the Support widget with slots, slotProps, Tailwind, CSS variables, and full composition.
+title: Change One Thing
+description: Keep the default widget and swap one small piece at a time.
 search:
   kind: guide
   tags:
@@ -16,32 +16,19 @@ search:
     - Support.Root
 ---
 
-## Overview
+`Support` is built for small edits. Start with styling, then swap one component, and keep the rest of the widget working as-is.
 
-The recommended customization path is:
+## Use this when
 
-1. Keep `Support` for the runtime and defaults.
-2. Use `classNames` and `slotProps` for styling.
-3. Use `slots` to replace only the parts you need.
-4. Move to `Support.Root` only when you want a custom shell.
+- you want the widget live fast
+- you need the bubble or first screen to feel more like your product
+- you want safe overrides without rebuilding the router or conversation UI
 
-## Styling Basics
-
-Import one stylesheet at your app root:
+## Smallest working change
 
 ```tsx
-import "@cossistant/react/styles.css";
-```
+import { Support } from "@cossistant/react";
 
-Or, if your app already uses Tailwind CSS v4:
-
-```tsx
-import "@cossistant/react/support.css";
-```
-
-For quick styling changes, start with `classNames` and `slotProps`:
-
-```tsx
 <Support
   classNames={{
     trigger: "bg-black text-white",
@@ -52,26 +39,12 @@ For quick styling changes, start with `classNames` and `slotProps`:
       className: "rounded-[28px]",
     },
   }}
-/>
+/>;
 ```
 
-If you want broader theming without replacing components, override the theme
-tokens exposed by the stylesheet:
+Use `classNames` for the built-in trigger and content. Use `slotProps` when you want to pass extra presentational props to built-in parts.
 
-```css
-:root {
-  --co-theme-radius: 1.5rem;
-  --co-theme-background: oklch(99% 0.01 95);
-  --co-theme-foreground: oklch(18% 0.01 95);
-  --co-theme-primary: oklch(22% 0.03 250);
-  --co-theme-primary-foreground: white;
-  --co-theme-border: oklch(90% 0.01 95);
-}
-```
-
-### Stable styling hooks
-
-The default widget exposes stable DOM attributes for CSS and Tailwind selectors:
+The default widget also exposes stable styling hooks:
 
 - `data-slot`
 - `data-state`
@@ -87,9 +60,116 @@ The default widget exposes stable DOM attributes for CSS and Tailwind selectors:
 }
 ```
 
-## Replace Only the Bubble
+## Bubble example 1
 
-Use `slots.trigger` when you want a different launcher without rebuilding the
-panel or router.
+Use `slots.trigger` when the launcher is the only thing that should change.
+
+```tsx
+import { Support, type SupportTriggerSlotProps } from "@cossistant/react";
+import * as React from "react";
+
+const CustomBubble = React.forwardRef<HTMLButtonElement, SupportTriggerSlotProps>(
+  function CustomBubble({ className, isOpen, toggle, unreadCount, ...props }, ref) {
+    return (
+      <button
+        {...props}
+        className={className}
+        onClick={toggle}
+        ref={ref}
+        type="button"
+      >
+        {isOpen ? "Close" : "Chat"}
+        {unreadCount > 0 ? ` (${unreadCount})` : null}
+      </button>
+    );
+  }
+);
+
+<Support slots={{ trigger: CustomBubble }} />;
+```
 
 <ComponentPreview name="support-classic-bubble" />
+
+## Bubble example 2
+
+The same slot can feel more like an in-product button instead of a floating chat bubble.
+
+```tsx
+import { Support, type SupportTriggerSlotProps } from "@cossistant/react";
+import * as React from "react";
+
+const PillBubble = React.forwardRef<HTMLButtonElement, SupportTriggerSlotProps>(
+  function PillBubble({ className, isTyping, toggle, ...props }, ref) {
+    return (
+      <button
+        {...props}
+        className={className}
+        onClick={toggle}
+        ref={ref}
+        type="button"
+      >
+        {isTyping ? "Support is typing..." : "Open support"}
+      </button>
+    );
+  }
+);
+
+<Support slots={{ trigger: PillBubble }} />;
+```
+
+<ComponentPreview name="support-pill-bubble" />
+
+## Replace the first screen
+
+Keep the default conversation flow and change only the home page.
+
+```tsx
+import { Support, type SupportHomePageSlotProps } from "@cossistant/react";
+
+function CustomHomePage({
+  className,
+  openConversationHistory,
+  quickOptions,
+  startConversation,
+  website,
+}: SupportHomePageSlotProps) {
+  return (
+    <div className={className}>
+      <h2>{website?.name}</h2>
+      <p>Rewrite the first screen while keeping the default conversation flow.</p>
+
+      {quickOptions.map((option) => (
+        <button key={option} onClick={() => startConversation(option)} type="button">
+          {option}
+        </button>
+      ))}
+
+      <button onClick={openConversationHistory} type="button">
+        View past conversations
+      </button>
+    </div>
+  );
+}
+
+<Support
+  slotProps={{
+    content: {
+      className: "rounded-3xl border shadow-2xl",
+    },
+  }}
+  slots={{ homePage: CustomHomePage }}
+/>;
+```
+
+<ComponentPreview name="support-custom-home" />
+
+## When to stop here
+
+- your widget is in production
+- branding changes fit inside `classNames`, `slotProps`, or one slot override
+- you still want the default router, conversation page, and composer
+
+## Next step
+
+- [Match Your Brand](/docs/support-component/theme) for colors, radius, and dark mode
+- [Pages & Layouts](/docs/support-component/routing) when you need custom pages or an inline embed

@@ -27,12 +27,6 @@ export const FeedbackWidgetProvider: React.FC<FeedbackWidgetProviderProps> = ({
 	const isControlled = controlledState?.isControlled ?? false;
 	const controlledOpen = controlledState?.open ?? false;
 
-	React.useEffect(() => {
-		if (!isControlled) {
-			setUncontrolledOpen(defaultOpen);
-		}
-	}, [defaultOpen, isControlled]);
-
 	const setOpen = React.useCallback(
 		(nextOpen: boolean) => {
 			if (isControlled) {

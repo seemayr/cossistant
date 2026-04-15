@@ -1,6 +1,6 @@
 ---
-title: Basic usage
-description: Start with the default Support widget, then grow into slots and full composition when you need more control.
+title: Overview
+description: Ship the default Support widget first. Then brand it in small steps.
 search:
   kind: component
   tags:
@@ -13,119 +13,86 @@ search:
     - SupportConfig
 ---
 
-## Philosophy
+`Support` is the fast path. Ship the widget with good defaults, change the parts users see first, and go deeper only if you need to.
 
-The React support SDK has two lanes on purpose:
+## Use this when
 
-- `Support` is the fastest way to ship a ready-to-use support widget.
-- `slots` and `slotProps` are the fastest way to swap one part without rebuilding everything.
-- `Support.Root` plus `Support.*` is the full composition lane when you want your own shell.
-- `Primitives` are the advanced headless building blocks.
+- the widget already renders and you want the quickest path to production
+- you want to know which API to reach for next
+- you want to keep the default shell while you brand a few parts
 
-Start with the default widget. Move into composition only when you actually need it.
+## 30-second version
 
-## Quick Start
+```tsx title="src/App.tsx"
+import { Support } from "@cossistant/react";
 
-```tsx
-import { Support, SupportProvider } from "@cossistant/react";
-import "@cossistant/react/styles.css";
-
-export function App() {
-  return (
-    <SupportProvider publicKey="pk_live_...">
-      <Support />
-    </SupportProvider>
-  );
+export default function App() {
+  return <Support />;
 }
 ```
 
 <ComponentPreview name="support-doc" />
 
-The widget does not inject CSS automatically. Use one of these imports at your
-app root:
+The default widget gives you three good things right away:
 
-- `@cossistant/react/styles.css` for plain CSS or any non-Tailwind app
-- `@cossistant/react/support.css` if your app already uses Tailwind CSS v4
+- fast to production
+- easy branding
+- safe partial overrides
 
-## Quick Customization
+## What you can change without rebuilding
 
-The easiest way to customize the widget is to keep the default runtime and
-replace only the parts you care about.
+- `classNames` and `slotProps` for styling the built-in UI
+- `slots.trigger` to swap the bubble
+- `slots.homePage` to change the first screen
+- `SupportConfig` for route-level welcome messages and quick options
+- `theme` and `--co-theme-*` tokens for colors, radius, and light or dark mode
 
-```tsx
-import { Support } from "@cossistant/react";
+If that covers your use case, stay here. You do not need the `Advanced` track to ship a polished widget.
 
-<Support
-  slots={{
-    trigger: CustomBubble,
-    homePage: CustomHomePage,
-  }}
-  slotProps={{
-    content: {
-      className: "rounded-3xl border border-neutral-200 shadow-2xl",
-    },
-  }}
-/>;
-```
+## Identifying visitors
 
-Use `slots` when you want a new component. Use `slotProps` when you want to add
-presentational props like `className` without replacing the whole part.
+Use `IdentifySupportVisitor` when a user signs in. Add `SupportConfig` when a page needs its own support context.
 
-### Bubble only
-
-<ComponentPreview name="support-classic-bubble" />
-
-### Bubble + home page
-
-<ComponentPreview name="support-bubble-and-home" />
-
-## Visitor Identity and Per-Page Defaults
-
-Use `IdentifySupportVisitor` to connect the widget to your signed-in user, and
-use `SupportConfig` when you want page-specific quick options or welcome
-messages.
-
-```tsx title="app/pricing/page.tsx"
+```tsx title="src/App.tsx"
 import {
   IdentifySupportVisitor,
+  Support,
   SupportConfig,
 } from "@cossistant/react";
 import { SenderType, type DefaultMessage } from "@cossistant/types";
 
 const defaultMessages: DefaultMessage[] = [
   {
-    content: "Welcome to pricing. I can help with plans, billing, or migration.",
+    content: "Hi Jane, I can help with billing, onboarding, or migration.",
     senderType: SenderType.TEAM_MEMBER,
   },
 ];
 
-export function PricingPage({
-  user,
-}: {
-  user: {
-    id: string;
-    email: string;
-    name: string | null;
-    image?: string | null;
+export default function App() {
+  const user = {
+    id: "user_123",
+    email: "jane@acme.com",
+    name: "Jane Doe",
   };
-}) {
+
   return (
     <>
       <IdentifySupportVisitor
-        email={user.email}
         externalId={user.id}
-        image={user.image}
+        email={user.email}
         name={user.name}
       />
 
       <SupportConfig
         defaultMessages={defaultMessages}
         quickOptions={[
-          "How does billing work?",
-          "Can I cancel anytime?",
-          "What is included in Pro?",
+          "How do I set this up?",
+          "Can you help with billing?",
+          "How do I import old conversations?",
         ]}
       />
+
+      <Support />
     </>
   );
 }
@@ -135,19 +102,30 @@ export function PricingPage({
   <Icon name="help" className="size-4" />
   <AlertTitle>When should I use `SupportConfig`?</AlertTitle>
   <AlertDescription>
-    Use `SupportConfig` for route-level defaults. Use `slots` when you want to
-    replace UI. Use `Support.Root` when you want to own the full widget shell.
+    Use `SupportConfig` for page-level defaults. Use `slots` when you want to
+    swap UI. Use `Support.Root` when you want your own shell.
   </AlertDescription>
 </Alert>
 
-## Choosing the Right API
+## When to stop here
 
-- Use `Support` when you want the ready-made widget.
-- Use `Support` with `slots` when you want to swap the trigger, home page,
-  composer, timeline, or another built-in part.
-- Use `Support.Root`, `Support.Trigger`, `Support.Content`, `Support.Router`,
-  and `Support.Page` when you want full composition.
-- Use `Primitives` when you want a headless build.
+- the default widget already fits your product
+- you only need identity, welcome messages, quick options, or prop-level styling
+- you do not need custom pages or a custom shell
+
+## Next step
+
+1. [Change One Thing](/docs/support-component/customization) to swap the bubble or first screen without rebuilding the widget.
+2. [Match Your Brand](/docs/support-component/theme) to set colors, radius, and dark mode.
+3. [Pages & Layouts](/docs/support-component/routing) when you need an inline embed, a custom page, or a custom shell.
+
+## Want to build your own?
+
+That is a separate track now.
+
+Use [Advanced](/docs/advanced) when you want to go fully custom. The shipped widget is built from reusable logic and primitives, and you can inspect the [support source](https://github.com/cossistantcom/cossistant/tree/main/packages/react/src/support) if you want a real starting point today.
+
+We are also working on templates with full examples for common custom builds.
 
 ## Support Props
 
@@ -156,10 +134,3 @@ export function PricingPage({
   name="SupportPropsReference"
   type="Pick<SupportProps, 'className' | 'mode' | 'side' | 'align' | 'sideOffset' | 'avoidCollisions' | 'collisionPadding' | 'classNames' | 'theme' | 'open' | 'onOpenChange' | 'defaultOpen' | 'quickOptions' | 'defaultMessages' | 'locale' | 'content' | 'customPages' | 'slots' | 'slotProps' | 'children'>"
 />
-
-## Related Guides
-
-- [Customization](/docs/support-component/customization) for slots, styling, and responsive embeds
-- [Routing & Pages](/docs/support-component/routing) for custom pages and full composition
-- [Primitives](/docs/support-component/primitives) for headless builds
-- [Hooks](/docs/support-component/hooks) for programmatic access

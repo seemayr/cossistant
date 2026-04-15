@@ -15,13 +15,13 @@ const baseStructuredData: SearchStructuredData = {
 describe("search route utils", () => {
 	it("builds advanced index with source and kind tags", () => {
 		const index = buildAdvancedSearchIndex({
-			id: "docs:/docs/support-component/primitives",
+			id: "docs:/docs/advanced/primitives",
 			source: "docs",
-			path: "support-component/primitives.mdx",
-			url: "/docs/support-component/primitives",
+			path: "advanced/primitives.mdx",
+			url: "/docs/advanced/primitives",
 			title: "Primitives",
 			description: "Headless building blocks.",
-			breadcrumbs: ["Docs", "<Support />"],
+			breadcrumbs: ["Docs", "Advanced"],
 			structuredData: baseStructuredData,
 			search: {
 				kind: "component",

@@ -4,6 +4,10 @@ import type { RouteRegistry } from "@cossistant/core";
 import type { DefaultMessage } from "@cossistant/types";
 import * as React from "react";
 import { useSupportController } from "../controller-context";
+import {
+	getCompoundDisplayName,
+	parseCompoundChildren,
+} from "../internal/compound-children";
 import * as Primitive from "../primitives";
 import { useSupport } from "../provider";
 import { SupportRealtimeProvider } from "../realtime";
@@ -291,37 +295,40 @@ function mergeCustomPages(
 }
 
 function parseChildren(children: React.ReactNode): ParsedChildren {
-	const result: ParsedChildren = {
-		trigger: null,
-		content: null,
-		pages: [],
-		other: [],
+	const { matched, other } = parseCompoundChildren(children, [
+		{
+			name: "trigger",
+			matches: (child) => {
+				const displayName = getCompoundDisplayName(child);
+				return (
+					displayName === "Support.Trigger" || child.type === SupportTrigger
+				);
+			},
+		},
+		{
+			name: "content",
+			matches: (child) => {
+				const displayName = getCompoundDisplayName(child);
+				return (
+					displayName === "Support.Content" || child.type === SupportContent
+				);
+			},
+		},
+		{
+			name: "page",
+			matches: (child) => {
+				const displayName = getCompoundDisplayName(child);
+				return displayName === "Support.Page" || child.type === Page;
+			},
+		},
+	] as const);
+
+	return {
+		trigger: matched.trigger[0] ?? null,
+		content: matched.content[0] ?? null,
+		pages: matched.page,
+		other,
 	};
-
-	React.Children.forEach(children, (child) => {
-		if (!React.isValidElement(child)) {
-			result.other.push(child);
-			return;
-		}
-
-		// Check component type by displayName or the component reference
-		const displayName = (child.type as React.ComponentType)?.displayName ?? "";
-
-		if (displayName === "Support.Trigger" || child.type === SupportTrigger) {
-			result.trigger = child;
-		} else if (
-			displayName === "Support.Content" ||
-			child.type === SupportContent
-		) {
-			result.content = child;
-		} else if (displayName === "Support.Page" || child.type === Page) {
-			result.pages.push(child);
-		} else {
-			result.other.push(child);
-		}
-	});
-
-	return result;
 }
 
 function SupportRuntimeBoundary<Locale extends string = SupportLocale>({
@@ -348,8 +355,15 @@ function SupportRuntimeBoundary<Locale extends string = SupportLocale>({
 	const { website, configurationError } = useSupport();
 	const controller = useSupportController();
 	const isVisitorBlocked = website?.visitor?.isBlocked ?? false;
+	const hasAppliedInitialDefaultOpenRef = React.useRef(false);
 
 	React.useEffect(() => {
+		if (hasAppliedInitialDefaultOpenRef.current) {
+			return;
+		}
+
+		hasAppliedInitialDefaultOpenRef.current = true;
+
 		if (
 			mode === "floating" &&
 			open === undefined &&

@@ -3,15 +3,23 @@ import { defineConfig } from "tsdown";
 export default defineConfig({
 	entry: [
 		"src/index.ts",
-		"src/**/*.ts",
-		"src/**/*.tsx",
-		"!src/**/*.test.ts",
-		"!src/**/*.test.tsx",
-		"!src/**/*.stories.tsx",
-		"!src/**/*.css",
+		"src/feedback/index.tsx",
+		"src/hooks/index.ts",
+		"src/identify-visitor.tsx",
+		"src/internal/hooks.ts",
+		"src/primitives/index.ts",
+		"src/provider.tsx",
+		"src/realtime/index.ts",
+		"src/support/index.tsx",
+		"src/support-config.tsx",
+		"src/utils/index.ts",
 	],
 	clean: true,
-	dts: true,
+	dts: {
+		// Resolve workspace type dependencies so published declarations keep
+		// package specifiers instead of vendoring sibling source trees.
+		resolve: true,
+	},
 	hash: false,
 	minify: true,
 	sourcemap: false,

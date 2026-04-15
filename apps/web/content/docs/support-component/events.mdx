@@ -1,6 +1,6 @@
 ---
-title: Events
-description: Listen to widget lifecycle events for analytics, logging, and custom integrations.
+title: Events Reference
+description: Listen to Support widget events for analytics, logging, and app-specific reactions.
 search:
   kind: guide
   tags:
@@ -15,22 +15,21 @@ search:
     - onError
 ---
 
-## Overview
+Reach for this page when prop-level customization is not enough and you need to react to widget activity in your app.
 
-The Support widget emits events throughout its lifecycle, allowing you to:
+If you are still shipping the widget, start with [Overview](/docs/support-component), [Change One Thing](/docs/support-component/customization), or [Pages & Layouts](/docs/support-component/routing).
 
-- Track user interactions for analytics
-- Log events for debugging
-- Trigger custom behavior based on widget activity
-- Integrate with third-party services
+## Use this page when
 
-## Event Callback Props
+- you want analytics events when visitors start or continue a conversation
+- you want error logging tied to widget activity
+- you are building custom pages that need to emit Support events
 
-The simplest way to listen to events is via callback props on the `<Support>` component:
+## Smallest working snippet
 
-```tsx showLineNumbers title="app/layout.tsx"
-"use client";
+Callback props on `<Support />` are the fastest way to listen to widget events.
 
+```tsx
 import { Support } from "@cossistant/react";
 
 export function SupportWidget() {
@@ -62,11 +61,9 @@ export function SupportWidget() {
 }
 ```
 
-## Available Events
+## Event payloads
 
 ### onConversationStart
-
-Fired when a new conversation is created.
 
 <auto-type-table
   path="packages/react/src/support/context/events.tsx"
@@ -76,8 +73,6 @@ Fired when a new conversation is created.
 
 ### onConversationEnd
 
-Fired when a conversation is closed or resolved.
-
 <auto-type-table
   path="packages/react/src/support/context/events.tsx"
   name="ConversationEndEvent"
@@ -85,8 +80,6 @@ Fired when a conversation is closed or resolved.
 />
 
 ### onMessageSent
-
-Fired when the visitor sends a message.
 
 <auto-type-table
   path="packages/react/src/support/context/events.tsx"
@@ -96,8 +89,6 @@ Fired when the visitor sends a message.
 
 ### onMessageReceived
 
-Fired when a message is received from an agent (human or AI).
-
 <auto-type-table
   path="packages/react/src/support/context/events.tsx"
   name="MessageReceivedEvent"
@@ -106,19 +97,17 @@ Fired when a message is received from an agent (human or AI).
 
 ### onError
 
-Fired when an error occurs within the widget.
-
 <auto-type-table
   path="packages/react/src/support/context/events.tsx"
   name="ErrorEvent"
   variant="parameter"
 />
 
-## Programmatic Event Handling
+## Subscribe inside custom UI
 
-For more control, use the `useSupportEvents` hook to subscribe to events from any component within the widget:
+Use `useSupportEvents()` when the listener belongs inside a custom widget component.
 
-```tsx showLineNumbers title="components/analytics-tracker.tsx"
+```tsx
 "use client";
 
 import { useSupportEvents } from "@cossistant/react";
@@ -128,212 +117,51 @@ export function AnalyticsTracker() {
   const events = useSupportEvents();
 
   useEffect(() => {
-    if (!events) return;
+    if (!events) {
+      return;
+    }
 
-    // Subscribe to multiple event types
-    const unsubscribes = [
-      events.subscribe("conversationStart", (event) => {
-        analytics.track("conversation_started", event);
-      }),
-      events.subscribe("messageSent", (event) => {
-        analytics.track("message_sent", event);
-      }),
-      events.subscribe("messageReceived", (event) => {
-        analytics.track("message_received", event);
-      }),
-      events.subscribe("error", (event) => {
-        errorTracker.captureException(event.error, {
-          extra: { context: event.context },
-        });
-      }),
-    ];
+    const unsubscribe = events.subscribe("messageSent", (event) => {
+      analytics.track("message_sent", event);
+    });
 
-    // Cleanup all subscriptions
-    return () => {
-      unsubscribes.forEach((unsubscribe) => unsubscribe());
-    };
+    return unsubscribe;
   }, [events]);
 
   return null;
 }
 ```
 
-<Alert variant="info" className="mt-6">
-  <Icon name="info" className="size-4" />
-  <AlertTitle>Where to place the tracker</AlertTitle>
-  <AlertDescription>
-    The `AnalyticsTracker` component should be rendered inside the Support
-    widget tree or within a component wrapped by `SupportProvider`. The events
-    context is scoped to the widget instance.
-  </AlertDescription>
-</Alert>
+## Emit from custom pages
 
-## Emitting Custom Events
+Use `useSupportEventEmitter()` when your own page or composer needs to emit the same widget events other listeners expect.
 
-From within custom pages or components, use `useSupportEventEmitter` to emit events:
-
-```tsx showLineNumbers title="pages/custom-conversation.tsx"
+```tsx
 "use client";
 
 import { useSupportEventEmitter } from "@cossistant/react";
 
-export function CustomConversationPage({ conversationId }: { conversationId: string }) {
+export function CustomConversationPage({
+  conversationId,
+}: {
+  conversationId: string;
+}) {
   const emitter = useSupportEventEmitter();
 
   const handleSendMessage = async (message: string) => {
     try {
       const sentMessage = await sendMessage(conversationId, message);
-
-      // Emit the event for other listeners
       emitter.emitMessageSent(conversationId, sentMessage);
     } catch (error) {
       emitter.emitError(error as Error, "message_send_failed");
     }
   };
 
-  return (
-    // ...your component
-  );
+  return <button onClick={() => void handleSendMessage("Hello")}>Send</button>;
 }
 ```
 
-## Integration Examples
+## Next step
 
-### Google Analytics 4
-
-```tsx showLineNumbers title="components/ga-tracker.tsx"
-"use client";
-
-import { Support } from "@cossistant/react";
-
-export function SupportWithGA() {
-  return (
-    <Support
-      onConversationStart={({ conversationId }) => {
-        gtag("event", "support_conversation_start", {
-          conversation_id: conversationId,
-        });
-      }}
-      onMessageSent={({ conversationId, message }) => {
-        gtag("event", "support_message_sent", {
-          conversation_id: conversationId,
-          message_id: message.id,
-        });
-      }}
-    />
-  );
-}
-```
-
-### Sentry Error Tracking
-
-```tsx showLineNumbers title="components/sentry-support.tsx"
-"use client";
-
-import { Support } from "@cossistant/react";
-import * as Sentry from "@sentry/react";
-
-export function SupportWithSentry() {
-  return (
-    <Support
-      onError={({ error, context }) => {
-        Sentry.captureException(error, {
-          tags: {
-            component: "support_widget",
-          },
-          extra: {
-            context,
-          },
-        });
-      }}
-    />
-  );
-}
-```
-
-### Segment
-
-```tsx showLineNumbers title="components/segment-support.tsx"
-"use client";
-
-import { Support } from "@cossistant/react";
-import { analytics } from "./analytics";
-
-export function SupportWithSegment() {
-  return (
-    <Support
-      onConversationStart={({ conversationId }) => {
-        analytics.track("Support Conversation Started", {
-          conversationId,
-        });
-      }}
-      onConversationEnd={({ conversationId }) => {
-        analytics.track("Support Conversation Ended", {
-          conversationId,
-        });
-      }}
-      onMessageSent={({ conversationId, message }) => {
-        analytics.track("Support Message Sent", {
-          conversationId,
-          messageId: message.id,
-          hasAttachments: message.parts.some(
-            (part) => part.type === "image" || part.type === "file"
-          ),
-        });
-      }}
-    />
-  );
-}
-```
-
-### PostHog
-
-```tsx showLineNumbers title="components/posthog-support.tsx"
-"use client";
-
-import { Support } from "@cossistant/react";
-import { usePostHog } from "posthog-js/react";
-
-export function SupportWithPostHog() {
-  const posthog = usePostHog();
-
-  return (
-    <Support
-      onConversationStart={({ conversationId }) => {
-        posthog.capture("support_conversation_started", {
-          conversationId,
-        });
-      }}
-      onMessageSent={({ conversationId }) => {
-        posthog.capture("support_message_sent", {
-          conversationId,
-        });
-      }}
-    />
-  );
-}
-```
-
-## Event Types
-
-All event types are exported for TypeScript usage:
-
-```tsx
-import type {
-  SupportEvent,
-  SupportEventType,
-  ConversationStartEvent,
-  ConversationEndEvent,
-  MessageSentEvent,
-  MessageReceivedEvent,
-  ErrorEvent,
-  SupportEventCallbacks,
-} from "@cossistant/react";
-```
-
-<auto-type-table
-  path="packages/react/src/support/context/events.tsx"
-  name="EventTypeExports"
-  type="{ SupportEvent: SupportEvent; SupportEventType: SupportEventType; SupportEventCallbacks: SupportEventCallbacks }"
-  variant="property"
-/>
+- [Hooks Reference](/docs/support-component/hooks) for the hook-level APIs used on this page
+- [Types Reference](/docs/support-component/types) for the shared event and message types
